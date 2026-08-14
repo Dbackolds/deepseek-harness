@@ -40,7 +40,7 @@ async function harness(options: {
 } = {}) {
   internals.now = () => NOW
   let seq = 0
-  internals.uuid = () => `fixed-${++seq}`
+  internals.uuid = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`
 
   const ctx = new Context()
   const pool = new MemoryMediaPool()

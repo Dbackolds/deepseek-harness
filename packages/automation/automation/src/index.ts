@@ -33,6 +33,7 @@ import {
 import type {
   AutomationRuleId as AutomationRuleIdType,
   AutomationRuleRecord,
+  AutomationRuleState,
   AutomationRuleView,
   AutomationRunId as AutomationRunIdType,
   AutomationRunRecord,
@@ -559,11 +560,12 @@ export class AutomationService extends Service {
     }
     return createLocalClockSelector(request.localClock, now)
   }
-  private viewOf(record: StoredAutomationRule, now: number) {
+  private viewOf(record: StoredAutomationRule, now: number): AutomationRuleView {
     const due = Date.parse(record.scheduledAt) <= now
+    const state: AutomationRuleState = record.enabled ? (due ? 'overdue' : 'scheduled') : 'disabled'
     return {
       ...publishedRule(record),
-      state: record.enabled ? (due ? 'overdue' : 'scheduled') : 'disabled',
+      state,
       nextAt: record.scheduledAt,
     }
   }

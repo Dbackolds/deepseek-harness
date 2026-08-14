@@ -2,13 +2,17 @@
  * Execution-time authority for Host Automation tools.
  * @module @deepseek-ai/dsh-tool-automation
  */
+import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 /** Throw one structured tool-policy failure. */
-function reject(message, code) {
+function reject(message: string, code: string): never {
   throw new HarnessError(message, code)
 }
 /** Locate the open turn enclosing a model tool call. */
-function openTurn(agent) {
+function openTurn(agent: Agent): { start: SessionEvent; events: SessionEvent[] } {
   const events = agent.session.events
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const boundary = events[index]
@@ -27,7 +31,11 @@ function openTurn(agent) {
  * @param exec - Tool execution metadata supplied by the registry.
  * @returns The authenticated agent and its current turn window.
  */
-export function automationToolExecution(ctx, exec) {
+export function automationToolExecution(ctx: Context, exec: ToolRunContext): {
+  agent: Agent
+  start: SessionEvent
+  events: SessionEvent[]
+} {
   const agent = exec.agent
   if (agent === undefined) {
     return reject('automation tools require a calling agent', 'AUTOMATION_TOOL_AGENT_REQUIRED')
@@ -45,7 +53,7 @@ export function automationToolExecution(ctx, exec) {
  * @param ctx - Context carrying the live agent registry.
  * @param execution - Authenticated turn window.
  */
-export function requireDirectHuman(ctx, execution) {
+export function requireDirectHuman(ctx: Context, execution: { agent: Agent; events: SessionEvent[] }): void {
   if (!ctx.agents.roots().includes(execution.agent)) {
     reject('automation tools refuse subagent callers', 'AUTOMATION_TOOL_AUTHORITY_REQUIRED')
   }

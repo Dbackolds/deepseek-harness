@@ -2,7 +2,9 @@
  * Model-facing Host Automation tools over `ctx.automation`.
  * @module @deepseek-ai/dsh-tool-automation
  */
+import type { Context } from '@deepseek-ai/cordis'
 import { AutomationInputError, AutomationRuleId } from '@deepseek-ai/dsh-automation'
+import type { AtInput, CreateAutomationRuleRequest, LocalClockInput, UpdateAutomationRuleRequest } from '@deepseek-ai/dsh-automation'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -29,14 +31,14 @@ const AFTER_SELECTOR = {
     kind: { type: 'string', required: true, const: 'after' },
     afterSeconds: { type: 'integer', required: true },
   },
-}
+} as const
 const AT_SELECTOR = {
   type: 'object',
   additionalProperties: false,
   properties: {
     kind: { type: 'string', required: true, const: 'at' },
   },
-}
+} as const
 const EVERY_SELECTOR = {
   type: 'object',
   additionalProperties: false,
@@ -44,7 +46,7 @@ const EVERY_SELECTOR = {
     kind: { type: 'string', required: true, const: 'every' },
     everySeconds: { type: 'integer', required: true },
   },
-}
+} as const
 const LOCAL_CLOCK_SELECTOR = {
   type: 'object',
   additionalProperties: false,
@@ -53,7 +55,7 @@ const LOCAL_CLOCK_SELECTOR = {
     time: { type: 'string', required: true },
     timeZone: { type: 'string', required: true },
   },
-}
+} as const
 const RULE_VIEW_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -73,7 +75,7 @@ const RULE_VIEW_SCHEMA = {
     state: { type: 'string', required: true, enum: ['scheduled', 'overdue', 'disabled'] },
     nextAt: { type: 'string', required: true },
   },
-}
+} as const
 const AT_INPUT_SCHEMA = {
   oneOf: [
     { type: 'string' },
@@ -87,13 +89,13 @@ const AT_INPUT_SCHEMA = {
       },
     },
   ],
-}
+} as const
 /**
  * Register the five Automation tools on one Agent context.
  * @param ctx - plugin context carrying automation and the tool registry.
  * @param agentCtx - the live root Agent context that receives the tools.
  */
-export function registerAutomationTools(ctx, agentCtx) {
+export function registerAutomationTools(ctx: Context, agentCtx: Context): void {
   agentCtx.tools.register(defineTool({
     name: 'automation_list',
     description: LIST_DESCRIPTION,
@@ -246,7 +248,7 @@ export function registerAutomationTools(ctx, agentCtx) {
  * Register the five Automation tools on every later runtime-root Agent.
  * @param ctx - plugin context carrying automation and the tool registry.
  */
-export function apply(ctx) {
+export function apply(ctx: Context): void {
   ctx.effect(() => {
     const stop = ctx.on('agent/created', ({ agent }) => {
       if (!ctx.agents.roots().includes(agent))
@@ -257,7 +259,7 @@ export function apply(ctx) {
   }, 'tool-automation.register()')
 }
 /** Resolve create args, filling workspace from the current session when omitted. */
-function buildCreate(ctx, cwd, args) {
+function buildCreate(ctx: Context, cwd: string | undefined, args: Record<string, unknown>): CreateAutomationRuleRequest {
   const workspaceId = typeof args['workspace_id'] === 'string'
     ? WorkspaceId(args['workspace_id'])
     : resolveCurrentWorkspace(ctx, cwd)
@@ -269,15 +271,13 @@ function buildCreate(ctx, cwd, args) {
     ...typeof args['permission_preset'] === 'string' ? { permissionPreset: args['permission_preset'] } : {},
     ...args['on_overlap'] === 'skip' || args['on_overlap'] === 'replace' ? { onOverlap: args['on_overlap'] } : {},
     ...typeof args['after_seconds'] === 'number' ? { afterSeconds: args['after_seconds'] } : {},
-    ...args['at'] === undefined ? {} : { at: args['at'] },
+    ...readAt(args['at']),
     ...typeof args['every_seconds'] === 'number' ? { everySeconds: args['every_seconds'] } : {},
-    ...args['local_clock'] === undefined
-      ? {}
-      : { localClock: args['local_clock'] },
+    ...readLocalClock(args['local_clock']),
   }
 }
 /** Sparse update patch from model args. */
-function buildUpdate(args) {
+function buildUpdate(args: Record<string, unknown>): UpdateAutomationRuleRequest {
   return {
     ...typeof args['task'] === 'string' ? { task: args['task'] } : {},
     ...typeof args['name'] === 'string' ? { name: args['name'] } : {},
@@ -287,15 +287,43 @@ function buildUpdate(args) {
     ...args['on_overlap'] === 'skip' || args['on_overlap'] === 'replace' ? { onOverlap: args['on_overlap'] } : {},
     ...typeof args['enabled'] === 'boolean' ? { enabled: args['enabled'] } : {},
     ...typeof args['after_seconds'] === 'number' ? { afterSeconds: args['after_seconds'] } : {},
-    ...args['at'] === undefined ? {} : { at: args['at'] },
+    ...readAt(args['at']),
     ...typeof args['every_seconds'] === 'number' ? { everySeconds: args['every_seconds'] } : {},
-    ...args['local_clock'] === undefined
-      ? {}
-      : { localClock: args['local_clock'] },
+    ...readLocalClock(args['local_clock']),
+  }
+}
+/** Accept a string or structured local-calendar `at` value. */
+function readAt(value: unknown): { at: AtInput } | {} {
+  if (typeof value === 'string')
+    return { at: value }
+  if (value !== null && typeof value === 'object'
+    && 'date' in value && typeof value.date === 'string'
+    && 'time' in value && typeof value.time === 'string'
+    && 'time_zone' in value && typeof value.time_zone === 'string') {
+    return { at: { date: value.date, time: value.time, time_zone: value.time_zone } }
+  }
+  return {}
+}
+/** Accept a structured local-clock selector. */
+function readLocalClock(value: unknown): { localClock: LocalClockInput } | {} {
+  if (value === null || typeof value !== 'object'
+    || !('time' in value) || typeof value.time !== 'string'
+    || !('time_zone' in value) || typeof value.time_zone !== 'string') {
+    return {}
+  }
+  const weekdays = 'weekdays' in value && Array.isArray(value.weekdays)
+    ? value.weekdays.filter((item): item is number => typeof item === 'number')
+    : undefined
+  return {
+    localClock: {
+      time: value.time,
+      time_zone: value.time_zone,
+      ...weekdays === undefined ? {} : { weekdays },
+    },
   }
 }
 /** Look up the workspace that owns the calling session cwd. */
-function resolveCurrentWorkspace(ctx, cwd) {
+function resolveCurrentWorkspace(ctx: Context, cwd: string | undefined) {
   if (cwd === undefined) {
     throw new HarnessError('automation_create needs workspace_id because the current session has no workspace', 'AUTOMATION_WORKSPACE_REQUIRED')
   }
@@ -306,7 +334,7 @@ function resolveCurrentWorkspace(ctx, cwd) {
   return match.id
 }
 /** Map domain errors onto HarnessError so the tool result stays closed. */
-function mapAutomationError(error) {
+function mapAutomationError(error: unknown): never {
   if (error instanceof AutomationInputError) {
     throw new HarnessError(error.message, `AUTOMATION_${error.code.toUpperCase()}`)
   }

@@ -223,6 +223,29 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: true, value: { skills: [{ name: 'commit-helper', description: 'Git commits', modelInvocable: true }] } } }
       },
     },
+    automation: {
+      async list(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { items: [] } } }
+      },
+      async create(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'automation-rejected', message: 'stub', details: { automationCode: 'internal_error' } } } }
+      },
+      async update(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'automation-rejected', message: 'stub', details: { automationCode: 'internal_error' } } } }
+      },
+      async delete(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { id: request.payload.id, deleted: false } } }
+      },
+      async setEnabled(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'automation-rejected', message: 'stub', details: { automationCode: 'internal_error' } } } }
+      },
+      async runNow(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'automation-rejected', message: 'stub', details: { automationCode: 'internal_error' } } } }
+      },
+      async listRuns(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { items: [] } } }
+      },
+    },
     goals: {
       async create(request) {
         return { rpcId: request.rpcId, result: { ok: false, error: { code: 'internal', message: 'stub', details: {} } } }

@@ -108,6 +108,15 @@ function scriptedApi(overrides: {
       clear: err,
       ...overrides.goals,
     },
+    automation: {
+      list: r => ok(r, { items: [] }),
+      create: err,
+      update: err,
+      delete: r => ok(r, { id: r.payload.id, deleted: false }),
+      setEnabled: err,
+      runNow: err,
+      listRuns: r => ok(r, { items: [] }),
+    },
     settings: {
       describe: r => ok(r, { writable: true, hasDocument: false, namespaces: [] }),
       openDocument: r => ok(r, { opened: true as const }),
