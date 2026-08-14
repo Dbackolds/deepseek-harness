@@ -11,6 +11,7 @@
 | `dsh --profile <name>` | 启动位于 `$DSH_HOME/profiles/<name>` 的指定 profile。 |
 | `dsh --profile headless "job"` | 运行一个全新的持久化会话，打印最终答案并退出。 |
 | `dsh web` | `--profile web` 的别名。 |
+| `dsh desktop` | 打开包裹本地 web Host 的 Electron 窗口。 |
 | `dsh plugin --profile <name> <pnpm args>` | 通过在 profile 目录中转发给 pnpm 来管理该 profile 的插件。 |
 
 运行命令时所在的目录将作为默认 workspace 根目录。`web` 和 `headless` profile 在首次使用时会从随附模板自动初始化；其他任何 profile 都必须通过 `dsh plugin` 创建。
@@ -44,4 +45,4 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 
 ## 开发
 
-生产运行需要已构建的包与前端产物。请在仓库根目录单独运行 `pnpm run build`，然后使用 `pnpm dsh <args...>` 运行 TypeScript 入口并转发所有参数；模块解析约定以[源码执行参考](reference/README.md#source-execution)为准。
+生产运行需要已构建的包与前端产物。请在仓库根目录单独运行 `pnpm run build`，然后使用 `pnpm dsh <args...>` 运行 TypeScript 入口并转发所有参数；模块解析约定以[源码执行参考](reference/README.md#source-execution)为准。`pnpm desktop` 或 `pnpm dsh desktop` 会打开包裹同一套已构建 Host 的 Electron 窗口。

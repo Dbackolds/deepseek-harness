@@ -1,8 +1,11 @@
 /** Release family discovery, publish order, tag naming, and the bump judgements. */
 
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { releaseFamily, type ReleaseMember } from './families.ts'
 import { compareVersions, nextVendorVersion, reachesPayload } from './bump.ts'
+
+const repoRoot = resolve(import.meta.dirname, '../..')
 
 /**
  * A release member standing in for a manifest on disk.
@@ -93,6 +96,13 @@ describe('release families', () => {
 
   it('rejects an unknown family identifier', () => {
     expect(() => { releaseFamily('native') }).toThrow(/unknown release family/)
+  })
+
+  it('skips private app shells when discovering members', () => {
+    const members = releaseFamily('dsh').members(repoRoot)
+    expect(members.some(entry => entry.directory === 'apps/desktop')).toBe(false)
+    expect(members.some(entry => entry.name === '@deepseek-ai/dsh-desktop')).toBe(false)
+    expect(members.some(entry => entry.directory === 'apps/cli')).toBe(true)
   })
 })
 

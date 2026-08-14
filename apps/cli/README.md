@@ -11,6 +11,7 @@ The `dsh` command is the product launcher for profiles: ordered stacks of plugin
 | `dsh --profile <name>` | Boot the named profile under `$DSH_HOME/profiles/<name>`. |
 | `dsh --profile headless "job"` | Run one fresh persisted session, print the final answer, and exit. |
 | `dsh web` | Alias of `--profile web`. |
+| `dsh desktop` | Open the Electron window around the local web Host. |
 | `dsh plugin --profile <name> <pnpm args>` | Manage a profile's plugins by forwarding to pnpm in the profile directory. |
 
 The invoking directory is the default workspace root. The `web` and `headless` profiles auto-initialize on first use from shipped templates; any other profile must be created through `dsh plugin`.
@@ -44,4 +45,4 @@ The [CLI behavior reference](reference/README.md) owns exact layer precedence, f
 
 ## Development
 
-Production runs require built package and frontend artifacts. From the repository root, run `pnpm run build` separately, then use `pnpm dsh <args...>` to run the TypeScript entry and forward every argument; the [source-execution reference](reference/README.md#source-execution) owns the module-resolution contract.
+Production runs require built package and frontend artifacts. From the repository root, run `pnpm run build` separately, then use `pnpm dsh <args...>` to run the TypeScript entry and forward every argument; the [source-execution reference](reference/README.md#source-execution) owns the module-resolution contract. `pnpm desktop` or `pnpm dsh desktop` opens the Electron window around that same built Host.

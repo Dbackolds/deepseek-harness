@@ -740,6 +740,18 @@
         "@deepseek-ai/.+"
       ]
     },
+    "apps/desktop": {
+      "entry": [
+        "src/main.ts",
+        "src/preload.ts",
+        "tests/**/*.spec.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ],
+      "ignoreDependencies": []
+    },
     "packages/client/modules": {
       "entry": [
         "tests/**/*.spec.ts"
