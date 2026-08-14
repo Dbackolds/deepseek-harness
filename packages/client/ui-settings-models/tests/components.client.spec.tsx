@@ -153,6 +153,7 @@ function scriptedFace(overrides: {
           { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], active: true },
           { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true },
           { provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'], active: false },
+          { provider: 'fac', displayName: 'FAC', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'fac'], active: false },
           { provider: 'zombie', displayName: 'zombie', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'zombie'], active: false },
           { provider: 'broken', displayName: 'broken', settingsNs: 'llm-pi-ai', settingsPath: ['nope', 'x'], active: false },
           { provider: 'plain', displayName: 'plain', settingsNs: 'llm-plain', settingsPath: ['profiles', 'plain'], active: false },
@@ -723,6 +724,38 @@ describe('ModelsSection', () => {
       .toBe(en.contextWindowPlaceholder)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 1`).placeholder)
       .toBe(en.maxTokensPlaceholder)
+    expect(screen.getByLabelText<HTMLTextAreaElement>(`${en.modelSystemPrompt} 1`).placeholder)
+      .toBe(en.modelSystemPromptPlaceholder)
+  })
+
+  it('writes a DeepSeek systemPrompt and drops an emptied one', async () => {
+    const { mutate } = await mountDeepSeekCard({
+      mutate: vi.fn(() => Promise.resolve(ok(wireNamespaces()[0]))),
+    })
+    fireEvent.click(screen.getByText(en.customized))
+    expandRow(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelSystemPrompt} 1`), {
+      target: { value: 'You replace the assembled prompt.' },
+    })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    expect(mutate.mock.calls[0]?.[0]).toMatchObject({
+      ns: 'llm-deepseek',
+      ops: [{
+        op: 'set',
+        path: ['models'],
+        value: [
+          {
+            id: 'deepseek-v4-flash',
+            name: 'DeepSeek-V4-Flash',
+            description: 'Preserved hidden detail',
+            contextWindow: 1_000_000,
+            systemPrompt: 'You replace the assembled prompt.',
+          },
+          DEFAULT_DEEPSEEK_MODELS[1],
+        ],
+      }],
+    })
   })
 
   it('can empty and reset the model override, then clear optional fields without dropping hidden data', async () => {
@@ -842,12 +875,16 @@ describe('ModelsSection', () => {
     const { mutate, set } = await mountSection()
     fireEvent.click(screen.getByText(en.add))
     const pick = await screen.findByLabelText<HTMLSelectElement>(en.provider)
-    expect([...pick.options].map(option => option.value)).toEqual(['anthropic', 'broken', 'plain'])
+    expect([...pick.options].map(option => option.value)).toEqual(['anthropic', 'fac', 'broken', 'plain'])
     expect(pick.value).toBe('anthropic')
     // A dormant profile has no endpoint anywhere: the pi-ai placeholder
     // falls back to the provider-default wording.
     fireEvent.click(screen.getByText(en.customized))
     expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe(en.baseUrlDefault)
+    fireEvent.change(pick, { target: { value: 'fac' } })
+    fireEvent.click(screen.getByText(en.customized))
+    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe('https://new.fastaicode.top/v1')
+    fireEvent.change(pick, { target: { value: 'anthropic' } })
     const addKey = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     expect(addKey.placeholder).toBe(en.keyPlaceholderNative)
     fireEvent.change(addKey, { target: { value: 'sk-ant' } })

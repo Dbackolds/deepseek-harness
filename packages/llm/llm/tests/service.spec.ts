@@ -597,6 +597,45 @@ describe('LlmRuntime', () => {
     })
   })
 
+  it('preserves a non-empty systemPrompt and drops an empty one', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const adapter = new class extends ScriptedAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({
+          provider, id: model, name: model,
+          systemPrompt: model === 'empty' ? '' : 'You replace the assembled prompt.',
+        })
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
+
+    await expect(ctx.llm.resolveModelInfo('route', 'model')).resolves.toEqual({
+      provider: 'route', id: 'model', name: 'model',
+      systemPrompt: 'You replace the assembled prompt.',
+    })
+    await expect(ctx.llm.resolveModelInfo('route', 'empty')).resolves.toEqual({
+      provider: 'route', id: 'empty', name: 'empty',
+    })
+  })
+
+  it('rejects a non-string systemPrompt', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const adapter = new class extends ScriptedAdapter {
+      override resolveModel(): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({
+          provider: 'route', id: 'model', name: 'Model',
+          systemPrompt: 1,
+        } as unknown as LlmResolvedModelInfo)
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
+
+    await expect(ctx.llm.resolveModelInfo('route', 'model'))
+      .rejects.toMatchObject({ code: 'INVALID_MODEL_SYSTEM_PROMPT' })
+  })
+
   it('resolves detached model context independently of advisory catalog membership', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)

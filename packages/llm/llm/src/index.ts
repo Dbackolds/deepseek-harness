@@ -214,7 +214,7 @@ export abstract class LlmAdapter {
    * @param model - exact model id passed to {@link GenerateOptions.model}.
    * @param _signal - cancellation for this exact-model lookup; asynchronous
    *   implementations must settle promptly after it aborts.
-   * @returns provider/model identity plus any context, call-default, and reasoning metadata.
+   * @returns provider/model identity plus any context, call-default, reasoning, and system-prompt metadata.
    */
   resolveModel(
     provider: string,
@@ -663,6 +663,13 @@ export class LlmRuntime extends Service {
         'INVALID_MODEL_MAX_TOKENS',
       )
     }
+    const systemPrompt = resolved.systemPrompt
+    if (systemPrompt !== undefined && typeof systemPrompt !== 'string') {
+      throw new LlmError(
+        `adapter returned invalid systemPrompt for provider "${provider}" model "${model}"`,
+        'INVALID_MODEL_SYSTEM_PROMPT',
+      )
+    }
     const info: LlmResolvedModelInfo = {
       provider,
       id: model,
@@ -671,6 +678,7 @@ export class LlmRuntime extends Service {
       ...inputModalities === undefined ? {} : { inputModalities },
       ...context === undefined ? {} : { context: { contextWindow: context.contextWindow } },
       ...defaultMaxTokens === undefined ? {} : { defaultMaxTokens },
+      ...systemPrompt === undefined || systemPrompt.length === 0 ? {} : { systemPrompt },
     }
     const reasoning = resolved.reasoning
     if (reasoning === undefined) return info

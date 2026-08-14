@@ -38,6 +38,12 @@ export interface DeepSeekCatalogModel {
   contextWindow?: number
   /** Per-request output cap for this model; omission falls back to the profile's {@link DeepSeekConnectionOptions.maxTokens}. */
   maxTokens?: number
+  /**
+   * Complete system-prompt template for this catalog entry. Absence keeps
+   * ordinary prompt assembly; a non-empty value replaces every assembled
+   * system section for requests that name this id.
+   */
+  systemPrompt?: string
 }
 
 /**
@@ -191,6 +197,9 @@ export class DeepSeekAdapter extends LlmAdapter {
         : modelInfo(provider, configured),
       context: { contextWindow },
       defaultMaxTokens: configured?.maxTokens ?? connection.maxTokens,
+      ...configured?.systemPrompt === undefined || configured.systemPrompt.length === 0
+        ? {}
+        : { systemPrompt: configured.systemPrompt },
       ...connection.defaults.thinking === 'disabled'
         ? {
           reasoning: {

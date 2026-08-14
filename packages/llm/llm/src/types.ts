@@ -278,6 +278,13 @@ export interface LlmResolvedModelInfo extends LlmModelInfo {
   defaultMaxTokens?: number
   /** Adapter-owned selectable reasoning levels when exposed. */
   reasoning?: LlmModelReasoningInfo
+  /**
+   * Optional complete system-prompt template for this exact model. When
+   * present and non-empty, agent-loop replaces every assembled system
+   * section with this text after `{{variable}}` interpolation. Absence
+   * keeps the ordinary section assembly.
+   */
+  systemPrompt?: string
 }
 
 /**

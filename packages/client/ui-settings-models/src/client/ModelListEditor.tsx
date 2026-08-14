@@ -417,6 +417,19 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                   />
                 </label>
+                <label className={`${styles['modelField']} ${styles['modelSystemPrompt']}`}>
+                  <span className={styles['modelFieldLabel']}>{t('modelSystemPrompt')}</span>
+                  <textarea
+                    className={`${styles['input']} ${styles['modelSystemPromptInput']}`}
+                    value={textOf(model, 'systemPrompt')}
+                    placeholder={t('modelSystemPromptPlaceholder')}
+                    aria-label={`${t('modelSystemPrompt')} ${index + 1}`}
+                    disabled={disabled}
+                    onChange={(event) => {
+                      patch(index, { systemPrompt: event.target.value === '' ? undefined : event.target.value })
+                    }}
+                  />
+                </label>
               </div>
             )
             : null}

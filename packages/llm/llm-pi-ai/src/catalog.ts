@@ -235,6 +235,12 @@ export interface PiAiModelProfile {
   reasoningEfforts?: false | PiAiReasoningEfforts
   /** Reasoning-dispatch switches for this model, winning over the route's. */
   compat?: PiAiCompatProfile
+  /**
+   * Complete system-prompt template for this model. Absence keeps ordinary
+   * prompt assembly; a non-empty value replaces every assembled system
+   * section for requests that name this id.
+   */
+  systemPrompt?: string
 }
 
 /**
@@ -423,6 +429,11 @@ export interface RouteCatalog {
   /** The materialized models in configuration order. */
   models: readonly Model<Api>[]
   /**
+   * Complete system-prompt templates this profile explicitly configured, by
+   * model id. Empty or omitted entries never appear here.
+   */
+  configuredSystemPrompts: ReadonlyMap<string, string>
+  /**
    * Per-request output caps this profile explicitly configured, by model id.
    *
    * Separate from `Model.maxTokens` because the two answer different
@@ -489,6 +500,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     || request.compat?.supportsReasoningEffort !== undefined
   const seen = new Set<string>()
   const configuredMaxTokens = new Map<string, number>()
+  const configuredSystemPrompts = new Map<string, string>()
   const models = entries.map((entry) => {
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
@@ -518,6 +530,10 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     // Only a value the profile named is a deployment choice; the catalog's is
     // the model's capability and stays out of request defaults.
     if (entry.maxTokens !== undefined) configuredMaxTokens.set(entry.id, entry.maxTokens)
+    const systemPrompt = entry.systemPrompt?.trim()
+    if (systemPrompt !== undefined && systemPrompt.length > 0) {
+      configuredSystemPrompts.set(entry.id, systemPrompt)
+    }
     return {
       // The installed entry lays the floor, and the fields below override it.
       // Enumerating instead would silently drop every `Model` field this
@@ -542,5 +558,5 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     invalid(provider, 'sets compat reasoning switches, but no model on the route speaks openai-completions;'
       + ' thinkingFormat and supportsReasoningEffort exist only on that protocol')
   }
-  return { models, configuredMaxTokens }
+  return { models, configuredMaxTokens, configuredSystemPrompts }
 }

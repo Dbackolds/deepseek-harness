@@ -86,6 +86,7 @@ const catalogModel: z<DeepSeekCatalogModel> = z.object({
   description: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
+  systemPrompt: z.string(),
 })
 
 export const Config: z<Config> = z.object({
@@ -134,14 +135,19 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
         `llm-deepseek: catalog model "${model.id}" maxTokens must be a positive integer`,
       )
     }
+    if (model.systemPrompt !== undefined && typeof model.systemPrompt !== 'string') {
+      throw new Error(`llm-deepseek: catalog model "${model.id}" systemPrompt must be a string`)
+    }
     if (seen.has(model.id)) throw new Error(`llm-deepseek: duplicate catalog model "${model.id}"`)
     seen.add(model.id)
+    const systemPrompt = model.systemPrompt?.trim()
     return {
       id: model.id,
       ...model.name === undefined ? {} : { name: model.name },
       ...model.description === undefined ? {} : { description: model.description },
       ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
       ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
+      ...systemPrompt === undefined || systemPrompt.length === 0 ? {} : { systemPrompt },
     }
   })
 }

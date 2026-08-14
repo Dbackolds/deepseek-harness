@@ -506,6 +506,10 @@
   padding: 8px 4px 2px;
 }
 
+.modelSystemPrompt {
+  grid-column: 1 / -1;
+}
+
 .modelField {
   display: flex;
   flex-direction: column;
@@ -580,6 +584,13 @@ select.input {
 .input:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.modelSystemPromptInput {
+  height: auto;
+  min-height: 88px;
+  padding: 8px 10px;
+  resize: vertical;
 }
 
 /* Select variant of .input: replaces the OS arrow (which sits flush against

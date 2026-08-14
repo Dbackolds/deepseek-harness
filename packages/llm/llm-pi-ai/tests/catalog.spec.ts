@@ -450,6 +450,48 @@ describe('catalog routes with per-model configuration', () => {
     expect((await ctx.llm.resolveModelInfo('deepseek', catalogModel.id)).defaultMaxTokens).toBe(4096)
   })
 
+  it('exposes a configured systemPrompt from models and modelOverrides', async () => {
+    const server = await mockServer([])
+    const [catalogModel] = getBuiltinModels('deepseek')
+    if (catalogModel === undefined) throw new Error('the installed catalog ships no deepseek model')
+    const listed = await harness({
+      providers: {
+        deepseek: {
+          baseURL: server.url,
+          models: [
+            { id: catalogModel.id, systemPrompt: '  You replace the assembled prompt.  ' },
+          ],
+        },
+      },
+    })
+    await expect(listed.llm.resolveModelInfo('deepseek', catalogModel.id))
+      .resolves.toMatchObject({ systemPrompt: 'You replace the assembled prompt.' })
+
+    const overridden = await harness({
+      providers: {
+        deepseek: {
+          baseURL: server.url,
+          modelOverrides: {
+            [catalogModel.id]: { systemPrompt: 'Override prompt for {{model}}.' },
+          },
+        },
+      },
+    })
+    await expect(overridden.llm.resolveModelInfo('deepseek', catalogModel.id))
+      .resolves.toMatchObject({ systemPrompt: 'Override prompt for {{model}}.' })
+
+    const blank = await harness({
+      providers: {
+        deepseek: {
+          baseURL: server.url,
+          models: [{ id: catalogModel.id, systemPrompt: '   ' }],
+        },
+      },
+    })
+    await expect(blank.llm.resolveModelInfo('deepseek', catalogModel.id))
+      .resolves.not.toHaveProperty('systemPrompt')
+  })
+
   it('adds a model the installed catalog does not describe to a catalog route', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = await harness({

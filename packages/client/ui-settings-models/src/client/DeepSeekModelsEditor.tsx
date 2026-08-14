@@ -17,7 +17,7 @@ import styles from './ModelsSection.module.css'
 export type DeepSeekModelDraft = Record<string, unknown>
 
 /** The catalog fields this editor writes. */
-type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens'
+type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens' | 'systemPrompt'
 
 /** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
 type CapacityField = 'contextWindow' | 'maxTokens'
@@ -343,6 +343,20 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                     <div className={styles['modelAdvanced']}>
                       {capacityField(model, index, 'contextWindow', props.defaultContextWindow)}
                       {capacityField(model, index, 'maxTokens', props.defaultMaxTokens)}
+                      <label className={`${styles['modelField']} ${styles['modelSystemPrompt']}`}>
+                        <span className={styles['modelFieldLabel']}>{props.t('modelSystemPrompt')}</span>
+                        <textarea
+                          className={`${styles['input']} ${styles['modelSystemPromptInput']}`}
+                          value={typeof model['systemPrompt'] === 'string' ? model['systemPrompt'] : ''}
+                          placeholder={props.t('modelSystemPromptPlaceholder')}
+                          aria-label={`${props.t('modelSystemPrompt')} ${String(index + 1)}`}
+                          disabled={props.disabled}
+                          onChange={(event) => {
+                            const text = event.target.value
+                            update(index, 'systemPrompt', text === '' ? undefined : text)
+                          }}
+                        />
+                      </label>
                     </div>
                   )
                   : null}

@@ -261,6 +261,7 @@ export class PiAiAdapter extends LlmAdapter {
       // Only a cap the deployment configured is a request default; the
       // catalog's `maxTokens` sizes the model and stops there.
       const configuredMaxTokens = profile.configuredMaxTokens.get(model)
+      const systemPrompt = profile.configuredSystemPrompts.get(model)
       return {
         provider,
         id: model,
@@ -268,6 +269,7 @@ export class PiAiAdapter extends LlmAdapter {
         inputModalities: [...resolvedModel.input],
         context: { contextWindow: resolvedModel.contextWindow },
         ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
+        ...systemPrompt === undefined ? {} : { systemPrompt },
         ...reasoningInfo(resolvedModel, defaultLevel),
       }
     })

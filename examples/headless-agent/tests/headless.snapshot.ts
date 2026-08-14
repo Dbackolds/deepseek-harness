@@ -541,6 +541,10 @@ describe('headless stream-json snapshots', () => {
       expect(result.stderr).toBe('')
       expect(server.requests).toHaveLength(1)
       expect(server.requests[0]?.max_tokens).toBe(256_000)
+      expect(server.requests[0]?.messages).toEqual([
+        { role: 'system', content: 'Model-owned system prompt for deepseek-v4-flash.' },
+        { role: 'user', content: 'return the deterministic response' },
+      ])
       const header = (parseJsonl(result.stdout)
         .map(record => record.event)
         .find((event): event is JsonObject => (

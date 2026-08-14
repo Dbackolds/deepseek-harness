@@ -8,6 +8,10 @@
           baseURL: !!js process.env.DSH_SNAPSHOT_BASE_URL
           thinking: disabled
           streamIdleTimeoutMs: 150
+          models:
+            - id: deepseek-v4-flash
+              name: DeepSeek-V4-Flash
+              systemPrompt: 'Model-owned system prompt for {{model}}.'
       - id: agent-spine
         config:
           agents:

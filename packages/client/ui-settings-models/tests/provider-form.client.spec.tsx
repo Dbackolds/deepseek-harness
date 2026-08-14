@@ -213,6 +213,27 @@ describe('model list editing', () => {
     })
   })
 
+  it('writes a pi-ai systemPrompt and drops an emptied one', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelSystemPrompt} 1`), {
+      target: { value: 'You replace the assembled prompt.' },
+    })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate)).toMatchObject({
+      ns: 'llm-pi-ai',
+      ops: [{
+        op: 'set',
+        path: ['providers', 'openai', 'models'],
+        value: [{ id: 'acme-large', systemPrompt: 'You replace the assembled prompt.' }],
+      }],
+    })
+  })
+
   it('names a duplicate model id in the edit flow too', async () => {
     const { mutate } = await mountSection({
       providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'dup' }] } },

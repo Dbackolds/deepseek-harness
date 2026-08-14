@@ -455,6 +455,13 @@ interface LlmResolvedModelInfo extends LlmModelInfo {
   defaultMaxTokens?: number
   /** Adapter-owned selectable reasoning levels when exposed. */
   reasoning?: LlmModelReasoningInfo
+  /**
+   * Optional complete system-prompt template for this exact model. When
+   * present and non-empty, agent-loop replaces every assembled system
+   * section with this text after `{{variable}}` interpolation. Absence
+   * keeps the ordinary section assembly.
+   */
+  systemPrompt?: string
 }
 ```
 
@@ -685,7 +692,7 @@ declare abstract class LlmAdapter {
    * @param model - exact model id passed to {@link GenerateOptions.model}.
    * @param _signal - cancellation for this exact-model lookup; asynchronous
    *   implementations must settle promptly after it aborts.
-   * @returns provider/model identity plus any context, call-default, and reasoning metadata.
+   * @returns provider/model identity plus any context, call-default, reasoning, and system-prompt metadata.
    */
   resolveModel(
     provider: string,

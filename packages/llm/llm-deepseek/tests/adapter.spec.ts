@@ -857,6 +857,30 @@ describe('plugin registration and config', () => {
       .resolves.toMatchObject({ defaultMaxTokens: 4096 })
   })
 
+  it('rejects a non-string catalog systemPrompt when apply is called directly', () => {
+    expect(() => resolveAdapterOptions({
+      models: [{ id: 'bad-prompt', systemPrompt: 1 as unknown as string }],
+    })).toThrow(/systemPrompt must be a string/)
+  })
+
+  it('exposes a catalog systemPrompt only for the listed id', async () => {
+    const adapter = adapterOf({
+      models: [
+        { id: 'scripted', systemPrompt: '  You replace the assembled prompt.  ' },
+        { id: 'blank', systemPrompt: '   ' },
+        { id: 'plain' },
+      ],
+    })
+    await expect(adapter.resolveModel('deepseek-official', 'scripted'))
+      .resolves.toMatchObject({ systemPrompt: 'You replace the assembled prompt.' })
+    await expect(adapter.resolveModel('deepseek-official', 'blank'))
+      .resolves.not.toHaveProperty('systemPrompt')
+    await expect(adapter.resolveModel('deepseek-official', 'plain'))
+      .resolves.not.toHaveProperty('systemPrompt')
+    await expect(adapter.resolveModel('deepseek-official', 'unlisted-pass-through'))
+      .resolves.not.toHaveProperty('systemPrompt')
+  })
+
   it('rejects invalid context capacity when apply is called directly', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)

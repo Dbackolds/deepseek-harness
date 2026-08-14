@@ -256,6 +256,69 @@ describe('agent loop', () => {
     expect(request!.tools?.map(t => t.name)).toEqual(['noop'])
   })
 
+  it('replaces every assembled system section with a model systemPrompt', async () => {
+    const adapter = new MockAdapter(
+      [textResponse('ok')],
+      undefined,
+      undefined,
+      'You replace the assembled prompt on {{model}}.',
+    )
+    const ctx = await harness(adapter, 'You are a test agent on {{model}}.')
+    ctx.systemPrompt.section({ name: 'tool:noop', order: 100, text: 'Use the noop tool wisely.' })
+    const agent = ctx.agentLoop.create(SessionId('a-model-prompt'), { provider: 'mock', model: 'mock' })
+
+    send(agent, 'hi')
+    await waitForIdle(ctx, agent)
+
+    expect(adapter.requests[0]!.system).toBe('You replace the assembled prompt on mock.')
+  })
+
+  it('lets a complete persona win over a model systemPrompt', async () => {
+    const adapter = new MockAdapter(
+      [textResponse('ok')],
+      undefined,
+      undefined,
+      'You replace the assembled prompt on {{model}}.',
+    )
+    const ctx = await harness(adapter, 'You are a test agent on {{model}}.')
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('a-complete-persona'),
+      agentOptions: { provider: 'mock', model: 'mock' },
+      setup: (agentCtx) => {
+        agentCtx.systemPrompt.section({
+          name: 'deployment:persona',
+          order: 0,
+          text: 'Only this.',
+          complete: true,
+        })
+      },
+    })
+
+    send(handle.agent, 'hi')
+    await waitForIdle(ctx, handle.agent)
+
+    expect(adapter.requests[0]!.system).toBe('Only this.')
+  })
+
+  it('keeps ordinary assembly when exact-model lookup fails', async () => {
+    let lookups = 0
+    const adapter = new class extends MockAdapter {
+      override resolveModel(provider: string, model: string) {
+        lookups += 1
+        // Assemble looks up first; a later prepareCall still needs metadata.
+        if (lookups === 1) return Promise.reject(new LlmError('no metadata', 'NO_ADAPTER'))
+        return super.resolveModel(provider, model)
+      }
+    }([textResponse('ok')])
+    const ctx = await harness(adapter, 'You are a test agent.')
+    const agent = ctx.agentLoop.create(SessionId('a-lookup-fail'), { provider: 'mock', model: 'mock' })
+
+    send(agent, 'hi')
+    await waitForIdle(ctx, agent)
+
+    expect(adapter.requests[0]!.system).toBe('You are an AI agent powered by DeepSeek Harness.\n\nYou are a test agent.')
+  })
+
   it('resolves {{cwd}} from the agent session workspace (factory create with meta.cwd)', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter, 'Working in {{cwd}}.')

@@ -166,6 +166,11 @@ export interface ResolvedPiAiProviderProfile
    * own, so a catalog capability must not appear here.
    */
   configuredMaxTokens: ReadonlyMap<string, number>
+  /**
+   * Complete system-prompt templates this profile explicitly configured, by
+   * model id. Empty or omitted entries never appear here.
+   */
+  configuredSystemPrompts: ReadonlyMap<string, string>
 }
 
 /** Plugin configuration: the provider routes this instance owns. */
@@ -219,6 +224,7 @@ const modelFields = {
   // installed catalog's capability", while `false` disables reasoning.
   reasoningEfforts: z.union([z.const(false), reasoningEfforts]),
   compat: compatProfile,
+  systemPrompt: z.string(),
 }
 
 const modelProfile: z<PiAiModelProfile> = z.object({
@@ -358,6 +364,7 @@ export function resolveProfiles(
       ...rest.headers === undefined ? {} : { headers: { ...rest.headers } },
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },
       configuredMaxTokens: catalog.configuredMaxTokens,
+      configuredSystemPrompts: catalog.configuredSystemPrompts,
       piProvider: buildProvider({
         provider,
         displayName,
