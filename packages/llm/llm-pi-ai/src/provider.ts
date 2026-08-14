@@ -24,7 +24,7 @@ import type { Api, ApiKeyAuth, Model, Provider, ProviderStreams } from '@earendi
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy'
-import { catalogProvider } from './catalog.ts'
+import { catalogProvider, shippedApi } from './catalog.ts'
 
 /**
  * Wire protocols a configured route may name, mapped to pi-ai's lazily loaded
@@ -173,11 +173,13 @@ export function buildProvider(spec: ProviderSpec): Provider {
 
   // Every model on this path carries the route's protocol: model resolution
   // requires one for a route the catalog cannot default, and an explicit one
-  // replaces each catalog model's own. So the route has a single API.
-  const factory = spec.api === undefined ? undefined : PROTOCOLS[spec.api]
+  // replaces each catalog model's own. A harness-owned gateway such as FAC
+  // supplies that protocol when the profile names none.
+  const api = spec.api ?? shippedApi(spec.provider)
+  const factory = api === undefined ? undefined : PROTOCOLS[api]
   if (factory === undefined) {
     throw new Error(
-      `llm-pi-ai: provider "${spec.provider}" names api "${spec.api}", which this build cannot serve;`
+      `llm-pi-ai: provider "${spec.provider}" names api "${api}", which this build cannot serve;`
       + ` supported protocols are ${supportedProtocols().join(', ')}`,
     )
   }

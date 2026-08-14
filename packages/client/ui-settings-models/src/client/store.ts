@@ -200,6 +200,12 @@ export class ModelsSettingsStore {
  */
 export function providerUsable(row: ProviderRow): boolean {
   if (!row.entry.active) return false
-  if (row.apiKeyEnv === undefined) return true
+  if (row.apiKeyEnv === undefined) {
+    // A composition-owned route with no named reference still needs a key
+    // the Models page can store. Treating it as native-auth would hide the
+    // FAC setup card behind a usable first-run posture.
+    if (!row.removable && row.configured) return false
+    return true
+  }
   return row.credential?.configured === true
 }

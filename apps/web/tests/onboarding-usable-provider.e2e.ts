@@ -70,6 +70,7 @@ describe.skipIf(MODE === 'record')('web e2e: another usable provider ends first-
       async () => settings.getByRole('textbox', { name: 'API 密钥', exact: true }).count(),
       { timeout: 10_000 },
     ).toBe(1)
+    await settings.getByRole('button', { name: '编辑 FAC (fac)' }).waitFor({ timeout: 10_000 })
     await settings.getByRole('button', { name: '编辑 DeepSeek (deepseek-official)' }).waitFor({ timeout: 10_000 })
     const dismissed = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DISMISSED_EXPECTED, dismissed, MODE)

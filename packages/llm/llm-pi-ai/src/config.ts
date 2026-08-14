@@ -21,7 +21,16 @@ import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
 import type { ResolvedRetryPolicy, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
-import { MODALITIES, resolveRouteModels, SUPPORTED_THINKING_FORMATS, THINKING_LEVELS } from './catalog.ts'
+import {
+  FAC_DISPLAY_NAME,
+  FAC_PROVIDER,
+  MODALITIES,
+  resolveRouteModels,
+  shippedApi,
+  shippedBaseUrl,
+  SUPPORTED_THINKING_FORMATS,
+  THINKING_LEVELS,
+} from './catalog.ts'
 import type {
   PiAiCompatProfile,
   PiAiModality,
@@ -341,7 +350,7 @@ export function resolveProfiles(
     // The route key, not the installed provider's own name: the directory has
     // always shown route keys, and a catalog route must not silently rename
     // itself on every configuration surface just because it gained a profile.
-    const displayName = source.displayName ?? provider
+    const displayName = source.displayName ?? (provider === FAC_PROVIDER ? FAC_DISPLAY_NAME : provider)
     const catalog = resolveRouteModels({
       provider,
       ...source.api === undefined ? {} : { api: source.api },
@@ -354,6 +363,8 @@ export function resolveProfiles(
       defaultMaxTokens: source.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
     })
     const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, ...rest } = source
+    const api = source.api ?? shippedApi(provider)
+    const baseURL = source.baseURL ?? shippedBaseUrl(provider)
     resolved.set(provider, {
       ...rest,
       provider,
@@ -368,8 +379,8 @@ export function resolveProfiles(
       piProvider: buildProvider({
         provider,
         displayName,
-        ...source.api === undefined ? {} : { api: source.api },
-        ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
+        ...api === undefined ? {} : { api },
+        ...baseURL === undefined ? {} : { baseURL },
         models: catalog.models,
         namesCredential: apiKeyEnv !== undefined,
       }),

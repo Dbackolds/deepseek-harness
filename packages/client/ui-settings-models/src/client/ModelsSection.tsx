@@ -127,7 +127,10 @@ export async function removeProviderProfile(
  */
 export function needsSetup(row: ProviderRow, anyUsable: boolean): boolean {
   if (anyUsable) return false
-  if (row.entry.settingsPath.length > 0) return false
+  // Composition-owned routes stay on the page as setup cards, whether the
+  // whole section is the profile (DeepSeek) or a dict entry the base pinned
+  // (FAC). A user-added nested profile stays off the page until Add provider.
+  if (row.entry.settingsPath.length > 0 && row.removable) return false
   return row.credential?.configured !== true
 }
 

@@ -34,4 +34,19 @@ describe('providerUsable', () => {
   it('treats a reference-free registered route as provider-native authentication', () => {
     expect(providerUsable(otherRow({ apiKeyEnv: undefined, credential: undefined }))).toBe(true)
   })
+
+  it('does not treat a composition-owned keyless route as already usable', () => {
+    expect(providerUsable(otherRow({
+      entry: {
+        provider: 'fac',
+        displayName: 'FAC',
+        settingsNs: 'llm-pi-ai',
+        settingsPath: ['providers', 'fac'],
+        active: true,
+      },
+      removable: false,
+      apiKeyEnv: undefined,
+      credential: undefined,
+    }))).toBe(false)
+  })
 })

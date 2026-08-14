@@ -21,6 +21,10 @@
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
   - list:
     - listitem:
+      - text: FAC
+      - img "API 密钥缺失"
+      - button "编辑 FAC (fac)": 编辑
+    - listitem:
       - text: minimax-cn
       - img "API 密钥已配置"
       - button "编辑 minimax-cn": 编辑

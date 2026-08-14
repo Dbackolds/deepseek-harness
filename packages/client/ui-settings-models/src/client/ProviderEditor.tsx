@@ -42,6 +42,8 @@ type EditorLayout = 'deepseek' | 'pi-ai' | 'unknown'
 
 /** The public DeepSeek endpoint shown as the deepseek base-URL placeholder. */
 const DEEPSEEK_PUBLIC_BASE_URL = 'https://api.deepseek.com'
+/** The shipped FAC endpoint shown as that route's base-URL placeholder. */
+const FAC_PUBLIC_BASE_URL = 'https://new.fastaicode.top/v1'
 
 /** Props of {@link ProviderEditor}. */
 export interface ProviderEditorProps {
@@ -391,7 +393,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 value={stringAt(draft, 'baseURL') ?? ''}
                 placeholder={family === 'deepseek'
                   ? DEEPSEEK_PUBLIC_BASE_URL
-                  : stringAt(fallback, 'baseURL') ?? t('baseUrlDefault')}
+                  : props.provider === 'fac'
+                    ? stringAt(fallback, 'baseURL') ?? FAC_PUBLIC_BASE_URL
+                    : stringAt(fallback, 'baseURL') ?? t('baseUrlDefault')}
                 aria-label={t('baseUrl')}
                 disabled={disabled}
                 onChange={(event) => {

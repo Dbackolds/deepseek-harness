@@ -103,6 +103,21 @@ describe('catalog-route model discovery', () => {
     // that shape is only reachable by calling it directly.
     await expect(discoverModels({})).rejects.toThrow(/set a baseURL/)
   })
+
+  it('asks the shipped FAC endpoint when the draft names no base URL', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe('https://new.fastaicode.top/v1/models')
+      return new Response(JSON.stringify({ data: [{ id: 'fac-chat', name: 'FAC Chat' }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const ctx = await harness()
+    await expect(ctx.llm.discoverModels('llm-pi-ai', { provider: 'fac' }))
+      .resolves.toEqual([{ id: 'fac-chat', name: 'FAC Chat' }])
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
 })
 
 describe('draft-provider model discovery', () => {

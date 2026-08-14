@@ -151,6 +151,21 @@ describe('hand-declared providers', () => {
     expect(directory.filter(entry => entry.declared).map(entry => entry.provider))
       .toEqual(['acme-gateway'])
     expect(directory.find(entry => entry.provider === 'deepseek')?.declared).toBe(false)
+    expect(directory.find(entry => entry.provider === 'fac')).toEqual({
+      provider: 'fac',
+      displayName: 'FAC',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'fac'],
+      declared: false,
+    })
+    expect(directory[0]?.provider).toBe('fac')
+  })
+
+  it('defaults a key-only FAC profile to the shipped endpoint and protocol', () => {
+    const resolved = resolveProfiles({ fac: { apiKeyEnv: KEY_ENV } })
+    expect(resolved.get('fac')?.displayName).toBe('FAC')
+    expect(resolved.get('fac')?.piProvider.baseUrl).toBe('https://new.fastaicode.top/v1')
+    expect(resolved.get('fac')?.piProvider.getModels()).toEqual([])
   })
 
   it('sizes a model the catalog cannot describe from the route\u2019s own fallbacks', () => {

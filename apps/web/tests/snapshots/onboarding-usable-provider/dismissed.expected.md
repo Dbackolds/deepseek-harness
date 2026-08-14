@@ -21,6 +21,10 @@
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
   - list:
     - listitem:
+      - text: FAC
+      - img "API 密钥缺失"
+      - button "编辑 FAC (fac)": 编辑
+    - listitem:
       - text: DeepSeek
       - img "API 密钥缺失"
       - button "编辑 DeepSeek (deepseek-official)": 编辑

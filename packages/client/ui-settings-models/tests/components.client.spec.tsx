@@ -114,7 +114,8 @@ function wireNamespaces(): SettingsNamespaceView[] {
     {
       ns: 'llm-pi-ai',
       schema: JSON.parse(JSON.stringify(PiAiConfig.toJSON())) as unknown,
-      value: { providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
+      value: { providers: { fac: { displayName: 'FAC', api: 'openai-completions', baseURL: 'https://new.fastaicode.top/v1' }, openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
+      base: { providers: { fac: { displayName: 'FAC', api: 'openai-completions', baseURL: 'https://new.fastaicode.top/v1' } } },
       user: { providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
       applies: 'live',
       secrets: [],
@@ -153,7 +154,7 @@ function scriptedFace(overrides: {
           { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], active: true },
           { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true },
           { provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'], active: false },
-          { provider: 'fac', displayName: 'FAC', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'fac'], active: false },
+          { provider: 'fac', displayName: 'FAC', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'fac'], active: true },
           { provider: 'zombie', displayName: 'zombie', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'zombie'], active: false },
           { provider: 'broken', displayName: 'broken', settingsNs: 'llm-pi-ai', settingsPath: ['nope', 'x'], active: false },
           { provider: 'plain', displayName: 'plain', settingsNs: 'llm-plain', settingsPath: ['profiles', 'plain'], active: false },
@@ -237,8 +238,9 @@ describe('ModelsSection', () => {
     await mountFirstRun()
     // Nothing is reachable yet, and DeepSeek has no configured credential and
     // no stored apiKey → setup card.
+    expect(screen.getByText('FAC')).toBeTruthy()
     expect(screen.getByText('DeepSeek')).toBeTruthy()
-    expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
+    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(2)
     expect(screen.getByText('openai')).toBeTruthy()
     expect(screen.queryByText('Active')).toBeNull()
     expect(screen.queryByText('Inactive')).toBeNull()
@@ -254,9 +256,13 @@ describe('ModelsSection', () => {
     expect(configured.getAttribute('title')).toBe(en.credentialConfigured)
     expect(configured.className).toContain('credentialDotConfigured')
     expect(configured.closest('li')?.textContent).toContain('openai')
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
-    expect(missing.closest('li')?.textContent).toContain('DeepSeek')
+    const missing = screen.getAllByRole('img', { name: en.credentialMissing })
+    expect(missing.some(node => node.closest('li')?.textContent?.includes('DeepSeek'))).toBe(true)
     // The card is still one click away.
+    fireEvent.click(screen.getByRole('button', { name: providerCopy(en.editProvider, { provider: 'fac', displayName: 'FAC' }) }))
+    fireEvent.click(screen.getByText(en.customized))
+    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe('https://new.fastaicode.top/v1')
+    fireEvent.click(screen.getByText(en.cancel))
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
   })
@@ -313,8 +319,10 @@ describe('ModelsSection', () => {
     })
     expect(needsSetup(row(undefined), false)).toBe(true)
     expect(needsSetup(row({ configured: true, writable: true }), false)).toBe(false)
-    const nested = { ...row(undefined), entry: { ...entry, settingsPath: ['providers', 'x'] } }
+    const nested = { ...row(undefined), entry: { ...entry, settingsPath: ['providers', 'x'] }, removable: true }
     expect(needsSetup(nested, false)).toBe(false)
+    const compositionOwned = { ...row(undefined), entry: { ...entry, provider: 'fac', settingsPath: ['providers', 'fac'] } }
+    expect(needsSetup(compositionOwned, false)).toBe(true)
     // A user who can already reach some provider is not in the first-run
     // posture, so nothing on the page opens itself.
     expect(needsSetup(row(undefined), true)).toBe(false)
@@ -343,9 +351,11 @@ describe('ModelsSection', () => {
 
   it('stores a typed key write-only from the setup card without touching settings', async () => {
     const { set, update, face } = await mountFirstRun()
-    const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+    const deepSeekCard = screen.getByText('DeepSeek').closest('li')
+    if (deepSeekCard === null) throw new Error('DeepSeek setup card missing')
+    const key = within(deepSeekCard).getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: '  sk-live  ' } })
-    fireEvent.click(screen.getByText(en.apply))
+    fireEvent.click(within(deepSeekCard).getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledWith({ ref: 'DEEPSEEK_API_KEY', value: 'sk-live' }) })
     expect(update).not.toHaveBeenCalled()
     await waitFor(() => { expect(face.settings.describe.mock.calls.length).toBeGreaterThan(1) })
@@ -875,16 +885,12 @@ describe('ModelsSection', () => {
     const { mutate, set } = await mountSection()
     fireEvent.click(screen.getByText(en.add))
     const pick = await screen.findByLabelText<HTMLSelectElement>(en.provider)
-    expect([...pick.options].map(option => option.value)).toEqual(['anthropic', 'fac', 'broken', 'plain'])
+    expect([...pick.options].map(option => option.value)).toEqual(['anthropic', 'broken', 'plain'])
     expect(pick.value).toBe('anthropic')
     // A dormant profile has no endpoint anywhere: the pi-ai placeholder
     // falls back to the provider-default wording.
     fireEvent.click(screen.getByText(en.customized))
     expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe(en.baseUrlDefault)
-    fireEvent.change(pick, { target: { value: 'fac' } })
-    fireEvent.click(screen.getByText(en.customized))
-    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe('https://new.fastaicode.top/v1')
-    fireEvent.change(pick, { target: { value: 'anthropic' } })
     const addKey = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     expect(addKey.placeholder).toBe(en.keyPlaceholderNative)
     fireEvent.change(addKey, { target: { value: 'sk-ant' } })
@@ -993,8 +999,8 @@ describe('ModelsSection', () => {
         api={face as never}
         t={t}
       />)
-      const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-      expect(key.placeholder).toBe(en.keyPlaceholder)
+      const keys = await screen.findAllByLabelText<HTMLInputElement>(en.keyInput)
+      expect(keys.some(input => input.placeholder === en.keyPlaceholder)).toBe(true)
       await new Promise(resolve => setTimeout(resolve, 10))
       expect(unhandled).not.toHaveBeenCalled()
     } finally {
@@ -1032,9 +1038,11 @@ describe('ModelsSection', () => {
     await mountFirstRun({
       set: vi.fn(() => Promise.resolve(fail('credentials: DEEPSEEK_API_KEY is shadowed by the read-only environment', 'credential-rejected'))),
     })
-    const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+    const deepSeekCard = screen.getByText('DeepSeek').closest('li')
+    if (deepSeekCard === null) throw new Error('DeepSeek setup card missing')
+    const key = within(deepSeekCard).getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: 'sk-live' } })
-    fireEvent.click(screen.getByText(en.apply))
+    fireEvent.click(within(deepSeekCard).getByText(en.apply))
     await screen.findByText(/shadowed by the read-only environment/)
     expect(screen.queryByRole('status')).toBeNull()
   })
@@ -1183,22 +1191,25 @@ describe('ModelsSection', () => {
     // The regression: the setup card shared the row/add/declare close handler,
     // so cancelling it discarded the add card's draft while staying open itself.
     await mountFirstRun()
-    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
+    expect(screen.getAllByLabelText(en.keyInput).length).toBeGreaterThanOrEqual(2)
     fireEvent.click(screen.getByText(en.add))
     await screen.findByLabelText(en.provider)
-    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(2)
+    const openKeys = screen.getAllByLabelText(en.keyInput).length
+    expect(openKeys).toBeGreaterThan(2)
 
-    // The setup card is the first one on the page, above the add block.
+    // The first setup card sits above the add block.
     fireEvent.click(screen.getAllByText(en.cancel)[0] as HTMLElement)
     // The add card kept its draft…
     expect(screen.getByLabelText(en.provider)).toBeTruthy()
-    // …and DeepSeek collapsed to an ordinary row carrying the missing-key dot.
-    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
+    // …and that setup card collapsed to an ordinary row.
+    expect(screen.getAllByLabelText(en.keyInput).length).toBe(openKeys - 1)
     expect(screen.getAllByRole('img', { name: en.credentialMissing })
       .some(dot => dot.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
     // Its card reopens through Edit, which closes the add card as any row does.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
-    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
+    const deepSeekEditor = screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }).closest('li')
+    if (deepSeekEditor === null) throw new Error('DeepSeek card missing')
+    expect(within(deepSeekEditor).getByLabelText(en.keyInput)).toBeTruthy()
     expect(screen.queryByLabelText(en.provider)).toBeNull()
   })
 

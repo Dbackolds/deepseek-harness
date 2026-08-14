@@ -142,6 +142,49 @@ export function catalogProviderIds(): readonly string[] {
 }
 
 /**
+ * Harness-owned OpenAI-compatible gateway that pi-ai does not ship. The
+ * Models page shows it as a first-class card above DeepSeek when the
+ * composition mounts a `fac` profile.
+ */
+export const FAC_PROVIDER = 'fac'
+/** Display name the Models page and selectors show for {@link FAC_PROVIDER}. */
+export const FAC_DISPLAY_NAME = 'FAC'
+/** Default chat-completions base for {@link FAC_PROVIDER}. */
+export const FAC_BASE_URL = 'https://new.fastaicode.top/v1'
+/** Wire protocol every FAC model speaks. */
+export const FAC_API = 'openai-completions' as const
+
+/**
+ * Whether this adapter ships a known description for one route: either the
+ * installed pi-ai catalog or the harness-owned FAC gateway.
+ * @param provider - provider route key.
+ * @returns true when this adapter can default the route without a full declaration.
+ */
+export function isShippedProvider(provider: string): boolean {
+  return provider === FAC_PROVIDER || catalogProviders().has(provider)
+}
+
+/**
+ * Default endpoint for a harness-owned route that is not in the installed
+ * catalog. Catalog routes keep answering through {@link catalogProvider}.
+ * @param provider - provider route key.
+ * @returns the shipped base URL, or undefined when this adapter has none.
+ */
+export function shippedBaseUrl(provider: string): string | undefined {
+  return provider === FAC_PROVIDER ? FAC_BASE_URL : catalogProvider(provider)?.baseUrl
+}
+
+/**
+ * Default wire protocol for a harness-owned route that is not in the
+ * installed catalog.
+ * @param provider - provider route key.
+ * @returns the shipped protocol, or undefined when this adapter has none.
+ */
+export function shippedApi(provider: string): string | undefined {
+  return provider === FAC_PROVIDER ? FAC_API : undefined
+}
+
+/**
  * Whether the installed catalog provider for one route declares an api-key
  * method — the only authentication this adapter obtains on its own.
  *
@@ -457,7 +500,8 @@ export interface RouteCatalog {
 export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
   const { provider } = request
   const defaults = catalogModels(provider)
-  const providerBaseUrl = catalogProvider(provider)?.baseUrl
+  const providerBaseUrl = shippedBaseUrl(provider)
+  const providerApi = shippedApi(provider)
   // An absent `models` key and an empty one are the same request: the config
   // schema materializes `[]` for the absent case, and an empty catalog could
   // serve no request anyway, so both mean "serve the installed catalog".
@@ -491,11 +535,11 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
   const entries: readonly PiAiModelProfile[] = configured.length > 0
     ? configured
     : [...defaults.values()].map(model => ({ id: model.id, ...overrides[model.id] }))
-  if (entries.length === 0) {
+  if (entries.length === 0 && provider !== FAC_PROVIDER) {
     invalid(provider, 'resolves no models; the installed catalog does not describe this route, so its models'
       + ' must be listed in configuration')
   }
-  const routeApi = sharedCatalogApi(defaults)
+  const routeApi = sharedCatalogApi(defaults) ?? providerApi
   const routeCompatDefined = request.compat?.thinkingFormat !== undefined
     || request.compat?.supportsReasoningEffort !== undefined
   const seen = new Set<string>()

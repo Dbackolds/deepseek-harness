@@ -61,13 +61,26 @@ import { assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import { deepEqualJson, installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { PiAiAdapter } from './adapter.ts'
-import { catalogProviderIds, catalogProviderTakesApiKey } from './catalog.ts'
+import {
+  catalogProviderIds,
+  catalogProviderTakesApiKey,
+  FAC_DISPLAY_NAME,
+  FAC_PROVIDER,
+  isShippedProvider,
+} from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'
+export {
+  FAC_API,
+  FAC_BASE_URL,
+  FAC_DISPLAY_NAME,
+  FAC_PROVIDER,
+  isShippedProvider,
+} from './catalog.ts'
 export { Config } from './config.ts'
 export type {
   PiAiCompatProfile,
@@ -128,12 +141,15 @@ function directoryEntries(
       displayName,
       settingsNs: NS,
       settingsPath: ['providers', provider],
-      // Membership of the installed catalog, not of the settings document:
-      // narrowing a shipped provider's models stores a profile too, and that
-      // route is still one pi-ai knows.
-      declared: !catalog.has(provider),
+      // Membership of the installed catalog or a harness-owned gateway, not of
+      // the settings document: narrowing a shipped provider's models stores a
+      // profile too, and that route is still one this adapter knows.
+      declared: !isShippedProvider(provider),
     })
   }
+  // FAC leads so the Models page paints it above DeepSeek, which the
+  // llm-deepseek adapter declares later into the same directory Map.
+  declare(FAC_PROVIDER, FAC_DISPLAY_NAME)
   // A provider whose only native method is OAuth leaves this adapter nothing
   // to authenticate with, so offering it would put a card on the settings page
   // whose own posture — no key, credentials discovered by the provider — fails
