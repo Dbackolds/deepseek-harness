@@ -51,6 +51,7 @@ import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
+import * as ToolAutomation from '@deepseek-ai/dsh-tool-automation'
 import * as ToolSchedule from '@deepseek-ai/dsh-schedule'
 import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
@@ -354,6 +355,24 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-automation',
+    dir: 'tool-automation',
+    source: 'packages/automation/tool-automation/src/index.ts',
+    requires: ['ctx.tools', 'ctx.automation', 'ctx.agents', 'ctx.workspaceRegistry', 'a future live root Agent'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      const agent = { id: SessionId('tool-catalog-automation') } as Agent
+      await mountCatalogChildScope(ctx, (childCtx) => {
+        ToolAutomation.registerAutomationTools(ctx, childCtx)
+      }, agent, ['tools', 'systemPrompt'])
+    },
+    scope: ctx => catalogChildScopes.get(ctx) as Agent,
+    note:
+      'Registered only inside live root Agent scopes created after this plugin loads. '
+      + 'Mutations require a live root Agent turn whose opening message is `{ kind: \'user\' }`. '
+      + 'There is no automation_run_now tool.',
   },
   {
     pkg: '@deepseek-ai/dsh-schedule',

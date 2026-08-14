@@ -54,6 +54,15 @@ import {
   goalClearValueSchema,
 } from '../api/goals.schema.ts'
 import {
+  automationCreateValueSchema,
+  automationDeleteValueSchema,
+  automationListRunsValueSchema,
+  automationListValueSchema,
+  automationRunNowValueSchema,
+  automationSetEnabledValueSchema,
+  automationUpdateValueSchema,
+} from '../api/automation.schema.ts'
+import {
   settingsDescribeValueSchema, settingsMutateValueSchema, settingsOpenDocumentValueSchema,
   settingsReplaceValueSchema, settingsUpdateValueSchema,
 } from '../api/settings.schema.ts'
@@ -144,6 +153,15 @@ export interface IApiClient {
     complete(payload: RequestPayload<'goal.complete'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'goal.complete'>>>
     clear(payload: RequestPayload<'goal.clear'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'goal.clear'>>>
   }
+  automation: {
+    list(payload: RequestPayload<'automation.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.list'>>>
+    create(payload: RequestPayload<'automation.create'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.create'>>>
+    update(payload: RequestPayload<'automation.update'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.update'>>>
+    delete(payload: RequestPayload<'automation.delete'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.delete'>>>
+    setEnabled(payload: RequestPayload<'automation.setEnabled'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.setEnabled'>>>
+    runNow(payload: RequestPayload<'automation.runNow'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.runNow'>>>
+    listRuns(payload: RequestPayload<'automation.listRuns'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.listRuns'>>>
+  }
   settings: {
     describe(payload: RequestPayload<'settings.describe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.describe'>>>
     openDocument(payload: RequestPayload<'settings.openDocument'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.openDocument'>>>
@@ -211,6 +229,13 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'goal.resume': goalResumeValueSchema,
   'goal.complete': goalCompleteValueSchema,
   'goal.clear': goalClearValueSchema,
+  'automation.list': automationListValueSchema,
+  'automation.create': automationCreateValueSchema,
+  'automation.update': automationUpdateValueSchema,
+  'automation.delete': automationDeleteValueSchema,
+  'automation.setEnabled': automationSetEnabledValueSchema,
+  'automation.runNow': automationRunNowValueSchema,
+  'automation.listRuns': automationListRunsValueSchema,
   'settings.describe': settingsDescribeValueSchema,
   'settings.openDocument': settingsOpenDocumentValueSchema,
   'settings.update': settingsUpdateValueSchema,
@@ -478,6 +503,16 @@ export abstract class AbstractApiClient implements IApiClient {
     resume: (payload, signal) => this.callUnary('goal.resume', payload, signal),
     complete: (payload, signal) => this.callUnary('goal.complete', payload, signal),
     clear: (payload, signal) => this.callUnary('goal.clear', payload, signal),
+  }
+
+  readonly automation: IApiClient['automation'] = {
+    list: (payload, signal) => this.callUnary('automation.list', payload, signal),
+    create: (payload, signal) => this.callUnary('automation.create', payload, signal),
+    update: (payload, signal) => this.callUnary('automation.update', payload, signal),
+    delete: (payload, signal) => this.callUnary('automation.delete', payload, signal),
+    setEnabled: (payload, signal) => this.callUnary('automation.setEnabled', payload, signal),
+    runNow: (payload, signal) => this.callUnary('automation.runNow', payload, signal),
+    listRuns: (payload, signal) => this.callUnary('automation.listRuns', payload, signal),
   }
 
   readonly settings: IApiClient['settings'] = {

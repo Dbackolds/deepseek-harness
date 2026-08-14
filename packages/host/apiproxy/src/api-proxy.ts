@@ -66,6 +66,8 @@ import type { JobSnapshot } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 // GoalError narrows domain rejections to their stable codes at the wire boundary.
 import { GoalError } from '@deepseek-ai/dsh-goal'
+import { AutomationInputError, AutomationRuleId } from '@deepseek-ai/dsh-automation'
+import type {} from '@deepseek-ai/dsh-automation'
 import type { GoalRef as CoreGoalRef } from '@deepseek-ai/dsh-goal'
 // Type-only edges: resolve the command-change stream and `ctx.get('skills')`.
 import type {} from '@deepseek-ai/dsh-commands'
@@ -534,7 +536,7 @@ function sessionListUpdatedAt(header: SessionHeader, metadata: SessionListMetada
 /** Shared Session-header projection for list baselines and creation frames. */
 function sessionListFields(header: SessionHeader, events: readonly SessionEvent[] = []): {
   parentSessionId?: SessionId
-  origin?: 'subagent'
+  origin?: 'subagent' | 'automation'
   cwd?: string
   agentPreset?: string
 } {
@@ -1808,6 +1810,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return err(request, { code: 'internal', message: String(error), details })
   }
 
+  function automationError(request: RpcRequest<unknown>, error: unknown): RpcResponse<never> {
+    if (error instanceof AutomationInputError) {
+      return err(request, { code: 'automation-rejected', message: error.message, details: { automationCode: error.code } })
+    }
+    return err(request, { code: 'internal', message: String(error), details: {} })
+  }
+
   /** Resolve a session's agent, apply one goal mutation, and acknowledge with the new CAS ref. */
   async function mutateGoal(
     request: RpcRequest<{ sessionId: SessionId }>,
@@ -3054,6 +3063,81 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           return ok(request, { cleared: true as const })
         } catch (error: unknown) {
           return goalError(request, error)
+        }
+      },
+    },
+
+    automation: {
+      async list(request) {
+        const automation = ctx.get('automation')
+        if (automation === undefined) return ok(request, { items: [] })
+        return ok(request, { items: automation.list() })
+      },
+      async create(request) {
+        const automation = ctx.get('automation')
+        if (automation === undefined) {
+          return err(request, { code: 'automation-rejected', message: 'automation service is absent', details: { automationCode: 'internal_error' } })
+        }
+        try {
+          return ok(request, { rule: await automation.create(request.payload) })
+        } catch (error: unknown) {
+          return automationError(request, error)
+        }
+      },
+      async update(request) {
+        const automation = ctx.get('automation')
+        if (automation === undefined) {
+          return err(request, { code: 'automation-rejected', message: 'automation service is absent', details: { automationCode: 'internal_error' } })
+        }
+        const { id, ...patch } = request.payload
+        try {
+          return ok(request, { rule: await automation.update(AutomationRuleId(id), patch) })
+        } catch (error: unknown) {
+          return automationError(request, error)
+        }
+      },
+      async delete(request) {
+        const automation = ctx.get('automation')
+        if (automation === undefined) {
+          return err(request, { code: 'automation-rejected', message: 'automation service is absent', details: { automationCode: 'internal_error' } })
+        }
+        try {
+          return ok(request, { id: request.payload.id, deleted: await automation.delete(AutomationRuleId(request.payload.id)) })
+        } catch (error: unknown) {
+          return automationError(request, error)
+        }
+      },
+      async setEnabled(request) {
+        const automation = ctx.get('automation')
+        if (automation === undefined) {
+          return err(request, { code: 'automation-rejected', message: 'automation service is absent', details: { automationCode: 'internal_error' } })
+        }
+        try {
+          return ok(request, { rule: await automation.setEnabled(AutomationRuleId(request.payload.id), request.payload.enabled) })
+        } catch (error: unknown) {
+          return automationError(request, error)
+        }
+      },
+      async runNow(request) {
+        const automation = ctx.get('automation')
+        if (automation === undefined) {
+          return err(request, { code: 'automation-rejected', message: 'automation service is absent', details: { automationCode: 'internal_error' } })
+        }
+        try {
+          return ok(request, { run: await automation.runNow(AutomationRuleId(request.payload.id)) })
+        } catch (error: unknown) {
+          return automationError(request, error)
+        }
+      },
+      async listRuns(request) {
+        const automation = ctx.get('automation')
+        if (automation === undefined) {
+          return err(request, { code: 'automation-rejected', message: 'automation service is absent', details: { automationCode: 'internal_error' } })
+        }
+        try {
+          return ok(request, { items: automation.listRuns(AutomationRuleId(request.payload.id), request.payload.limit) })
+        } catch (error: unknown) {
+          return automationError(request, error)
         }
       },
     },

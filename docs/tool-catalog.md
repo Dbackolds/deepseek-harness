@@ -27,6 +27,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`, `grep` | `ctx.tools`, `ctx.subprocess`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments. |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`, `terminal_list`, `terminal_open`, `terminal_read`, `terminal_send`, `terminal_signal` | `ctx.tools`, `ctx.terminals`, `ctx.systemPrompt`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema. |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`, `get_goal`, `update_goal` | `ctx.tools`, `ctx.agents`, `ctx.goals`, `ctx.systemPrompt`, `a calling Agent in an authorized open turn` | `tool/call`, `goal/change for mutations`, `tool/result` | - | create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds. |
+| `@deepseek-ai/dsh-tool-automation` | `automation_create`, `automation_delete`, `automation_list`, `automation_set_enabled`, `automation_update` | `ctx.tools`, `ctx.automation`, `ctx.agents`, `ctx.workspaceRegistry`, `a future live root Agent` | `tool/call`, `tool/result` | - | Registered only inside live root Agent scopes created after this plugin loads. Mutations require a live root Agent turn whose opening message is `{ kind: 'user' }`. There is no automation_run_now tool. |
 | `@deepseek-ai/dsh-schedule` | `schedule_create`, `schedule_delete`, `schedule_list` | `ctx.tools`, `ctx.sessions`, `Session persistence`, `a future live root Agent` | `tool/call`, `schedule/change create or delete`, `tool/result` | - | Registered only inside live root Agent scopes created after the opt-in Schedule plugin loads. Version 1 accepts after_seconds, explicit absolute at, and bounded fixed-rate every_seconds, and discloses session-local delivery; management reads and mutations require the shared Session persistence barrier. |
 | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.tools`, `ctx.lsp`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | The lsp tool keeps provider selection and language-server subprocesses behind ctx.lsp, so its model-visible schema stays stable across providers. Requires a registered provider (e.g. `@deepseek-ai/dsh-lsp-stdio`) at runtime; without one, a query returns the structured `LSP_UNAVAILABLE` error rather than changing the schema. |
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`, `ctx.workflowEngine`, `ctx.subagents`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents every fresh round)` | `tool/call`, `tool/result`, `workflow and child session events during execution` | - | A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap. |
@@ -1031,6 +1032,272 @@ Update the exact current goal revision. edit, pause, and resume require a direct
 Source: [`packages/goal/tool-goal/src/index.ts`](../packages/goal/tool-goal/src/index.ts)
 
 create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds.
+
+<a id="deepseek-aidsh-tool-automation"></a>
+
+## `@deepseek-ai/dsh-tool-automation`
+
+### `automation_create`
+
+Create one Host Automation rule that opens a NEW session at a future time and submits task. Use this when the user asks to run work later or on a repeating wall-clock schedule. Do not use session-local reminders. Pass exactly one of after_seconds, at, every_seconds, or local_clock. Unattended writes or commands need permission_preset danger-full-access; omitted permission keeps the user default. on_overlap skip waits if the previous run is still running; replace stops that run and starts a new session. Execution rejects non-human and Automation-sourced turns.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "task": {
+      "type": "string",
+      "description": "User prompt submitted to the new session."
+    },
+    "name": {
+      "type": "string",
+      "description": "Short display name; omitted, derived from task."
+    },
+    "workspace_id": {
+      "type": "string",
+      "description": "Workspace id. Omitted, the current session workspace."
+    },
+    "agent_preset": {
+      "type": "string"
+    },
+    "permission_preset": {
+      "type": "string",
+      "description": "Pin this permission preset on the new session. Unattended writes need danger-full-access."
+    },
+    "on_overlap": {
+      "type": "string",
+      "enum": [
+        "skip",
+        "replace"
+      ]
+    },
+    "after_seconds": {
+      "type": "integer",
+      "description": "One-shot delay in seconds."
+    },
+    "at": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "date": {
+              "type": "string"
+            },
+            "time": {
+              "type": "string"
+            },
+            "time_zone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "date",
+            "time",
+            "time_zone"
+          ]
+        }
+      ],
+      "description": "Absolute RFC 3339 instant with offset, or { date, time, time_zone }."
+    },
+    "every_seconds": {
+      "type": "integer",
+      "description": "Fixed-rate interval, at least 300 seconds."
+    },
+    "local_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "type": "string",
+          "description": "HH:mm in time_zone."
+        },
+        "time_zone": {
+          "type": "string"
+        },
+        "weekdays": {
+          "type": "array",
+          "description": "ISO 1=Monday … 7=Sunday. Omitted means every day.",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "time",
+        "time_zone"
+      ]
+    }
+  },
+  "required": [
+    "task"
+  ]
+}
+```
+
+Source: [`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+### `automation_delete`
+
+Delete one Host Automation rule by id. Past runs remain. Execution rejects non-human and Automation-sourced turns.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+### `automation_list`
+
+List every Host Automation rule: name, next fire time, enabled state, overlap policy, and workspace. Call this before updating or deleting a rule.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+### `automation_set_enabled`
+
+Enable or disable one Host Automation rule without rewriting its schedule. Execution rejects non-human and Automation-sourced turns.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "enabled"
+  ]
+}
+```
+
+Source: [`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+### `automation_update`
+
+Update one Host Automation rule by id. Changing the schedule still requires exactly one selector field. Call automation_list first. Execution rejects non-human and Automation-sourced turns.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "task": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "workspace_id": {
+      "type": "string"
+    },
+    "agent_preset": {
+      "type": "string"
+    },
+    "permission_preset": {
+      "type": "string"
+    },
+    "on_overlap": {
+      "type": "string",
+      "enum": [
+        "skip",
+        "replace"
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "after_seconds": {
+      "type": "integer"
+    },
+    "at": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "date": {
+              "type": "string"
+            },
+            "time": {
+              "type": "string"
+            },
+            "time_zone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "date",
+            "time",
+            "time_zone"
+          ]
+        }
+      ]
+    },
+    "every_seconds": {
+      "type": "integer"
+    },
+    "local_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "type": "string"
+        },
+        "time_zone": {
+          "type": "string"
+        },
+        "weekdays": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "time",
+        "time_zone"
+      ]
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+Registered only inside live root Agent scopes created after this plugin loads. Mutations require a live root Agent turn whose opening message is `{ kind: 'user' }`. There is no automation_run_now tool.
 
 <a id="deepseek-aidsh-schedule"></a>
 

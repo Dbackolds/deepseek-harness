@@ -222,6 +222,46 @@
       "source": "packages/goal/goal/src/domain.ts"
     },
     {
+      "doc": "docs/subsystems/automation.md",
+      "symbol": "AutomationRuleId",
+      "source": "packages/automation/automation/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/automation.md",
+      "symbol": "AutomationOverlapPolicy",
+      "source": "packages/automation/automation/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/automation.md",
+      "symbol": "AutomationSelector",
+      "source": "packages/automation/automation/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/automation.md",
+      "symbol": "CreateAutomationRuleRequest",
+      "source": "packages/automation/automation/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/automation.md",
+      "symbol": "UpdateAutomationRuleRequest",
+      "source": "packages/automation/automation/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/automation.md",
+      "symbol": "AutomationRuleRecord",
+      "source": "packages/automation/automation/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/automation.md",
+      "symbol": "AutomationRuleView",
+      "source": "packages/automation/automation/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/automation.md",
+      "symbol": "AutomationRunRecord",
+      "source": "packages/automation/automation/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/schedule.md",
       "symbol": "AfterScheduleRecord",
       "source": "packages/schedule/schedule/src/types.ts"

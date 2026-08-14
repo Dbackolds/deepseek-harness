@@ -171,6 +171,8 @@
     { "path": "./packages/goal/command-goal" },
     { "path": "./packages/feedback/command-feedback" },
     { "path": "./packages/schedule/schedule" },
+    { "path": "./packages/automation/automation" },
+    { "path": "./packages/automation/tool-automation" },
     { "path": "./packages/context/time-context" },
     { "path": "./packages/context/tmux-context" },
     { "path": "./packages/context/session-reference" },

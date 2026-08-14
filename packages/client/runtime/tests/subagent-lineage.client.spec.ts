@@ -7,7 +7,7 @@ const sid = (id: string) => id as SessionId
 function summary(
   id: string,
   parentId?: SessionId,
-  origin?: 'subagent',
+  origin?: 'subagent' | 'automation',
   running = false,
 ): SessionSummary {
   return {

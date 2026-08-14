@@ -1278,6 +1278,19 @@ describe('SessionStore', () => {
     })
   })
 
+  it('attaches automation origin from meta to the header', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const session = ctx.sessions.create(SessionId('automation-run'), {
+      meta: { cwd: '/work/project', origin: 'automation' },
+    })
+    expect(session.header).toMatchObject({
+      id: 'automation-run',
+      cwd: '/work/project',
+      origin: 'automation',
+    })
+  })
+
   it('attaches subagent origin and delegationDepth from meta to the header', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
@@ -1306,7 +1319,7 @@ describe('SessionStore', () => {
       { meta: { seedLength: '1' }, error: /seedLength must be a non-negative safe integer/ },
       { meta: { seedLength: 0.5 }, error: /seedLength must be a non-negative safe integer/ },
       { meta: { seedLength: -1 }, error: /seedLength must be a non-negative safe integer/ },
-      { meta: { origin: 'fork' }, error: /origin must be "subagent"/ },
+      { meta: { origin: 'fork' }, error: /origin must be "subagent" or "automation"/ },
       { meta: { delegationDepth: '1' }, error: /delegationDepth must be a non-negative safe integer/ },
       { meta: { delegationDepth: 0.5 }, error: /delegationDepth must be a non-negative safe integer/ },
       { meta: { delegationDepth: -1 }, error: /delegationDepth must be a non-negative safe integer/ },

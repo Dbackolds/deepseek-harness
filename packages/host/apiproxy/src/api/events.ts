@@ -130,7 +130,7 @@ export type HostFrame =
     sessionId: SessionId
     blank: boolean
     parentSessionId?: SessionId
-    origin?: 'subagent'
+    origin?: 'subagent' | 'automation'
     cwd?: string
     agentPreset?: string
   }

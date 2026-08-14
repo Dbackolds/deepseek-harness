@@ -73,6 +73,12 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
+    - id: automation
+      name: '@deepseek-ai/dsh-automation'
+
+    - id: tool-automation
+      name: '@deepseek-ai/dsh-tool-automation'
+
     - id: session-projection-cache
       name: '@deepseek-ai/dsh-session-projection-cache'
       config:

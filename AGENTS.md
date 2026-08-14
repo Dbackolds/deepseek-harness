@@ -35,6 +35,7 @@ packages/    @deepseek-ai/dsh-<pkg> workspaces at packages/<group>/<pkg>/
   self-modification/  the agent inspects/mounts its own plugins
   hooks/       Claude Code/Codex hook bridges + wire-protocol library
   session/     durable session data: persistence, projection, titles, telemetry
+  automation/  host-owned timed new-session runs
   identity/    anonymous identity
   settings/    user-settings capability + file provider
   credentials/ credential-reference capability + env/.env provider

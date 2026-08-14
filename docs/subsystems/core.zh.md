@@ -202,6 +202,7 @@ type AgentCancelCause =
   | { readonly kind: 'parent' }
   | { readonly kind: 'hook'; readonly reason: string }
   | { readonly kind: 'disposed' }
+  | { readonly kind: 'automation'; readonly ruleId: string }
 ```
 
 cause 是由 TypeScript 强制约束的同进程输入。活跃的取消持有者会将它复制到仅运行时的 `AbortSignal.reason`；signal 不授予协作监听器任何分类权限。持久 `turn/end` 保留粗粒度 `{ kind: 'aborted' }` 结果；若需记录谁请求了取消，应使用单独的持久事件，而不是让终态结果承担额外含义。

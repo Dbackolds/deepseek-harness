@@ -32,7 +32,7 @@ type FeedRow = {
   id: string
   cwd?: string
   parentId?: string
-  origin?: 'subagent'
+  origin?: 'subagent' | 'automation'
   running?: boolean
   blank?: boolean
   agentPreset?: string

@@ -29,6 +29,7 @@
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`、`grep` | `ctx.tools`、`ctx.subprocess`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。 |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`、`terminal_list`、`terminal_open`、`terminal_read`、`terminal_send`、`terminal_signal` | `ctx.tools`、`ctx.terminals`、`ctx.systemPrompt`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | 这 6 个终端工具需要选择启用，用于补充一次性 bash／文件系统工具。`terminal_send(run_in_background: true)` 会注册到 `ctx.jobs`；schema 不包含 TUI、具名按键序列、BEL、调整尺寸、自动启动和跨 agent 共享。 |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。 |
+| `@deepseek-ai/dsh-tool-automation` | `automation_create`、`automation_delete`、`automation_list`、`automation_set_enabled`、`automation_update` | `ctx.tools`、`ctx.automation`、`ctx.agents`、`ctx.workspaceRegistry`、`a future live root Agent` | `tool/call`、`tool/result` | - | 仅在本插件加载后创建的 live 根 Agent scope 内注册。mutate 要求 live 根 Agent turn，且该 turn 的开场消息是 `{ kind: 'user' }`。没有 automation_run_now tool。 |
 | `@deepseek-ai/dsh-schedule` | `schedule_create`、`schedule_delete`、`schedule_list` | `ctx.tools`、`ctx.sessions`、Session 持久化、未来创建的 live 根 Agent | `tool/call`、`schedule/change create or delete`、`tool/result` | - | 仅在选择启用的 Schedule 插件加载后创建的 live 根 Agent scope 内注册。版本 1 接受 after_seconds、显式绝对 at 和有界固定速率 every_seconds，并披露 session-local 交付；管理读取与变更必须通过共享的 Session 持久化 barrier。 |
 | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.tools`、`ctx.lsp`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，因此其模型可见 schema 在更换提供方时保持稳定。运行时要求已注册提供方，例如 `@deepseek-ai/dsh-lsp-stdio`；如果没有提供方，查询会返回结构化 `LSP_UNAVAILABLE` 错误，而不会改变 schema。 |
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`、`ctx.workflowEngine`、`ctx.subagents`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents every fresh round)` | `tool/call`、`tool/result`、`workflow and child session events during execution` | - | 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。 |
@@ -1035,6 +1036,272 @@ glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn �
 来源：[`packages/goal/tool-goal/src/index.ts`](../packages/goal/tool-goal/src/index.ts)
 
 create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。
+
+<a id="deepseek-aidsh-tool-automation"></a>
+
+## `@deepseek-ai/dsh-tool-automation`
+
+### `automation_create`
+
+创建一条 Host Automation 规则：在未来时刻打开一条新 session 并提交 task。当用户要求稍后或按重复墙上时钟日程跑工作时使用。不要用仅限会话内的提醒。恰好传入 after_seconds、at、every_seconds 或 local_clock 之一。无人值守写入或命令需要 permission_preset danger-full-access；省略 permission 则保留用户默认。on_overlap 为 skip 时，若上一次 run 仍在运行则等待；replace 会停止该 run 并开启新 session。执行拒绝非人类来源和 Automation 来源的 turn。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "task": {
+      "type": "string",
+      "description": "User prompt submitted to the new session."
+    },
+    "name": {
+      "type": "string",
+      "description": "Short display name; omitted, derived from task."
+    },
+    "workspace_id": {
+      "type": "string",
+      "description": "Workspace id. Omitted, the current session workspace."
+    },
+    "agent_preset": {
+      "type": "string"
+    },
+    "permission_preset": {
+      "type": "string",
+      "description": "Pin this permission preset on the new session. Unattended writes need danger-full-access."
+    },
+    "on_overlap": {
+      "type": "string",
+      "enum": [
+        "skip",
+        "replace"
+      ]
+    },
+    "after_seconds": {
+      "type": "integer",
+      "description": "One-shot delay in seconds."
+    },
+    "at": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "date": {
+              "type": "string"
+            },
+            "time": {
+              "type": "string"
+            },
+            "time_zone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "date",
+            "time",
+            "time_zone"
+          ]
+        }
+      ],
+      "description": "Absolute RFC 3339 instant with offset, or { date, time, time_zone }."
+    },
+    "every_seconds": {
+      "type": "integer",
+      "description": "Fixed-rate interval, at least 300 seconds."
+    },
+    "local_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "type": "string",
+          "description": "HH:mm in time_zone."
+        },
+        "time_zone": {
+          "type": "string"
+        },
+        "weekdays": {
+          "type": "array",
+          "description": "ISO 1=Monday … 7=Sunday. Omitted means every day.",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "time",
+        "time_zone"
+      ]
+    }
+  },
+  "required": [
+    "task"
+  ]
+}
+```
+
+来源：[`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+### `automation_delete`
+
+按 id 删除一条 Host Automation 规则。过去的 run 会保留。执行拒绝非人类来源和 Automation 来源的 turn。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源：[`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+### `automation_list`
+
+列出每条 Host Automation 规则：名称、下次开火时间、enabled 状态、互斥策略和工作区。更新或删除规则前先调用此工具。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+### `automation_set_enabled`
+
+启用或禁用一条 Host Automation 规则，不改写其日程。执行拒绝非人类来源和 Automation 来源的 turn。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "enabled"
+  ]
+}
+```
+
+来源：[`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+### `automation_update`
+
+按 id 更新一条 Host Automation 规则。改日程时仍需要恰好一个选择器字段。先调用 automation_list。执行拒绝非人类来源和 Automation 来源的 turn。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "task": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "workspace_id": {
+      "type": "string"
+    },
+    "agent_preset": {
+      "type": "string"
+    },
+    "permission_preset": {
+      "type": "string"
+    },
+    "on_overlap": {
+      "type": "string",
+      "enum": [
+        "skip",
+        "replace"
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "after_seconds": {
+      "type": "integer"
+    },
+    "at": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "date": {
+              "type": "string"
+            },
+            "time": {
+              "type": "string"
+            },
+            "time_zone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "date",
+            "time",
+            "time_zone"
+          ]
+        }
+      ]
+    },
+    "every_seconds": {
+      "type": "integer"
+    },
+    "local_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "type": "string"
+        },
+        "time_zone": {
+          "type": "string"
+        },
+        "weekdays": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "time",
+        "time_zone"
+      ]
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源：[`packages/automation/tool-automation/src/index.ts`](../packages/automation/tool-automation/src/index.ts)
+
+仅在本插件加载后创建的 live 根 Agent scope 内注册。mutate 要求 live 根 Agent turn，且该 turn 的开场消息是 `{ kind: 'user' }`。没有 automation_run_now tool。
 
 <a id="deepseek-aidsh-schedule"></a>
 

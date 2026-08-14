@@ -79,10 +79,11 @@ export interface SessionHeader {
    */
   readonly seedLength?: number
   /**
-   * Coarse product classification for a session created as a subagent child.
-   * This is presentation metadata, not proof that the child is continuable.
+   * Coarse product classification for a session created as a subagent child
+   * or an Automation fire. This is presentation metadata, not proof that the
+   * child is continuable or that a rule is still active.
    */
-  readonly origin?: 'subagent'
+  readonly origin?: 'subagent' | 'automation'
   /**
    * Delegation depth: absent (zero) for a top-level session, parent depth + 1
    * for a subagent child. Persisted so a recursion budget survives restart and
@@ -115,7 +116,7 @@ export interface CreateSessionOptions {
     readonly parentSession?: SessionId
     readonly createdAt?: number
     readonly seedLength?: number
-    readonly origin?: 'subagent'
+    readonly origin?: 'subagent' | 'automation'
     readonly delegationDepth?: number
     readonly agentPreset?: string
   }
@@ -145,6 +146,7 @@ export type AgentCancelCause =
   | { readonly kind: 'parent' }
   | { readonly kind: 'hook'; readonly reason: string }
   | { readonly kind: 'disposed' }
+  | { readonly kind: 'automation'; readonly ruleId: string }
 
 /** Durable cancellation cause, including imports whose original coarse record carried no cause. */
 export type TurnEndCancelCause = AgentCancelCause | { readonly kind: 'legacy' }

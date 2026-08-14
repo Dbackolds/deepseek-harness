@@ -10,6 +10,7 @@ import type { WorkspaceApi } from './workspace.ts'
 import type { AgentPresetsApi } from './agent-presets.ts'
 import type { SkillsApi } from './skills.ts'
 import type { GoalsApi } from './goals.ts'
+import type { AutomationApi } from './automation.ts'
 import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { LlmApi } from './llm.ts'
@@ -63,6 +64,13 @@ export interface RpcMethodMap {
   'goal.resume': GoalsApi['resume']
   'goal.complete': GoalsApi['complete']
   'goal.clear': GoalsApi['clear']
+  'automation.list': AutomationApi['list']
+  'automation.create': AutomationApi['create']
+  'automation.update': AutomationApi['update']
+  'automation.delete': AutomationApi['delete']
+  'automation.setEnabled': AutomationApi['setEnabled']
+  'automation.runNow': AutomationApi['runNow']
+  'automation.listRuns': AutomationApi['listRuns']
   'settings.describe': SettingsApi['describe']
   'settings.openDocument': SettingsApi['openDocument']
   'settings.update': SettingsApi['update']

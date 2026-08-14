@@ -57,6 +57,15 @@ import {
   goalClearRequestSchema,
 } from '../api/goals.schema.ts'
 import {
+  automationCreateRequestSchema,
+  automationDeleteRequestSchema,
+  automationListRequestSchema,
+  automationListRunsRequestSchema,
+  automationRunNowRequestSchema,
+  automationSetEnabledRequestSchema,
+  automationUpdateRequestSchema,
+} from '../api/automation.schema.ts'
+import {
   settingsDescribeRequestSchema, settingsMutateRequestSchema, settingsOpenDocumentRequestSchema,
   settingsReplaceRequestSchema, settingsUpdateRequestSchema,
 } from '../api/settings.schema.ts'
@@ -129,6 +138,13 @@ const UNARY_ROUTES: UnaryRoutes = {
   'goal.resume': { schema: goalResumeRequestSchema, invoke: (api, r) => api.goals.resume(r) },
   'goal.complete': { schema: goalCompleteRequestSchema, invoke: (api, r) => api.goals.complete(r) },
   'goal.clear': { schema: goalClearRequestSchema, invoke: (api, r) => api.goals.clear(r) },
+  'automation.list': { schema: automationListRequestSchema, invoke: (api, r) => api.automation.list(r) },
+  'automation.create': { schema: automationCreateRequestSchema, invoke: (api, r) => api.automation.create(r) },
+  'automation.update': { schema: automationUpdateRequestSchema, invoke: (api, r) => api.automation.update(r) },
+  'automation.delete': { schema: automationDeleteRequestSchema, invoke: (api, r) => api.automation.delete(r) },
+  'automation.setEnabled': { schema: automationSetEnabledRequestSchema, invoke: (api, r) => api.automation.setEnabled(r) },
+  'automation.runNow': { schema: automationRunNowRequestSchema, invoke: (api, r) => api.automation.runNow(r) },
+  'automation.listRuns': { schema: automationListRunsRequestSchema, invoke: (api, r) => api.automation.listRuns(r) },
   'settings.describe': { schema: settingsDescribeRequestSchema, invoke: (api, r) => api.settings.describe(r) },
   'settings.openDocument': { schema: settingsOpenDocumentRequestSchema, invoke: (api, r, signal) => api.settings.openDocument(r, signal) },
   'settings.update': { schema: settingsUpdateRequestSchema, invoke: (api, r) => api.settings.update(r) },

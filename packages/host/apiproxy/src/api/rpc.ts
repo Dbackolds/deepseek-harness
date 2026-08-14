@@ -99,6 +99,7 @@ export interface RpcErrorDetailsMap {
   'subagent-unauthorized': { childSessionId: SessionId }
   'subagent-delivery-unavailable': { childSessionId: SessionId }
   'internal': {}
+  'automation-rejected': { automationCode: string }
 }
 
 /** Closed error-code union (the keys of RpcErrorDetailsMap). */

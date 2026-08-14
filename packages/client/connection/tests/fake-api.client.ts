@@ -204,6 +204,38 @@ export class FakeApiClient implements IApiClient {
     clear: payload => this.record('goal.clear', payload, Promise.resolve(ok({ cleared: true as const }))),
   }
 
+  readonly automation: IApiClient['automation'] = {
+    list: payload => this.record('automation.list', payload, Promise.resolve(ok({ items: [] }))),
+    create: payload => this.record('automation.create', payload, Promise.resolve(ok({
+      rule: {
+        id: 'rule-fake' as never,
+        name: 'fake',
+        enabled: true,
+        task: 'fake',
+        workspaceId: 'fk-ws' as never,
+        onOverlap: 'skip',
+        selector: { kind: 'after', afterSeconds: 60 },
+        scheduledAt: '2026-08-15T12:01:00.000Z',
+        createdAt: '2026-08-15T12:00:00.000Z',
+        updatedAt: '2026-08-15T12:00:00.000Z',
+        state: 'scheduled',
+        nextAt: '2026-08-15T12:01:00.000Z',
+      },
+    }))),
+    update: payload => this.record('automation.update', payload, this.automation.create(payload)),
+    delete: payload => this.record('automation.delete', payload, Promise.resolve(ok({ id: 'rule-fake' as never, deleted: true }))),
+    setEnabled: payload => this.record('automation.setEnabled', payload, this.automation.create(payload)),
+    runNow: payload => this.record('automation.runNow', payload, Promise.resolve(ok({
+      run: {
+        id: 'run-fake' as never,
+        ruleId: 'rule-fake' as never,
+        startedAt: '2026-08-15T12:00:00.000Z',
+        outcome: 'started',
+      },
+    }))),
+    listRuns: payload => this.record('automation.listRuns', payload, Promise.resolve(ok({ items: [] }))),
+  }
+
   readonly settings: IApiClient['settings'] = {
     describe: payload => this.record('settings.describe', payload, Promise.resolve(ok({ writable: true, hasDocument: false, namespaces: [] }))),
     openDocument: payload => this.record('settings.openDocument', payload, Promise.resolve(ok({ opened: true as const }))),

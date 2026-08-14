@@ -379,6 +379,79 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'automation',
+    summary: 'Host-owned Automation service.',
+    description: 'Host-owned Automation service. CRUD, listing, and fire all go through this object; tools and Host RPC must not write the domain tables themselves.',
+    methods: [
+      {
+        signature: 'list(): AutomationRuleView[]',
+        description: 'List every rule in creation order with derived delivery state.',
+        parameters: [],
+        returns: 'detached rule views.',
+      },
+      {
+        signature: 'get(id: AutomationRuleId): AutomationRuleView | undefined',
+        description: 'Read one rule.',
+        parameters: [{ name: 'id', description: 'Rule id.' }],
+        returns: 'the view, or `undefined` when unknown.',
+      },
+      {
+        signature: 'create(request: CreateAutomationRuleRequest): Promise<AutomationRuleView>',
+        description: 'Create one enabled rule and arm its first target.',
+        parameters: [{ name: 'request', description: 'Caller-supplied fields; exactly one time selector.' }],
+        returns: 'the created view.',
+      },
+      {
+        signature: 'update(id: AutomationRuleId, patch: UpdateAutomationRuleRequest): Promise<AutomationRuleView>',
+        description: 'Apply a sparse patch. Selector fields replace the whole selector.',
+        parameters: [{ name: 'id', description: 'Existing rule.' }, { name: 'patch', description: 'Fields to change.' }],
+        returns: 'the updated view.',
+      },
+      {
+        signature: 'delete(id: AutomationRuleId): Promise<boolean>',
+        description: 'Delete one rule. Its id is never reused. Runs stay for history.',
+        parameters: [{ name: 'id', description: 'Rule to remove.' }],
+        returns: '`true` when a record was deleted.',
+      },
+      {
+        signature: 'setEnabled(id: AutomationRuleId, enabled: boolean): Promise<AutomationRuleView>',
+        description: 'Enable or disable one rule without rewriting its selector.',
+        parameters: [{ name: 'id', description: 'Existing rule.' }, { name: 'enabled', description: 'Next armed state.' }],
+        returns: 'the updated view.',
+      },
+      {
+        signature: 'runNow(id: AutomationRuleId): Promise<AutomationRunRecord>',
+        description: 'Fire one rule immediately without moving its next scheduled target.',
+        parameters: [{ name: 'id', description: 'Existing rule.' }],
+        returns: 'the run written for this attempt.',
+      },
+      {
+        signature: 'listRuns(id: AutomationRuleId, limit: number = 20): AutomationRunRecord[]',
+        description: 'Recent runs for one rule, newest first.',
+        parameters: [{ name: 'id', description: 'Existing rule.' }, { name: 'limit', description: 'Maximum rows; defaults to 20.' }],
+        returns: 'detached run records.',
+      },
+      {
+        signature: 'dueRules(now: number): readonly AutomationRuleRecord[]',
+        description: 'Enabled rules whose target is due at `now`.',
+        parameters: [{ name: 'now', description: 'Wall-clock decision time.' }],
+        returns: 'due records in target then create order.',
+      },
+      {
+        signature: 'nextWakeAt(now: number): number | undefined',
+        description: 'Earliest future target among enabled rules.',
+        parameters: [{ name: 'now', description: 'Wall-clock decision time.' }],
+        returns: 'epoch milliseconds, or `undefined` when nothing is armed.',
+      },
+      {
+        signature: 'fireDue(id: AutomationRuleId, now: number): Promise<AutomationRunRecord>',
+        description: 'Admit one due rule from the timer owner.',
+        parameters: [{ name: 'id', description: 'Due rule.' }, { name: 'now', description: 'Shared decision time for this batch.' }],
+        returns: 'the run written for this attempt.',
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -2614,12 +2687,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
   },
   {
+    name: 'AfterAutomationSelector',
+    declaration: 'export interface AfterAutomationSelector {\n    readonly kind: \'after\';\n    readonly afterSeconds: number;\n}',
+  },
+  {
     name: 'Agent',
     declaration: 'export interface Agent {\n    readonly id: SessionId;\n    readonly options: AgentOptions;\n    readonly session: Session;\n    readonly inbox: Inbox;\n    readonly status: AgentStatus;\n    readonly ctx: Context;\n    cancel(cause: AgentCancelCause, options?: CancelOptions): void;\n    whenIdle(): Promise<void>;\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n    send(message: UserMessage, target: InboxTarget, wakeup: boolean): void;\n    followup(message: UserMessage): void;\n    steer(message: UserMessage): void;\n    inject(message: UserMessage): void;\n}',
   },
   {
     name: 'AgentCancelCause',
-    declaration: 'export type AgentCancelCause = {\n    readonly kind: \'user\';\n} | {\n    readonly kind: \'parent\';\n} | {\n    readonly kind: \'hook\';\n    readonly reason: string;\n} | {\n    readonly kind: \'disposed\';\n};',
+    declaration: 'export type AgentCancelCause = {\n    readonly kind: \'user\';\n} | {\n    readonly kind: \'parent\';\n} | {\n    readonly kind: \'hook\';\n    readonly reason: string;\n} | {\n    readonly kind: \'disposed\';\n} | {\n    readonly kind: \'automation\';\n    readonly ruleId: string;\n};',
   },
   {
     name: 'AgentFactory',
@@ -2710,8 +2787,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AssistantProvenance {\n    provider: string;\n    model: string;\n    replayState?: unknown;\n}',
   },
   {
+    name: 'AtAutomationSelector',
+    declaration: 'export interface AtAutomationSelector {\n    readonly kind: \'at\';\n}',
+  },
+  {
     name: 'AttachmentId',
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
+  },
+  {
+    name: 'AutomationOverlapPolicy',
+    declaration: 'export type AutomationOverlapPolicy = \'skip\' | \'replace\';',
+  },
+  {
+    name: 'AutomationRuleRecord',
+    declaration: 'export interface AutomationRuleRecord {\n    readonly id: AutomationRuleId;\n    readonly name: string;\n    readonly enabled: boolean;\n    readonly task: string;\n    readonly workspaceId: WorkspaceId;\n    readonly agentPreset?: string;\n    readonly permissionPreset?: string;\n    readonly onOverlap: AutomationOverlapPolicy;\n    readonly selector: AutomationSelector;\n    readonly scheduledAt: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'AutomationRunOutcome',
+    declaration: 'export type AutomationRunOutcome = \'started\' | \'skipped_busy\' | \'replaced\' | \'failed\';',
+  },
+  {
+    name: 'AutomationRunRecord',
+    declaration: 'export interface AutomationRunRecord {\n    readonly id: AutomationRunId;\n    readonly ruleId: AutomationRuleId;\n    readonly sessionId?: SessionId;\n    readonly startedAt: string;\n    readonly outcome: AutomationRunOutcome;\n    readonly errorCode?: string;\n}',
+  },
+  {
+    name: 'AutomationSelector',
+    declaration: 'export type AutomationSelector = AfterAutomationSelector | AtAutomationSelector | EveryAutomationSelector | LocalClockAutomationSelector;',
   },
   {
     name: 'BackendRegistry',
@@ -2899,7 +3000,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateAgentOptions',
-    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\' | \'automation\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+  },
+  {
+    name: 'CreateAutomationRuleRequest',
+    declaration: 'export interface CreateAutomationRuleRequest {\n    readonly name?: string;\n    readonly task: string;\n    readonly workspaceId: WorkspaceId;\n    readonly agentPreset?: string;\n    readonly permissionPreset?: string;\n    readonly onOverlap?: AutomationOverlapPolicy;\n    readonly afterSeconds?: number;\n    readonly at?: AtInput;\n    readonly everySeconds?: number;\n    readonly localClock?: LocalClockInput;\n}',
   },
   {
     name: 'CreateGoalRequest',
@@ -2911,7 +3016,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateSessionOptions',
-    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
+    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\' | \'automation\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
   },
   {
     name: 'CredentialInfo',
@@ -3028,6 +3133,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EpochHeader',
     declaration: 'export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    system?: string;\n    tools?: ToolSchema[];\n}',
+  },
+  {
+    name: 'EveryAutomationSelector',
+    declaration: 'export interface EveryAutomationSelector {\n    readonly kind: \'every\';\n    readonly everySeconds: number;\n}',
   },
   {
     name: 'FileDiff',
@@ -3311,11 +3420,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmResolvedModelInfo',
-    declaration: 'export interface LlmResolvedModelInfo extends LlmModelInfo {\n    context?: LlmModelContext;\n    defaultMaxTokens?: number;\n    reasoning?: LlmModelReasoningInfo;\n}',
+    declaration: 'export interface LlmResolvedModelInfo extends LlmModelInfo {\n    context?: LlmModelContext;\n    defaultMaxTokens?: number;\n    reasoning?: LlmModelReasoningInfo;\n    systemPrompt?: string;\n}',
   },
   {
     name: 'LlmRuntime',
     declaration: 'export class LlmRuntime extends Service {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+  },
+  {
+    name: 'LocalClockAutomationSelector',
+    declaration: 'export interface LocalClockAutomationSelector {\n    readonly kind: \'local-clock\';\n    readonly time: string;\n    readonly weekdays?: readonly number[];\n    readonly timeZone: string;\n}',
+  },
+  {
+    name: 'LocalClockInput',
+    declaration: 'export interface LocalClockInput {\n    readonly time: string;\n    readonly weekdays?: readonly number[];\n    readonly time_zone: string;\n}',
   },
   {
     name: 'LspHover',
@@ -3795,7 +3912,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionHeader',
-    declaration: 'export interface SessionHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly seedLength?: number;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly seedLength?: number;\n    readonly origin?: \'subagent\' | \'automation\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionId',
@@ -4520,6 +4637,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TypertTypeModel',
     declaration: 'export interface TypertTypeModel {\n    readonly name: string;\n    readonly declaration: string;\n}',
+  },
+  {
+    name: 'UpdateAutomationRuleRequest',
+    declaration: 'export interface UpdateAutomationRuleRequest {\n    readonly name?: string;\n    readonly task?: string;\n    readonly workspaceId?: WorkspaceId;\n    readonly agentPreset?: string | null;\n    readonly permissionPreset?: string | null;\n    readonly onOverlap?: AutomationOverlapPolicy;\n    readonly enabled?: boolean;\n    readonly afterSeconds?: number;\n    readonly at?: AtInput;\n    readonly everySeconds?: number;\n    readonly localClock?: LocalClockInput;\n}',
   },
   {
     name: 'UserMessage',
