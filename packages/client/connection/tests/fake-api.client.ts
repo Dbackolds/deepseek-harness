@@ -30,6 +30,23 @@ export function ok<T>(value: T): RpcResponse<T> {
   return { rpcId: RpcId(`fake-${nextRpc++}`), result: { ok: true, value } }
 }
 
+function fakeAutomationRule() {
+  return {
+    id: 'rule-fake' as never,
+    name: 'fake',
+    enabled: true,
+    task: 'fake',
+    workspaceId: 'fk-ws' as never,
+    onOverlap: 'skip' as const,
+    selector: { kind: 'after' as const, afterSeconds: 60 },
+    scheduledAt: '2026-08-15T12:01:00.000Z',
+    createdAt: '2026-08-15T12:00:00.000Z',
+    updatedAt: '2026-08-15T12:00:00.000Z',
+    state: 'scheduled' as const,
+    nextAt: '2026-08-15T12:01:00.000Z',
+  }
+}
+
 
 type StreamItem<F> = { kind: 'frame'; envelope: RpcRequest<F> } | { kind: 'end' } | { kind: 'fail'; error: unknown }
 
@@ -206,25 +223,10 @@ export class FakeApiClient implements IApiClient {
 
   readonly automation: IApiClient['automation'] = {
     list: payload => this.record('automation.list', payload, Promise.resolve(ok({ items: [] }))),
-    create: payload => this.record('automation.create', payload, Promise.resolve(ok({
-      rule: {
-        id: 'rule-fake' as never,
-        name: 'fake',
-        enabled: true,
-        task: 'fake',
-        workspaceId: 'fk-ws' as never,
-        onOverlap: 'skip',
-        selector: { kind: 'after', afterSeconds: 60 },
-        scheduledAt: '2026-08-15T12:01:00.000Z',
-        createdAt: '2026-08-15T12:00:00.000Z',
-        updatedAt: '2026-08-15T12:00:00.000Z',
-        state: 'scheduled',
-        nextAt: '2026-08-15T12:01:00.000Z',
-      },
-    }))),
-    update: payload => this.record('automation.update', payload, this.automation.create(payload)),
+    create: payload => this.record('automation.create', payload, Promise.resolve(ok({ rule: fakeAutomationRule() }))),
+    update: payload => this.record('automation.update', payload, Promise.resolve(ok({ rule: fakeAutomationRule() }))),
     delete: payload => this.record('automation.delete', payload, Promise.resolve(ok({ id: 'rule-fake' as never, deleted: true }))),
-    setEnabled: payload => this.record('automation.setEnabled', payload, this.automation.create(payload)),
+    setEnabled: payload => this.record('automation.setEnabled', payload, Promise.resolve(ok({ rule: fakeAutomationRule() }))),
     runNow: payload => this.record('automation.runNow', payload, Promise.resolve(ok({
       run: {
         id: 'run-fake' as never,
