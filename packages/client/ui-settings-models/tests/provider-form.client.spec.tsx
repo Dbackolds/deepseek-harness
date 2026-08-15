@@ -31,6 +31,8 @@ const PiAiConfig = Schema.object({
       name: Schema.string(),
       contextWindow: Schema.number(),
       maxTokens: Schema.number(),
+      api: Schema.union(PROTOCOLS),
+      apiKeyEnv: Schema.string().role('credential-ref'),
     })),
     reasoning: Schema.union(['off', 'high']),
   })),
@@ -151,14 +153,26 @@ async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
   return { ...scripted, controller }
 }
 
-/** Open the editor of one configured row and expand its customized fold. */
+/** Open the editor of one configured row or setup card and expand its customized fold. */
 function openEditor(provider: string): void {
   const row = screen.getByText(provider).closest('li')
   if (row === null) throw new Error(`no row for ${provider}`)
-  fireEvent.click(within_(row, en.edit))
-  const summary = document.querySelector('summary')
-  if (summary === null) throw new Error('no customized fold')
-  fireEvent.click(summary)
+  const edit = [...row.querySelectorAll('button')].find(button => button.textContent === en.edit)
+  if (edit !== undefined) {
+    fireEvent.click(edit)
+  } else {
+    const details = row.querySelector('details')
+    if (details === null) throw new Error(`no "${en.edit}" button`)
+    if (!details.open) {
+      const title = details.querySelector('summary')
+      if (title === null) throw new Error(`${provider} setup summary missing`)
+      fireEvent.click(title)
+      details.open = true
+    }
+  }
+  const customized = [...row.querySelectorAll('summary')].find(node => node.textContent === en.customized)
+  if (customized === undefined) throw new Error('no customized fold')
+  fireEvent.click(customized)
 }
 
 /** Open one model row's advanced fold, where the capacities live. */
@@ -743,12 +757,11 @@ describe('hand-declared providers', () => {
     expect(fields()).toEqual([en.customRoute, en.customDisplayName, en.baseUrl, en.customApi, en.keyInput])
     cleanup()
 
-    // A shipped route's models each carry their own protocol, so its editor
-    // offers no route-level protocol to override them with.
+    // A shipped route still offers a default protocol; each model can override
+    // it, so the route-level field no longer hides the catalog's mix.
     await mountSection({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
     openEditor('openai')
-    fireEvent.click(screen.getByText(en.customized))
-    expect(fields()).toEqual([en.keyInput, en.baseUrl])
+    expect(fields()).toEqual([en.keyInput, en.baseUrl, en.customApi])
     cleanup()
 
     // A hand-declared route named its own protocol at creation, so editing it
@@ -1176,6 +1189,41 @@ describe('hand-declared providers', () => {
       baseURL: 'https://acme.test/v1',
       models: [{ id: 'm' }],
     })
+  })
+
+  it('lets each model name its own protocol and share or split keys', async () => {
+    const { mutate, set, onClose } = mountCard()
+
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'openai-completions' } })
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'shared-key' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'chat' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'claude' } })
+    fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} 1`))
+    fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} 2`))
+    fireEvent.change(screen.getByLabelText(`${en.modelApi} 1`), { target: { value: 'openai-responses' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelApi} 2`), { target: { value: 'anthropic-messages' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelKeyInput} 1`), { target: { value: 'shared-key' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelKeyInput} 2`), { target: { value: 'other-key' } })
+    fireEvent.click(screen.getByText(en.create))
+
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual({
+      apiKeyEnv: 'ACME_API_KEY',
+      api: 'openai-completions',
+      baseURL: 'https://acme.test/v1',
+      models: [
+        { id: 'chat', api: 'openai-responses' },
+        { id: 'claude', api: 'anthropic-messages', apiKeyEnv: 'ACME_CLAUDE_API_KEY' },
+      ],
+    })
+    expect(set.mock.calls.map(call => call[0])).toEqual([
+      { ref: 'ACME_API_KEY', value: 'shared-key' },
+      { ref: 'ACME_CLAUDE_API_KEY', value: 'other-key' },
+    ])
   })
 
   it('offers no protocol when the namespace declares none', () => {

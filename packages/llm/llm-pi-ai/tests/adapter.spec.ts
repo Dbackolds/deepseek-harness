@@ -695,6 +695,23 @@ describe('provider profile lifecycle', () => {
     expect(server.requests).toHaveLength(0)
   })
 
+  it('uses a model-level credential when the selected model names one', async () => {
+    vi.stubEnv('ROUTE_KEY', 'route-key')
+    vi.stubEnv('MODEL_KEY', 'model-key')
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
+    const ctx = await harness(server.url, {
+      apiKeyEnv: 'ROUTE_KEY',
+      models: [
+        { id: 'deepseek-v4-flash' },
+        { id: 'deepseek-v4-pro', apiKeyEnv: 'MODEL_KEY' },
+      ],
+    })
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    await assemble(ctx, { model: 'deepseek-v4-pro', messages: [] })
+    expect(server.headers[0]?.authorization).toBe('Bearer route-key')
+    expect(server.headers[1]?.authorization).toBe('Bearer model-key')
+  })
+
   it('validates empty, underspecified, legacy-shaped, and explicitly blank profiles', () => {
     // Empty and omitted dicts are the dormant zero-route posture, not errors.
     expect(resolveProfiles({}).size).toBe(0)

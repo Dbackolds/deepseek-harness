@@ -48,6 +48,7 @@ describe.skipIf(MODE === 'record')('web e2e: another usable provider ends first-
     const settings = page.getByRole('dialog', { name: '设置' })
     await settings.waitFor({ timeout: 10_000 })
     await settings.getByRole('button', { name: '模型' }).click()
+    await settings.getByText('FAC', { exact: true }).click()
     const setupKey = settings.getByRole('textbox', { name: 'API 密钥', exact: true })
     await setupKey.waitFor({ timeout: 10_000 })
 

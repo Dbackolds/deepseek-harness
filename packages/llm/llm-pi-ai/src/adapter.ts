@@ -66,14 +66,19 @@ export interface PiAiAdapterOptions {
   /** Current validated profiles by provider route; called once per operation. */
   profiles: () => ReadonlyMap<string, ResolvedPiAiProviderProfile>
   /**
-   * Resolve the credential for one already-resolved profile; called once per
-   * stream call and frozen for that call. `undefined` defers to the route's own
-   * pi-ai auth, which for an installed catalog route is its provider-native
-   * ambient discovery; the plugin allows that only for a profile naming no
-   * credential at all, because a named reference that misses throws `LlmError`
-   * `MISSING_CREDENTIAL` rather than falling back.
+   * Resolve the credential for one already-resolved profile and the model the
+   * request names; called once per stream call and frozen for that call.
+   * `undefined` defers to the route's own pi-ai auth, which for an installed
+   * catalog route is its provider-native ambient discovery; the plugin allows
+   * that only when neither the model nor the route names a credential, because
+   * a named reference that misses throws `LlmError` `MISSING_CREDENTIAL`
+   * rather than falling back.
    */
-  resolveApiKey: (provider: string, profile: ResolvedPiAiProviderProfile) => Promise<string | undefined>
+  resolveApiKey: (
+    provider: string,
+    profile: ResolvedPiAiProviderProfile,
+    model: string,
+  ) => Promise<string | undefined>
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
 }
@@ -291,7 +296,7 @@ export class PiAiAdapter extends LlmAdapter {
       model,
       options.reasoningEffort ?? profile.reasoning,
     )
-    const apiKey = await this.config.resolveApiKey(options.provider, profile)
+    const apiKey = await this.config.resolveApiKey(options.provider, profile, options.model)
 
     const consumer = new AbortController()
     const upstream = options.signal === undefined

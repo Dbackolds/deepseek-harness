@@ -6,7 +6,7 @@
 
 ## 配置 DeepSeek
 
-打开**设置 → 模型**。FAC 排在 DeepSeek 上面。每张卡片提供一个 API 密钥字段；输入密钥并保存。FAC 默认使用 `https://new.fastaicode.top/v1`。
+打开**设置 → 模型**。FAC 排在 DeepSeek 上面。每张卡片提供一个 API 密钥字段，该提供方下的模型会继承它，除非某个模型自己点名密钥；输入密钥并保存。FAC 默认使用 `https://new.fastaicode.top/v1`。
 
 ![模型页：DeepSeek 卡片，以及添加提供方与添加自定义提供方两个入口](providers-models-page.zh.png)
 
@@ -20,7 +20,7 @@
 
 ## 添加自定义提供方
 
-对于公司网关、自建服务器或已安装目录中不存在的提供方，选择**添加自定义提供方**。提供小写 Provider ID、基础 URL、API 协议、凭据和至少一个模型。
+对于公司网关、自建服务器或已安装目录中不存在的提供方，选择**添加自定义提供方**。提供小写 Provider ID、基础 URL、默认 API 协议、凭据和至少一个模型。每个模型都可以覆盖该协议，并可以存自己的密钥。多个模型键入相同密钥时只存一份并共用；不同的键入值会变成不同的密钥。
 
 ![自定义提供方表单：Provider ID、显示名称、API 地址、API 协议、API 密钥](providers-custom-form.zh.png)
 

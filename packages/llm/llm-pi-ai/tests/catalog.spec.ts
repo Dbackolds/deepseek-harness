@@ -326,6 +326,47 @@ describe('hand-declared providers', () => {
     })).toThrow(/needs a baseURL/)
   })
 
+  it('serves a hand-declared model that names its own protocol', () => {
+    const resolved = resolveProfiles({
+      'acme-gateway': {
+        baseURL: 'https://acme.test',
+        models: [{ id: 'm', api: 'openai-completions' }],
+      },
+    })
+    expect(resolved.get('acme-gateway')?.piProvider.getModels()[0]?.api).toBe('openai-completions')
+  })
+
+  it('lets each model name its own protocol and credential', () => {
+    const resolved = resolveProfiles({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        apiKeyEnv: KEY_ENV,
+        models: [
+          { id: 'chat', api: 'openai-responses' },
+          { id: 'claude', api: 'anthropic-messages', apiKeyEnv: 'ACME_CLAUDE_KEY' },
+        ],
+      },
+    })
+    const models = resolved.get('acme-gateway')?.piProvider.getModels() ?? []
+    expect(models.map(model => ({ id: model.id, api: model.api }))).toEqual([
+      { id: 'chat', api: 'openai-responses' },
+      { id: 'claude', api: 'anthropic-messages' },
+    ])
+    expect(resolved.get('acme-gateway')?.configuredApiKeys.get('claude')).toBe('ACME_CLAUDE_KEY')
+    expect(resolved.get('acme-gateway')?.configuredApiKeys.has('chat')).toBe(false)
+  })
+
+  it('rejects an empty per-model credential reference', () => {
+    expect(() => resolveProfiles({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        models: [{ id: 'm', apiKeyEnv: '' }],
+      },
+    })).toThrow(/empty apiKeyEnv/)
+  })
+
   it.each(['bedrock-converse-stream', 'google-vertex', 'azure-openai-responses', 'openai-codex-responses'])(
     'refuses %s, whose authentication a profile cannot express',
     (api) => {

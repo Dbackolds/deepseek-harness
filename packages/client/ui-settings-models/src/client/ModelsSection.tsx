@@ -3,13 +3,14 @@
  * directory, settings namespaces, and credential states, with one editor
  * card at a time. Rows expose only confirmed API-key state through accessible
  * solid configured or missing dots. A whole-section provider without a
- * configured key renders as its open setup card instead of a row, but only in
- * the first-run posture — no provider on the page can serve requests yet — and
- * only until the user closes that card; the add flow is a card carrying the
- * dormant-provider select. Each card kind owns its own open state, so closing
- * one never discards a draft in another. Every mutation writes through the
- * wire, while a provider removal first requires confirmation; the page
- * re-renders from pushed invalidations or the post-apply reload.
+ * configured key renders as its collapsed setup card instead of a row, but
+ * only in the first-run posture — no provider on the page can serve requests
+ * yet — and only until the user closes that card; the add flow is a card
+ * carrying the dormant-provider select. Each card kind owns its own open
+ * state, so closing one never discards a draft in another. Every mutation
+ * writes through the wire, while a provider removal first requires
+ * confirmation; the page re-renders from pushed invalidations or the
+ * post-apply reload.
  */
 
 import { useState } from 'react'
@@ -18,7 +19,7 @@ import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, IconPlusOutline16, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-web-react'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
-import { deriveKeyRef, messageOf, protocolChoices, providerUsable } from './store.ts'
+import { isPageManagedRef, messageOf, protocolChoices, providerUsable } from './store.ts'
 import type { ModelsSettingsState, ModelsSettingsStore, ProviderRow } from './store.ts'
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
 import type { en } from './locales.ts'
@@ -54,8 +55,8 @@ export interface ProviderIdentity {
 interface EditorTarget extends ProviderIdentity {
   settingsNs: string
   settingsPath: readonly string[]
-  /** Writable credential identified under this page's conventional reference. */
-  credentialRef?: string
+  /** Writable credentials this page derived and therefore owns on delete. */
+  credentialRefs?: readonly string[]
   /** The adapter reports this route as one it does not ship (see {@link ProviderEditorProps.declared}). */
   declared?: boolean
 }
@@ -63,7 +64,7 @@ interface EditorTarget extends ProviderIdentity {
 /** Values that vary around the shared provider-editor rendering. */
 interface ProviderEditorRenderProps extends Pick<
   ProviderEditorProps,
-  'namespace' | 'api' | 't' | 'readOnly' | 'onClose'
+  'namespace' | 'api' | 't' | 'readOnly' | 'onClose' | 'hideTitle'
 > {
   target: EditorTarget
 }
@@ -95,11 +96,17 @@ function renderProviderEditor({ target, ...props }: ProviderEditorRenderProps): 
 export async function removeProviderProfile(
   api: Pick<IApiClient, 'settings' | 'credentials'>,
   controller: ModelsSettingsStore,
-  target: { settingsNs: string; settingsPath: readonly string[]; credentialRef?: string },
+  target: {
+    settingsNs: string
+    settingsPath: readonly string[]
+    credentialRef?: string
+    credentialRefs?: readonly string[]
+  },
 ): Promise<string | undefined> {
   try {
-    if (target.credentialRef !== undefined) {
-      const credential = await api.credentials.unset({ ref: target.credentialRef })
+    const refs = target.credentialRefs ?? (target.credentialRef === undefined ? [] : [target.credentialRef])
+    for (const ref of refs) {
+      const credential = await api.credentials.unset({ ref })
       if (!credential.result.ok) return credential.result.error.message
     }
     const response = await api.settings.mutate({
@@ -118,9 +125,10 @@ export async function removeProviderProfile(
 
 /**
  * Whether a whole-section provider still needs its first key: an unconfigured
- * credential opens the setup card instead of showing a row. This is the
+ * credential renders the setup card instead of showing a row. This is the
  * first-run posture alone — a user who can already reach some provider gets an
  * ordinary row with the missing-key dot, since nothing here is blocking them.
+ * The setup card's form starts collapsed; expanding the title reveals it.
  * @param row - the joined provider row.
  * @param anyUsable - whether any joined row can already serve requests.
  * @returns whether to render the setup card.
@@ -135,18 +143,15 @@ export function needsSetup(row: ProviderRow, anyUsable: boolean): boolean {
 }
 
 function targetOf(row: ProviderRow): EditorTarget {
-  const managedRef = deriveKeyRef(row.entry.provider)
-  const credentialRef = row.apiKeyEnv === managedRef
-    && row.credential?.configured === true
-    && row.credential.writable
-    ? managedRef
-    : undefined
+  const managed = row.apiKeyEnvs.filter(ref => isPageManagedRef(row.entry.provider, ref)
+    && row.credentials[ref]?.configured === true
+    && row.credentials[ref]?.writable === true)
   return {
     provider: row.entry.provider,
     displayName: row.entry.displayName,
     settingsNs: row.entry.settingsNs,
     settingsPath: row.entry.settingsPath,
-    ...credentialRef === undefined ? {} : { credentialRef },
+    ...managed.length === 0 ? {} : { credentialRefs: managed },
     // Absent is not "shipped": an adapter that answers nothing leaves the
     // route-level fields only a declared route owns off the card, exactly as
     // it leaves the custom tag off the row.
@@ -295,24 +300,34 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
           if (needsSetup(row, anyUsable) && !dismissedSetup.has(row.entry.provider)) {
             // First-run posture: the provider exists but has no key — the
             // setup card IS its presence on the page, until the user closes it.
+            // The form stays mounted behind the disclosure so a typed key
+            // survives collapse; Cancel still dismisses the card to a row.
             return (
               <li key={row.entry.provider} className={styles['setupCard']}>
-                {renderProviderEditor({
-                  target,
-                  namespace,
-                  api,
-                  t,
-                  readOnly: !state.writable,
-                  onClose: (changed) => { closeSetup(changed, target) },
-                })}
+                <details className={styles['setupDisclosure']}>
+                  <summary className={styles['setupSummary']}>
+                    <span className={styles['editorTitle']}>{target.displayName}</span>
+                    {target.provider !== target.displayName
+                      ? <span className={styles['editorRoute']}>{target.provider}</span>
+                      : null}
+                  </summary>
+                  {renderProviderEditor({
+                    target,
+                    namespace,
+                    api,
+                    t,
+                    hideTitle: true,
+                    readOnly: !state.writable,
+                    onClose: (changed) => { closeSetup(changed, target) },
+                  })}
+                </details>
               </li>
             )
           }
           const open = !adding && editing?.provider === row.entry.provider
-          const credentialConfigured = row.credential?.configured === true
-          const credentialMissing = !credentialConfigured
-            && row.apiKeyEnv !== undefined
-            && row.credential?.configured === false
+          const credentialConfigured = row.apiKeyEnvs.length > 0
+            && row.apiKeyEnvs.every(ref => row.credentials[ref]?.configured === true)
+          const credentialMissing = row.apiKeyEnvs.some(ref => row.credentials[ref]?.configured === false)
           return (
             <li key={row.entry.provider} className={styles['rowCard']}>
               <div className={styles['rowHead']}>
@@ -497,7 +512,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
         description={deleteTarget === undefined
           ? ''
           : providerCopy(
-            deleteTarget.credentialRef === undefined
+            deleteTarget.credentialRefs === undefined
               ? t('deleteDescription')
               : t('deleteDescriptionWithCredential'),
             deleteTarget,

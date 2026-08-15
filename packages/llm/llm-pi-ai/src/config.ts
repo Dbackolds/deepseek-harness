@@ -72,14 +72,18 @@ export type {
 
 /** Configuration for one pi-ai provider route; the `providers` dict key IS the route. */
 export interface PiAiProviderProfile {
-  /** Credential reference (environment-variable name) resolved per request through `ctx.credentials`. */
+  /**
+   * Default credential reference resolved per request through `ctx.credentials`.
+   * A model that names its own `apiKeyEnv` wins for requests that select it.
+   */
   apiKeyEnv?: string
   /** Name shown by configuration surfaces; defaults to the route key. */
   displayName?: string
   /**
-   * Wire protocol every model on this route speaks. Omission keeps each
-   * installed catalog model's own protocol, which is why a catalog route needs
-   * no protocol at all; a route the catalog does not ship must name one.
+   * Default wire protocol for models on this route that do not name their own.
+   * Omission keeps each installed catalog model's own protocol, which is why a
+   * catalog route needs no protocol at all; a route the catalog does not ship
+   * must name one here or on every model.
    */
   api?: string
   /** Endpoint for this route's models; defaults to the installed catalog's endpoint. */
@@ -180,6 +184,11 @@ export interface ResolvedPiAiProviderProfile
    * model id. Empty or omitted entries never appear here.
    */
   configuredSystemPrompts: ReadonlyMap<string, string>
+  /**
+   * Credential references this profile named on individual models, by model
+   * id. A request for a model absent here uses {@link apiKeyEnv}.
+   */
+  configuredApiKeys: ReadonlyMap<string, CredentialRef>
 }
 
 /** Plugin configuration: the provider routes this instance owns. */
@@ -234,6 +243,8 @@ const modelFields = {
   reasoningEfforts: z.union([z.const(false), reasoningEfforts]),
   compat: compatProfile,
   systemPrompt: z.string(),
+  api: z.union(supportedProtocols()),
+  apiKeyEnv: z.string().role('credential-ref'),
 }
 
 const modelProfile: z<PiAiModelProfile> = z.object({
@@ -376,13 +387,16 @@ export function resolveProfiles(
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },
       configuredMaxTokens: catalog.configuredMaxTokens,
       configuredSystemPrompts: catalog.configuredSystemPrompts,
+      configuredApiKeys: new Map(
+        [...catalog.configuredApiKeys].map(([id, ref]) => [id, credentialRef(ref)]),
+      ),
       piProvider: buildProvider({
         provider,
         displayName,
         ...api === undefined ? {} : { api },
         ...baseURL === undefined ? {} : { baseURL },
         models: catalog.models,
-        namesCredential: apiKeyEnv !== undefined,
+        namesCredential: apiKeyEnv !== undefined || catalog.configuredApiKeys.size > 0,
       }),
     })
   }

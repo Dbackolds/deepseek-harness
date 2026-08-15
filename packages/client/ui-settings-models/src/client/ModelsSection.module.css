@@ -218,7 +218,8 @@
 .linkButton:focus-visible,
 .addModelButton:focus-visible,
 .iconButton:focus-visible,
-.customizedSummary:focus-visible {
+.customizedSummary:focus-visible,
+.setupSummary:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
 }
@@ -347,6 +348,43 @@
 .setupCard .editor {
   background: none;
   padding: 0;
+}
+
+/* Same rotating chevron as `.customizedSummary`, sized for the card title. */
+.setupSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.setupSummary::-webkit-details-marker {
+  display: none;
+}
+
+.setupSummary::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  color: var(--dsw-alias-label-secondary);
+  transform: rotate(-45deg) translate(-1px, -1px);
+  transition: transform 120ms ease;
+}
+
+.setupDisclosure[open] > .setupSummary::before {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.setupDisclosure[open] > .setupSummary {
+  margin-bottom: 14px;
+}
+
+.setupSummary:hover .editorTitle {
+  color: var(--dsw-alias-label-primary);
 }
 
 .customized {
@@ -639,7 +677,8 @@ select.input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .customizedSummary::before {
+  .customizedSummary::before,
+  .setupSummary::before {
     transition: none;
   }
 }

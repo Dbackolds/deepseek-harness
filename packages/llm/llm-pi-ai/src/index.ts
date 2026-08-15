@@ -191,13 +191,15 @@ export function apply(ctx: Context, config: Config): void {
   const resolveApiKey = async (
     provider: string,
     profile: ResolvedPiAiProviderProfile,
+    model?: string,
   ): Promise<string | undefined> => {
-    const ref = profile.apiKeyEnv
-    // Only a profile that names no credential at all defers to pi-ai's
-    // provider-native discovery. Once one is named, a miss must fail loud:
-    // handing pi-ai `undefined` would let it pick up an unrelated ambient key
-    // (OPENAI_API_KEY and friends), billing another tenant for a request the
-    // deployment meant to authenticate differently.
+    const ref = model === undefined ? profile.apiKeyEnv : (profile.configuredApiKeys.get(model) ?? profile.apiKeyEnv)
+    // Only a request that names no credential at all defers to pi-ai's
+    // provider-native discovery. Once one is named — on the model or the
+    // route — a miss must fail loud: handing pi-ai `undefined` would let it
+    // pick up an unrelated ambient key (OPENAI_API_KEY and friends), billing
+    // another tenant for a request the deployment meant to authenticate
+    // differently.
     if (ref === undefined) return undefined
     const credentials = ctx.get('credentials')
     const hit = credentials !== undefined
@@ -205,8 +207,11 @@ export function apply(ctx: Context, config: Config): void {
       // Without the seam the environment is the whole credential plane.
       : launchEnvironmentOf(ctx).get(ref)?.value
     if (hit !== undefined && hit.length > 0) return assertUsableApiKey(hit, 'llm-pi-ai', ref)
+    const subject = model === undefined
+      ? `provider route "${provider}"`
+      : `provider route "${provider}" model "${model}"`
     throw new LlmError(
-      `llm-pi-ai: no credential for provider route "${provider}"; its profile resolves ${ref}, which is not`
+      `llm-pi-ai: no credential for ${subject}; its profile resolves ${ref}, which is not`
       + ` set — store ${ref} through the credentials service (the web Models page writes it) or export it,`
       + ' and remove apiKeyEnv only if this provider should authenticate from pi-ai\'s own environment discovery',
       'MISSING_CREDENTIAL',

@@ -31,6 +31,24 @@ function expandRow(position: number): void {
   fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} ${String(position)}`))
 }
 
+/**
+ * Expand a first-run setup card by its display name. The form stays mounted
+ * behind the disclosure, so a second call is a no-op once `open`.
+ */
+function expandSetup(displayName: string): HTMLElement {
+  const card = screen.getByText(displayName).closest('li')
+  if (card === null) throw new Error(`${displayName} setup card missing`)
+  const details = card.querySelector('details')
+  if (details === null) throw new Error(`${displayName} setup disclosure missing`)
+  if (!details.open) {
+    const summary = details.querySelector('summary')
+    if (summary === null) throw new Error(`${displayName} setup summary missing`)
+    fireEvent.click(summary)
+    details.open = true
+  }
+  return card
+}
+
 /** The capacity inputs of every open row, in row order. */
 function capacityInputs(label: string): HTMLInputElement[] {
   return screen.getAllByLabelText<HTMLInputElement>(new RegExp(label))
@@ -234,17 +252,37 @@ describe('ModelsSection', () => {
     expect(document.body.textContent).toBe('')
   })
 
-  it('renders the unkeyed whole-section provider as an open setup card in the first-run posture', async () => {
+  it('renders the unkeyed whole-section provider as a collapsed setup card in the first-run posture', async () => {
     await mountFirstRun()
     // Nothing is reachable yet, and DeepSeek has no configured credential and
-    // no stored apiKey → setup card.
+    // no stored apiKey → setup card, collapsed until the title is expanded.
     expect(screen.getByText('FAC')).toBeTruthy()
     expect(screen.getByText('DeepSeek')).toBeTruthy()
+    expect([...document.querySelectorAll('li details')].every(node => !(node as HTMLDetailsElement).open)).toBe(true)
+    expandSetup('DeepSeek')
+    expandSetup('FAC')
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(2)
     expect(screen.getByText('openai')).toBeTruthy()
     expect(screen.queryByText('Active')).toBeNull()
     expect(screen.queryByText('Inactive')).toBeNull()
     expect(screen.getByText(en.add)).toBeTruthy()
+  })
+
+  it('keeps a typed key when the setup card is collapsed and expanded again', async () => {
+    await mountFirstRun()
+    const card = expandSetup('DeepSeek')
+    fireEvent.change(within(card).getByLabelText<HTMLInputElement>(en.keyInput), {
+      target: { value: 'sk-kept' },
+    })
+    const details = card.querySelector('details')
+    if (details === null) throw new Error('DeepSeek setup disclosure missing')
+    fireEvent.click(within(card).getByText('DeepSeek'))
+    details.open = false
+    expect(details.open).toBe(false)
+    expect(within(card).getByLabelText<HTMLInputElement>(en.keyInput).value).toBe('sk-kept')
+    fireEvent.click(within(card).getByText('DeepSeek'))
+    details.open = true
+    expect(within(card).getByLabelText<HTMLInputElement>(en.keyInput).value).toBe('sk-kept')
   })
 
   it('leaves the unkeyed provider a plain row once another provider is usable', async () => {
@@ -315,7 +353,9 @@ describe('ModelsSection', () => {
       configured: true,
       removable: false,
       apiKeyEnv: 'X',
+      apiKeyEnvs: ['X'],
       credential,
+      credentials: credential === undefined ? {} : { X: credential },
     })
     expect(needsSetup(row(undefined), false)).toBe(true)
     expect(needsSetup(row({ configured: true, writable: true }), false)).toBe(false)
@@ -351,8 +391,7 @@ describe('ModelsSection', () => {
 
   it('stores a typed key write-only from the setup card without touching settings', async () => {
     const { set, update, face } = await mountFirstRun()
-    const deepSeekCard = screen.getByText('DeepSeek').closest('li')
-    if (deepSeekCard === null) throw new Error('DeepSeek setup card missing')
+    const deepSeekCard = expandSetup('DeepSeek')
     const key = within(deepSeekCard).getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: '  sk-live  ' } })
     fireEvent.click(within(deepSeekCard).getByText(en.apply))
@@ -999,6 +1038,8 @@ describe('ModelsSection', () => {
         api={face as never}
         t={t}
       />)
+      await screen.findByText('DeepSeek')
+      expandSetup('DeepSeek')
       const keys = await screen.findAllByLabelText<HTMLInputElement>(en.keyInput)
       expect(keys.some(input => input.placeholder === en.keyPlaceholder)).toBe(true)
       await new Promise(resolve => setTimeout(resolve, 10))
@@ -1038,8 +1079,7 @@ describe('ModelsSection', () => {
     await mountFirstRun({
       set: vi.fn(() => Promise.resolve(fail('credentials: DEEPSEEK_API_KEY is shadowed by the read-only environment', 'credential-rejected'))),
     })
-    const deepSeekCard = screen.getByText('DeepSeek').closest('li')
-    if (deepSeekCard === null) throw new Error('DeepSeek setup card missing')
+    const deepSeekCard = expandSetup('DeepSeek')
     const key = within(deepSeekCard).getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: 'sk-live' } })
     fireEvent.click(within(deepSeekCard).getByText(en.apply))
@@ -1191,6 +1231,8 @@ describe('ModelsSection', () => {
     // The regression: the setup card shared the row/add/declare close handler,
     // so cancelling it discarded the add card's draft while staying open itself.
     await mountFirstRun()
+    expandSetup('DeepSeek')
+    expandSetup('FAC')
     expect(screen.getAllByLabelText(en.keyInput).length).toBeGreaterThanOrEqual(2)
     fireEvent.click(screen.getByText(en.add))
     await screen.findByLabelText(en.provider)
