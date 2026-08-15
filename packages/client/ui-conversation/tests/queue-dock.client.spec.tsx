@@ -390,7 +390,7 @@ describe('QueueDock', () => {
     })
     fireDrag(second, 'drop', 230)
     await waitFor(() => {
-      expect(notify).toHaveBeenCalledWith('error', '调整顺序失败：这条消息可能已经开始发送。')
+      expect(notify).toHaveBeenCalledWith('error', '调整顺序失败，请重试。')
     })
     expect(getByText('one')).toBeTruthy()
     expect(getByText('two')).toBeTruthy()
