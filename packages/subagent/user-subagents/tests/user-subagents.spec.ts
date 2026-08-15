@@ -69,10 +69,10 @@ describe('validateUserSubagents', () => {
   it('rejects an empty allow or deny name', () => {
     expect(() => validateUserSubagents({
       definitions: [{ ...REVIEWER, allow: [''] }],
-    })).toThrow('empty allow name')
+    })).toThrow('empty filter name')
     expect(() => validateUserSubagents({
       definitions: [{ id: 'reader', name: 'Reader', description: '', persona: 'x', deny: [''] }],
-    })).toThrow('empty deny name')
+    })).toThrow('empty filter name')
   })
 
   it('accepts a non-empty allow list', () => {
