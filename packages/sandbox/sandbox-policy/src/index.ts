@@ -27,8 +27,18 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import { effectiveSandboxMode } from './session-mode.ts'
+import { sessionWorkingDirectory } from './session-worktree.ts'
 
 export { SANDBOX_MODES, effectiveSandboxMode, setSandboxMode } from './session-mode.ts'
+export {
+  effectiveWorktree, sessionWorkingDirectory, setSessionWorktree,
+  type SessionWorktree,
+} from './session-worktree.ts'
+export {
+  checkoutSessionBranch, createSessionBranch, describeSessionGit, discoverRepoRoot,
+  GitWorktreeError, isValidBranchName,
+  type GitBranchEntry, type SessionGitState,
+} from './git-worktree.ts'
 
 /** Resolve filesystem identity before lexical normalization can erase symlink-sensitive components. */
 function resolveWorkspaceRoot(path: string): string {
@@ -82,7 +92,7 @@ export interface Config {
 
 /** Inputs that select the sandbox policy for one capability call. */
 export interface SandboxPolicyRequest {
-  /** Calling session; its immutable cwd becomes the workspace boundary. */
+  /** Calling session; its worktree overlay or immutable cwd becomes the workspace boundary. */
   session?: Session
   /** Explicit approved mode override, which outranks session policy. */
   mode?: SandboxMode
@@ -132,16 +142,18 @@ export class SandboxPolicyService extends Service {
   /**
    * Resolve the complete policy for one capability call. An approved explicit
    * mode outranks the session's last `sandbox/mode` event, which outranks the
-   * deployment default. A session cwd is its primary workspace-write boundary;
-   * additional folders from the owning workspace join the same allow-list. The
-   * configured root is the fallback for agentless calls and sessions without a
-   * cwd.
+   * deployment default. A session's last `git/worktree` overlay outranks its
+   * immutable header cwd as the primary workspace-write boundary; additional
+   * folders from the owning workspace join the same allow-list. The configured
+   * root is the fallback for agentless calls and sessions without a cwd.
    * @param request - optional session and approved mode override.
    * @returns the fully resolved per-call mode, primary workspace root, and extra folders.
    */
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
     const { session } = request
-    const workspaceRoot = resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot)
+    const workspaceRoot = resolveWorkspaceRoot(
+      (session === undefined ? undefined : sessionWorkingDirectory(session)) ?? this.workspaceRoot,
+    )
     const additionalRoots = session === undefined ? [] : this.additionalRootsOf(session, workspaceRoot)
     return {
       mode: request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,

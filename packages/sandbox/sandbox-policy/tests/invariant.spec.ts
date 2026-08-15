@@ -33,6 +33,27 @@ describe('sandbox-policy invariants', () => {
     expect(() => { ctx.emit('tools/change') }).not.toThrow()
   })
 
+  it('rejects an empty git/worktree path', async () => {
+    const ctx = await setup()
+    expect(() => { ctx.emit('session/event', {} as Session, {
+      type: 'git/worktree', seq: 0, time: 0, data: { path: '', branch: 'main' },
+    } as SessionEvent) }).toThrow(/git\/worktree carries empty path/)
+  })
+
+  it('rejects an empty git/worktree branch', async () => {
+    const ctx = await setup()
+    expect(() => { ctx.emit('session/event', {} as Session, {
+      type: 'git/worktree', seq: 0, time: 0, data: { path: '/wt', branch: '' },
+    } as SessionEvent) }).toThrow(/git\/worktree carries empty branch/)
+  })
+
+  it('accepts a well-formed git/worktree overlay', async () => {
+    const ctx = await setup()
+    expect(() => { ctx.emit('session/event', {} as Session, {
+      type: 'git/worktree', seq: 0, time: 0, data: { path: '/wt', branch: 'main' },
+    } as SessionEvent) }).not.toThrow()
+  })
+
   it('rejects and attributes an unknown durable sandbox mode', async () => {
     const ctx = await setup()
     expect(() => { ctx.emit('session/event', {} as Session, modeEvent('host-root')) })

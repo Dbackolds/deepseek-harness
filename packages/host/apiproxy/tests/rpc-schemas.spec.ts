@@ -74,6 +74,10 @@ describe('rpcErrorSchema', () => {
       message: 'm',
       details: { provider: 'p', model: 'm' },
     }).code).toBe('model-unavailable')
+    expect(rpcErrorSchema.parse({ code: 'git-not-a-repository', message: 'm', details: { path: '/x' } }).code).toBe('git-not-a-repository')
+    expect(rpcErrorSchema.parse({ code: 'git-branch-invalid', message: 'm', details: { branch: 'x' } }).code).toBe('git-branch-invalid')
+    expect(rpcErrorSchema.parse({ code: 'git-branch-exists', message: 'm', details: { branch: 'x' } }).code).toBe('git-branch-exists')
+    expect(rpcErrorSchema.parse({ code: 'git-failed', message: 'm', details: { reason: 'x' } }).code).toBe('git-failed')
     expect(rpcErrorSchema.parse({ code: 'agent-busy', message: 'm', details: { reason: 'r' } }).code).toBe('agent-busy')
     expect(rpcErrorSchema.parse({ code: 'queue-item-not-found', message: 'm', details: { itemId: 'i' } }).code).toBe('queue-item-not-found')
     expect(rpcErrorSchema.parse({ code: 'command-error', message: 'm', details: {} }).code).toBe('command-error')

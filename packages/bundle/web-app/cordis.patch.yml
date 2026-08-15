@@ -272,6 +272,11 @@
     - id: ui-agent-preset
       name: '@deepseek-ai/dsh-client-ui-agent-preset'
 
+    # Per-session Git branch chip on the new-session screen. Absent a Git
+    # checkout the chip renders nothing.
+    - id: ui-git-branch
+      name: '@deepseek-ai/dsh-client-ui-git-branch'
+
     # System-prompt library and per-model assembly. Absent the Host namespace
     # it renders the unavailable line.
     - id: ui-settings-system-prompts

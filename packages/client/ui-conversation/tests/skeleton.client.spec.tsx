@@ -486,6 +486,7 @@ describe('ConversationRoot resident composer', () => {
     // The agent-preset chip sits in the same row, for the same reason: both
     // choices are only open before the first message.
     expect(b.slotCalls).toContain('conversation.hero.agentPreset')
+    expect(b.slotCalls).toContain('conversation.hero.branch')
   })
 
   it('prompt failure renders the promptError strip (ordinary failure, no transaction UI)', () => {

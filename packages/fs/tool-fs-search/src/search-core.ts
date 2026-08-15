@@ -26,6 +26,7 @@ import { ItemRetainer, TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import type { RetainedItems } from '@deepseek-ai/dsh-output-retention'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
+import { sessionWorkingDirectory } from '@deepseek-ai/dsh-sandbox-policy'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 
 /**
@@ -220,7 +221,7 @@ export async function runRipgrep(
   if (exec.signal.aborted) {
     throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
   }
-  const cwd = exec.agent?.session.header.cwd
+  const cwd = exec.agent === undefined ? undefined : sessionWorkingDirectory(exec.agent.session)
   const workdir = cwd ?? process.cwd()
   let handle: SubprocessHandle
   try {

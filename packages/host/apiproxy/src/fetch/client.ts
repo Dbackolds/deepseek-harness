@@ -48,6 +48,9 @@ import {
   agentPresetReadValueSchema, agentPresetRemoveValueSchema, agentPresetSelectValueSchema,
 } from '../api/agent-presets.schema.ts'
 import {
+  gitCheckoutValueSchema, gitCreateBranchValueSchema, gitDescribeValueSchema,
+} from '../api/git.schema.ts'
+import {
   goalCreateValueSchema,
   goalEditValueSchema,
   goalPauseValueSchema,
@@ -138,6 +141,11 @@ export interface IApiClient {
   skills: {
     list(payload: RequestPayload<'skill.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'skill.list'>>>
   }
+  git: {
+    describe(payload: RequestPayload<'git.describe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.describe'>>>
+    checkout(payload: RequestPayload<'git.checkout'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.checkout'>>>
+    createBranch(payload: RequestPayload<'git.createBranch'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.createBranch'>>>
+  }
   agentPresets: {
     list(payload: RequestPayload<'agentPreset.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'agentPreset.list'>>>
     select(payload: RequestPayload<'agentPreset.select'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'agentPreset.select'>>>
@@ -227,6 +235,9 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'workspace.addFolder': workspaceAddFolderValueSchema,
   'workspace.removeFolder': workspaceRemoveFolderValueSchema,
   'skill.list': skillListValueSchema,
+  'git.describe': gitDescribeValueSchema,
+  'git.checkout': gitCheckoutValueSchema,
+  'git.createBranch': gitCreateBranchValueSchema,
   'agentPreset.list': agentPresetListValueSchema,
   'agentPreset.select': agentPresetSelectValueSchema,
   'agentPreset.read': agentPresetReadValueSchema,
@@ -500,6 +511,12 @@ export abstract class AbstractApiClient implements IApiClient {
   // declaration by the specifier TS picks — the host `index.ts` — which drags
   // the whole gateway, and with it the host `Context` merges, into every
   // Client program that imports this carrier.
+  readonly git: IApiClient['git'] = {
+    describe: (payload, signal) => this.callUnary('git.describe', payload, signal),
+    checkout: (payload, signal) => this.callUnary('git.checkout', payload, signal),
+    createBranch: (payload, signal) => this.callUnary('git.createBranch', payload, signal),
+  }
+
   readonly agentPresets: IApiClient['agentPresets'] = {
     list: (payload, signal) => this.callUnary('agentPreset.list', payload, signal),
     select: (payload, signal) => this.callUnary('agentPreset.select', payload, signal),

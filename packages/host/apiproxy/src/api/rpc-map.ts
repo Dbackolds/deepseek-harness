@@ -8,6 +8,7 @@ import type { SessionsApi } from './sessions.ts'
 import type { HostApi } from './host.ts'
 import type { WorkspaceApi } from './workspace.ts'
 import type { AgentPresetsApi } from './agent-presets.ts'
+import type { GitApi } from './git.ts'
 import type { SkillsApi } from './skills.ts'
 import type { GoalsApi } from './goals.ts'
 import type { AutomationApi } from './automation.ts'
@@ -55,6 +56,9 @@ export interface RpcMethodMap {
   'workspace.addFolder': WorkspaceApi['addFolder']
   'workspace.removeFolder': WorkspaceApi['removeFolder']
   'skill.list': SkillsApi['list']
+  'git.describe': GitApi['describe']
+  'git.checkout': GitApi['checkout']
+  'git.createBranch': GitApi['createBranch']
   'agentPreset.list': AgentPresetsApi['list']
   'agentPreset.select': AgentPresetsApi['select']
   'agentPreset.read': AgentPresetsApi['read']
