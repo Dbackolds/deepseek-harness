@@ -62,6 +62,8 @@
             - text: acme-large
           - textbox "显示名称 1":
             - /placeholder: 显示名称
+          - checkbox "支持图片 1" [checked]
+          - text: 支持图片
           - button "容量 1"
           - button "删除模型 1"
           - button "添加模型"

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-models-page-image-input-checkbox.md
+2026-08-15-models-page-image-input-checkbox.md: b9cdaab50776a9593176099e67d1ffd2123dc8d1
+2026-08-15-models-page-image-input-checkbox.zh.md: 11b1e641b3b2fb7735d303e3dd4bf155dcbc90dc

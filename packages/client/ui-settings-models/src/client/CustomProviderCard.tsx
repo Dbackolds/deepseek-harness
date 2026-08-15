@@ -13,7 +13,8 @@
  * The three fields a hand-declared route cannot default — endpoint, a default
  * protocol, and at least one model — are required here rather than at load, so
  * the failure names the field while the user is still looking at it. Each
- * model can then override that protocol and store its own key.
+ * model can then override that protocol, store its own key, and declare
+ * image input.
  *
  * There is deliberately no reasoning-effort control, here or on the editor
  * card: effort is a per-MODEL capability, and the models under one provider

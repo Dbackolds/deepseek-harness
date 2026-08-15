@@ -4,7 +4,9 @@
  *
  * The list is the profile's `models` array as the card holds it: an empty list
  * means "serve this route's built-in catalog", and any entry replaces that
- * catalog, so a row is only ever added deliberately. Fetching asks the endpoint
+ * catalog, so a row is only ever added deliberately. Each row can declare
+ * image input; checking writes `input: [text, image]`, and unchecking drops
+ * the field so a catalog answer still applies. Fetching asks the endpoint
  * **the form currently shows** — including a key typed but not yet saved — so
  * adding a provider is one pass instead of save-then-return; the reply is
  * candidates the user picks from, never configuration written behind them.
@@ -42,6 +44,16 @@ function textOf(model: ModelDraft, key: string): string {
 function numberOf(model: ModelDraft, key: string): number | undefined {
   const value = model[key]
   return typeof value === 'number' ? value : undefined
+}
+
+/**
+ * Whether this row itself declares image input. Absence is not a no: it
+ * keeps the installed catalog entry, then the route's `defaultInput`, so a
+ * catalog vision model stays visual until the row writes `input`.
+ */
+function declaresImageInput(model: ModelDraft): boolean {
+  const input = model['input']
+  return Array.isArray(input) && input.includes('image')
 }
 
 /** What an interrogation needs, taken from the live form. */
@@ -176,7 +188,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [candidates, setCandidates] = useState<readonly DiscoveredModelView[] | undefined>(undefined)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
-  // Rows carry an id and a name; capacities are the exception, so they stay
+  // Rows carry an id, a name, and the image-input claim; capacities stay
   // folded until asked for rather than crowding every row with four inputs.
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
   // Capacities are edited as text, so a field's keystrokes are held here rather
@@ -222,7 +234,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
-  const patch = (index: number, next: Record<string, string | number | undefined>): void => {
+  const patch = (index: number, next: Record<string, unknown>): void => {
     onChange(models.map((model, at) => {
       if (at !== index) return model
       // Rebuilt rather than spread over: an emptied optional field has to leave
@@ -237,6 +249,13 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         Object.entries({ ...model, ...next }).filter(([key]) => !cleared.has(key)),
       )
     }))
+  }
+
+  const setImageInput = (index: number, enabled: boolean): void => {
+    // Checking writes the claim that makes a hand-declared vision model
+    // usable. Unchecking drops the field rather than storing `[text]`, so a
+    // catalog model whose gateway already serves images keeps that answer.
+    patch(index, { input: enabled ? ['text', 'image'] : undefined })
   }
 
   const fetchModels = async (): Promise<void> => {
@@ -364,6 +383,16 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
               disabled={disabled}
               onChange={(event) => { patch(index, { name: event.target.value === '' ? undefined : event.target.value }) }}
             />
+            <label className={styles['modelImageInput']} title={t('modelImageInputHint')}>
+              <input
+                type="checkbox"
+                checked={declaresImageInput(model)}
+                aria-label={`${t('modelImageInput')} ${index + 1}`}
+                disabled={disabled}
+                onChange={(event) => { setImageInput(index, event.target.checked) }}
+              />
+              <span>{t('modelImageInput')}</span>
+            </label>
             <button
               type="button"
               className={styles['iconButton']}

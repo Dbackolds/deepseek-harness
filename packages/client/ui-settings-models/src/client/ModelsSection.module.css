@@ -474,11 +474,11 @@
 }
 
 /* Model list, shared with the pi-ai provider form: one bordered
-   entry per model, id and display name on the row, capacities behind the
-   row's own disclosure. The rules use this stylesheet's token vocabulary —
-   `--dsw-alias-border-subtle`, `--dsw-alias-text-tertiary`, and
-   `--dsw-alias-text-primary` are undefined here and would resolve to their
-   light-mode literals. */
+   entry per model, id, display name, and image-input claim on the row,
+   capacities behind the row's own disclosure. The rules use this
+   stylesheet's token vocabulary — `--dsw-alias-border-subtle`,
+   `--dsw-alias-text-tertiary`, and `--dsw-alias-text-primary` are
+   undefined here and would resolve to their light-mode literals. */
 .modelList {
   display: flex;
   flex-direction: column;
@@ -500,9 +500,35 @@
 
 .modelRow {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 6px;
+}
+
+/* Per-row claim that this model accepts images. Sits on the identifying
+   line rather than behind the disclosure: a hand-declared vision model is
+   unusable until this is set, so hiding it behind Capacities would leave
+   the toast as the only way to discover the field. */
+.modelImageInput {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.modelImageInput input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.modelImageInput:has(input:disabled) {
+  cursor: default;
+  opacity: 0.4;
 }
 
 /* Square, label-free affordances: the row's own inputs carry the meaning, so
