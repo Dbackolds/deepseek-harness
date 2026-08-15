@@ -18,11 +18,7 @@ export function titlebarMarkup(): string {
     + '<div class="dsh-desktop-drag" data-dsh-desktop-drag="true">'
     + '<span class="dsh-desktop-title">DeepSeek Harness</span>'
     + '</div>'
-    + '<div class="dsh-desktop-controls" data-dsh-desktop-controls="true">'
-    + '<button type="button" data-dsh-desktop-action="minimize" aria-label="Minimize"></button>'
-    + '<button type="button" data-dsh-desktop-action="maximize" aria-label="Maximize"></button>'
-    + '<button type="button" data-dsh-desktop-action="close" aria-label="Close"></button>'
-    + '</div></div>'
+    + '</div>'
 }
 
 /**
@@ -41,32 +37,10 @@ export function titlebarStyles(): string {
   user-select: none;
 }
 #${TITLEBAR_ID} .dsh-desktop-drag {
-  flex: 1; display: flex; align-items: center; padding: 0 12px;
+  flex: 1; display: flex; align-items: center; padding: 0 138px 0 12px;
   -webkit-app-region: drag;
 }
 #${TITLEBAR_ID} .dsh-desktop-title { opacity: 0.72; pointer-events: none; }
-#${TITLEBAR_ID} .dsh-desktop-controls {
-  display: flex; -webkit-app-region: no-drag;
-}
-#${TITLEBAR_ID} button {
-  width: 46px; border: 0; padding: 0; background: transparent; color: inherit;
-  cursor: pointer; -webkit-app-region: no-drag;
-}
-#${TITLEBAR_ID} button:hover { background: rgba(255,255,255,0.08); }
-#${TITLEBAR_ID} button[data-dsh-desktop-action="close"]:hover { background: #e81123; }
-#${TITLEBAR_ID} button::before { content: ""; display: block; width: 10px; height: 10px; margin: 0 auto; }
-#${TITLEBAR_ID} button[data-dsh-desktop-action="minimize"]::before {
-  border-bottom: 1px solid currentColor; height: 0; transform: translateY(5px);
-}
-#${TITLEBAR_ID} button[data-dsh-desktop-action="maximize"]::before {
-  border: 1px solid currentColor;
-}
-#${TITLEBAR_ID} button[data-dsh-desktop-action="close"]::before {
-  width: 10px; height: 10px;
-  background:
-    linear-gradient(45deg, transparent 0 42%, currentColor 42% 58%, transparent 58%),
-    linear-gradient(-45deg, transparent 0 42%, currentColor 42% 58%, transparent 58%);
-}
 html, body { padding-top: var(--dsh-desktop-titlebar); box-sizing: border-box; }
 `
 }
@@ -80,14 +54,6 @@ function titlebarScript(): string {
   const api = window.dshDesktop;
   const root = document.getElementById(${JSON.stringify(TITLEBAR_ID)});
   if (api === undefined || root === null) return;
-  root.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const action = target.closest("[data-dsh-desktop-action]")?.getAttribute("data-dsh-desktop-action");
-    if (action === "minimize") api.minimize();
-    if (action === "maximize") api.maximize();
-    if (action === "close") api.close();
-  });
   root.querySelector("[data-dsh-desktop-drag]")?.addEventListener("dblclick", () => api.maximize());
 })();`
 }
@@ -105,8 +71,7 @@ export function titlebarInjectScript(): string {
   document.body.insertAdjacentHTML("afterbegin", ${JSON.stringify(titlebarMarkup())});
   ${titlebarScript()}
   return document.getElementById(${JSON.stringify(TITLEBAR_ID)}) !== null
-    && document.querySelector("[data-dsh-desktop-drag]") !== null
-    && document.querySelectorAll("[data-dsh-desktop-action]").length === 3;
+    && document.querySelector("[data-dsh-desktop-drag]") !== null;
 })()`
 }
 

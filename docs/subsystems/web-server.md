@@ -2,7 +2,7 @@
 
 English | [中文](web-server.zh.md)
 
-[dsh-host-webserver](../../packages/host/webserver) is the browser HTTP carrier for the GUI host: a single `node:http` plugin providing `ctx.webServer`, a named-route registry, index.html transform callbacks, and one fallback handler that a plugin may claim. It is not part of the agent loop and not a capability seam; it knows no harness concepts, and another plugin registers every feature route, including the `/api` bridge, plugin bundles, and the HMR event stream ([layering note](../../.agents/notes/implemented/architecture/2026-07-19-gui-layering-and-rpc-protocol.md)). It serves browsers only: Electron loads the built files over `file://` and sends fetch requests through an IPC bridge instead of this server.
+[dsh-host-webserver](../../packages/host/webserver) is the browser HTTP carrier for the GUI host: a single `node:http` plugin providing `ctx.webServer`, a named-route registry, index.html transform callbacks, and one fallback handler that a plugin may claim. It is not part of the agent loop and not a capability seam; it knows no harness concepts, and another plugin registers every feature route, including the `/api` bridge, plugin bundles, and the HMR event stream ([layering note](../../.agents/notes/implemented/architecture/2026-07-19-gui-layering-and-rpc-protocol.md)). It serves browsers only. The desktop window loads the same loopback HTTP origin this plugin binds.
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
 
@@ -104,5 +104,28 @@ tapIndex(transform: (html: string) => string): () => void
 applyIndexTaps(html: string): string
 ```
 
-Source: [`packages/host/webserver/src/index.ts:59`](../../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:69`](../../packages/host/webserver/src/index.ts)
+
+<a id="web-server-events"></a>
+
+### `web-server/*` events
+
+<a id="web-serverlistening--emit"></a>
+
+#### `web-server/listening` — emit
+
+The HTTP server accepted its first bind. Routes and the SPA fallback may still be mounting; unmatched paths answer 404 until they register.
+
+```ts cordis-catalog
+/**
+ * The HTTP server accepted its first bind. Routes and the SPA fallback
+ * may still be mounting; unmatched paths answer 404 until they register.
+ * @mode emit
+ * @param payload.host - configured bind host.
+ * @param payload.port - OS-assigned or configured listen port.
+ */
+'web-server/listening'(payload: { host: '127.0.0.1' | '0.0.0.0'; port: number }): void
+```
+
+Source: [`packages/host/webserver/src/index.ts:30`](../../packages/host/webserver/src/index.ts)
 <!-- END GENERATED cordis-surface -->

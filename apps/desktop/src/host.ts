@@ -39,9 +39,13 @@ export function findRepoRoot(from: string): string {
 /**
  * Node used to boot `dsh web`. Electron's `process.execPath` is the shell
  * binary and cannot run the CLI.
+ * @param remembered - last Node path persisted by a successful launch.
  * @returns an absolute Node executable, or `node` on PATH.
  */
-export function resolveNodeExecutable(): string {
+export function resolveNodeExecutable(remembered?: string): string {
+  const pinned = process.env.DSH_NODE_EXEC
+  if (pinned !== undefined && pinned !== '' && existsSync(pinned)) return pinned
+  if (remembered !== undefined && remembered !== '' && existsSync(remembered)) return remembered
   if (process.versions.electron === undefined) return process.execPath
   const fromNpm = process.env.npm_node_execpath
   if (fromNpm !== undefined && fromNpm !== '' && existsSync(fromNpm)) return fromNpm
@@ -54,8 +58,8 @@ export function resolveNodeExecutable(): string {
  * @param repoRoot - repository root.
  * @returns Node argv that starts with the bin path.
  */
-export function resolveDshInvocation(repoRoot: string): { command: string; args: string[] } {
-  const node = resolveNodeExecutable()
+export function resolveDshInvocation(repoRoot: string, rememberedNode?: string): { command: string; args: string[] } {
+  const node = resolveNodeExecutable(rememberedNode)
   const built = join(repoRoot, 'apps', 'cli', 'lib', 'bin.js')
   if (existsSync(built)) return { command: node, args: [built] }
   const source = join(repoRoot, 'apps', 'cli', 'src', 'bin.ts')
@@ -74,9 +78,10 @@ export async function startWebHost(options: {
   cwd: string
   extraArgs?: readonly string[]
   timeoutMs?: number
+  nodePath?: string
 }): Promise<StartedHost> {
   const repoRoot = findRepoRoot(dirname(fileURLToPath(import.meta.url)))
-  const invocation = resolveDshInvocation(repoRoot)
+  const invocation = resolveDshInvocation(repoRoot, options.nodePath)
   const extra = options.extraArgs ?? []
   const args = extra.includes('--port')
     ? [...invocation.args, 'web', ...extra]

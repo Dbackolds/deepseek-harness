@@ -202,5 +202,5 @@ nextWakeAt(now: number): number | undefined
 fireDue(id: AutomationRuleId, now: number): Promise<AutomationRunRecord>
 ```
 
-Source: [`packages/automation/automation/src/index.ts:121`](../../packages/automation/automation/src/index.ts)
+Source: [`packages/automation/automation/src/index.ts:120`](../../packages/automation/automation/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -2631,6 +2631,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'exec', description: 'the execution object that traversed the pipeline.' }, { name: 'result', description: 'a deep-frozen snapshot of the final returned result.' }],
   },
   {
+    name: 'web-server/listening',
+    mode: 'emit',
+    signature: '\'web-server/listening\'(payload: { host: \'127.0.0.1\' | \'0.0.0.0\'; port: number }): void',
+    summary: 'The HTTP server accepted its first bind.',
+    description: 'The HTTP server accepted its first bind. Routes and the SPA fallback may still be mounting; unmatched paths answer 404 until they register.',
+    parameters: [{ name: 'payload', description: '.port - OS-assigned or configured listen port.' }],
+  },
+  {
     name: 'workflow/agent-end',
     mode: 'emit',
     signature: '\'workflow/agent-end\'(info: WorkflowRunInfo, agent: WorkflowAgentEndInfo): void',

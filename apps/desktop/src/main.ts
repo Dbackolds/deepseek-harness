@@ -3,37 +3,54 @@
  * @module @deepseek-ai/dsh-desktop/main
  */
 
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage, shell } from 'electron'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { startWebHost, stopWebHost, type StartedHost } from './host.ts'
-import { loadingPage, titlebarInjectScript } from './titlebar.ts'
+import { APP_USER_MODEL_ID, desktopIconPath } from './icon.ts'
+import { windowsShortcutPath, windowsShortcutSpec } from './shortcut.ts'
+import { TITLEBAR_HEIGHT_PX, loadingPage, titlebarInjectScript } from './titlebar.ts'
 
 const WINDOW_TITLE = 'DeepSeek Harness'
 const PRELOAD = fileURLToPath(new URL('./preload.js', import.meta.url))
 
-/** Last successful workspace directory, kept next to Electron's userData. */
+/** Last successful workspace and Node path, kept next to Electron's userData. */
 function workspaceMemoryPath(): string {
   return join(app.getPath('userData'), 'workspace.json')
 }
 
-/** Restore the directory the previous window used as `dsh web` cwd. */
-function readRememberedWorkspace(): string | undefined {
+interface LaunchMemory {
+  cwd?: string
+  node?: string
+}
+
+/** Restore the previous window's `dsh web` cwd and Node executable. */
+function readLaunchMemory(): LaunchMemory {
   try {
     const parsed: unknown = JSON.parse(readFileSync(workspaceMemoryPath(), 'utf8'))
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
-    const cwd = (parsed as { cwd?: unknown }).cwd
-    return typeof cwd === 'string' && existsSync(cwd) ? cwd : undefined
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const record = parsed as { cwd?: unknown; node?: unknown }
+    return {
+      ...typeof record.cwd === 'string' && existsSync(record.cwd) ? { cwd: record.cwd } : {},
+      ...typeof record.node === 'string' && existsSync(record.node) ? { node: record.node } : {},
+    }
   } catch {
-    return undefined
+    return {}
   }
 }
 
-/** Persist the directory this window used as `dsh web` cwd. */
-function rememberWorkspace(cwd: string): void {
+/** Persist the directory and Node path this window used. */
+function rememberLaunch(cwd: string, node: string): void {
   mkdirSync(app.getPath('userData'), { recursive: true })
-  writeFileSync(workspaceMemoryPath(), `${JSON.stringify({ cwd })}\n`)
+  writeFileSync(workspaceMemoryPath(), `${JSON.stringify({ cwd, node })}\n`)
+}
+
+/** Working directory for the Host spawned beside this window. */
+function resolveWorkspace(memory: LaunchMemory): string {
+  return memory.cwd
+    ?? (process.env.INIT_CWD !== undefined && existsSync(process.env.INIT_CWD) ? process.env.INIT_CWD : undefined)
+    ?? process.cwd()
 }
 
 /** Extra `dsh web` flags forwarded by `dsh desktop` through the environment. */
@@ -54,8 +71,15 @@ function createWindow(): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     title: WINDOW_TITLE,
+    icon: nativeImage.createFromPath(desktopIconPath()),
     backgroundColor: '#151517',
     frame: false,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#151517',
+      symbolColor: '#ececf1',
+      height: TITLEBAR_HEIGHT_PX,
+    },
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -97,6 +121,18 @@ function fenceNavigation(window: BrowserWindow, origin: string): void {
 
 let host: StartedHost | undefined
 
+if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID)
+
+function publishWindowsShortcut(): void {
+  const desktopRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..')
+  const shortcut = windowsShortcutPath(join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs'))
+  if (existsSync(shortcut)) return
+  const spec = windowsShortcutSpec({ electronPath: process.execPath, desktopRoot })
+  if (!shell.writeShortcutLink(shortcut, 'create', spec)) {
+    console.error(`dsh desktop: could not write Start menu shortcut at ${shortcut}`)
+  }
+}
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
@@ -108,18 +144,25 @@ if (!gotLock) {
     window.focus()
   })
 
+  const memory = readLaunchMemory()
+  const cwd = resolveWorkspace(memory)
+  // Start the Host before Chromium is ready so plugin boot overlaps window creation.
+  const hostReady = startWebHost({
+    cwd,
+    extraArgs: extraWebArgs(),
+    ...memory.node === undefined ? {} : { nodePath: memory.node },
+  })
+
   void app.whenReady().then(async () => {
+    if (process.platform === 'win32') publishWindowsShortcut()
     const window = createWindow()
     bindWindowChrome(window)
     attachTitlebar(window)
-    await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingPage())}`)
+    void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingPage())}`)
     window.show()
-    const cwd = readRememberedWorkspace()
-      ?? (process.env.INIT_CWD !== undefined && existsSync(process.env.INIT_CWD) ? process.env.INIT_CWD : undefined)
-      ?? process.cwd()
     try {
-      host = await startWebHost({ cwd, extraArgs: extraWebArgs() })
-      rememberWorkspace(cwd)
+      host = await hostReady
+      rememberLaunch(cwd, host.child.spawnfile)
       fenceNavigation(window, host.ready.href)
       await window.loadURL(host.ready.href)
     } catch (error) {

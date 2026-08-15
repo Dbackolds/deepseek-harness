@@ -19,6 +19,16 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     webServer: WebServer
   }
+  interface Events {
+    /**
+     * The HTTP server accepted its first bind. Routes and the SPA fallback
+     * may still be mounting; unmatched paths answer 404 until they register.
+     * @mode emit
+     * @param payload.host - configured bind host.
+     * @param payload.port - OS-assigned or configured listen port.
+     */
+    'web-server/listening'(payload: { host: '127.0.0.1' | '0.0.0.0'; port: number }): void
+  }
 }
 
 /** Route match kind: 'exact' matches the pathname verbatim; 'prefix' p matches p and p/<anything>. */
@@ -219,6 +229,7 @@ export class WebServer extends Service {
         this.server.off('error', reject)
         this.server.on('error', (err) => { this.ctx.logger.error(err) })
         this.listenedPort = (this.server.address() as AddressInfo).port
+        this.ctx.emit('web-server/listening', { host: this.config.host, port: this.listenedPort })
         resolve()
       })
     })

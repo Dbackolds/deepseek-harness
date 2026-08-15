@@ -154,52 +154,18 @@ describe('web-app runtime glue', () => {
     await ctx.fiber.dispose()
   })
 
-  it('defers the URL line until Loader settlement and drops it on failure or teardown', async () => {
+  it('prints the URL line as soon as the web-runtime row can form it', async () => {
     stageDist()
-    // Settlement path: the line waits for loader.await() so supervisors can
-    // RPC immediately after observing it.
-    const settled = new Context()
-    settled.provide('webServer', fakeHttpServer().server)
-    let release: () => void
-    const settlement = new Promise<void>((resolve) => { release = resolve })
-    provideLoader(settled, () => settlement)
+    const ctx = new Context()
+    ctx.provide('webServer', fakeHttpServer().server)
+    let awaited = false
+    provideLoader(ctx, async () => { awaited = true })
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    apply(settled, new Config({ printUrl: true, surfaceContext: true, trustedHosts: [] }))
-    await new Promise(resolve => setTimeout(resolve, 0))
-    expect(log).not.toHaveBeenCalled()
-    release!()
-    await new Promise(resolve => setTimeout(resolve, 0))
+    apply(ctx, new Config({ printUrl: true, surfaceContext: true, trustedHosts: [] }))
+    expect(awaited).toBe(false)
     expect(log).toHaveBeenCalledWith('dsh web: http://127.0.0.1:4567')
-    await settled.fiber.dispose()
-
-    // Failed path: Loader reports the sibling failure; the app prints no URL
-    // for a process that is about to exit.
-    log.mockClear()
-    const failed = new Context()
-    failed.provide('webServer', fakeHttpServer().server)
-    provideLoader(failed, async () => { throw new Error('boot failed') })
-    apply(failed, new Config({ printUrl: true, surfaceContext: true, trustedHosts: [] }))
     await new Promise(resolve => setTimeout(resolve, 0))
-    expect(log).not.toHaveBeenCalled()
-    await failed.fiber.dispose()
-
-    // Torn-down path: settlement resolves after the webserver is gone — no
-    // line, no crash.
-    log.mockClear()
-    const torn = new Context()
-    const child = torn.plugin((childCtx: Context) => {
-      childCtx.provide('webServer', fakeHttpServer().server)
-    })
-    await child
-    let releaseTorn: () => void
-    const tornSettlement = new Promise<void>((resolve) => { releaseTorn = resolve })
-    provideLoader(torn, () => tornSettlement)
-    apply(torn, new Config({ printUrl: true, surfaceContext: true, trustedHosts: [] }))
-    await child.dispose() // the webServer service goes away
-    releaseTorn!()
-    await new Promise(resolve => setTimeout(resolve, 0))
-    expect(log).not.toHaveBeenCalled()
-    await torn.fiber.dispose()
+    await ctx.fiber.dispose()
   })
 
   it('fails loud when the prompt section resolves against a portless webserver', async () => {

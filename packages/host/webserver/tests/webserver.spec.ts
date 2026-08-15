@@ -28,7 +28,7 @@ afterEach(async () => {
 })
 
 /** Write a cordis.yml with one webserver row, then boot it through the real Loader. */
-async function loadComposition(port = 0): Promise<Context> {
+async function loadComposition(port = 0): Promise<{ ctx: Context; listening: Promise<{ host: string; port: number }> }> {
   root = await mkdtemp(join(tmpdir(), 'dsh-webserver-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -40,6 +40,9 @@ async function loadComposition(port = 0): Promise<Context> {
   ].join('\n'))
 
   context = new Context()
+  const listening = new Promise<{ host: string; port: number }>((resolve) => {
+    context!.on('web-server/listening', (payload) => { resolve(payload) })
+  })
   context.baseUrl = pathToFileURL(root).href + '/'
   await context.plugin(Loader)
   context.loader.builtins.include = Include
@@ -58,7 +61,7 @@ async function loadComposition(port = 0): Promise<Context> {
     config: { path: pathToFileURL(configPath).href },
   })
   await context.loader.await()
-  return context
+  return { ctx: context, listening }
 }
 
 /** GET (by default) one path against the running server; returns status plus a body prefix. */
@@ -90,7 +93,8 @@ describe('real Loader composition', () => {
   // time; first resolution after the host/client program split is slow enough
   // to trip the default 5s budget on cold caches.
   it('serves registered routes, index taps, and the fallback-seat semantics', { timeout: 60_000 }, async () => {
-    const loaded = await loadComposition()
+    const { ctx: loaded, listening } = await loadComposition()
+    await expect(listening).resolves.toEqual({ host: '127.0.0.1', port: loaded.webServer.port })
     const unloaded = [...loaded.loader.entries()]
       .filter(entry => entry.fiber === undefined && !entry.disabled)
       .map(entry => entry.options.name)
@@ -201,7 +205,7 @@ describe('real Loader composition', () => {
   })
 
   it('fails the fiber when the port is already taken (fail-loud at activation)', { timeout: 60_000 }, async () => {
-    const first = await loadComposition()
+    const { ctx: first } = await loadComposition()
     const takenPort = first.webServer.port
     const firstRoot = root
     root = undefined // keep the first composition's files until the end

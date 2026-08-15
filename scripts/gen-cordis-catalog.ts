@@ -182,6 +182,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'system-prompt': 'system-prompt.md',
   'session-telemetry': 'session-telemetry.md',
   'tools': 'tools.md',
+  'web-server': 'web-server.md',
   'workflow': 'workflow.md',
 }
 
