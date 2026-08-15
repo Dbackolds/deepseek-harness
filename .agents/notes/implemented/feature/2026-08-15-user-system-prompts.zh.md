@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`dsh-user-system-prompts` 拥有 `user-system-prompts` Settings 分节：`{ id, name, text }` 提示词库，以及 `{ provider, model, promptIds, override }` 的按模型绑定。`dsh-client-ui-settings-system-prompts` 在 Agent 预设之后注册「系统提示词」设置页。写入走 `settings.replace`。组装通过 `ctx.systemPrompt.afterAssemble()` 应用匹配模型的选中文本；该 hook 在协作式 waterfall 之后、以及有效 complete 段还原之后运行。
+`dsh-user-system-prompts` 拥有 `user-system-prompts` Settings 分节：`{ id, name, text }` 提示词库、`{ provider, model, promptIds, override }` 的按模型绑定，以及 `{ name, text }` 的已注册插件段替换。`dsh-client-ui-settings-system-prompts` 在 Agent 预设之后注册「系统提示词」设置页。写入走 `settings.replace`。该页通过 `systemPrompt.list` 列出已注册段，后者读取 `ctx.systemPrompt.listSections()`——这是注册表视图，不是完整组装。组装先应用已存储的段替换，再通过 `ctx.systemPrompt.afterAssemble()` 应用匹配模型的选中文本；该 hook 在协作式 waterfall 之后、以及有效 complete 段还原之后运行。
 
 `afterAssemble` 放在 `dsh-system-prompt` 上，因为 `system-prompt/assemble` 监听器无法替换 `complete` 段：注册表在 waterfall 之后还原该段。若用户覆盖就是模型应收到的提示词，就必须在这次还原之后运行。
 
@@ -25,11 +25,11 @@ Status: implemented
 
 ## 后果
 
-- 设置导航增加「系统提示词」一行。该页是库与绑定的唯一产品编辑器。
+- 设置导航增加「系统提示词」一行。该页是库、已注册段替换与绑定的唯一产品编辑器。
 - `override: true` 的模型只收到选中的库文本，即使 preset 挂载了 complete persona。
 - 更改库或绑定会在任何已组装提供方／模型对匹配的会话的下一次组装步骤生效。
 - ApiProxy 必须暴露 `user-system-prompts`，否则该页无法持久化。
 
 ## 测试
 
-Host 测试覆盖追加、complete 段之后的覆盖、空库空操作，以及写入时校验。客户端测试覆盖注册、创建／替换写入、删除从绑定中级联移除，以及分区的添加／重排／覆盖手势。ApiProxy 服务该命名空间。Web 快照包含新的导航行。
+Host 测试覆盖追加、complete 段之后的覆盖、已注册段替换、空库空操作，以及写入时校验。客户端测试覆盖注册、创建／替换写入、自带段编辑与恢复、删除从绑定中级联移除，以及分区的添加／重排／覆盖手势。ApiProxy 服务该命名空间和 `systemPrompt.list`。Web 快照包含新的导航行。

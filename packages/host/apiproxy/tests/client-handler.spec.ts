@@ -28,6 +28,7 @@ function scriptedApi(overrides: {
   settings?: Partial<ApiProxy['settings']>
   credentials?: Partial<ApiProxy['credentials']>
   llm?: Partial<ApiProxy['llm']>
+  systemPrompt?: Partial<ApiProxy['systemPrompt']>
   respond?: ApiProxy['respond']
 } = {}): ApiProxy {
   async function *empty<F>(): AsyncGenerator<RpcRequest<F>> { /* no frames */ }
@@ -137,6 +138,7 @@ function scriptedApi(overrides: {
       discoverModels: err,
       ...overrides.llm,
     },
+    systemPrompt: { list: r => ok(r, { sections: [] }), ...overrides.systemPrompt },
     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
     respond: overrides.respond ?? (() => Promise.resolve({ accepted: false as const, reason: 'not-pending' as const })),
     downloads: { sessionLog: async () => new Response('stub', { status: 404 }) },
@@ -763,6 +765,11 @@ describe('config unary surface', () => {
         models: record('llm.models', r => ok(r, { groups: [group], failures: [] })),
         discoverModels: record('llm.discoverModels', r => ok(r, { models: [{ id: 'acme-large', contextWindow: 65536 }] })),
       },
+      systemPrompt: {
+        list: record('systemPrompt.list', r => ok(r, {
+          sections: [{ name: 'harness:identity', order: -100, text: 'You are an AI agent powered by DeepSeek Harness.', complete: false }],
+        })),
+      },
     })
     const c = client(api)
 
@@ -794,11 +801,16 @@ describe('config unary surface', () => {
       apiKey: 'probe-key',
     })
     expect(discovered.result).toEqual({ ok: true, value: { models: [{ id: 'acme-large', contextWindow: 65536 }] } })
+    const listed = await c.systemPrompt.list({})
+    expect(listed.result).toEqual({
+      ok: true,
+      value: { sections: [{ name: 'harness:identity', order: -100, text: 'You are an AI agent powered by DeepSeek Harness.', complete: false }] },
+    })
 
     expect(seen.map(call => call.method)).toEqual([
       'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
       'credentials.describe', 'credentials.set', 'credentials.unset',
-      'llm.providers', 'llm.models', 'llm.discoverModels',
+      'llm.providers', 'llm.models', 'llm.discoverModels', 'systemPrompt.list',
     ])
     expect(seen[2]?.payload).toEqual({ ns: 'llm-deepseek', patch: { baseURL: 'https://next' } })
     expect(seen[4]?.payload)

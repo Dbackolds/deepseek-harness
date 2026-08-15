@@ -30,6 +30,10 @@ export interface SystemPromptsSectionInjected {
   beginCreate: () => void
   /** Open an edit draft. */
   beginEdit: (id: string) => void
+  /** Open an edit draft over a registered plugin section. */
+  beginEditBuiltIn: (name: string) => void
+  /** Drop the stored replacement for a registered plugin section. */
+  resetBuiltIn: (name: string) => Promise<void>
   /** Close the draft dialog. */
   cancelDraft: () => void
   /** Update the draft name. */
@@ -96,6 +100,47 @@ export function SystemPromptsSection(props: SystemPromptsSectionProps): ReactNod
       <p className={css.intro}>{t('intro')}</p>
       {state.error === null ? null : <p className={css.error} role="alert">{state.error}</p>}
       {!state.writable && state.status === 'ready' ? <p className={css.empty}>{t('readOnly')}</p> : null}
+
+      <section className={css.group}>
+        <h3 className={css.groupHead}>{t('builtInGroup')}</h3>
+        {state.builtInError === null ? null : <p className={css.error} role="alert">{t('builtInFailed')}</p>}
+        {state.builtIns.length === 0
+          ? <p className={css.empty}>{t('emptyBuiltIns')}</p>
+          : (
+            <ul className={css.cards}>
+              {state.builtIns.map(section => (
+                <li key={section.name} className={css.card}>
+                  <div className={css.cardHead}>
+                    <span className={css.cardName}>{section.name}</span>
+                    {section.overridden
+                      ? <span className={css.cardMeta}>{t('overridden')}</span>
+                      : null}
+                  </div>
+                  <p className={css.cardPreview}>{section.text.length === 0 ? t('emptySection') : section.text}</p>
+                  <div className={css.cardFoot}>
+                    <button
+                      type="button"
+                      className={css.iconButton}
+                      disabled={!state.writable}
+                      aria-label={`${t('edit')}: ${section.name}`}
+                      onClick={() => { props.beginEditBuiltIn(section.name) }}
+                    >
+                      <IconEditOutline16 />
+                    </button>
+                    <button
+                      type="button"
+                      className={css.secondaryButton}
+                      disabled={!state.writable || !section.overridden}
+                      onClick={() => { void props.resetBuiltIn(section.name) }}
+                    >
+                      {t('resetBuiltIn')}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+      </section>
 
       <section className={css.group}>
         <h3 className={css.groupHead}>{t('libraryGroup')}</h3>
@@ -261,7 +306,9 @@ export function SystemPromptsSection(props: SystemPromptsSectionProps): ReactNod
       <Modal
         open={state.draft !== null}
         onClose={() => { props.cancelDraft() }}
-        title={state.draft?.id === null ? t('addPrompt') : t('edit')}
+        title={state.draft?.kind === 'builtin'
+          ? t('editBuiltIn')
+          : state.draft?.id === null ? t('addPrompt') : t('edit')}
         closeLabel={t('close')}
         className={css.dialog as string}
         footer={(
@@ -286,17 +333,23 @@ export function SystemPromptsSection(props: SystemPromptsSectionProps): ReactNod
           ? null
           : (
             <div className={css.dialogFields}>
-              <label className={css.field}>
-                <span className={css.fieldLabel}>{t('promptName')}</span>
-                <input
-                  className={css.input}
-                  value={state.draft.name}
-                  autoFocus
-                  spellCheck={false}
-                  placeholder={t('promptNamePlaceholder')}
-                  onChange={(event) => { props.setDraftName(event.target.value) }}
-                />
-              </label>
+              {state.draft.kind === 'builtin'
+                ? (
+                  <p className={css.overrideHint}>{state.draft.name}</p>
+                )
+                : (
+                  <label className={css.field}>
+                    <span className={css.fieldLabel}>{t('promptName')}</span>
+                    <input
+                      className={css.input}
+                      value={state.draft.name}
+                      autoFocus
+                      spellCheck={false}
+                      placeholder={t('promptNamePlaceholder')}
+                      onChange={(event) => { props.setDraftName(event.target.value) }}
+                    />
+                  </label>
+                )}
               <label className={css.field}>
                 <span className={css.fieldLabel}>{t('promptText')}</span>
                 <textarea

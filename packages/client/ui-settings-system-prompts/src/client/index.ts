@@ -14,7 +14,9 @@ import { refreshIfLoaded, SystemPromptsStore, USER_SYSTEM_PROMPTS_NS } from './s
 
 export type { SystemPromptsSectionInjected, SystemPromptsSectionProps } from './SystemPromptsSection.tsx'
 export type { SystemPromptsKey } from './locales.ts'
-export type { BindingRow, CatalogModel, PromptDraft, PromptRow, SystemPromptsState } from './store.ts'
+export type {
+  BindingRow, BuiltInRow, CatalogModel, OverrideRow, PromptDraft, PromptRow, SystemPromptsState,
+} from './store.ts'
 export { USER_SYSTEM_PROMPTS_NS, bindingFor, slugFromName } from './store.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -45,6 +47,8 @@ export function apply(ctx: ClientContext): void {
     load: () => controller.load(),
     beginCreate: () => { controller.beginCreate() },
     beginEdit: (id: string) => { controller.beginEdit(id) },
+    beginEditBuiltIn: (name: string) => { controller.beginEditBuiltIn(name) },
+    resetBuiltIn: (name: string) => controller.resetBuiltIn(name),
     cancelDraft: () => { controller.cancelDraft() },
     setDraftName: (name: string) => { controller.setDraftName(name) },
     setDraftText: (text: string) => { controller.setDraftText(text) },

@@ -311,6 +311,10 @@ export class FakeApiClient implements IApiClient {
     discoverModels: payload => this.record('llm.discoverModels', payload, Promise.resolve(ok({ models: [] }))),
   }
 
+  readonly systemPrompt: IApiClient['systemPrompt'] = {
+    list: payload => this.record('systemPrompt.list', payload, Promise.resolve(ok({ sections: [] }))),
+  }
+
   /** When true, streams never fire onOpen (misbehaving-carrier material for the handshake timeout guard). */
   suppressStreamOpen = false
 

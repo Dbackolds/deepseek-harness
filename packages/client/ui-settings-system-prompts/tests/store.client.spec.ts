@@ -8,7 +8,7 @@ function ok<T>(value: T): RpcResponse<T> {
   return { rpcId: 'r' as RpcId, result: { ok: true, value } }
 }
 
-function view(section: { prompts: unknown[]; bindings: unknown[] }, revision = 1): SettingsNamespaceView {
+function view(section: { prompts: unknown[]; bindings: unknown[]; overrides?: unknown[] }, revision = 1): SettingsNamespaceView {
   return {
     ns: 'user-system-prompts',
     schema: {},
@@ -19,12 +19,21 @@ function view(section: { prompts: unknown[]; bindings: unknown[] }, revision = 1
   }
 }
 
-function api(initial = { prompts: [] as unknown[], bindings: [] as unknown[] }): {
+function api(initial: {
+  prompts?: unknown[]
+  bindings?: unknown[]
+  overrides?: unknown[]
+} = {}): {
   settings: Pick<IApiClient, 'settings'>['settings']
   llm: Pick<IApiClient, 'llm'>['llm']
+  systemPrompt: Pick<IApiClient, 'systemPrompt'>['systemPrompt']
   replace: ReturnType<typeof vi.fn>
 } {
-  let current = view(initial)
+  let current = view({
+    prompts: initial.prompts ?? [],
+    bindings: initial.bindings ?? [],
+    overrides: initial.overrides ?? [],
+  })
   const replace = vi.fn(async (payload: { section: { prompts: unknown[]; bindings: unknown[] } }) => {
     current = view(payload.section, current.revision + 1)
     return ok(current)
@@ -44,10 +53,21 @@ function api(initial = { prompts: [] as unknown[], bindings: [] as unknown[] }):
         failures: [],
       })),
     },
+    systemPrompt: {
+      list: vi.fn(async () => ok({
+        sections: [{
+          name: 'harness:identity',
+          order: -100,
+          text: 'You are an AI agent powered by DeepSeek Harness.',
+          complete: false,
+        }],
+      })),
+    },
     replace,
   } as unknown as {
     settings: Pick<IApiClient, 'settings'>['settings']
     llm: Pick<IApiClient, 'llm'>['llm']
+    systemPrompt: Pick<IApiClient, 'systemPrompt'>['systemPrompt']
     replace: ReturnType<typeof vi.fn>
   }
 }
@@ -93,6 +113,13 @@ describe('SystemPromptsStore', () => {
     const snapshot = store.store.getSnapshot()
     expect(snapshot.status).toBe('ready')
     expect(snapshot.prompts).toEqual([{ id: 'style', name: 'Style', text: 'Be concise.' }])
+    expect(snapshot.builtIns).toEqual([{
+      name: 'harness:identity',
+      order: -100,
+      text: 'You are an AI agent powered by DeepSeek Harness.',
+      complete: false,
+      overridden: false,
+    }])
     expect(snapshot.catalog).toEqual([{
       provider: 'deepseek-official',
       providerName: 'DeepSeek',
@@ -139,6 +166,7 @@ describe('SystemPromptsStore', () => {
       section: {
         prompts: [{ id: 'style', name: 'Style', text: 'Be concise.' }],
         bindings: [],
+        overrides: [],
       },
     }))
     expect(store.store.getSnapshot().draft).toBeNull()
@@ -188,6 +216,7 @@ describe('SystemPromptsStore', () => {
       section: {
         prompts: [{ id: 'style', name: 'Voice', text: 'Speak plainly.' }],
         bindings: [],
+        overrides: [],
       },
     }))
     store.beginCreate()
@@ -208,6 +237,59 @@ describe('SystemPromptsStore', () => {
     store.setDraftText('Be concise.')
     await store.saveDraft()
     expect(store.store.getSnapshot().draft?.error).toBe('conflict')
+  })
+
+  it('keeps a shipped-prompt listing error while the library stays editable', async () => {
+    const wire = api()
+    wire.systemPrompt.list = vi.fn(async () => ({
+      rpcId: 'p' as RpcId,
+      result: { ok: false, error: { message: 'down' } },
+    })) as unknown as typeof wire.systemPrompt.list
+    const store = new SystemPromptsStore(wire)
+    await store.load()
+    expect(store.store.getSnapshot()).toMatchObject({
+      status: 'ready',
+      builtInError: 'down',
+      builtIns: [],
+    })
+  })
+
+  it('ignores malformed override and registered-section rows', async () => {
+    const wire = api({
+      prompts: [],
+      bindings: [],
+      overrides: [null, { name: 1 }, { name: 'harness:identity', text: 3 }, { name: 'ok' }],
+    })
+    wire.systemPrompt.list = vi.fn(async () => ok({
+      sections: [
+        null,
+        { name: 1 },
+        { name: 'harness:identity', order: -100, text: 'You are an AI agent powered by DeepSeek Harness.', complete: false },
+        { name: 'empty', order: 1 },
+      ],
+    })) as unknown as typeof wire.systemPrompt.list
+    const store = new SystemPromptsStore(wire)
+    await store.load()
+    expect(store.store.getSnapshot().overrides).toEqual([
+      { name: 'harness:identity', text: '' },
+      { name: 'ok', text: '' },
+    ])
+    expect(store.store.getSnapshot().builtIns).toEqual([
+      {
+        name: 'harness:identity',
+        order: -100,
+        text: '',
+        complete: false,
+        overridden: true,
+      },
+      {
+        name: 'empty',
+        order: 1,
+        text: '',
+        complete: false,
+        overridden: false,
+      },
+    ])
   })
 
   it('keeps a catalog error while the library stays editable', async () => {
@@ -234,6 +316,7 @@ describe('SystemPromptsStore', () => {
       llm: {
         models: vi.fn(async () => ({ rpcId: 'm' as RpcId, result: { ok: false, error: { message: 'catalog down' } } })),
       },
+      systemPrompt: { list: vi.fn(async () => ok({ sections: [] })) },
     } as never)
     await store.load()
     expect(store.store.getSnapshot().status).toBe('unavailable')
@@ -244,6 +327,7 @@ describe('SystemPromptsStore', () => {
         replace: vi.fn(),
       },
       llm: { models: vi.fn(async () => ok({ groups: [], failures: [] })) },
+      systemPrompt: { list: vi.fn(async () => ok({ sections: [] })) },
     } as never)
     await failing.load()
     expect(failing.store.getSnapshot()).toMatchObject({ status: 'error', error: 'describe failed' })
@@ -264,7 +348,41 @@ describe('SystemPromptsStore', () => {
     store.confirmDelete('style')
     await store.remove()
     expect(wire.replace).toHaveBeenCalledWith(expect.objectContaining({
-      section: { prompts: [], bindings: [] },
+      section: { prompts: [], bindings: [], overrides: [] },
     }))
+  })
+
+  it('writes and resets a shipped-section override', async () => {
+    const wire = api()
+    const store = new SystemPromptsStore(wire)
+    await store.load()
+    store.beginEditBuiltIn('harness:identity')
+    store.setDraftText('Custom opener.')
+    await store.saveDraft()
+    expect(wire.replace).toHaveBeenCalledWith(expect.objectContaining({
+      section: {
+        prompts: [],
+        bindings: [],
+        overrides: [{ name: 'harness:identity', text: 'Custom opener.' }],
+      },
+    }))
+    expect(store.store.getSnapshot().builtIns[0]).toMatchObject({
+      name: 'harness:identity',
+      text: 'Custom opener.',
+      overridden: true,
+    })
+    await store.resetBuiltIn('harness:identity')
+    expect(wire.replace.mock.calls.at(-1)?.[0].section.overrides).toEqual([])
+    expect(store.store.getSnapshot().builtIns[0]?.overridden).toBe(false)
+  })
+
+  it('does not write a shipped-section reset when nothing is overridden', async () => {
+    const wire = api()
+    const store = new SystemPromptsStore(wire)
+    await store.load()
+    store.beginEditBuiltIn('missing')
+    expect(store.store.getSnapshot().draft).toBeNull()
+    await store.resetBuiltIn('harness:identity')
+    expect(wire.replace).not.toHaveBeenCalled()
   })
 })

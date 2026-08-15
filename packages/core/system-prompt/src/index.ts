@@ -93,6 +93,18 @@ export interface AssembledSection {
   text: string
 }
 
+/** One registered prompt section with its text resolved for a listing. */
+export interface RegisteredPromptSection {
+  /** The contributing section's unique name. */
+  name: string
+  /** Concatenation order; lower values render first. */
+  order: number
+  /** The resolved (but not yet interpolated) section text. */
+  text: string
+  /** Whether this contribution is a complete system prompt. */
+  complete: boolean
+}
+
 /** One resolved dynamic context contribution. */
 export interface AssembledContext {
   /** The contributing context's unique name. */
@@ -484,6 +496,28 @@ export class SystemPrompt extends Service {
         this.ctx.emit('system-prompt/change')
       }
     }, 'systemPrompt.afterAssemble()')
+  }
+
+  /**
+   * List the effective registered prompt sections for one scope, in
+   * concatenation order, with each section's text resolved. This is the
+   * registry view, not a full assembly: tools, contexts, the assemble
+   * waterfall, complete-section restore, and afterAssemble hooks do not run.
+   * A function provider is evaluated with the supplied context, so a listing
+   * without a scope shows only global sections.
+   * @param context - the optional scope and plugin-defined assembly fields.
+   * @returns the merged, ordered, text-resolved registered sections.
+   */
+  listSections(context: AssembleContext = {}): RegisteredPromptSection[] {
+    const sectionByName = this.layers.merge(context.scope, layer => layer.sections)
+    return [...sectionByName.values()]
+      .sort((a, b) => a.order - b.order)
+      .map(section => ({
+        name: section.name,
+        order: section.order,
+        text: typeof section.text === 'function' ? section.text(context) : section.text,
+        complete: section.complete === true,
+      }))
   }
 
   /**

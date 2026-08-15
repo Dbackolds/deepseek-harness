@@ -19,6 +19,15 @@ const READY: SystemPromptsState = {
   writable: true,
   revision: 1,
   prompts: [{ id: 'style', name: 'Style', text: 'Be concise.' }],
+  overrides: [],
+  builtIns: [{
+    name: 'harness:identity',
+    order: -100,
+    text: 'You are an AI agent powered by DeepSeek Harness.',
+    complete: false,
+    overridden: false,
+  }],
+  builtInError: null,
   bindings: [],
   catalog: [{
     provider: 'deepseek-official',
@@ -37,6 +46,8 @@ function renderSection(state: Partial<SystemPromptsState> = {}) {
     load: vi.fn(() => Promise.resolve()),
     beginCreate: vi.fn(),
     beginEdit: vi.fn(),
+    beginEditBuiltIn: vi.fn(),
+    resetBuiltIn: vi.fn(() => Promise.resolve()),
     cancelDraft: vi.fn(),
     setDraftName: vi.fn(),
     setDraftText: vi.fn(),
@@ -61,7 +72,24 @@ describe('SystemPromptsSection', () => {
     expect(actions.load).toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: 'System prompts' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Edit: Style' })).toBeTruthy()
+    expect(screen.getByText('You are an AI agent powered by DeepSeek Harness.')).toBeTruthy()
     expect(screen.getByText('DeepSeek V4 Flash')).toBeTruthy()
+  })
+
+  it('opens a shipped prompt for edit and restores the original', () => {
+    const actions = renderSection({
+      builtIns: [{
+        name: 'harness:identity',
+        order: -100,
+        text: 'Custom opener.',
+        complete: false,
+        overridden: true,
+      }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit: harness:identity' }))
+    expect(actions.beginEditBuiltIn).toHaveBeenCalledWith('harness:identity')
+    fireEvent.click(screen.getByRole('button', { name: 'Restore original' }))
+    expect(actions.resetBuiltIn).toHaveBeenCalledWith('harness:identity')
   })
 
   it('opens a create draft from the dashed add control', () => {
@@ -115,7 +143,7 @@ describe('SystemPromptsSection', () => {
 
   it('opens the draft and delete dialogs', () => {
     const actions = renderSection({
-      draft: { id: null, name: 'Style', text: 'Be concise.', error: 'nameRequired', saving: false },
+      draft: { id: null, kind: 'library', name: 'Style', text: 'Be concise.', error: 'nameRequired', saving: false },
     })
     fireEvent.change(screen.getByPlaceholderText('Shown in this list'), { target: { value: 'Voice' } })
     expect(actions.setDraftName).toHaveBeenCalledWith('Voice')
@@ -150,14 +178,34 @@ describe('SystemPromptsSection', () => {
       catalogError: 'down',
       writable: false,
     })
-    expect(screen.getByText('No system prompts yet. Create one to assemble it onto a model.')).toBeTruthy()
+    expect(screen.getByText('No extra system prompts yet. Create one to assemble it onto a model.')).toBeTruthy()
     expect(screen.getByText('Could not load the model catalog. The library is still editable.')).toBeTruthy()
     expect(screen.getByText('This deployment stores settings read-only.')).toBeTruthy()
     cleanup()
     renderSection({
-      draft: { id: 'style', name: 'Style', text: 'Be concise.', error: null, saving: true },
+      builtIns: [],
+      builtInError: 'down',
+    })
+    expect(screen.getByText('This deployment has not registered any system-prompt sections.')).toBeTruthy()
+    expect(screen.getByText('Could not load the shipped prompts. The library is still editable.')).toBeTruthy()
+    cleanup()
+    renderSection({
+      draft: { id: 'style', kind: 'library', name: 'Style', text: 'Be concise.', error: null, saving: true },
     })
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeTruthy()
+    cleanup()
+    renderSection({
+      draft: {
+        id: 'harness:identity',
+        kind: 'builtin',
+        name: 'harness:identity',
+        text: 'Custom opener.',
+        error: null,
+        saving: false,
+      },
+    })
+    expect(screen.getByRole('heading', { name: 'Edit shipped prompt' })).toBeTruthy()
+    expect(screen.getByDisplayValue('Custom opener.')).toBeTruthy()
   })
 
   it('renders unavailable and error states', () => {

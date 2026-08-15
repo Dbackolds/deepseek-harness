@@ -68,6 +68,22 @@ interface PromptSection {
 }
 ```
 
+`RegisteredPromptSection` 是一条已注册段在列表中的已求值行。`listSections()` 按拼接顺序返回这些行，且不运行完整组装。
+
+```ts type-equiv
+/** One registered prompt section with its text resolved for a listing. */
+interface RegisteredPromptSection {
+  /** The contributing section's unique name. */
+  name: string
+  /** Concatenation order; lower values render first. */
+  order: number
+  /** The resolved (but not yet interpolated) section text. */
+  text: string
+  /** Whether this contribution is a complete system prompt. */
+  complete: boolean
+}
+```
+
 ## 动态提示词上下文
 
 `PromptContext` 是与 `PromptSection` 对应的缓存安全结构。组装会解析这些贡献并排序；agent loop（智能体循环）仅在完整当前快照发生变化或被压缩（compaction）移除时，才会将其记录在保留的模型历史之后。
@@ -145,18 +161,58 @@ tools(provider: (context: AssembleContext) => ToolProviderResult): () => void
 variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void
 
 /**
+ * Register a transform that runs after the assembly waterfall and after an
+ * effective complete section is restored. Use this when a contribution must
+ * see — and may replace — the prompt the model would otherwise receive.
+ * Registration and disposal emit `system-prompt/change`.
+ * @param hook - receives the post-restore assembly and returns the next one.
+ * @returns the exact Cordis effect disposer.
+ */
+afterAssemble(hook: AfterAssemble): () => void
+
+/**
+ * List the effective registered prompt sections for one scope, in
+ * concatenation order, with each section's text resolved. This is the
+ * registry view, not a full assembly: tools, contexts, the assemble
+ * waterfall, complete-section restore, and afterAssemble hooks do not run.
+ * A function provider is evaluated with the supplied context, so a listing
+ * without a scope shows only global sections.
+ * @param context - the optional scope and plugin-defined assembly fields.
+ * @returns the merged, ordered, text-resolved registered sections.
+ */
+listSections(context: AssembleContext = {}): RegisteredPromptSection[]
+
+/**
  * Assemble global and scoped providers, detach tool parameters, apply
  * canonical ordering, then run the assembly waterfall. Scoped sections and
  * variables shadow globals. The returned waterfall value is authoritative
  * except that an effective complete section is restored afterwards as the
- * sole prompt section.
+ * sole prompt section. Registered {@link afterAssemble} hooks then run in
+ * registration order and may replace that restored prompt.
  * @param context - the optional scope and plugin-defined assembly fields.
- * @returns the post-waterfall assembly with any complete prompt enforced.
+ * @returns the post-waterfall assembly with any complete prompt enforced
+ *   and after-assemble hooks applied.
  */
 async assemble(context: AssembleContext = {}): Promise<PromptAssembly>
 ```
 
-Source: [`packages/core/system-prompt/src/index.ts:338`](../../packages/core/system-prompt/src/index.ts)
+Source: [`packages/core/system-prompt/src/index.ts:361`](../../packages/core/system-prompt/src/index.ts)
+
+<a id="ctxusersystemprompts--usersystemprompts"></a>
+
+### `ctx.userSystemPrompts` — `UserSystemPrompts`
+
+Owns the user prompt library, registered-section replacements, and per-model assembly after cooperative prompt assembly.
+
+```ts cordis-catalog
+/**
+ * Read the current library, bindings, and registered-section replacements.
+ * @returns a detached snapshot of the resolved settings section.
+ */
+current(): UserSystemPromptsSettings
+```
+
+Source: [`packages/core/user-system-prompts/src/index.ts:219`](../../packages/core/user-system-prompts/src/index.ts)
 
 <a id="system-prompt-events"></a>
 
@@ -166,7 +222,7 @@ Source: [`packages/core/system-prompt/src/index.ts:338`](../../packages/core/sys
 
 #### `system-prompt/assemble` — waterfall
 
-Expert waterfall over the assembled sections, contexts, tools, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope's assemblies. The returned value is authoritative. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope's system prompt.
+Expert waterfall over the assembled sections, contexts, tools, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope's assemblies. The returned value is authoritative. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope's system prompt. Registered `afterAssemble` hooks then run and may replace the restored prompt.
 
 ```ts cordis-catalog
 /**
@@ -176,7 +232,8 @@ Expert waterfall over the assembled sections, contexts, tools, and variables. Sc
  * A supplied signal controls only this explicit assembly request and must not
  * be retained to control later turns. A registered complete section is
  * restored after this waterfall, so listeners cannot add to or replace
- * that scope's system prompt.
+ * that scope's system prompt. Registered `afterAssemble` hooks then run
+ * and may replace the restored prompt.
  * @param assembly - the mutable assembly built from registered providers.
  * @param context - the caller's per-assembly context.
  * @mode waterfall
@@ -186,7 +243,7 @@ Expert waterfall over the assembled sections, contexts, tools, and variables. Sc
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/system-prompt/src/index.ts:31`](../../packages/core/system-prompt/src/index.ts)
+Source: [`packages/core/system-prompt/src/index.ts:32`](../../packages/core/system-prompt/src/index.ts)
 
 <a id="system-promptchange--emit"></a>
 
@@ -203,5 +260,5 @@ Emitted when any prompt provider changes. This registry notification is unfilter
 'system-prompt/change'(): void
 ```
 
-Source: [`packages/core/system-prompt/src/index.ts:37`](../../packages/core/system-prompt/src/index.ts)
+Source: [`packages/core/system-prompt/src/index.ts:38`](../../packages/core/system-prompt/src/index.ts)
 <!-- END GENERATED cordis-surface -->

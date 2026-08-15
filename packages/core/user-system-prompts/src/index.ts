@@ -1,10 +1,11 @@
 /**
  * User-authored system-prompt library and per-model assembly.
  *
- * Settings owns the library and the bindings. Assembly reads them live and
+ * Settings owns the library, registered-section replacements, and bindings.
+ * Assembly reads them live, replaces matching registered section texts, then
  * applies the matching model's selected prompts after cooperative assembly
- * and any complete-section restore, so an override replaces the prompt the
- * model would otherwise receive.
+ * and any complete-section restore, so a model override replaces the prompt
+ * the model would otherwise receive.
  *
  * @module @deepseek-ai/dsh-user-system-prompts
  */
@@ -47,18 +48,29 @@ export interface UserSystemPromptBinding {
   override: boolean
 }
 
-/** Stored library and per-model assemblies. */
+/** One user replacement of a registered plugin section. */
+export interface UserSystemPromptSectionOverride {
+  /** Registered section name (`harness:identity`, `tool:bash`, …). */
+  name: string
+  /** Replacement text. An empty string hides the section at assembly. */
+  text: string
+}
+
+/** Stored library, per-model assemblies, and registered-section overrides. */
 export interface UserSystemPromptsSettings {
   /** User-authored prompts. */
   prompts: UserSystemPrompt[]
   /** Per-model ordered selections over {@link prompts}. */
   bindings: UserSystemPromptBinding[]
+  /** Replacements keyed by registered section name. */
+  overrides: UserSystemPromptSectionOverride[]
 }
 
 /** Empty composition entry: no user prompts until Settings supplies some. */
 export const EMPTY_USER_SYSTEM_PROMPTS: UserSystemPromptsSettings = {
   prompts: [],
   bindings: [],
+  overrides: [],
 }
 
 /** Prompt id: lowercase start, then letters, digits, hyphens, or underscores. */
@@ -77,10 +89,16 @@ const BINDING_SCHEMA: z<UserSystemPromptBinding> = z.object({
   override: z.boolean().default(false),
 })
 
+const OVERRIDE_SCHEMA: z<UserSystemPromptSectionOverride> = z.object({
+  name: z.string().required(),
+  text: z.string().default(''),
+})
+
 /** Schema of the user-system-prompts settings section. */
 export const USER_SYSTEM_PROMPTS_SETTINGS_SCHEMA: z<UserSystemPromptsSettings> = z.object({
   prompts: z.array(PROMPT_SCHEMA).default([]),
   bindings: z.array(BINDING_SCHEMA).default([]),
+  overrides: z.array(OVERRIDE_SCHEMA).default([]),
 })
 
 /**
@@ -124,6 +142,16 @@ export function validateUserSystemPrompts(value: UserSystemPromptsSettings): voi
       seenPromptIds.add(id)
     }
   }
+  const seenOverrideNames = new Set<string>()
+  for (const entry of value.overrides) {
+    if (entry.name.length === 0) {
+      throw new Error('a section override needs a registered section name')
+    }
+    if (seenOverrideNames.has(entry.name)) {
+      throw new Error(`section override "${entry.name}" is listed more than once`)
+    }
+    seenOverrideNames.add(entry.name)
+  }
 }
 
 /**
@@ -158,12 +186,35 @@ export function applyUserSystemPrompts(
   }
 }
 
+/**
+ * Replace registered section texts that have a stored override. Unknown names
+ * are ignored so a retired plugin section does not fail assembly.
+ * @param assembly - post-waterfall, post-complete assembly.
+ * @param settings - current library, bindings, and overrides.
+ * @returns the assembly with matching section texts replaced.
+ */
+export function applyUserSystemPromptOverrides(
+  assembly: PromptAssembly,
+  settings: UserSystemPromptsSettings,
+): PromptAssembly {
+  if (settings.overrides.length === 0) return assembly
+  const byName = new Map(settings.overrides.map(entry => [entry.name, entry.text]))
+  let changed = false
+  const sections = assembly.sections.map((section) => {
+    const text = byName.get(section.name)
+    if (text === undefined) return section
+    changed = true
+    return { ...section, text }
+  })
+  return changed ? { ...assembly, sections } : assembly
+}
+
 /** Plugin config: the composition entry is always empty; Settings holds the library. */
 export interface Config {}
 
 /**
- * Owns the user prompt library and applies the matching model's assembly after
- * cooperative prompt assembly.
+ * Owns the user prompt library, registered-section replacements, and
+ * per-model assembly after cooperative prompt assembly.
  */
 export class UserSystemPrompts extends Service {
   static Config: z<Config> = z.object({})
@@ -185,16 +236,19 @@ export class UserSystemPrompts extends Service {
         validate: validateUserSystemPrompts,
       },
     )
-    ctx.effect(() => ctx.systemPrompt.afterAssemble(assembly => applyUserSystemPrompts(
-      assembly,
-      this.source(),
-      assembly.variables.provider,
-      assembly.variables.model,
-    )), 'userSystemPrompts.afterAssemble()')
+    ctx.effect(() => ctx.systemPrompt.afterAssemble((assembly) => {
+      const settings = this.source()
+      return applyUserSystemPrompts(
+        applyUserSystemPromptOverrides(assembly, settings),
+        settings,
+        assembly.variables.provider,
+        assembly.variables.model,
+      )
+    }), 'userSystemPrompts.afterAssemble()')
   }
 
   /**
-   * Read the current library and bindings.
+   * Read the current library, bindings, and registered-section replacements.
    * @returns a detached snapshot of the resolved settings section.
    */
   current(): UserSystemPromptsSettings {

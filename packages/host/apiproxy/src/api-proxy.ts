@@ -91,6 +91,7 @@ import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-a
 // Side-effect type import: resolves the `approval/request` waterfall and
 // `ctx.get('approval')` without a value dependency on the seam (optional composition).
 import type {} from '@deepseek-ai/dsh-user-approval'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { approvalResponsePayloadSchema } from './api/approvals.schema.ts'
 import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema } from './api/sessions.schema.ts'
 import { questionResponsePayloadSchema } from './api/questions.schema.ts'
@@ -3452,6 +3453,20 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         return ok(request, {})
+      },
+    },
+
+    systemPrompt: {
+      list(request) {
+        const systemPrompt = ctx.get('systemPrompt')
+        if (systemPrompt === undefined) {
+          return Promise.resolve(err(request, {
+            code: 'internal',
+            message: 'system-prompt registry is absent: this composition does not mount @deepseek-ai/dsh-system-prompt',
+            details: {},
+          }))
+        }
+        return Promise.resolve(ok(request, { sections: systemPrompt.listSections() }))
       },
     },
 
