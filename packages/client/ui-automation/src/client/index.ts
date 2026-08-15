@@ -8,12 +8,13 @@ import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import { AutomationPanel } from './AutomationPanel.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import { AutomationPage, AutomationPanel } from './AutomationPanel.tsx'
 import type { AutomationPanelInjected } from './AutomationPanel.tsx'
 import { AutomationStore, refreshIfLoaded } from './store.ts'
 import { en, NS, zh, type AutomationKey } from './locales.ts'
 
-export type { AutomationPanelInjected, AutomationPanelProps } from './AutomationPanel.tsx'
+export type { AutomationPageProps, AutomationPanelInjected, AutomationPanelProps } from './AutomationPanel.tsx'
 export type { AutomationKey } from './locales.ts'
 export type { AutomationCreateInput, AutomationRuleView, AutomationState } from './store.ts'
 export { AutomationStore, refreshIfLoaded } from './store.ts'
@@ -44,6 +45,7 @@ export function apply(ctx: ClientContext): void {
     setEnabled: (id, enabled) => controller.setEnabled(id, enabled),
     runNow: id => controller.runNow(id),
     remove: id => controller.remove(id),
+    setPageOpen: (open) => { controller.setPageOpen(open) },
   })
 
   ctx.effect(() => ctx.on('connection/reset', () => {
@@ -55,4 +57,11 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: injected,
   }, AutomationPanel))
+
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'automation-page',
+    locale: NS,
+    inject: injected,
+  }, AutomationPage))
 }

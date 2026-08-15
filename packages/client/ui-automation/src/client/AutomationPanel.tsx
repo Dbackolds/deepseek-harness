@@ -1,13 +1,12 @@
 /**
- * Host Automation sidebar occupant: the trigger under New Session plus the
- * modal that lists rules and creates one. The Host remains the fact source;
- * this component owns only panel visibility and the create draft.
+ * Host Automation: New Session sibling trigger plus the center-column page.
+ * The Host remains the fact source; this file owns only the create draft.
  */
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Button, IconPlayOutline16, IconPlusOutline16, IconQueueOutline14, IconTrashOutline16,
-  Input, Modal, Tooltip,
+  Button, IconClockOutline16, IconCloseOutline16, IconPlayOutline16, IconPlusOutline16,
+  IconTrashOutline16, Input, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore, WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -29,7 +28,7 @@ export interface AutomationPanelInjected {
     /** Page snapshot bound by the renderer as useAutomation. */
     automation: SnapshotStore<AutomationState>
   }
-  /** Fetch the rule list when the panel first opens. */
+  /** Fetch the rule list when the page first opens. */
   load: () => Promise<void>
   /** Persist one new rule. */
   create: AutomationStore['create']
@@ -39,55 +38,131 @@ export interface AutomationPanelInjected {
   runNow: AutomationStore['runNow']
   /** Delete one rule. */
   remove: AutomationStore['remove']
+  /** Show or hide the center-column page. */
+  setPageOpen: (open: boolean) => void
 }
 
-/** Full component props. */
+/** Sidebar trigger props. */
 export type AutomationPanelProps =
   PropsRuntime<'sidebar.automation'>
   & PropsLocale<typeof NS>
   & InjectFace<AutomationPanelInjected>
 
+/** Overlay page props: same inject face, no sidebar owner share. */
+export type AutomationPageProps =
+  PropsLocale<typeof NS>
+  & InjectFace<AutomationPanelInjected>
+  & { useWorkspaces: AutomationPanelProps['useWorkspaces'] }
+
 /**
- * Render the sidebar Automation trigger and panel.
+ * Render the sidebar Automation trigger.
  * @param props - composed slot props.
- * @returns the trigger, and the modal while it is open.
+ * @returns the New Session sibling control.
  */
 export function AutomationPanel(props: AutomationPanelProps): ReactNode {
-  const { wide, useAutomation, useWorkspaces, load, create, setEnabled, runNow, remove, t } = props
-  const [open, setOpen] = useState(false)
+  const { wide, useAutomation, setPageOpen, t } = props
+  const pageOpen = useAutomation(snapshot => snapshot.pageOpen)
+  return (
+    <Tooltip label={t('trigger.label')} delayMs={500} disabled={wide}>
+      <button
+        type="button"
+        className={wide ? css.trigger : [css.trigger, css.rail].join(' ')}
+        aria-pressed={pageOpen}
+        aria-label={t('trigger.label')}
+        onClick={() => { setPageOpen(!pageOpen) }}
+      >
+        <IconClockOutline16 size={wide ? 14 : 18} />
+        {wide && <span className={css.label}>{t('trigger')}</span>}
+      </button>
+    </Tooltip>
+  )
+}
+
+/**
+ * Render the center-column Automation page while it is open.
+ * @param props - injected store face and locale.
+ * @returns the full-column page, or null while closed.
+ */
+export function AutomationPage(props: AutomationPageProps): ReactNode {
+  const { useAutomation, useWorkspaces, load, create, setEnabled, runNow, remove, setPageOpen, t } = props
   const state = useAutomation(snapshot => snapshot)
   const workspaces = useWorkspaces(snapshot => snapshot.items)
 
   useEffect(() => {
-    if (!open) return
+    if (!state.pageOpen) return
     if (state.status === 'idle') void load()
-  }, [open, state.status, load])
+  }, [state.pageOpen, state.status, load])
 
+  useEffect(() => {
+    if (!state.pageOpen) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setPageOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => { document.removeEventListener('keydown', onKeyDown) }
+  }, [state.pageOpen, setPageOpen])
+
+  if (!state.pageOpen) return null
   return (
-    <>
-      <Tooltip label={t('trigger.label')} delayMs={500} disabled={wide}>
-        <button
-          type="button"
-          className={wide ? css.trigger : `${css.trigger} ${css.rail}`}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-label={t('trigger.label')}
-          onClick={() => { setOpen(true) }}
-        >
-          <IconQueueOutline14 size={wide ? 14 : 18} />
-          {wide && <span className={css.label}>{t('trigger')}</span>}
-        </button>
-      </Tooltip>
-      <Modal
-        open={open}
-        onClose={() => { setOpen(false) }}
-        title={t('title')}
-        closeLabel={t('close')}
-        description={t('intro')}
-      >
+    <AutomationPageChrome
+      state={state}
+      workspaces={workspaces}
+      load={load}
+      create={create}
+      setEnabled={setEnabled}
+      runNow={runNow}
+      remove={remove}
+      setPageOpen={setPageOpen}
+      t={t}
+    />
+  )
+}
+
+function AutomationPageChrome({
+  state, workspaces, load, create, setEnabled, runNow, remove, setPageOpen, t,
+}: {
+  state: AutomationState
+  workspaces: readonly WorkspaceView[]
+  load: () => Promise<void>
+  create: AutomationStore['create']
+  setEnabled: AutomationStore['setEnabled']
+  runNow: AutomationStore['runNow']
+  remove: AutomationStore['remove']
+  setPageOpen: (open: boolean) => void
+  t: AutomationPanelProps['t']
+}): ReactNode {
+  const [adding, setAdding] = useState(false)
+  return (
+    <section className={css.page} aria-label={t('title')}>
+      <header className={css.pageHeader}>
+        <div className={css.pageHeading}>
+          <h1 className={css.pageTitle}>{t('title')}</h1>
+          <p className={css.intro}>{t('intro')}</p>
+        </div>
+        <div className={css.pageTools}>
+          {state.status !== 'error' || state.items.length > 0
+            ? (
+              <Button
+                variant="primary"
+                icon={<IconPlusOutline16 size={16} />}
+                disabled={adding}
+                onClick={() => { setAdding(true) }}
+              >
+                {t('add')}
+              </Button>
+            )
+            : null}
+          <button type="button" className={css.pageClose} aria-label={t('close')} onClick={() => { setPageOpen(false) }}>
+            <IconCloseOutline16 size={16} />
+          </button>
+        </div>
+      </header>
+      <div className={css.pageScroll}>
         <AutomationBody
           state={state}
           workspaces={workspaces}
+          adding={adding}
+          onAdded={() => { setAdding(false) }}
           load={load}
           create={create}
           setEnabled={setEnabled}
@@ -95,14 +170,16 @@ export function AutomationPanel(props: AutomationPanelProps): ReactNode {
           remove={remove}
           t={t}
         />
-      </Modal>
-    </>
+      </div>
+    </section>
   )
 }
 
 interface BodyProps {
   state: AutomationState
   workspaces: readonly WorkspaceView[]
+  adding: boolean
+  onAdded: () => void
   load: () => Promise<void>
   create: AutomationStore['create']
   setEnabled: AutomationStore['setEnabled']
@@ -112,19 +189,18 @@ interface BodyProps {
 }
 
 function AutomationBody({
-  state, workspaces, load, create, setEnabled, runNow, remove, t,
+  state, workspaces, adding, onAdded, load, create, setEnabled, runNow, remove, t,
 }: BodyProps): ReactNode {
-  const [adding, setAdding] = useState(false)
   if (state.status === 'error' && state.items.length === 0) {
     return (
-      <div className={css.section}>
+      <div className={css.body}>
         <p className={css.error}>{t('loadFailed') + ': ' + String(state.error)}</p>
         <Button variant="outline" onClick={() => { void load() }}>{t('retry')}</Button>
       </div>
     )
   }
   return (
-    <div className={css.section}>
+    <div className={css.body}>
       {state.error !== null && <p className={css.notice} role="alert">{state.error}</p>}
       {state.items.length === 0 && !adding
         ? <p className={css.empty}>{t('empty')}</p>
@@ -148,19 +224,11 @@ function AutomationBody({
           <CreateForm
             workspaces={workspaces}
             create={create}
-            onClose={() => { setAdding(false) }}
+            onClose={onAdded}
             t={t}
           />
         )
-        : (
-          <Button
-            variant="outline"
-            icon={<IconPlusOutline16 size={16} />}
-            onClick={() => { setAdding(true) }}
-          >
-            {t('add')}
-          </Button>
-        )}
+        : null}
     </div>
   )
 }
@@ -194,14 +262,14 @@ function RuleRow({
     ...workspaceTitle === undefined ? [] : [workspaceTitle],
   ].join(' · ')
   return (
-    <li className={css.rowCard}>
-      <div className={css.rowHead}>
-        <div className={css.rowIdentity}>
-          <div className={css.rowName}>{rule.name}</div>
-          <div className={css.rowMeta}>{meta}</div>
-          <div className={css.rowTask}>{rule.task}</div>
+    <li className={css.card}>
+      <div className={css.cardHead}>
+        <div className={css.cardIdentity}>
+          <div className={css.cardName}>{rule.name}</div>
+          <div className={css.cardMeta}>{meta}</div>
+          <div className={css.cardTask}>{rule.task}</div>
         </div>
-        <div className={css.rowActions}>
+        <div className={css.cardActions}>
           <Button
             size="sm"
             variant="outline"
@@ -298,7 +366,7 @@ function CreateForm({
   }
   return (
     <form
-      className={css.form}
+      className={css.formCard}
       onSubmit={(event) => {
         event.preventDefault()
         submit()

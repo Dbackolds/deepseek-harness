@@ -24,6 +24,8 @@ export interface AutomationState {
   /** Whole-load failure text; row-level write failures stay on the row. */
   error: string | null
   items: readonly AutomationRuleView[]
+  /** Whether the center-column Automation page is showing. */
+  pageOpen: boolean
 }
 
 /**
@@ -52,6 +54,7 @@ export class AutomationStore {
     status: 'idle',
     error: null,
     items: [],
+    pageOpen: false,
   })
 
   /**
@@ -71,7 +74,11 @@ export class AutomationStore {
     })
     try {
       const value = valueOf(await this.api.automation.list({}))
-      this.store.set({ status: 'ready', error: null, items: value.items })
+      this.store.update((draft) => {
+        draft.status = 'ready'
+        draft.error = null
+        draft.items = value.items
+      })
     } catch (error) {
       this.store.update((draft) => {
         draft.status = previous.items.length === 0 ? 'error' : 'ready'
@@ -138,6 +145,16 @@ export class AutomationStore {
     }
     await this.load()
     return this.store.getSnapshot().error ?? undefined
+  }
+
+  /**
+   * Show or hide the center-column Automation page.
+   * @param open - next page visibility.
+   */
+  setPageOpen(open: boolean): void {
+    this.store.update((draft) => {
+      draft.pageOpen = open
+    })
   }
 }
 

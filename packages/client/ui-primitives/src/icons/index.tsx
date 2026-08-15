@@ -870,3 +870,16 @@ export const IconArchiveOutline20 = ({ size = 20, className }: IconProps) => (
     <path d="M12.7962 12.5661V11.0832H7.20548V12.5661L12.7962 12.5661Z" fill="currentColor" />
   </svg>
 )
+
+/** Clock face with hour and minute hands. Used by the Automation sidebar control. */
+export const IconClockOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M8 1.35C4.3274 1.35 1.35 4.3274 1.35 8C1.35 11.6726 4.3274 14.65 8 14.65C11.6726 14.65 14.65 11.6726 14.65 8C14.65 4.3274 11.6726 1.35 8 1.35ZM0 8C0 3.58172 3.58172 0 8 0C12.4183 0 16 3.58172 16 8C16 12.4183 12.4183 16 8 16C3.58172 16 0 12.4183 0 8Z"
+      fill="currentColor"
+    />
+    <path d="M8.675 4.2V7.7206L11.1373 9.19513L10.4627 10.3229L7.325 8.4444V4.2H8.675Z" fill="currentColor" />
+  </svg>
+)
