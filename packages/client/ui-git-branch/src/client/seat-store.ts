@@ -46,6 +46,8 @@ export class GitBranchSeatController {
     private readonly api: Pick<IApiClient, 'git'>,
     /** The session the hero is showing, when there is one. */
     private readonly currentSessionId: () => SessionId | undefined,
+    /** Workspace the new-session screen is aimed at, when no session is current. */
+    private readonly currentWorkspaceId: () => string | undefined,
   ) {}
 
   private set(patch: Partial<GitBranchSeatState>): void {
@@ -58,16 +60,20 @@ export class GitBranchSeatController {
    */
   async load(): Promise<void> {
     const sessionId = this.currentSessionId()
-    if (sessionId === undefined) {
+    const workspaceId = this.currentWorkspaceId()
+    if (sessionId === undefined && workspaceId === undefined) {
       this.store.set(INITIAL)
       return
     }
     try {
-      const response = await this.api.git.describe({ sessionId })
+      const response = await this.api.git.describe({
+        ...sessionId === undefined ? {} : { sessionId },
+        ...workspaceId === undefined ? {} : { workspaceId },
+      })
       if (!response.result.ok) {
         const unavailable = response.result.error.code === 'git-not-a-repository'
         this.set({
-          sessionId,
+          sessionId: sessionId ?? '',
           view: null,
           unavailable,
           error: unavailable ? null : response.result.error.message,
@@ -75,13 +81,13 @@ export class GitBranchSeatController {
         return
       }
       this.set({
-        sessionId,
+        sessionId: sessionId ?? '',
         view: response.result.value,
         unavailable: false,
         error: null,
       })
     } catch (error) {
-      this.set({ sessionId, error: messageOf(error) })
+      this.set({ sessionId: sessionId ?? '', error: messageOf(error) })
     }
   }
 

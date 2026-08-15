@@ -23,7 +23,7 @@ describe('GitBranchSeatController', () => {
         checkout: () => Promise.resolve(ok(view)),
         createBranch: () => Promise.resolve(ok(view)),
       },
-    } as never, () => 's1' as never)
+    } as never, () => 's1' as never, () => 'ws-1')
     await seat.load()
     expect(seat.store.getSnapshot()).toMatchObject({ sessionId: 's1', view, unavailable: false, error: null })
   })
@@ -35,7 +35,7 @@ describe('GitBranchSeatController', () => {
         checkout: () => Promise.resolve(ok({} as never)),
         createBranch: () => Promise.resolve(ok({} as never)),
       },
-    } as never, () => 's1' as never)
+    } as never, () => 's1' as never, () => 'ws-1')
     await seat.load()
     expect(seat.store.getSnapshot()).toMatchObject({ unavailable: true, view: null, error: null })
   })
@@ -51,7 +51,7 @@ describe('GitBranchSeatController', () => {
         checkout: () => Promise.resolve(ok(next)),
         createBranch: () => Promise.resolve(ok(next)),
       },
-    } as never, () => 's1' as never)
+    } as never, () => 's1' as never, () => 'ws-1')
     await seat.checkout('feature')
     expect(seat.store.getSnapshot().view).toEqual(next)
   })
@@ -63,11 +63,32 @@ describe('GitBranchSeatController', () => {
         checkout: () => Promise.resolve(ok({} as never)),
         createBranch: () => Promise.resolve(ok({} as never)),
       },
-    } as never, () => undefined)
+    } as never, () => undefined, () => undefined)
     await seat.load()
     expect(seat.store.getSnapshot()).toMatchObject({ sessionId: '', view: null, unavailable: false })
     await seat.checkout('feature')
     expect(seat.store.getSnapshot().busy).toBe(false)
+  })
+
+  it('loads the workspace checkout when no session is current', async () => {
+    const view = {
+      currentBranch: 'main', worktreePath: '/repo', isolated: false,
+      branches: [{ name: 'main', current: true, remote: false }],
+    }
+    let described: unknown
+    const seat = new GitBranchSeatController({
+      git: {
+        describe: (payload: unknown) => {
+          described = payload
+          return Promise.resolve(ok(view))
+        },
+        checkout: () => Promise.resolve(ok(view)),
+        createBranch: () => Promise.resolve(ok(view)),
+      },
+    } as never, () => undefined, () => 'ws-1')
+    await seat.load()
+    expect(described).toEqual({ workspaceId: 'ws-1' })
+    expect(seat.store.getSnapshot()).toMatchObject({ sessionId: '', view, unavailable: false })
   })
 
   it('records a host error that is not a missing repository', async () => {
@@ -77,7 +98,7 @@ describe('GitBranchSeatController', () => {
         checkout: () => Promise.resolve(err('git-failed', 'switch failed')),
         createBranch: () => Promise.resolve(err('git-branch-exists', 'taken')),
       },
-    } as never, () => 's1' as never)
+    } as never, () => 's1' as never, () => 'ws-1')
     await seat.load()
     expect(seat.store.getSnapshot()).toMatchObject({ unavailable: false, error: 'boom' })
     await seat.checkout('feature')
@@ -93,7 +114,7 @@ describe('GitBranchSeatController', () => {
         checkout: () => Promise.reject('raw'),
         createBranch: () => Promise.reject(new Error('create failed')),
       },
-    } as never, () => 's1' as never)
+    } as never, () => 's1' as never, () => 'ws-1')
     await seat.load()
     expect(seat.store.getSnapshot().error).toBe('offline')
     await seat.checkout('feature')
@@ -114,7 +135,7 @@ describe('GitBranchSeatController', () => {
         checkout: () => { calls += 1; return blocked },
         createBranch: () => Promise.resolve(ok({} as never)),
       },
-    } as never, () => 's1' as never)
+    } as never, () => 's1' as never, () => 'ws-1')
     const first = seat.checkout('a')
     await Promise.resolve()
     await seat.checkout('b')

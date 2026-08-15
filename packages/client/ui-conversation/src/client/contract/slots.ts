@@ -145,10 +145,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'root'; owner: HeroAgentPresetOwnerProps }
     /**
      * The Git branch chip beside the agent-preset chip on the new-session
-     * screen. Session-maybe: the chip hides until a current session has a
-     * workspace checkout, then lists and switches that session overlay.
+     * screen. Root scope: the chip names the current workspace checkout, and
+     * a live session overlay when one exists.
      */
-    'conversation.hero.branch': { kind: 'single'; scope: 'session-maybe'; owner: HeroBranchOwnerProps }
+    'conversation.hero.branch': { kind: 'single'; scope: 'root'; owner: HeroBranchOwnerProps }
     // 'conversation.input.overlay' merges in ui-input-trigger (the dependency
     // direction is the hard constraint — ui-input-trigger cannot import
     // this package, while this package's input contract already imports

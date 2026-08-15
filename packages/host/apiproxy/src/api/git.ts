@@ -36,7 +36,7 @@ export interface GitApi {
    * A path that is not a Git checkout answers `git-not-a-repository`.
    * Session-backed subagents reject with `agent-busy`.
    */
-  describe(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<SessionGitView>>
+  describe(request: RpcRequest<{ sessionId?: SessionId; workspaceId?: string }>): Promise<RpcResponse<SessionGitView>>
 
   /**
    * Checks `branch` out for this session. The workspace current branch

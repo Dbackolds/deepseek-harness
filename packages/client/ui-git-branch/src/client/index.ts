@@ -22,7 +22,7 @@ export type { GitBranchSeatInjected, GitBranchSeatProps } from './GitBranchSeat.
 export type { GitBranchSeatState } from './seat-store.ts'
 
 /** Required services for locale registration and hero-slot contribution. */
-export const inject = ['slots', 'locale', 'connection', 'sessions']
+export const inject = ['slots', 'locale', 'connection', 'sessions', 'workspaces']
 
 /**
  * Client plugin body: register the dictionaries and the hero chip.
@@ -30,9 +30,22 @@ export const inject = ['slots', 'locale', 'connection', 'sessions']
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-git-branch: dictionaries')
-  ctx.inject(['slots', 'conversation', 'sessions'], (scope: ClientContext) => {
+  ctx.inject(['slots', 'conversation', 'sessions', 'workspaces'], (scope: ClientContext) => {
     const api = (scope.get('connection') as ConnectionHandle).api
-    const seat = new GitBranchSeatController(api, () => scope.sessions.list.getSnapshot().current)
+    const currentWorkspaceId = (): string | undefined => {
+      const sessionId = scope.sessions.list.getSnapshot().current
+      const workspaces = scope.workspaces.list.getSnapshot()
+      if (sessionId !== undefined) {
+        const owning = workspaces.items.find(item => item.sessionIds.includes(sessionId))
+        if (owning !== undefined) return owning.workspaceId
+      }
+      return workspaces.recentWorkspaceId ?? workspaces.items[0]?.workspaceId
+    }
+    const seat = new GitBranchSeatController(
+      api,
+      () => scope.sessions.list.getSnapshot().current,
+      currentWorkspaceId,
+    )
     const seatInjected = (): GitBranchSeatInjected => ({
       hooks: { gitBranchSeat: seat.store },
       load: () => seat.load(),
@@ -40,7 +53,8 @@ export function apply(ctx: ClientContext): void {
       createBranch: (branch: string) => seat.createBranch(branch),
     })
     scope.effect(() => {
-      const stop = scope.sessions.list.subscribe(() => { void seat.load() })
+      const stopSessions = scope.sessions.list.subscribe(() => { void seat.load() })
+      const stopWorkspaces = scope.workspaces.list.subscribe(() => { void seat.load() })
       const chip = scope.slots.inject(
         'conversation.hero.branch',
         () => scope.slots.register({
@@ -50,7 +64,8 @@ export function apply(ctx: ClientContext): void {
         }, GitBranchSeat),
       )
       return () => {
-        stop()
+        stopSessions()
+        stopWorkspaces()
         chip()
       }
     }, 'ui-git-branch: hero chip')

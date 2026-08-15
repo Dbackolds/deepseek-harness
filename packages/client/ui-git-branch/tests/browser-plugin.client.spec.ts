@@ -24,7 +24,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   ctx.slots.register({
     name: 'root',
     children: {
-      'conversation.hero.branch': { kind: 'single', scope: 'session-maybe' },
+      'conversation.hero.branch': { kind: 'single', scope: 'root' },
     },
   } as never, () => null)
   const listeners = new Set<() => void>()
@@ -36,6 +36,12 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
         listener()
         return () => { listeners.delete(listener) }
       },
+    },
+  })
+  ctx.provide('workspaces', {
+    list: {
+      getSnapshot: () => ({ items: [{ workspaceId: 'ws-1', sessionIds: [] }], recentWorkspaceId: 'ws-1' }),
+      subscribe: () => () => {},
     },
   })
   ctx.provide('conversation', {})
@@ -59,7 +65,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
 
 describe('ui-git-branch browser half', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'sessions'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'sessions', 'workspaces'])
   })
 
   it('registers the hero chip, and fiber teardown removes it (HMR safety)', async () => {
