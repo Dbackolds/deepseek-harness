@@ -165,6 +165,7 @@
     { "path": "./packages/core/agent" },
     { "path": "./packages/core/agent-default-model" },
     { "path": "./packages/core/user-system-prompts" },
+    { "path": "./packages/subagent/user-subagents" },
     { "path": "./packages/interaction/commands" },
     { "path": "./packages/goal/goal" },
     { "path": "./packages/goal/tool-goal" },

@@ -1439,6 +1439,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings-plugins':
         specifier: workspace:^
         version: link:../../client/ui-settings-plugins
+      '@deepseek-ai/dsh-client-ui-settings-subagents':
+        specifier: workspace:^
+        version: link:../../client/ui-settings-subagents
       '@deepseek-ai/dsh-client-ui-settings-system-prompts':
         specifier: workspace:^
         version: link:../../client/ui-settings-system-prompts

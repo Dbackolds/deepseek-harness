@@ -1,0 +1,305 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.intro {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group + .group {
+  margin-top: 20px;
+}
+
+.groupHead {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-3);
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 8px;
+}
+
+.cardName {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.cardMeta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.cardPreview {
+  margin: 0;
+  padding: 0 16px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.cardFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.iconButton {
+  appearance: none;
+  border: 0;
+  border-radius: 7px;
+  padding: 6px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+.iconDanger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.creatorButton {
+  box-sizing: border-box;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.creatorButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.creatorButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.modelCard {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-3);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modelTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modelName {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.providerName {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.selected {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.selectedRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.selectedName {
+  flex: 1;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.overrideRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.overrideHint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.addSelect {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.input,
+.textarea {
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+.textarea {
+  min-height: 160px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.input:focus,
+.textarea:focus,
+.addSelect:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.dialog {
+  width: min(560px, 100%);
+}
+
+.dialogFields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.deleteDialog {
+  width: min(480px, 100%);
+}
+
+.deleteConfirm:not(:disabled) {
+  border-color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.secondaryButton {
+  border: none;
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-1);
+}
