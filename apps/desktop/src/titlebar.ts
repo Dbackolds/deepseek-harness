@@ -53,6 +53,9 @@ export function titlebarMarkup(variant: TitlebarVariant): string {
 
 /**
  * Styles that pin the title bar above the Web GUI without covering its clicks.
+ * Only `body` receives the reserved padding: the Web GUI sets
+ * `html, body, #root { height: 100% }`, and padding both `html` and `body`
+ * stacks two gaps under the fixed bar.
  * @param variant platform variant controlling the drag-region padding.
  * @returns a CSS text block.
  */
@@ -72,7 +75,7 @@ export function titlebarStyles(variant: TitlebarVariant): string {
   -webkit-app-region: drag;
 }
 #${TITLEBAR_ID} .dsh-desktop-title { opacity: 0.72; pointer-events: none; }
-html, body { padding-top: var(--dsh-desktop-titlebar); box-sizing: border-box; }
+body { padding-top: var(--dsh-desktop-titlebar); box-sizing: border-box; }
 `
 }
 
