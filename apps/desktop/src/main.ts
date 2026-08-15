@@ -182,6 +182,8 @@ function fenceNavigation(window: BrowserWindow, origin: string): void {
 let host: StartedHost | undefined
 
 if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID)
+// A checkout-launched Electron binary has no bundle icon; claim the whale mark.
+if (IS_MAC) app.dock?.setIcon(nativeImage.createFromPath(desktopIconPath()))
 
 function publishWindowsShortcut(): void {
   const desktopRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..')
