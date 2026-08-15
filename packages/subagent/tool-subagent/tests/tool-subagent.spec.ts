@@ -659,6 +659,7 @@ describe('dsh-tool-subagent', () => {
         seen = request
         return {
           id: SessionId('capture-child'),
+          localAgent: undefined,
           result: Promise.resolve({
             stopReason: 'completed' as const,
             output: [{ type: 'text' as const, text: 'ok' }],
