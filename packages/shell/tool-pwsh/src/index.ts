@@ -26,6 +26,7 @@ import { defineTool, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, TerminalCallView, ToolExecution, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { sessionWorkingDirectory } from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-shell-env'
@@ -149,7 +150,7 @@ function pwshDescription(backgroundEnabled: boolean, escalationModes: readonly S
  * otherwise use the session header cwd and leave executor defaulting as the fallback.
  */
 function resolveWorkdir(modelWorkdir: string | undefined, exec: { agent?: Agent }): string | undefined {
-  const headerCwd = exec.agent?.session.header.cwd
+  const headerCwd = exec.agent === undefined ? undefined : sessionWorkingDirectory(exec.agent.session)
   if (modelWorkdir === undefined) return headerCwd
   if (headerCwd !== undefined && !isAbsolute(modelWorkdir)) {
     return resolvePath(headerCwd, modelWorkdir)

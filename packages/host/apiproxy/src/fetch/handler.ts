@@ -51,6 +51,9 @@ import {
   agentPresetReadRequestSchema, agentPresetRemoveRequestSchema, agentPresetSelectRequestSchema,
 } from '../api/agent-presets.schema.ts'
 import {
+  gitCheckoutRequestSchema, gitCreateBranchRequestSchema, gitDescribeRequestSchema,
+} from '../api/git.schema.ts'
+import {
   goalCreateRequestSchema,
   goalEditRequestSchema,
   goalPauseRequestSchema,
@@ -131,6 +134,9 @@ const UNARY_ROUTES: UnaryRoutes = {
   'workspace.addFolder': { schema: workspaceAddFolderRequestSchema, invoke: (api, r) => api.workspace.addFolder(r) },
   'workspace.removeFolder': { schema: workspaceRemoveFolderRequestSchema, invoke: (api, r) => api.workspace.removeFolder(r) },
   'skill.list': { schema: skillListRequestSchema, invoke: (api, r) => api.skills.list(r) },
+  'git.describe': { schema: gitDescribeRequestSchema, invoke: (api, r) => api.git.describe(r) },
+  'git.checkout': { schema: gitCheckoutRequestSchema, invoke: (api, r) => api.git.checkout(r) },
+  'git.createBranch': { schema: gitCreateBranchRequestSchema, invoke: (api, r) => api.git.createBranch(r) },
   'agentPreset.list': { schema: agentPresetListRequestSchema, invoke: (api, r) => api.agentPresets.list(r) },
   'agentPreset.select': { schema: agentPresetSelectRequestSchema, invoke: (api, r) => api.agentPresets.select(r) },
   'agentPreset.read': { schema: agentPresetReadRequestSchema, invoke: (api, r) => api.agentPresets.read(r) },

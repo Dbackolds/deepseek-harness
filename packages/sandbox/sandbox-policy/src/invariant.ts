@@ -18,6 +18,14 @@ function validateEvent(event: SessionEvent, fail: InvariantFailure): void {
   if (event.type === 'sandbox/mode' && !SANDBOX_MODES.includes(event.data.mode)) {
     fail(`sandbox/mode carries unknown mode ${JSON.stringify(event.data.mode)}`)
   }
+  if (event.type === 'git/worktree') {
+    if (typeof event.data.path !== 'string' || event.data.path.length === 0) {
+      fail(`git/worktree carries empty path ${JSON.stringify(event.data.path)}`)
+    }
+    if (typeof event.data.branch !== 'string' || event.data.branch.length === 0) {
+      fail(`git/worktree carries empty branch ${JSON.stringify(event.data.branch)}`)
+    }
+  }
 }
 
 /** Install validation for loaded and newly appended sandbox modes. */

@@ -24,6 +24,9 @@ import type { SubagentListEntry as CatalogSubagentListEntry } from '@deepseek-ai
 import { isUserInvocable } from '@deepseek-ai/dsh-skill'
 import type { Workspace, WorkspaceRecord } from '@deepseek-ai/dsh-workspace'
 import {
+  checkoutSessionBranch, createSessionBranch, describeSessionGit, GitWorktreeError,
+} from '@deepseek-ai/dsh-sandbox-policy'
+import {
   workspaceDomainState, workspaceRecord, WorkspaceId as brandWorkspaceId,
   WorkspaceMoveInvalidError, WorkspaceOrderInvalidError, WorkspaceUnknownSessionError,
 } from '@deepseek-ai/dsh-workspace'
@@ -40,7 +43,7 @@ import type {
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
-  WorkspaceId, WorkspaceView,
+  SessionGitView, WorkspaceId, WorkspaceView,
 } from './api/index.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
@@ -522,9 +525,13 @@ function applySessionListMetadata(state: SessionListMetadata, event: SessionEven
   const lastPromptAt = event.type === 'user/message' && event.data.source.kind === 'user'
     ? event.time
     : state.lastPromptAt
-  return blank === state.blank && lastPromptAt === state.lastPromptAt
-    ? state
-    : { blank, lastPromptAt }
+  let interrupted = state.interrupted === true
+  if (event.type === 'turn/start') interrupted = false
+  else if (event.type === 'turn/end' && event.data.reason.kind === 'interrupted') interrupted = true
+  if (blank === state.blank && lastPromptAt === state.lastPromptAt && interrupted === (state.interrupted === true)) {
+    return state
+  }
+  return { blank, lastPromptAt, ...interrupted ? { interrupted: true } : {} }
 }
 
 /** Fold exact list metadata for an attached Session. */
@@ -566,6 +573,7 @@ function summarize(session: Session, running: boolean): SessionSummary {
     updatedAt: sessionListUpdatedAt(session.header, metadata),
     running,
     blank: metadata.blank,
+    ...metadata.interrupted === true ? { interrupted: true } : {},
     ...sessionListFields(session.header, session.events),
   }
 }
@@ -587,7 +595,17 @@ async function probeColdSessionMetadata(
   if (maxBytes === 0) return undefined
   signal?.throwIfAborted()
   const location = persistence.locate(meta)
-  if (location === undefined) return undefined
+  if (location === undefined) {
+    try {
+      const inspected = await persistence.inspect(meta.id, signal)
+      signal?.throwIfAborted()
+      return sessionListMetadata(inspected.events)
+    } catch (error) {
+      signal?.throwIfAborted()
+      ctx.logger.warn(`session.list: inspect probe for "${meta.id}" failed (serving it as visible): ${String(error)}`)
+      return undefined
+    }
+  }
   signal?.throwIfAborted()
   let size: number
   try {
@@ -625,6 +643,7 @@ async function summarizeCold(
     updatedAt: sessionListUpdatedAt(meta, probed ?? metadata),
     running: false,
     blank: metadata?.blank === false ? false : probed?.blank ?? false,
+    ...((probed ?? metadata)?.interrupted === true ? { interrupted: true } : {}),
     // Header-only: reading the log for a blank-window preset switch would
     // defeat the same index read, and attaching the session replaces this row
     // with `summarize()`, which resolves the switch from the events.
@@ -1823,6 +1842,64 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       return err(request, { code: 'automation-rejected', message: error.message, details: { automationCode: error.code } })
     }
     return err(request, { code: 'internal', message: String(error), details: {} })
+  }
+
+  function gitError(
+    request: RpcRequest<unknown>,
+    error: unknown,
+    workspacePath: string,
+    branch?: string,
+  ): RpcResponse<never> {
+    if (error instanceof GitWorktreeError) {
+      switch (error.code) {
+        case 'not-a-repository':
+          return err(request, { code: 'git-not-a-repository', message: error.message, details: { path: workspacePath } })
+        case 'branch-invalid':
+          return err(request, {
+            code: 'git-branch-invalid',
+            message: error.message,
+            details: { branch: branch ?? '' },
+          })
+        case 'branch-exists':
+          return err(request, {
+            code: 'git-branch-exists',
+            message: error.message,
+            details: { branch: branch ?? '' },
+          })
+        default:
+          return err(request, { code: 'git-failed', message: error.message, details: { reason: error.message } })
+      }
+    }
+    return err(request, { code: 'git-failed', message: String(error), details: { reason: String(error) } })
+  }
+
+  async function gitOp(
+    request: RpcRequest<unknown>,
+    sessionId: SessionId,
+    run: (session: Session, workspace: Workspace) => Promise<SessionGitView>,
+    branch?: string,
+  ): Promise<RpcResponse<SessionGitView>> {
+    const found = await agentFor(sessionId)
+    if ('error' in found) return err(request, found.error)
+    const session = found.agent.session
+    const cwd = session.header.cwd
+    if (cwd === undefined) {
+      return err(request, { code: 'internal', message: `session "${sessionId}" has no project cwd`, details: {} })
+    }
+    const workspace = ctx.get('workspaceRegistry')?.list().find(item => item.sessionIds.includes(session.id))
+      ?? ctx.get('workspaceRegistry')?.list().find(item => item.path === cwd)
+    if (workspace === undefined) {
+      return err(request, {
+        code: 'workspace-not-found',
+        message: `session "${sessionId}" is not accounted by a workspace`,
+        details: { workspaceId: '' },
+      })
+    }
+    try {
+      return ok(request, await run(session, workspace))
+    } catch (error: unknown) {
+      return gitError(request, error, workspace.path, branch)
+    }
   }
 
   /** Resolve a session's agent, apply one goal mutation, and acknowledge with the new CAS ref. */
@@ -3331,6 +3408,21 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         } catch (error: unknown) {
           return err(request, presetError(agentPreset, error))
         }
+      },
+    },
+
+    git: {
+      async describe(request) {
+        return gitOp(request, request.payload.sessionId, (session, workspace) =>
+          describeSessionGit(workspace.path, session))
+      },
+      async checkout(request) {
+        return gitOp(request, request.payload.sessionId, (session, workspace) =>
+          checkoutSessionBranch(workspace.id, workspace.path, session, request.payload.branch), request.payload.branch)
+      },
+      async createBranch(request) {
+        return gitOp(request, request.payload.sessionId, (session, workspace) =>
+          createSessionBranch(workspace.id, workspace.path, session, request.payload.branch), request.payload.branch)
       },
     },
 

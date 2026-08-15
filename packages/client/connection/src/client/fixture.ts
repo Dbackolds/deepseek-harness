@@ -2746,6 +2746,26 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         return ok(request, { workspace: { ...workspace } })
       },
     },
+    git: {
+      describe: request => ok(request, {
+        currentBranch: 'main',
+        worktreePath: '/tmp/fixture',
+        isolated: false,
+        branches: [{ name: 'main', current: true, remote: false }],
+      }),
+      checkout: request => ok(request, {
+        currentBranch: request.payload.branch,
+        worktreePath: '/tmp/fixture',
+        isolated: request.payload.branch !== 'main',
+        branches: [{ name: request.payload.branch, current: true, remote: false }],
+      }),
+      createBranch: request => ok(request, {
+        currentBranch: request.payload.branch,
+        worktreePath: '/tmp/fixture',
+        isolated: true,
+        branches: [{ name: request.payload.branch, current: true, remote: false }],
+      }),
+    },
     agentPresets: {
       // Both trusts appear, because a surface must present a locally authored
       // preset differently from one the deployment vetted.
@@ -3221,6 +3241,9 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.addFolder': return this.api.workspace.addFolder(request)
       case 'workspace.removeFolder': return this.api.workspace.removeFolder(request)
       case 'skill.list': return this.api.skills.list(request)
+      case 'git.describe': return this.api.git.describe(request)
+      case 'git.checkout': return this.api.git.checkout(request)
+      case 'git.createBranch': return this.api.git.createBranch(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)
       case 'agentPreset.read': return this.api.agentPresets.read(request)
