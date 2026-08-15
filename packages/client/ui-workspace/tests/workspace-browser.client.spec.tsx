@@ -148,6 +148,7 @@ describe('WorkspaceBrowser', () => {
     expect(b.store.getSnapshot().groupBy).toBe('flat')
     expect(screen.getByText('会话')).toBeTruthy()
     expect(screen.queryByText('alpha')).toBeNull()
+    expect(screen.getByRole('heading', { name: '历史记录' })).toBeTruthy()
     expect(screen.getByText('alpha-s')).toBeTruthy()
     expect(screen.getByText('beta-s')).toBeTruthy()
 
@@ -219,6 +220,34 @@ describe('WorkspaceBrowser', () => {
     ])
   })
 
+  it('splits the flat list into Completed, Running, and History and folds History after five rows', () => {
+    const items = [
+      summary('done-a', 9, { completed: true }),
+      summary('done-b', 8, { completed: true }),
+      summary('live', 7, { running: true }),
+      summary('waiting', 6, { pendingInteraction: 'question' }),
+      ...Array.from({ length: 6 }, (_, index) => summary(`old-${index + 1}`, 5 - index)),
+    ]
+    mount({
+      useSessions: hook(sessionState(items)),
+      useWorkspaces: hook(workspaceState([workspace('alpha', items.map(item => item.id))])),
+    })
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    expect(screen.getByRole('heading', { name: '已完成' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '运行中' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '历史记录' })).toBeTruthy()
+    expect(screen.getByText('done-a')).toBeTruthy()
+    expect(screen.getByText('done-b')).toBeTruthy()
+    expect(screen.getByText('live')).toBeTruthy()
+    expect(screen.getByText('waiting')).toBeTruthy()
+    expect(screen.getByText('old-1')).toBeTruthy()
+    expect(screen.getByText('old-5')).toBeTruthy()
+    expect(screen.queryByText('old-6')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '展开其余 1 个会话' }))
+    expect(screen.getByText('old-6')).toBeTruthy()
+  })
+
   it('expands a group on click and opens a session row', () => {
     const open = vi.fn()
     mount({
@@ -245,6 +274,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('session-6')).toBeNull()
     expect(screen.queryByText('session-7')).toBeNull()
 
+    expect(screen.getByRole('heading', { name: '历史记录' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '展开其余 2 个会话' }))
     expect(screen.getByText('session-6')).toBeTruthy()
     expect(screen.getByText('session-7')).toBeTruthy()

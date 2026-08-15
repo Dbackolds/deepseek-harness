@@ -69,11 +69,14 @@ describe('WorkspaceBrowser.module.css list', () => {
     expect(list!.get('scrollbar-gutter')).toBe('stable')
   })
 
-  it('keeps 2px between rows and 4px between workspace groups', () => {
-    expect(declarations('.flatList > * + *')?.get('margin-top')).toBe('2px')
+  it('keeps 2px between rows and 8px between activity and workspace groups', () => {
+    expect(declarations('.activitySection > * + *')?.get('margin-top')).toBe('2px')
     expect(declarations(".searchTree > [role='treeitem'] + [role='treeitem']")?.get('margin-top')).toBe('2px')
-    expect(declarations('.groupSection > * + *')?.get('margin-top')).toBe('2px')
-    expect(declarations('.groupSection + .groupSection')?.get('margin-top')).toBe('4px')
+    expect(declarations('.flatList > .activitySection + .activitySection')?.get('margin-top')).toBe('8px')
+    expect(declarations('.groupSection > .activitySection + .activitySection')?.get('margin-top')).toBe('8px')
+    expect(declarations('.groupSection + .groupSection')?.get('margin-top')).toBe('8px')
+    expect(declarations('.activityHeading')?.get('height')).toBe('24px')
+    expect(declarations('.activityHeading')?.get('margin')).toBe('0')
   })
 
   it('draws drag targets as a leading chevron joined to the insertion line', () => {

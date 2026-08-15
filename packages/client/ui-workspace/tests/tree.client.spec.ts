@@ -3,7 +3,8 @@ import type {
   SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, workspaceLabel, relativeTime,
+  deriveFlat, deriveGroups, deriveSearchResults, partitionSessionActivity, sessionActivityBucket,
+  workspaceLabel, relativeTime,
   UNGROUPED_KEY, UNGROUPED_LABEL,
 } from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
@@ -397,6 +398,41 @@ describe('deriveSearchResults', () => {
     expect(backendMore.hasMore).toBe(true)
     expect(deriveSearchResults(list(), [], '  ', noArchive, { items: [], hasMore: true }, 3))
       .toEqual({ items: [], hasMore: false })
+  })
+})
+
+describe('sessionActivityBucket', () => {
+  it('puts live work in Running ahead of an unviewed completion reminder', () => {
+    const unread = { pendingInteraction: undefined, running: false, runningSubagentCount: 0, completed: true }
+    const waiting = { pendingInteraction: 'question' as const, running: false, runningSubagentCount: 0, completed: true }
+    const ownRun = { pendingInteraction: undefined, running: true, runningSubagentCount: 0, completed: true }
+    const descendant = { pendingInteraction: undefined, running: false, runningSubagentCount: 1, completed: true }
+    const history = { pendingInteraction: undefined, running: false, runningSubagentCount: 0, completed: false }
+    expect(sessionActivityBucket(unread)).toBe('unread')
+    expect(sessionActivityBucket(waiting)).toBe('running')
+    expect(sessionActivityBucket(ownRun)).toBe('running')
+    expect(sessionActivityBucket(descendant)).toBe('running')
+    expect(sessionActivityBucket(history)).toBe('history')
+  })
+})
+
+describe('partitionSessionActivity', () => {
+  it('keeps Completed, Running, and History in that order and preserves empty sections', () => {
+    const sessions = [
+      { id: sid('done'), title: 'done', blank: false, running: false, runningSubagentCount: 0, completed: true, updatedAt: 3 },
+      { id: sid('live'), title: 'live', blank: false, running: true, runningSubagentCount: 0, completed: false, updatedAt: 2 },
+      { id: sid('read'), title: 'read', blank: false, running: false, runningSubagentCount: 0, completed: false, updatedAt: 1 },
+    ]
+    expect(partitionSessionActivity(sessions).map(section => [section.bucket, section.sessions.map(row => row.id)])).toEqual([
+      ['unread', [sid('done')]],
+      ['running', [sid('live')]],
+      ['history', [sid('read')]],
+    ])
+    expect(partitionSessionActivity([]).map(section => [section.bucket, section.sessions])).toEqual([
+      ['unread', []],
+      ['running', []],
+      ['history', []],
+    ])
   })
 })
 
