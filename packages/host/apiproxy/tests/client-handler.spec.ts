@@ -93,6 +93,11 @@ function scriptedApi(overrides: {
       removeFolder: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', folders: [], title: 't', sessionIds: [], createdAt: '0', updatedAt: '0' } }),
     },
     skills: { list: r => ok(r, { skills: [] }), ...overrides.skills },
+    git: {
+      describe: r => ok(r, { currentBranch: 'main', worktreePath: '/t', isolated: false, branches: [] }),
+      checkout: r => ok(r, { currentBranch: r.payload.branch, worktreePath: '/t', isolated: false, branches: [] }),
+      createBranch: r => ok(r, { currentBranch: r.payload.branch, worktreePath: '/t', isolated: true, branches: [] }),
+    },
     agentPresets: {
       list: r => ok(r, { presets: [], authorable: false, hasDocument: false }),
       select: r => ok(r, { agentPreset: r.payload.agentPreset }),
