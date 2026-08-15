@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { findRepoRoot, resolveDshInvocation, resolveNodeExecutable } from '../src/host.ts'
@@ -19,7 +20,7 @@ describe('desktop host resolution', () => {
   })
 
   it('rejects a directory that is not this checkout', () => {
-    expect(() => findRepoRoot(join('C:\\', 'Windows'))).toThrow(/cannot locate the repository root/)
+    expect(() => findRepoRoot(join(tmpdir(), 'dsh-desktop-not-a-checkout'))).toThrow(/cannot locate the repository root/)
   })
 
   it('ships the DeepSeek whale mark next to the desktop package', () => {

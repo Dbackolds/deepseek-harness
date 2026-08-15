@@ -1,19 +1,26 @@
 /**
- * Electron main process: one frameless window around a local `dsh web` Host.
+ * Electron main process: one custom-chrome window around a local `dsh web` Host.
  * @module @deepseek-ai/dsh-desktop/main
  */
 
-import { app, BrowserWindow, ipcMain, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell } from 'electron'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { startWebHost, stopWebHost, type StartedHost } from './host.ts'
 import { APP_USER_MODEL_ID, desktopIconPath } from './icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from './shortcut.ts'
-import { TITLEBAR_HEIGHT_PX, loadingPage, titlebarInjectScript } from './titlebar.ts'
+import {
+  TITLEBAR_HEIGHT_PX,
+  loadingPage,
+  titlebarInjectScript,
+  titlebarVariantForPlatform,
+} from './titlebar.ts'
 
 const WINDOW_TITLE = 'DeepSeek Harness'
 const PRELOAD = fileURLToPath(new URL('./preload.js', import.meta.url))
+const IS_MAC = process.platform === 'darwin'
+const TITLEBAR_VARIANT = titlebarVariantForPlatform(process.platform)
 
 /** Last successful workspace and Node path, kept next to Electron's userData. */
 function workspaceMemoryPath(): string {
@@ -65,6 +72,22 @@ function extraWebArgs(): string[] {
 }
 
 function createWindow(): BrowserWindow {
+  // On macOS the native traffic lights sit in the reserved left side of the
+  // title bar; elsewhere the system caption-button overlay sits on the right.
+  const chrome = IS_MAC
+    ? {
+      titleBarStyle: 'hiddenInset' as const,
+      trafficLightPosition: { x: 12, y: Math.floor((TITLEBAR_HEIGHT_PX - 14) / 2) },
+      vibrancy: 'under-window' as const,
+    }
+    : {
+      titleBarStyle: 'hidden' as const,
+      titleBarOverlay: {
+        color: '#151517',
+        symbolColor: '#ececf1',
+        height: TITLEBAR_HEIGHT_PX,
+      },
+    }
   return new BrowserWindow({
     width: 1440,
     height: 900,
@@ -74,12 +97,7 @@ function createWindow(): BrowserWindow {
     icon: nativeImage.createFromPath(desktopIconPath()),
     backgroundColor: '#151517',
     frame: false,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#151517',
-      symbolColor: '#ececf1',
-      height: TITLEBAR_HEIGHT_PX,
-    },
+    ...chrome,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -89,6 +107,48 @@ function createWindow(): BrowserWindow {
       sandbox: true,
     },
   })
+}
+
+/**
+ * Standard macOS application menu. `role` items carry their own Cmd shortcuts.
+ */
+function installApplicationMenu(): void {
+  if (!IS_MAC) return
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      role: 'window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'close' },
+      ],
+    },
+  ]))
 }
 
 function bindWindowChrome(window: BrowserWindow): void {
@@ -102,7 +162,7 @@ function bindWindowChrome(window: BrowserWindow): void {
 
 function attachTitlebar(window: BrowserWindow): void {
   window.webContents.on('did-finish-load', () => {
-    void window.webContents.executeJavaScript(titlebarInjectScript())
+    void window.webContents.executeJavaScript(titlebarInjectScript(TITLEBAR_VARIANT))
   })
 }
 
@@ -133,10 +193,53 @@ function publishWindowsShortcut(): void {
   }
 }
 
+/** One Host start, handed to {@link presentWindow} for display. */
+interface HostLaunch {
+  /** Working directory the Host was spawned in. */
+  cwd: string
+  /** Promise that resolves when the Host prints its readiness URL. */
+  ready: Promise<StartedHost>
+}
+
+function startHost(memory: LaunchMemory): HostLaunch {
+  const cwd = resolveWorkspace(memory)
+  return {
+    cwd,
+    ready: startWebHost({
+      cwd,
+      extraArgs: extraWebArgs(),
+      ...memory.node === undefined ? {} : { nodePath: memory.node },
+    }),
+  }
+}
+
+/** Create a window, then mount the launched Host into it (or its failure page). */
+async function presentWindow(launch: HostLaunch): Promise<void> {
+  const window = createWindow()
+  bindWindowChrome(window)
+  attachTitlebar(window)
+  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingPage(TITLEBAR_VARIANT))}`)
+  window.show()
+  try {
+    host = await launch.ready
+    rememberLaunch(launch.cwd, host.child.spawnfile)
+    fenceNavigation(window, host.ready.href)
+    await window.loadURL(host.ready.href)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(
+      loadingPage(TITLEBAR_VARIANT).replace('正在启动 DeepSeek Harness…', message),
+    )}`)
+  }
+}
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
+  app.name = WINDOW_TITLE
+  installApplicationMenu()
+
   app.on('second-instance', () => {
     const window = BrowserWindow.getAllWindows()[0]
     if (window === undefined) return
@@ -144,38 +247,24 @@ if (!gotLock) {
     window.focus()
   })
 
-  const memory = readLaunchMemory()
-  const cwd = resolveWorkspace(memory)
   // Start the Host before Chromium is ready so plugin boot overlaps window creation.
-  const hostReady = startWebHost({
-    cwd,
-    extraArgs: extraWebArgs(),
-    ...memory.node === undefined ? {} : { nodePath: memory.node },
-  })
+  const firstLaunch = startHost(readLaunchMemory())
 
   void app.whenReady().then(async () => {
     if (process.platform === 'win32') publishWindowsShortcut()
-    const window = createWindow()
-    bindWindowChrome(window)
-    attachTitlebar(window)
-    void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingPage())}`)
-    window.show()
-    try {
-      host = await hostReady
-      rememberLaunch(cwd, host.child.spawnfile)
-      fenceNavigation(window, host.ready.href)
-      await window.loadURL(host.ready.href)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(
-        loadingPage().replace('正在启动 DeepSeek Harness…', message),
-      )}`)
-    }
+    await presentWindow(firstLaunch)
+  })
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length > 0) return
+    void presentWindow(startHost(readLaunchMemory()))
   })
 
   app.on('window-all-closed', () => {
     if (host !== undefined) stopWebHost(host.child)
-    app.quit()
+    host = undefined
+    // macOS keeps the dock process alive; the dock icon reopens the window.
+    if (!IS_MAC) app.quit()
   })
 
   app.on('before-quit', () => {

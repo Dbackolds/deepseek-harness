@@ -41,7 +41,9 @@ export function windowsShortcutSpec(options: {
     args: JSON.stringify(options.desktopRoot),
     cwd: options.desktopRoot,
     description: 'DeepSeek Harness',
-    icon: desktopIconPath(join(options.desktopRoot, 'src')),
+    // The shortcut only runs on Windows, so it takes the ICO even when
+    // authored from a non-win32 development host.
+    icon: desktopIconPath(join(options.desktopRoot, 'src'), 'win32'),
     iconIndex: 0,
     appUserModelId: APP_USER_MODEL_ID,
   }

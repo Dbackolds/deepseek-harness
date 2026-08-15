@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Electron window around the local `dsh web` Host. The chat UI stays the official Web GUI; this package only owns the frameless window, Host process, and title-bar chrome.
+Electron window around the local `dsh web` Host. The chat UI stays the official Web GUI; this package only owns the window, Host process, and title-bar chrome.
 
 ## Run
 
@@ -19,6 +19,8 @@ pnpm dsh desktop
 ```
 
 The window starts `dsh web --port 0` as soon as the Electron process exists, so Host boot overlaps Chromium ready. It loads the loopback URL as soon as the HTTP server prints `dsh web: http://127.0.0.1:<port>`; later Host rows keep mounting while the browser boot kernel waits for client plugins. Closing the window stops the Host. Windows uses the system caption overlay for minimize, maximize, and close. The taskbar and window icon is the same DeepSeek whale mark as the Web favicon. On Windows, the first launch writes `DeepSeek Harness.lnk` into the Start menu with that icon and AppUserModelID; pin that shortcut, not a raw `electron.exe` process.
+
+On macOS the window uses `titleBarStyle: hiddenInset`: the native traffic lights sit in the reserved left side of the title bar, and a standard application menu (Edit roles, Window roles, Quit) provides the usual Cmd shortcuts. Closing the window keeps the dock process alive; clicking the dock icon reopens the window and restarts the Host.
 
 ## Known Limitations and Deferred Work
 
