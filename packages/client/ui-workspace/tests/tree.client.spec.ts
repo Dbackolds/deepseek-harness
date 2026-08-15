@@ -403,11 +403,11 @@ describe('deriveSearchResults', () => {
 
 describe('sessionActivityBucket', () => {
   it('puts live work in Running ahead of an unviewed completion reminder', () => {
-    const unread = { pendingInteraction: undefined, running: false, runningSubagentCount: 0, completed: true }
+    const unread = { running: false, runningSubagentCount: 0, completed: true }
     const waiting = { pendingInteraction: 'question' as const, running: false, runningSubagentCount: 0, completed: true }
-    const ownRun = { pendingInteraction: undefined, running: true, runningSubagentCount: 0, completed: true }
-    const descendant = { pendingInteraction: undefined, running: false, runningSubagentCount: 1, completed: true }
-    const history = { pendingInteraction: undefined, running: false, runningSubagentCount: 0, completed: false }
+    const ownRun = { running: true, runningSubagentCount: 0, completed: true }
+    const descendant = { running: false, runningSubagentCount: 1, completed: true }
+    const history = { running: false, runningSubagentCount: 0, completed: false }
     expect(sessionActivityBucket(unread)).toBe('unread')
     expect(sessionActivityBucket(waiting)).toBe('running')
     expect(sessionActivityBucket(ownRun)).toBe('running')
