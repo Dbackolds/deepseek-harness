@@ -301,6 +301,33 @@ describe('SystemPrompt', () => {
     ])
   })
 
+  it('runs afterAssemble hooks after a complete section is restored', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    ctx.systemPrompt.section({ name: 'complete', order: 10, text: 'Exact prompt.', complete: true })
+    ctx.systemPrompt.afterAssemble(assembly => ({
+      ...assembly,
+      sections: [{ name: 'user:override', text: 'User override.' }],
+    }))
+
+    expect((await ctx.systemPrompt.assemble()).sections).toEqual([
+      { name: 'user:override', text: 'User override.' },
+    ])
+  })
+
+  it('unregisters an afterAssemble hook when its effect disposes', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    const dispose = ctx.systemPrompt.afterAssemble(assembly => ({
+      ...assembly,
+      sections: [{ name: 'user:override', text: 'gone' }],
+    }))
+    dispose()
+
+    expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name))
+      .toEqual(['harness:identity', 'deployment:persona'])
+  })
+
   it('rejects multiple effective complete sections', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)

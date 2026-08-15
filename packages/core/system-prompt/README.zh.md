@@ -22,7 +22,8 @@
 - `ctx.systemPrompt.suppressRuntimeContext(): () => void`：抑制调用作用域的所有动态上下文贡献。多个注册会独立组合；只有当不再存在抑制器时，dispose 返回的 effect 才会恢复上下文。
 - `ctx.systemPrompt.tools(provider: (context: AssembleContext) => ToolProviderResult): () => void`：贡献工具 schema；每次组装时使用该次组装的上下文求值。`ToolProviderResult` = `{ schemas, knownNames? }`：`schemas` 是限制后的可见集合；`knownNames` 是限制前由 `toolOrder` 使用的全集。提供方不得返回名为 `TOOL_ORDER_REST` 的 schema。带作用域提供方只在其作用域的组装中查询。随调用 fiber 一并 dispose。
 - `ctx.systemPrompt.variable(name: string, provider: (context) => string | undefined): () => void`：贡献提示词变量，在段文本中以 `{{name}}` 引用。带作用域变量会为该 agent 遮蔽同名全局变量。同层重复或无法引用的名称会抛出；`undefined` 表示「本次组装没有值」。随调用 fiber 一并 dispose。
-- `ctx.systemPrompt.assemble(context?: AssembleContext): Promise<PromptAssembly>`：为一个调用方组装提示词：将全局层与 `context.scope` 的层合并，并在变换 waterfall 前分离工具 schema。它经过按作用域筛选的 `system-prompt/assemble` waterfall，之后将一个有效的 complete 段恢复为唯一的提示词段，并实施任何活动的 runtime-context 抑制器。可选的 `context.signal` 显式控制本次组装请求；提供方与监听器可以配合该信号，但不得将它保留给另一轮次。存在多个 complete 段、已配置的 `toolOrder` 指名提供方 `knownNames` 全集以外的工具，或提供方返回保留的其余项名称时，调用会被拒绝。
+- `ctx.systemPrompt.afterAssemble(hook): () => void`：注册一个在 waterfall 之后、以及有效 complete 段还原之后运行的变换。当一份贡献必须看到——并可能替换——模型本来会收到的提示词时使用。注册和释放会发出 `system-prompt/change`。
+- `ctx.systemPrompt.assemble(context?: AssembleContext): Promise<PromptAssembly>`：为一个调用方组装提示词：将全局层与 `context.scope` 的层合并，并在变换 waterfall 前分离工具 schema。它经过按作用域筛选的 `system-prompt/assemble` waterfall，之后将一个有效的 complete 段恢复为唯一的提示词段，并实施任何活动的 runtime-context 抑制器。已注册的 `afterAssemble` hook 随后按注册顺序运行，并可以替换该还原后的提示词。可选的 `context.signal` 显式控制本次组装请求；提供方与监听器可以配合该信号，但不得将它保留给另一轮次。存在多个 complete 段、已配置的 `toolOrder` 指名提供方 `knownNames` 全集以外的工具，或提供方返回保留的其余项名称时，调用会被拒绝。
 
 <a id="live-events"></a>
 
@@ -86,7 +87,7 @@ schema token 在每次请求中重复。限制工具会为该 agent 移除其全
 
 ## 已知限制与暂缓事项
 
-- **部署方编写的提示词文本只来自配置／组合**：此插件拥有全局 persona 默认值；创建方插件可以注册 agent 作用域的遮蔽项；其他段来自拥有相应事实的插件。不存在终端用户提示词编辑 API。
+- **部署方编写的提示词文本只来自配置／组合**：此插件拥有全局 persona 默认值；创建方插件可以注册 agent 作用域的遮蔽项；其他段来自拥有相应事实的插件。终端用户库编辑位于 [`dsh-user-system-prompts`](../user-system-prompts/README.md)，它在 `afterAssemble` 之后应用。
 - **没有表示字面量 `{{…}}` 花括号的转义语法**：每个完整组都会按已注册变量插值；只有实际提示词需要转义时才会实现。
 - **`toolOrder` 配置错误在提示词组装（首轮）时出现，而不是启动时**：只有形状违规会在配置加载时抛出。
 - **共享同一 `order` 值的段按注册顺序打破平局**：这是插件加载产物；确定性依赖在顺序分段内使用不同值的约定，与已规范化的工具顺序不同。

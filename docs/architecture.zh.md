@@ -44,6 +44,7 @@ dsh --profile web --dump-config
 |---|---|---|
 | [`core/session`](subsystems/session.md) | 仅追加的 `SessionEvent` 日志和内存存储 | `ctx.sessions` |
 | [`core/system-prompt`](subsystems/system-prompt.md) | 提示词片段与工具 schema 的组装 | `ctx.systemPrompt` |
+| [`core/user-system-prompts`](../packages/core/user-system-prompts/README.md) | 用户编写的系统提示词库与按模型组装 | `ctx.userSystemPrompts` |
 | [`core/tools`](subsystems/tools.md) | 作用域化的工具注册表和带把关的执行流水线 | `ctx.tools` |
 | [`core/agent`](subsystems/core.md) | `Agent` 接口、活跃 agent 注册表和 `agent/*` 事件 | `ctx.agents` |
 | [`core/agent-loop`](subsystems/core.md) | 实现该接口的默认驱动器 | `ctx.agentLoop` |

@@ -1,0 +1,441 @@
+/**
+ * System-prompt settings page store: the library and bindings from the
+ * `user-system-prompts` namespace, plus the host model catalog used to pick
+ * which models can be assembled.
+ */
+
+import type { IApiClient, ModelProviderGroup, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+
+/** Settings namespace this page reads and writes. */
+export const USER_SYSTEM_PROMPTS_NS = 'user-system-prompts'
+
+/** One library entry as the page stores it. */
+export interface PromptRow {
+  id: string
+  name: string
+  text: string
+}
+
+/** One model's selected prompts and override policy. */
+export interface BindingRow {
+  provider: string
+  model: string
+  promptIds: string[]
+  override: boolean
+}
+
+/** One catalog model the page can assemble. */
+export interface CatalogModel {
+  provider: string
+  providerName: string
+  model: string
+  modelName: string
+}
+
+/** Draft for create or edit. */
+export interface PromptDraft {
+  id: string | null
+  name: string
+  text: string
+  error: string | null
+  saving: boolean
+}
+
+/** Page snapshot. */
+export interface SystemPromptsState {
+  status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error'
+  error: string | null
+  catalogError: string | null
+  writable: boolean
+  revision: number
+  prompts: readonly PromptRow[]
+  bindings: readonly BindingRow[]
+  catalog: readonly CatalogModel[]
+  draft: PromptDraft | null
+  pendingDelete: string | null
+  deleting: boolean
+}
+
+/** Human text for a rejected wire call. */
+export function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** Prompt id: lowercase start, then letters, digits, hyphens, or underscores. */
+const PROMPT_ID = /^[a-z][a-z0-9_-]*$/
+
+/**
+ * Mint a unique library id from a display name.
+ * @param name - display name the user typed.
+ * @param existing - ids already in the library.
+ * @returns a unique slug, falling back to `prompt` when the name has no letters.
+ */
+export function slugFromName(name: string, existing: readonly string[]): string {
+  const taken = new Set(existing)
+  const base = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/^[^a-z]+/, '')
+  const root = base.length > 0 && PROMPT_ID.test(base) ? base : 'prompt'
+  if (!taken.has(root)) return root
+  let n = 2
+  while (taken.has(`${root}-${String(n)}`)) n += 1
+  return `${root}-${String(n)}`
+}
+
+/**
+ * Binding for one catalog model, or an empty selection when none is stored.
+ * @param bindings - stored bindings.
+ * @param provider - provider route.
+ * @param model - model id.
+ * @returns the stored or empty binding.
+ */
+export function bindingFor(
+  bindings: readonly BindingRow[],
+  provider: string,
+  model: string,
+): BindingRow {
+  return bindings.find(entry => entry.provider === provider && entry.model === model)
+    ?? { provider, model, promptIds: [], override: false }
+}
+
+function asPromptRows(value: unknown): PromptRow[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const row = entry as { id?: unknown; name?: unknown; text?: unknown }
+    if (typeof row.id !== 'string' || typeof row.name !== 'string') return []
+    return [{ id: row.id, name: row.name, text: typeof row.text === 'string' ? row.text : '' }]
+  })
+}
+
+function asBindingRows(value: unknown): BindingRow[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const row = entry as { provider?: unknown; model?: unknown; promptIds?: unknown; override?: unknown }
+    if (typeof row.provider !== 'string' || typeof row.model !== 'string') return []
+    const promptIds = Array.isArray(row.promptIds)
+      ? row.promptIds.filter((id): id is string => typeof id === 'string')
+      : []
+    return [{
+      provider: row.provider,
+      model: row.model,
+      promptIds,
+      override: row.override === true,
+    }]
+  })
+}
+
+function catalogFrom(groups: readonly ModelProviderGroup[]): CatalogModel[] {
+  return groups.flatMap(group => group.models.map(model => ({
+    provider: group.id,
+    providerName: group.name,
+    model: model.id,
+    modelName: model.name,
+  })))
+}
+
+/** Controller joining Settings reads, writes, and the model catalog. */
+export class SystemPromptsStore {
+  /** Page snapshot consumed through a bound selector hook. */
+  readonly store: SnapshotStore<SystemPromptsState> = createSnapshotStore({
+    status: 'idle',
+    error: null,
+    catalogError: null,
+    writable: false,
+    revision: 0,
+    prompts: [],
+    bindings: [],
+    catalog: [],
+    draft: null,
+    pendingDelete: null,
+    deleting: false,
+  })
+
+  private generation = 0
+  private view: SettingsNamespaceView | undefined
+
+  /** @param api - Settings and model-catalog wire faces. */
+  constructor(private readonly api: Pick<IApiClient, 'settings' | 'llm'>) {}
+
+  /**
+   * Refresh the namespace and catalog. Latest request wins.
+   * @returns nothing; {@link store} carries success or failure.
+   */
+  async load(): Promise<void> {
+    const generation = ++this.generation
+    this.store.update((state) => {
+      state.status = 'loading'
+      state.error = null
+      state.catalogError = null
+    })
+    try {
+      const [settingsResponse, modelsResponse] = await Promise.all([
+        this.api.settings.describe({}),
+        this.api.llm.models({}),
+      ])
+      if (generation !== this.generation) return
+      if (!settingsResponse.result.ok) throw new Error(settingsResponse.result.error.message)
+      const view = settingsResponse.result.value.namespaces.find(entry => entry.ns === USER_SYSTEM_PROMPTS_NS)
+      if (view === undefined) {
+        this.view = undefined
+        this.store.update((state) => {
+          state.status = 'unavailable'
+          state.writable = false
+          state.prompts = []
+          state.bindings = []
+          state.catalog = []
+        })
+        return
+      }
+      let catalog: CatalogModel[] = []
+      let catalogError: string | null = null
+      if (!modelsResponse.result.ok) {
+        catalogError = modelsResponse.result.error.message
+      } else {
+        catalog = catalogFrom(modelsResponse.result.value.groups)
+      }
+      this.accept(view, settingsResponse.result.value.writable, catalog, catalogError)
+    } catch (error) {
+      if (generation !== this.generation) return
+      this.fail(error)
+    }
+  }
+
+  /** Open a create draft. */
+  beginCreate(): void {
+    this.store.update((state) => {
+      state.draft = { id: null, name: '', text: '', error: null, saving: false }
+    })
+  }
+
+  /**
+   * Open an edit draft over one library entry.
+   * @param id - library id.
+   */
+  beginEdit(id: string): void {
+    const prompt = this.store.getSnapshot().prompts.find(entry => entry.id === id)
+    if (prompt === undefined) return
+    this.store.update((state) => {
+      state.draft = { id, name: prompt.name, text: prompt.text, error: null, saving: false }
+    })
+  }
+
+  /** Close the create/edit dialog. */
+  cancelDraft(): void {
+    this.store.update((state) => {
+      state.draft = null
+    })
+  }
+
+  /**
+   * Update the draft name.
+   * @param name - typed display name.
+   */
+  setDraftName(name: string): void {
+    this.store.update((state) => {
+      if (state.draft === null) return
+      state.draft.name = name
+      state.draft.error = null
+    })
+  }
+
+  /**
+   * Update the draft text.
+   * @param text - typed prompt body.
+   */
+  setDraftText(text: string): void {
+    this.store.update((state) => {
+      if (state.draft === null) return
+      state.draft.text = text
+      state.draft.error = null
+    })
+  }
+
+  /**
+   * Persist the open draft.
+   * @returns nothing; {@link store} carries success or failure.
+   */
+  async saveDraft(): Promise<void> {
+    const state = this.store.getSnapshot()
+    const draft = state.draft
+    if (draft === null || !state.writable) return
+    const name = draft.name.trim()
+    const text = draft.text.trim()
+    if (name.length === 0) {
+      this.store.update((current) => {
+        if (current.draft === null) return
+        current.draft.error = 'nameRequired'
+      })
+      return
+    }
+    if (text.length === 0) {
+      this.store.update((current) => {
+        if (current.draft === null) return
+        current.draft.error = 'textRequired'
+      })
+      return
+    }
+    const prompts = [...state.prompts]
+    if (draft.id === null) {
+      prompts.push({ id: slugFromName(name, prompts.map(entry => entry.id)), name, text })
+    } else {
+      const index = prompts.findIndex(entry => entry.id === draft.id)
+      const existing = index < 0 ? undefined : prompts[index]
+      if (existing === undefined) return
+      prompts[index] = { ...existing, name, text }
+    }
+    this.store.update((current) => {
+      if (current.draft === null) return
+      current.draft.saving = true
+      current.draft.error = null
+    })
+    await this.write({ prompts, bindings: [...state.bindings] }, () => {
+      this.store.update((current) => { current.draft = null })
+    })
+  }
+
+  /**
+   * Ask for delete confirmation, or dismiss it with null.
+   * @param id - library id, or null to dismiss.
+   */
+  confirmDelete(id: string | null): void {
+    this.store.update((state) => {
+      state.pendingDelete = id
+      state.deleting = false
+    })
+  }
+
+  /**
+   * Delete the prompt awaiting confirmation and drop it from every binding.
+   * @returns nothing; {@link store} carries success or failure.
+   */
+  async remove(): Promise<void> {
+    const state = this.store.getSnapshot()
+    const id = state.pendingDelete
+    if (id === null || !state.writable) return
+    this.store.update((current) => { current.deleting = true })
+    const prompts = state.prompts.filter(entry => entry.id !== id)
+    const bindings = state.bindings
+      .map(entry => ({ ...entry, promptIds: entry.promptIds.filter(promptId => promptId !== id) }))
+      .filter(entry => entry.promptIds.length > 0 || entry.override)
+    await this.write({ prompts, bindings }, () => {
+      this.store.update((current) => {
+        current.pendingDelete = null
+        current.deleting = false
+      })
+    })
+  }
+
+  /**
+   * Replace one model's selected prompt ids.
+   * @param provider - provider route.
+   * @param model - model id.
+   * @param promptIds - ordered library ids.
+   */
+  async setPromptIds(provider: string, model: string, promptIds: readonly string[]): Promise<void> {
+    await this.updateBinding(provider, model, current => ({ ...current, promptIds: [...promptIds] }))
+  }
+
+  /**
+   * Toggle whether one model replaces the assembled prompt.
+   * @param provider - provider route.
+   * @param model - model id.
+   * @param override - whether selected texts replace the assembled prompt.
+   */
+  async setOverride(provider: string, model: string, override: boolean): Promise<void> {
+    await this.updateBinding(provider, model, current => ({ ...current, override }))
+  }
+
+  /** Stop in-flight responses from publishing after plugin disposal. */
+  dispose(): void {
+    this.generation += 1
+    this.view = undefined
+  }
+
+  private async updateBinding(
+    provider: string,
+    model: string,
+    next: (current: BindingRow) => BindingRow,
+  ): Promise<void> {
+    const state = this.store.getSnapshot()
+    if (!state.writable) return
+    const current = bindingFor(state.bindings, provider, model)
+    const updated = next(current)
+    const empty = updated.promptIds.length === 0 && !updated.override
+    const bindings = state.bindings.filter(entry => !(entry.provider === provider && entry.model === model))
+    if (!empty) bindings.push(updated)
+    await this.write({ prompts: [...state.prompts], bindings })
+  }
+
+  private async write(
+    section: { prompts: PromptRow[]; bindings: BindingRow[] },
+    onSuccess?: () => void,
+  ): Promise<void> {
+    const view = this.view
+    if (view === undefined) return
+    const generation = ++this.generation
+    try {
+      const response = await this.api.settings.replace({
+        ns: USER_SYSTEM_PROMPTS_NS,
+        section,
+        expectedRevision: view.revision,
+      })
+      if (generation !== this.generation) return
+      if (!response.result.ok) throw new Error(response.result.error.message)
+      const snapshot = this.store.getSnapshot()
+      this.accept(response.result.value, snapshot.writable, snapshot.catalog, snapshot.catalogError)
+      onSuccess?.()
+    } catch (error) {
+      if (generation !== this.generation) return
+      this.store.update((state) => {
+        state.error = messageOf(error)
+        state.deleting = false
+        if (state.draft !== null) {
+          state.draft.saving = false
+          state.draft.error = messageOf(error)
+        }
+      })
+    }
+  }
+
+  private accept(
+    view: SettingsNamespaceView,
+    writable: boolean,
+    catalog: readonly CatalogModel[],
+    catalogError: string | null,
+  ): void {
+    const value = (view.value ?? {}) as { prompts?: unknown; bindings?: unknown }
+    this.view = view
+    this.store.update((state) => {
+      state.status = 'ready'
+      state.error = null
+      state.catalogError = catalogError
+      state.writable = writable
+      state.revision = view.revision
+      state.prompts = asPromptRows(value.prompts)
+      state.bindings = asBindingRows(value.bindings)
+      state.catalog = catalog
+    })
+  }
+
+  private fail(error: unknown): void {
+    this.store.update((state) => {
+      state.status = 'error'
+      state.error = messageOf(error)
+    })
+  }
+}
+
+/**
+ * Refetch only after the page has opened once.
+ * @param controller - page store.
+ */
+export function refreshIfLoaded(controller: SystemPromptsStore): void {
+  if (controller.store.getSnapshot().status === 'idle') return
+  void controller.load()
+}
