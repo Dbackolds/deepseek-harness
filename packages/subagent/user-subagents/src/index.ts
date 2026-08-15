@@ -87,11 +87,9 @@ export function validateUserSubagents(value: UserSubagentsSettings): void {
       throw new Error(`user subagent "${definition.id}" is listed more than once`)
     }
     seenIds.add(definition.id)
-    for (const name of definition.allow ?? []) {
-      if (name.length === 0) throw new Error(`user subagent "${definition.id}" has an empty allow name`)
-    }
-    for (const name of definition.deny ?? []) {
-      if (name.length === 0) throw new Error(`user subagent "${definition.id}" has an empty deny name`)
+    const filters = [...(definition.allow === undefined ? [] : definition.allow), ...(definition.deny === undefined ? [] : definition.deny)]
+    for (const name of filters) {
+      if (name.length === 0) throw new Error(`user subagent "${definition.id}" has an empty filter name`)
     }
   }
 }
