@@ -204,6 +204,26 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         }
       },
     },
+    git: {
+      describe(request: RpcRequest<{ sessionId: string }>) {
+        return Promise.resolve({
+          rpcId: request.rpcId,
+          result: { ok: true as const, value: { currentBranch: 'main', worktreePath: '/w', isolated: false, branches: [] } },
+        })
+      },
+      checkout(request: RpcRequest<{ sessionId: string; branch: string }>) {
+        return Promise.resolve({
+          rpcId: request.rpcId,
+          result: { ok: true as const, value: { currentBranch: request.payload.branch, worktreePath: '/w', isolated: false, branches: [] } },
+        })
+      },
+      createBranch(request: RpcRequest<{ sessionId: string; branch: string }>) {
+        return Promise.resolve({
+          rpcId: request.rpcId,
+          result: { ok: true as const, value: { currentBranch: request.payload.branch, worktreePath: '/w', isolated: true, branches: [] } },
+        })
+      },
+    },
     agentPresets: {
       list(request: RpcRequest<{}>) {
         return Promise.resolve({
