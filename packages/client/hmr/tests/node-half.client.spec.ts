@@ -9,7 +9,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebBootGraph, ClientModuleRegistry } from '@deepseek-ai/dsh-client-modules'
 import type { WebRoute, WebServer } from '@deepseek-ai/dsh-host-webserver'
-import { apply, Config, EVENTS_ENDPOINT, inject } from '../src/index.ts'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import { apply, Config, CLIENT_HMR_SETTINGS_NAMESPACE, EVENTS_ENDPOINT, RELOAD_ENDPOINT, inject } from '../src/index.ts'
 
 const POLL_MS = 20
 
@@ -58,6 +60,14 @@ function fakeClientModuleHost(rows: Map<string, string>, options: FakeHostOption
 
 // Structural fake: the plugin only touches register(); the service class
 // carries private state a literal cannot (and need not) reproduce.
+class MemorySettings extends SettingsProvider {
+  readonly writable = true
+  protected load(): Promise<Record<string, unknown>> { return Promise.resolve({}) }
+  protected persist(_ns: SettingsNamespace, _section: Record<string, unknown>): Promise<void> {
+    return Promise.resolve()
+  }
+}
+
 function fakeHttpServer(routes: WebRoute[]): WebServer {
   const fake: Pick<WebServer, 'register' | 'tapIndex' | 'port'> = {
     register(route) {
@@ -70,16 +80,35 @@ function fakeHttpServer(routes: WebRoute[]): WebServer {
   return fake as WebServer
 }
 
-async function mount(clientModuleHost: FakeHost, webServer: WebServer) {
+async function mount(clientModuleHost: FakeHost, webServer: WebServer, withSettings = false) {
   const ctx = new Context()
   ctx.provide('clientModules', clientModuleHost)
   ctx.provide('webServer', webServer)
+  if (withSettings) await ctx.plugin(MemorySettings).await()
   const fiber = ctx.plugin(
     { inject: [...inject], Config, apply },
     { pollIntervalMs: POLL_MS },
   )
   await fiber.await()
-  return fiber
+  return { ctx, fiber }
+}
+
+function findRoute(routes: WebRoute[], path: string): WebRoute {
+  const route = routes.find(entry => entry.path === path)
+  if (route === undefined) throw new Error(`missing route ${path}`)
+  return route
+}
+
+function fakeResponse() {
+  const writes: string[] = []
+  const res = {
+    writeHead() { return res },
+    write(chunk: string) { writes.push(chunk); return true },
+    end(chunk?: string) { if (chunk !== undefined) writes.push(chunk) },
+    on() { return res },
+    destroy() {},
+  }
+  return { res: res as unknown as ServerResponse, writes }
 }
 
 describe('hmr node half', () => {
@@ -88,10 +117,10 @@ describe('hmr node half', () => {
     writeFileSync(bundle, 'v1')
     const clientModuleHost = fakeClientModuleHost(new Map([['pkg-a', bundle]]))
     const routes: WebRoute[] = []
-    const fiber = await mount(clientModuleHost, fakeHttpServer(routes))
+    const { fiber } = await mount(clientModuleHost, fakeHttpServer(routes))
 
-    expect(routes).toHaveLength(1)
-    expect(routes[0]).toMatchObject({ kind: 'exact', path: EVENTS_ENDPOINT })
+    expect(routes).toHaveLength(2)
+    expect(routes.map(route => route.path)).toEqual([EVENTS_ENDPOINT, RELOAD_ENDPOINT])
     expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a'])
     clientModuleHost.rebuiltCalls.length = 0
 
@@ -115,7 +144,7 @@ describe('hmr node half', () => {
     writeFileSync(early, 'v1')
     const rows = new Map([['pkg-early', early]])
     const clientModuleHost = fakeClientModuleHost(rows)
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const { fiber } = await mount(clientModuleHost, fakeHttpServer([]))
     clientModuleHost.rebuiltCalls.length = 0
 
     writeFileSync(late, 'v1')
@@ -152,7 +181,7 @@ describe('hmr node half', () => {
       },
     })
 
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const { fiber } = await mount(clientModuleHost, fakeHttpServer([]))
 
     expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a'])
     clientModuleHost.rebuiltCalls.length = 0
@@ -168,7 +197,7 @@ describe('hmr node half', () => {
     utimesSync(bundle, fixedTime, fixedTime)
     const baseline = statSync(bundle)
     const clientModuleHost = fakeClientModuleHost(new Map([['pkg-a', bundle]]))
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const { fiber } = await mount(clientModuleHost, fakeHttpServer([]))
     clientModuleHost.rebuiltCalls.length = 0
 
     unlinkSync(bundle)
@@ -196,9 +225,58 @@ describe('hmr node half', () => {
       },
     })
 
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const { fiber } = await mount(clientModuleHost, fakeHttpServer([]))
 
     await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a', 'pkg-a']) }, { timeout: 3_000 })
+    await fiber.dispose()
+  })
+
+  it('does not broadcast rebuilt frames while autoReload is off and does after it turns on', async () => {
+    const bundle = join(dir, 'gated.js')
+    writeFileSync(bundle, 'v1')
+    const rebuiltListeners = new Set<(id: string, rev: string) => void>()
+    const rows = new Map([['pkg-a', bundle]])
+    const clientModuleHost = fakeClientModuleHost(rows)
+    clientModuleHost.onRebuilt = (listener) => {
+      rebuiltListeners.add(listener)
+      return () => { rebuiltListeners.delete(listener) }
+    }
+    const routes: WebRoute[] = []
+    const { ctx, fiber } = await mount(clientModuleHost, fakeHttpServer(routes), true)
+    const events = findRoute(routes, EVENTS_ENDPOINT)
+    const { res, writes } = fakeResponse()
+    void events.handler({ method: 'GET' } as IncomingMessage, res)
+    writes.length = 0
+    for (const listener of rebuiltListeners) listener('pkg-a', 'r2')
+    expect(writes).toEqual([])
+
+    await ctx.settings.update(settingsNamespace(CLIENT_HMR_SETTINGS_NAMESPACE), { autoReload: true })
+    for (const listener of rebuiltListeners) listener('pkg-a', 'r3')
+    expect(writes.some(chunk => chunk.includes('"type":"rebuilt"') && chunk.includes('"id":"pkg-a"'))).toBe(true)
+    await fiber.dispose()
+  })
+
+  it('rehashes watched bundles and broadcasts reload frames from POST /plugins/reload', async () => {
+    const bundle = join(dir, 'manual.js')
+    writeFileSync(bundle, 'v1')
+    const rows = new Map([['pkg-a', bundle]])
+    const clientModuleHost = fakeClientModuleHost(rows)
+    const routes: WebRoute[] = []
+    const { fiber } = await mount(clientModuleHost, fakeHttpServer(routes))
+    const events = findRoute(routes, EVENTS_ENDPOINT)
+    const reload = findRoute(routes, RELOAD_ENDPOINT)
+    const sse = fakeResponse()
+    void events.handler({ method: 'GET' } as IncomingMessage, sse.res)
+    sse.writes.length = 0
+    clientModuleHost.rebuiltCalls.length = 0
+    const posted = fakeResponse()
+    void reload.handler({ method: 'POST' } as IncomingMessage, posted.res)
+    expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a'])
+    expect(posted.writes.join('')).toContain('"reloaded":1')
+    expect(sse.writes.some(chunk => chunk.includes('"type":"reload"') && chunk.includes('"id":"pkg-a"'))).toBe(true)
+    const rejected = fakeResponse()
+    void reload.handler({ method: 'GET' } as IncomingMessage, rejected.res)
+    expect(rejected.writes).toEqual([])
     await fiber.dispose()
   })
 })

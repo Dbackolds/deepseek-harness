@@ -141,8 +141,9 @@
         surfaceContext: true
         trustedHosts: !!js ctx.webStartup.trustedHosts
 
-    # The client-plugin reload chain, always mounted: it is idle until a
-    # rebuild watcher (pnpm run dev:web) actually rewrites client bundles. It
+    # The client-plugin reload chain, always mounted: automatic rebuilt
+    # frames stay off until Settings enables client-hmr.autoReload and a
+    # rebuild watcher (pnpm run dev:web) rewrites client bundles. It
     # is a row rather than a child of web-runtime because its node half is a
     # client-side package, which a host-side bundle cannot import.
     - id: client-hmr

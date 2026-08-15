@@ -7,10 +7,14 @@
 
 import type { WebBootGraph } from '@deepseek-ai/dsh-client-modules'
 
-/** One SSE frame: the full graph on connect, or one rebuilt bundle notice. */
+/** One SSE frame: the full graph on connect, one rebuilt bundle notice, or a manual reload request. */
 export type PluginsEventFrame =
   | { type: 'graph'; graph: WebBootGraph }
   | { type: 'rebuilt'; id: string; rev: string }
+  | { type: 'reload'; id: string; rev: string }
 
-/** System SSE endpoint pushing graph/rebuilt frames (wire protocol constant). */
+/** System SSE endpoint pushing graph/rebuilt/reload frames (wire protocol constant). */
 export const EVENTS_ENDPOINT = '/plugins/events'
+
+/** Host POST that re-hashes every watched bundle and broadcasts a manual reload. */
+export const RELOAD_ENDPOINT = '/plugins/reload'

@@ -3,8 +3,9 @@
 // real theme gesture — click 深色 and the whole cascade runs: ThemeRuntime preference -> Host settings
 // -> theme/change -> ui-layout's presenter -> body attribute -> alias token +
 // browser theme-color metadata)
-// the Language row and busy-state Enter preference (both Host-backed), plus
-// Permission as the persisted default for subsequently created sessions.
+// the Language row, busy-state Enter preference, and plugin auto-reload
+// switch (all Host-backed), plus Permission as the persisted default for
+// subsequently created sessions.
 // Zero model calls: everything is pure client + persistence state on a blank
 // frame, so there is no fixture and a stray stream would fail loud on the
 // open llm seam.
@@ -63,6 +64,9 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.getByRole('button', { name: 'Workspace Write' }).waitFor({ timeout: 10_000 })
     await expect.poll(() => dialog.getByText('语言', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     await expect.poll(() => dialog.getByText('外观', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    await expect.poll(() => dialog.getByText('插件热重载', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    expect(await dialog.getByRole('switch', { name: '自动热重载' }).getAttribute('aria-checked')).toBe('false')
+    expect(await dialog.getByRole('button', { name: '重载插件' }).count()).toBe(1)
     const openDocument = dialog.getByRole('button', { name: '打开配置文件' })
     await openDocument.waitFor({ timeout: 10_000 })
     let openRequests = 0
@@ -398,6 +402,52 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('persists plugin auto-reload across reload and a distinct port', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-plugin-reload'))
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.waitFor({ timeout: 10_000 })
+    const toggle = dialog.getByRole('switch', { name: '自动热重载' })
+    expect(await toggle.getAttribute('aria-checked')).toBe('false')
+    await toggle.click()
+    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: 5_000 }).toBe('true')
+    await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
+      .toMatch(/client-hmr:\n\s+autoReload: true/)
+    await page.keyboard.press('Escape')
+
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const reloaded = page.getByRole('dialog', { name: '设置' })
+    await expect.poll(() => reloaded.getByRole('switch', { name: '自动热重载' }).getAttribute('aria-checked'), { timeout: 5_000 }).toBe('true')
+
+    const second = await launchWebScaffold({ harnessHome: scaffold.harnessHome })
+    const secondPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    const secondTripwire = watchConsole(secondPage)
+    try {
+      expect(second.baseUrl).not.toBe(scaffold.baseUrl)
+      await secondPage.goto(second.baseUrl, { waitUntil: 'load' })
+      await secondPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await secondPage.getByRole('button', { name: '设置', exact: true }).click()
+      await expect.poll(() => secondPage.getByRole('dialog', { name: '设置' })
+        .getByRole('switch', { name: '自动热重载' }).getAttribute('aria-checked'), { timeout: 5_000 }).toBe('true')
+      expect(secondTripwire.pageErrors).toEqual([])
+      expect(secondTripwire.warnings).toEqual([])
+    } finally {
+      await secondPage.close()
+      await second.close()
+    }
+
+    await reloaded.getByRole('switch', { name: '自动热重载' }).click()
+    await expect.poll(() => reloaded.getByRole('switch', { name: '自动热重载' }).getAttribute('aria-checked'), { timeout: 5_000 }).toBe('false')
+    await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
+      .toMatch(/client-hmr:\n\s+autoReload: false/)
+    await page.keyboard.press('Escape')
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
+
   it('persists the settings language across reload and a distinct port', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-language'))
     await page.getByRole('button', { name: '设置', exact: true }).click()
@@ -415,6 +465,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await enDialog.waitFor({ timeout: 10_000 })
     expect(await enDialog.getByRole('button', { name: 'General' }).getAttribute('aria-current')).toBe('true')
     await expect.poll(() => enDialog.getByText('Appearance', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    await expect.poll(() => enDialog.getByText('Plugin hot reload', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     expect(await page.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
       .toMatch(/locale:\n\s+preference: en/)

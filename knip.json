@@ -763,11 +763,14 @@
     },
     "packages/client/hmr": {
       "entry": [
-        "tests/**/*.spec.ts"
+        "tests/**/*.spec.ts",
+        "tests/**/*.spec.tsx"
       ],
       "project": [
         "src/**/*.ts",
-        "tests/**/*.ts"
+        "src/**/*.tsx",
+        "tests/**/*.ts",
+        "tests/**/*.tsx"
       ]
     },
     "packages/subagent/subagent-dsh-sdk": {
