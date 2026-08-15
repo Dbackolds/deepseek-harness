@@ -205,7 +205,7 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       },
     },
     git: {
-      describe(request: RpcRequest<{ sessionId: string }>) {
+      describe(request: RpcRequest<{ sessionId?: string; workspaceId?: string }>) {
         return Promise.resolve({
           rpcId: request.rpcId,
           result: { ok: true as const, value: { currentBranch: 'main', worktreePath: '/w', isolated: false, branches: [] } },
