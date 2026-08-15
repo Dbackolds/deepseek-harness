@@ -405,7 +405,9 @@ export function apply(ctx: Context, config: Config): void {
         }
 
         const maxDepth = typeof config.maxDepth === 'number' ? config.maxDepth : undefined
-        const selectedId = typeof args.agent === 'string' ? args.agent : undefined
+        const selectedId = typeof (args as { agent?: unknown }).agent === 'string'
+          ? (args as { agent?: string }).agent
+          : undefined
         const selected = selectedId === undefined ? undefined : ctx.get('userSubagents')?.get(selectedId)
         if (selectedId !== undefined && selected === undefined) {
           throw new Error(`unknown subagent definition "${selectedId}"`)
