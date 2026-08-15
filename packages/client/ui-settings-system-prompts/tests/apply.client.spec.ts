@@ -22,6 +22,7 @@ async function bench() {
     api: {
       settings: { describe: vi.fn(() => Promise.resolve({ rpcId: 's', result: { ok: false, error: { message: 'no' } } })) },
       llm: { models: vi.fn(() => Promise.resolve({ rpcId: 'm', result: { ok: false, error: { message: 'no' } } })) },
+      systemPrompt: { list: vi.fn(() => Promise.resolve({ rpcId: 'p', result: { ok: false, error: { message: 'no' } } })) },
     },
   } as never)
   return { ctx, slots: ctx.get('slots') as SlotRegistry }
@@ -49,6 +50,8 @@ describe('ui-settings-system-prompts apply', () => {
     const face = (section.inject as unknown as () => SystemPromptsSectionInjected)()
     face.beginCreate()
     face.beginEdit('missing')
+    face.beginEditBuiltIn('harness:identity')
+    await face.resetBuiltIn('harness:identity')
     face.cancelDraft()
     face.setDraftName('n')
     face.setDraftText('t')

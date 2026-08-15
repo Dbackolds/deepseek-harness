@@ -440,6 +440,7 @@ describe('settings domain', () => {
         promptIds: z.array(z.string()),
         override: z.boolean(),
       })),
+      overrides: z.array(z.object({ name: z.string(), text: z.string() })),
     }))
     const api = createApiProxy(ctx, DEFAULTS)
 
@@ -448,6 +449,7 @@ describe('settings domain', () => {
       section: {
         prompts: [{ id: 'style', name: 'Style', text: 'Be concise.' }],
         bindings: [],
+        overrides: [{ name: 'harness:identity', text: 'Custom opener.' }],
       },
     })))
 
@@ -455,7 +457,21 @@ describe('settings domain', () => {
       .toEqual({
         prompts: [{ id: 'style', name: 'Style', text: 'Be concise.' }],
         bindings: [],
+        overrides: [{ name: 'harness:identity', text: 'Custom opener.' }],
       })
+    expect(expectOk(await api.systemPrompt.list(request({}))).sections.map(section => section.name))
+      .toContain('harness:identity')
+  })
+
+  it('lists an empty registry when systemPrompt is not mounted', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(UserQuestionService)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(LlmRuntime)
+    const api = createApiProxy(ctx, DEFAULTS)
+    expect(expectErr(await api.systemPrompt.list(request({}))).code).toBe('internal')
   })
 
   it('serves the agent-preset namespace, so a browser preset picker can persist its choice', async () => {

@@ -54,6 +54,9 @@
       "path": "../../core/tools"
     },
     {
+      "path": "../../core/system-prompt"
+    },
+    {
       "path": "../../session/session-persistence"
     },
     {

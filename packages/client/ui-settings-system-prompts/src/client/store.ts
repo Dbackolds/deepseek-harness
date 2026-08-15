@@ -1,10 +1,12 @@
 /**
- * System-prompt settings page store: the library and bindings from the
- * `user-system-prompts` namespace, plus the host model catalog used to pick
- * which models can be assembled.
+ * System-prompt settings page store: the library, registered-section
+ * overrides, and bindings from the `user-system-prompts` namespace, plus
+ * the host model catalog used to pick which models can be assembled.
  */
 
-import type { IApiClient, ModelProviderGroup, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  IApiClient, ModelProviderGroup, RegisteredPromptSectionView, SettingsNamespaceView,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** Settings namespace this page reads and writes. */
@@ -13,6 +15,21 @@ export const USER_SYSTEM_PROMPTS_NS = 'user-system-prompts'
 /** One library entry as the page stores it. */
 export interface PromptRow {
   id: string
+  name: string
+  text: string
+}
+
+/** One registered plugin section with any stored user replacement applied. */
+export interface BuiltInRow {
+  name: string
+  order: number
+  text: string
+  complete: boolean
+  overridden: boolean
+}
+
+/** One stored replacement of a registered section. */
+export interface OverrideRow {
   name: string
   text: string
 }
@@ -33,9 +50,10 @@ export interface CatalogModel {
   modelName: string
 }
 
-/** Draft for create or edit. */
+/** Draft for create, library edit, or built-in edit. */
 export interface PromptDraft {
   id: string | null
+  kind: 'library' | 'builtin'
   name: string
   text: string
   error: string | null
@@ -50,6 +68,9 @@ export interface SystemPromptsState {
   writable: boolean
   revision: number
   prompts: readonly PromptRow[]
+  overrides: readonly OverrideRow[]
+  builtIns: readonly BuiltInRow[]
+  builtInError: string | null
   bindings: readonly BindingRow[]
   catalog: readonly CatalogModel[]
   draft: PromptDraft | null
@@ -112,6 +133,45 @@ function asPromptRows(value: unknown): PromptRow[] {
   })
 }
 
+function asOverrideRows(value: unknown): OverrideRow[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const row = entry as { name?: unknown; text?: unknown }
+    if (typeof row.name !== 'string' || row.name.length === 0) return []
+    return [{ name: row.name, text: typeof row.text === 'string' ? row.text : '' }]
+  })
+}
+
+function asRegisteredSections(value: unknown): RegisteredPromptSectionView[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const row = entry as { name?: unknown; order?: unknown; text?: unknown; complete?: unknown }
+    if (typeof row.name !== 'string' || row.name.length === 0 || typeof row.order !== 'number') return []
+    return [{
+      name: row.name,
+      order: row.order,
+      text: typeof row.text === 'string' ? row.text : '',
+      complete: row.complete === true,
+    }]
+  })
+}
+
+function mergeBuiltIns(
+  sections: readonly RegisteredPromptSectionView[],
+  overrides: readonly OverrideRow[],
+): BuiltInRow[] {
+  const byName = new Map(overrides.map(entry => [entry.name, entry.text]))
+  return sections.map(section => ({
+    name: section.name,
+    order: section.order,
+    text: byName.get(section.name) ?? section.text,
+    complete: section.complete,
+    overridden: byName.has(section.name),
+  }))
+}
+
 function asBindingRows(value: unknown): BindingRow[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
@@ -149,6 +209,9 @@ export class SystemPromptsStore {
     writable: false,
     revision: 0,
     prompts: [],
+    overrides: [],
+    builtIns: [],
+    builtInError: null,
     bindings: [],
     catalog: [],
     draft: null,
@@ -158,9 +221,10 @@ export class SystemPromptsStore {
 
   private generation = 0
   private view: SettingsNamespaceView | undefined
+  private registered: readonly RegisteredPromptSectionView[] = []
 
-  /** @param api - Settings and model-catalog wire faces. */
-  constructor(private readonly api: Pick<IApiClient, 'settings' | 'llm'>) {}
+  /** @param api - Settings, registered-section, and model-catalog wire faces. */
+  constructor(private readonly api: Pick<IApiClient, 'settings' | 'llm' | 'systemPrompt'>) {}
 
   /**
    * Refresh the namespace and catalog. Latest request wins.
@@ -172,11 +236,13 @@ export class SystemPromptsStore {
       state.status = 'loading'
       state.error = null
       state.catalogError = null
+      state.builtInError = null
     })
     try {
-      const [settingsResponse, modelsResponse] = await Promise.all([
+      const [settingsResponse, modelsResponse, sectionsResponse] = await Promise.all([
         this.api.settings.describe({}),
         this.api.llm.models({}),
+        this.api.systemPrompt.list({}),
       ])
       if (generation !== this.generation) return
       if (!settingsResponse.result.ok) throw new Error(settingsResponse.result.error.message)
@@ -187,6 +253,8 @@ export class SystemPromptsStore {
           state.status = 'unavailable'
           state.writable = false
           state.prompts = []
+          state.overrides = []
+          state.builtIns = []
           state.bindings = []
           state.catalog = []
         })
@@ -199,7 +267,21 @@ export class SystemPromptsStore {
       } else {
         catalog = catalogFrom(modelsResponse.result.value.groups)
       }
-      this.accept(view, settingsResponse.result.value.writable, catalog, catalogError)
+      let registered: readonly RegisteredPromptSectionView[] = []
+      let builtInError: string | null = null
+      if (!sectionsResponse.result.ok) {
+        builtInError = sectionsResponse.result.error.message
+      } else {
+        registered = asRegisteredSections(sectionsResponse.result.value.sections)
+      }
+      this.accept(
+        view,
+        settingsResponse.result.value.writable,
+        catalog,
+        catalogError,
+        registered,
+        builtInError,
+      )
     } catch (error) {
       if (generation !== this.generation) return
       this.fail(error)
@@ -209,7 +291,7 @@ export class SystemPromptsStore {
   /** Open a create draft. */
   beginCreate(): void {
     this.store.update((state) => {
-      state.draft = { id: null, name: '', text: '', error: null, saving: false }
+      state.draft = { id: null, kind: 'library', name: '', text: '', error: null, saving: false }
     })
   }
 
@@ -221,7 +303,26 @@ export class SystemPromptsStore {
     const prompt = this.store.getSnapshot().prompts.find(entry => entry.id === id)
     if (prompt === undefined) return
     this.store.update((state) => {
-      state.draft = { id, name: prompt.name, text: prompt.text, error: null, saving: false }
+      state.draft = { id, kind: 'library', name: prompt.name, text: prompt.text, error: null, saving: false }
+    })
+  }
+
+  /**
+   * Open an edit draft over one registered plugin section.
+   * @param name - registered section name.
+   */
+  beginEditBuiltIn(name: string): void {
+    const section = this.store.getSnapshot().builtIns.find(entry => entry.name === name)
+    if (section === undefined) return
+    this.store.update((state) => {
+      state.draft = {
+        id: name,
+        kind: 'builtin',
+        name: section.name,
+        text: section.text,
+        error: null,
+        saving: false,
+      }
     })
   }
 
@@ -264,6 +365,21 @@ export class SystemPromptsStore {
     const state = this.store.getSnapshot()
     const draft = state.draft
     if (draft === null || !state.writable) return
+    if (draft.kind === 'builtin') {
+      if (draft.id === null) return
+      this.store.update((current) => {
+        if (current.draft === null) return
+        current.draft.saving = true
+        current.draft.error = null
+      })
+      const overrides = state.overrides.filter(entry => entry.name !== draft.id)
+      overrides.push({ name: draft.id, text: draft.text })
+      await this.write(
+        { prompts: [...state.prompts], bindings: [...state.bindings], overrides },
+        () => { this.store.update((current) => { current.draft = null }) },
+      )
+      return
+    }
     const name = draft.name.trim()
     const text = draft.text.trim()
     if (name.length === 0) {
@@ -294,8 +410,23 @@ export class SystemPromptsStore {
       current.draft.saving = true
       current.draft.error = null
     })
-    await this.write({ prompts, bindings: [...state.bindings] }, () => {
-      this.store.update((current) => { current.draft = null })
+    await this.write(
+      { prompts, bindings: [...state.bindings], overrides: [...state.overrides] },
+      () => { this.store.update((current) => { current.draft = null }) },
+    )
+  }
+
+  /**
+   * Drop the stored replacement for one registered section.
+   * @param name - registered section name.
+   */
+  async resetBuiltIn(name: string): Promise<void> {
+    const state = this.store.getSnapshot()
+    if (!state.writable || !state.overrides.some(entry => entry.name === name)) return
+    await this.write({
+      prompts: [...state.prompts],
+      bindings: [...state.bindings],
+      overrides: state.overrides.filter(entry => entry.name !== name),
     })
   }
 
@@ -323,7 +454,7 @@ export class SystemPromptsStore {
     const bindings = state.bindings
       .map(entry => ({ ...entry, promptIds: entry.promptIds.filter(promptId => promptId !== id) }))
       .filter(entry => entry.promptIds.length > 0 || entry.override)
-    await this.write({ prompts, bindings }, () => {
+    await this.write({ prompts, bindings, overrides: [...state.overrides] }, () => {
       this.store.update((current) => {
         current.pendingDelete = null
         current.deleting = false
@@ -355,6 +486,7 @@ export class SystemPromptsStore {
   dispose(): void {
     this.generation += 1
     this.view = undefined
+    this.registered = []
   }
 
   private async updateBinding(
@@ -369,11 +501,11 @@ export class SystemPromptsStore {
     const empty = updated.promptIds.length === 0 && !updated.override
     const bindings = state.bindings.filter(entry => !(entry.provider === provider && entry.model === model))
     if (!empty) bindings.push(updated)
-    await this.write({ prompts: [...state.prompts], bindings })
+    await this.write({ prompts: [...state.prompts], bindings, overrides: [...state.overrides] })
   }
 
   private async write(
-    section: { prompts: PromptRow[]; bindings: BindingRow[] },
+    section: { prompts: PromptRow[]; bindings: BindingRow[]; overrides: OverrideRow[] },
     onSuccess?: () => void,
   ): Promise<void> {
     const view = this.view
@@ -388,7 +520,14 @@ export class SystemPromptsStore {
       if (generation !== this.generation) return
       if (!response.result.ok) throw new Error(response.result.error.message)
       const snapshot = this.store.getSnapshot()
-      this.accept(response.result.value, snapshot.writable, snapshot.catalog, snapshot.catalogError)
+      this.accept(
+        response.result.value,
+        snapshot.writable,
+        snapshot.catalog,
+        snapshot.catalogError,
+        this.registered,
+        snapshot.builtInError,
+      )
       onSuccess?.()
     } catch (error) {
       if (generation !== this.generation) return
@@ -408,16 +547,23 @@ export class SystemPromptsStore {
     writable: boolean,
     catalog: readonly CatalogModel[],
     catalogError: string | null,
+    registered: readonly RegisteredPromptSectionView[],
+    builtInError: string | null,
   ): void {
-    const value = (view.value ?? {}) as { prompts?: unknown; bindings?: unknown }
+    const value = (view.value ?? {}) as { prompts?: unknown; bindings?: unknown; overrides?: unknown }
     this.view = view
+    this.registered = registered
+    const overrides = asOverrideRows(value.overrides)
     this.store.update((state) => {
       state.status = 'ready'
       state.error = null
       state.catalogError = catalogError
+      state.builtInError = builtInError
       state.writable = writable
       state.revision = view.revision
       state.prompts = asPromptRows(value.prompts)
+      state.overrides = overrides
+      state.builtIns = mergeBuiltIns(registered, overrides)
       state.bindings = asBindingRows(value.bindings)
       state.catalog = catalog
     })

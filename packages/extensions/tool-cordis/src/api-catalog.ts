@@ -1802,10 +1802,22 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the exact Cordis effect disposer.',
       },
       {
-        signature: 'async assemble(context: AssembleContext = {}): Promise<PromptAssembly>',
-        description: 'Assemble global and scoped providers, detach tool parameters, apply canonical ordering, then run the assembly waterfall. Scoped sections and variables shadow globals. The returned waterfall value is authoritative except that an effective complete section is restored afterwards as the sole prompt section.',
+        signature: 'afterAssemble(hook: AfterAssemble): () => void',
+        description: 'Register a transform that runs after the assembly waterfall and after an effective complete section is restored. Use this when a contribution must see — and may replace — the prompt the model would otherwise receive. Registration and disposal emit `system-prompt/change`.',
+        parameters: [{ name: 'hook', description: 'receives the post-restore assembly and returns the next one.' }],
+        returns: 'the exact Cordis effect disposer.',
+      },
+      {
+        signature: 'listSections(context: AssembleContext = {}): RegisteredPromptSection[]',
+        description: 'List the effective registered prompt sections for one scope, in concatenation order, with each section\'s text resolved. This is the registry view, not a full assembly: tools, contexts, the assemble waterfall, complete-section restore, and afterAssemble hooks do not run. A function provider is evaluated with the supplied context, so a listing without a scope shows only global sections.',
         parameters: [{ name: 'context', description: 'the optional scope and plugin-defined assembly fields.' }],
-        returns: 'the post-waterfall assembly with any complete prompt enforced.',
+        returns: 'the merged, ordered, text-resolved registered sections.',
+      },
+      {
+        signature: 'async assemble(context: AssembleContext = {}): Promise<PromptAssembly>',
+        description: 'Assemble global and scoped providers, detach tool parameters, apply canonical ordering, then run the assembly waterfall. Scoped sections and variables shadow globals. The returned waterfall value is authoritative except that an effective complete section is restored afterwards as the sole prompt section. Registered afterAssemble hooks then run in registration order and may replace that restored prompt.',
+        parameters: [{ name: 'context', description: 'the optional scope and plugin-defined assembly fields.' }],
+        returns: 'the post-waterfall assembly with any complete prompt enforced and after-assemble hooks applied.',
       },
     ],
   },
@@ -2093,6 +2105,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'request', description: 'Questions, owner agent, and abort signal.' }],
         returns: 'The answer chosen or typed by the human.',
         throws: ['{UserQuestionError} code `CALLER_NOT_LIVE` when a supplied agent is not the registry\'s exact live instance, or `DELEGATED_CALLER` when that live agent is owned by another agent.'],
+      },
+    ],
+  },
+  {
+    key: 'userSystemPrompts',
+    summary: 'Owns the user prompt library, registered-section replacements, and per-model assembly after cooperative prompt assembly.',
+    description: 'Owns the user prompt library, registered-section replacements, and per-model assembly after cooperative prompt assembly.',
+    methods: [
+      {
+        signature: 'current(): UserSystemPromptsSettings',
+        description: 'Read the current library, bindings, and registered-section replacements.',
+        parameters: [],
+        returns: 'a detached snapshot of the resolved settings section.',
       },
     ],
   },
@@ -2571,7 +2596,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'waterfall',
     signature: '\'system-prompt/assemble\'(this: Scoped<SystemPrompt>, assembly: PromptAssembly, context: AssembleContext, next: () => Promise<PromptAssembly>): Promise<PromptAssembly>',
     summary: 'Expert waterfall over the assembled sections, contexts, tools, and variables.',
-    description: 'Expert waterfall over the assembled sections, contexts, tools, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope\'s assemblies. The returned value is authoritative. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope\'s system prompt.',
+    description: 'Expert waterfall over the assembled sections, contexts, tools, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope\'s assemblies. The returned value is authoritative. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope\'s system prompt. Registered `afterAssemble` hooks then run and may replace the restored prompt.',
     parameters: [{ name: 'assembly', description: 'the mutable assembly built from registered providers.' }, { name: 'context', description: 'the caller\'s per-assembly context.' }],
   },
   {
@@ -2693,6 +2718,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AdapterRegistrationHandle',
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
+  },
+  {
+    name: 'AfterAssemble',
+    declaration: 'export type AfterAssemble = (assembly: PromptAssembly, context: AssembleContext) => PromptAssembly | Promise<PromptAssembly>;',
   },
   {
     name: 'AfterAutomationSelector',
@@ -3703,6 +3732,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
   },
   {
+    name: 'RegisteredPromptSection',
+    declaration: 'export interface RegisteredPromptSection {\n    name: string;\n    order: number;\n    text: string;\n    complete: boolean;\n}',
+  },
+  {
     name: 'RequestContext',
     declaration: 'export interface RequestContext {\n    provider: string;\n    model: string;\n    contextWindow?: number;\n}',
   },
@@ -4356,7 +4389,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SystemPrompt',
-    declaration: 'export class SystemPrompt extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, config: Config);\n    section(section: PromptSection): () => void;\n    context(context: PromptContext): () => void;\n    suppressRuntimeContext(): () => void;\n    tools(provider: (context: AssembleContext) => ToolProviderResult): () => void;\n    variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void;\n    async assemble(context: AssembleContext = {}): Promise<PromptAssembly>;\n}',
+    declaration: 'export class SystemPrompt extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, config: Config);\n    section(section: PromptSection): () => void;\n    context(context: PromptContext): () => void;\n    suppressRuntimeContext(): () => void;\n    tools(provider: (context: AssembleContext) => ToolProviderResult): () => void;\n    variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void;\n    afterAssemble(hook: AfterAssemble): () => void;\n    listSections(context: AssembleContext = {}): RegisteredPromptSection[];\n    async assemble(context: AssembleContext = {}): Promise<PromptAssembly>;\n}',
   },
   {
     name: 'TableKeyOf',
@@ -4657,6 +4690,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UserQuestionProvider',
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
+  },
+  {
+    name: 'UserSystemPrompt',
+    declaration: 'export interface UserSystemPrompt {\n    id: string;\n    name: string;\n    text: string;\n}',
+  },
+  {
+    name: 'UserSystemPromptBinding',
+    declaration: 'export interface UserSystemPromptBinding {\n    provider: string;\n    model: string;\n    promptIds: string[];\n    override: boolean;\n}',
+  },
+  {
+    name: 'UserSystemPromptSectionOverride',
+    declaration: 'export interface UserSystemPromptSectionOverride {\n    name: string;\n    text: string;\n}',
+  },
+  {
+    name: 'UserSystemPromptsSettings',
+    declaration: 'export interface UserSystemPromptsSettings {\n    prompts: UserSystemPrompt[];\n    bindings: UserSystemPromptBinding[];\n    overrides: UserSystemPromptSectionOverride[];\n}',
   },
   {
     name: 'WebBootEntry',

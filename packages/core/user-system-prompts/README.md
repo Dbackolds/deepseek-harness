@@ -4,14 +4,15 @@ English | [中文](README.zh.md)
 
 User-authored system-prompt library and per-model assembly. `UserSystemPrompts` provides `ctx.userSystemPrompts` and registers the `user-system-prompts` Settings section. The composition entry is empty; a mounted settings provider layers the user's library and bindings over it.
 
-The settings page owns create, edit, delete, per-model multi-select, order, and override. This package applies the matching model's selected prompts after cooperative assembly and after any complete-section restore.
+The settings page owns create, edit, delete, per-model multi-select, order, override, and replacements of registered plugin sections. This package applies stored section replacements, then the matching model's selected prompts, after cooperative assembly and after any complete-section restore.
 
-- `ctx.userSystemPrompts.current()` returns a detached `{ prompts, bindings }` snapshot.
+- `ctx.userSystemPrompts.current()` returns a detached `{ prompts, bindings, overrides }` snapshot.
+- An override `{ name, text }` replaces the assembled text of that registered section. An empty string hides the section. Unknown names are ignored at assembly.
 - A binding with `override: false` appends its selected prompts, in listed order, after the assembled sections.
 - A binding with `override: true` replaces those assembled sections. That replacement runs after a `complete` persona is restored, so a user override is the prompt the model receives.
-- A request whose assembled `{{provider}}`/`{{model}}` pair has no binding, or an empty selection, leaves assembly unchanged.
+- A request whose assembled `{{provider}}`/`{{model}}` pair has no binding, or an empty selection, leaves the selected-library step unchanged.
 
-Unknown prompt ids, duplicate ids, and duplicate model keys fail at the Settings write. Assembly treats a stored list as exact.
+Unknown prompt ids, duplicate ids, duplicate override names, and duplicate model keys fail at the Settings write. Assembly treats a stored list as exact.
 
 ## Model Experience
 
@@ -27,7 +28,7 @@ Selected texts repeat on every request for that model. Override mode removes eve
 
 #### KV Cache effect
 
-Prefix-stable while the library texts, listed order, override flag, and earlier assembled sections stay identical. Editing a selected prompt, changing order, toggling override, or switching the session's model may invalidate reuse from the first changed system-prompt token.
+Prefix-stable while the library texts, listed order, override flag, registered-section replacements, and earlier assembled sections stay identical. Editing a selected prompt, changing order, toggling override, editing a shipped section, or switching the session's model may invalidate reuse from the first changed system-prompt token.
 
 ## Known Limitations and Deferred Work
 

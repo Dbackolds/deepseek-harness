@@ -29,6 +29,22 @@ describe('SystemPrompt', () => {
       // The names are reserved by the plugin — one owner per section.
       expect(() => ctx.systemPrompt.section({ name: 'deployment:persona', order: 0, text: 'imposter' }))
         .toThrow('prompt section "deployment:persona" is already registered')
+      expect(ctx.systemPrompt.listSections()).toEqual([
+        { name: 'harness:identity', order: -100, text: IDENTITY, complete: false },
+        { name: 'deployment:persona', order: 0, text: 'You are DeepSeek Harness.', complete: false },
+      ])
+    })
+
+    it('lists registered sections in order without running assemble hooks', async () => {
+      const ctx = new Context()
+      await ctx.plugin(SystemPrompt, { persona: 'You are DeepSeek Harness.' })
+      ctx.systemPrompt.section({ name: 'rules', order: 10, text: 'Be precise.' })
+      ctx.systemPrompt.afterAssemble(assembly => ({
+        ...assembly,
+        sections: [{ name: 'after', text: 'hooked' }],
+      }))
+      expect(ctx.systemPrompt.listSections().map(section => section.name))
+        .toEqual(['harness:identity', 'deployment:persona', 'rules'])
     })
 
     it('renders no persona section for a persona-less deployment (empty default)', async () => {
