@@ -24,7 +24,7 @@ Completed and Running stay fully expanded. History keeps the existing five-row f
 
 ## Consequences
 
-The three headings are presentation-only. Search stays one flat match list. Workspace headers, Host order, and the reminder lifetime stay as they are. A Session that starts running leaves Completed immediately; a Session that is opened leaves Completed on the next list snapshot.
+The three headings are presentation-only. Search stays one flat match list. Workspace headers, Host order, and the reminder lifetime stay as they are. A Session that starts running leaves Completed immediately; a Session that is opened leaves Completed on the next list snapshot. A crash/reload-interrupted Session is listed as interrupted; `session.list` then resumes it and wakes one plugin-notice continuation turn.
 
 ## Testing
 

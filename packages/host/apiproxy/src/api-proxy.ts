@@ -16,6 +16,9 @@ import { contentHasImage, createUserMessage, freezeMessage, ReasoningEffortId } 
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import { isAppendSurfaceEvent, isJsonValue } from '@deepseek-ai/dsh-session'
+import {
+  applyInterruptedListMetadata, createInterruptedResumeScheduler, foldListMetadataWithRepair,
+} from './interrupted-resume.ts'
 import type { JsonValue, Session, SessionEvent, SessionEventMap, SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
@@ -521,13 +524,7 @@ function sessionBlank(session: Session): boolean {
 
 /** Advance the Session-list hint projection by one committed event. */
 function applySessionListMetadata(state: SessionListMetadata, event: SessionEvent): SessionListMetadata {
-  const blank = state.blank && event.type !== 'turn/start'
-  const lastPromptAt = event.type === 'user/message' && event.data.source.kind === 'user'
-    ? event.time
-    : state.lastPromptAt
-  return blank === state.blank && lastPromptAt === state.lastPromptAt
-    ? state
-    : { blank, lastPromptAt }
+  return applyInterruptedListMetadata(state, event)
 }
 
 /** Fold exact list metadata for an attached Session. */
@@ -569,6 +566,7 @@ function summarize(session: Session, running: boolean): SessionSummary {
     updatedAt: sessionListUpdatedAt(session.header, metadata),
     running,
     blank: metadata.blank,
+    ...metadata.interrupted === true ? { interrupted: true } : {},
     ...sessionListFields(session.header, session.events),
   }
 }
@@ -594,7 +592,7 @@ async function probeColdSessionMetadata(
     try {
       const inspected = await persistence.inspect(meta.id, signal)
       signal?.throwIfAborted()
-      return sessionListMetadata(inspected.events)
+      return foldListMetadataWithRepair(inspected.events)
     } catch (error) {
       signal?.throwIfAborted()
       ctx.logger.warn(`session.list: inspect probe for "${meta.id}" failed (serving it as visible): ${String(error)}`)
@@ -613,7 +611,7 @@ async function probeColdSessionMetadata(
   try {
     const { events } = await persistence.readFrom(meta.id, 0, signal)
     signal?.throwIfAborted()
-    return sessionListMetadata(events)
+    return foldListMetadataWithRepair(events)
   } catch (error) {
     signal?.throwIfAborted()
     ctx.logger.warn(`session.list: blank probe for "${meta.id}" failed (serving it as visible): ${String(error)}`)
@@ -638,6 +636,7 @@ async function summarizeCold(
     updatedAt: sessionListUpdatedAt(meta, probed ?? metadata),
     running: false,
     blank: metadata?.blank === false ? false : probed?.blank ?? false,
+    ...((probed ?? metadata)?.interrupted === true ? { interrupted: true } : {}),
     // Header-only: reading the log for a blank-window preset switch would
     // defeat the same index read, and attaching the session replaces this row
     // with `summarize()`, which resolves the switch from the events.
@@ -1292,6 +1291,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     setup: async ({ meta, events }) =>
       (await composeAgent(resolveSessionPreset({ header: meta, events }))).setup,
   })
+  const scheduleInterruptedResume = createInterruptedResumeScheduler(ctx, agentFor)
 
   /** Send one transient frame to every connected mux consumer. */
   function broadcast(payload: MuxFrame): void {
@@ -1781,6 +1781,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             )
             const attachedSession = ctx.sessions.get(meta.id)
             if (attachedSession !== undefined) return summarizeAttached(attachedSession)
+            if (summary.interrupted === true) scheduleInterruptedResume(meta.id)
             return {
               ...summary,
               ...projections === undefined ? {} : { projections },

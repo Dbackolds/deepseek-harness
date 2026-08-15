@@ -24,7 +24,7 @@ Status: implemented
 
 ## Consequences
 
-三个分区标题只属于呈现层。搜索仍是一份扁平匹配列表。Workspace 组头、Host 顺序和提醒生命周期保持不变。Session 开始运行会立刻离开已完成；打开 Session 会在下一次列表快照中离开已完成。
+三个分区标题只属于呈现层。搜索仍是一份扁平匹配列表。Workspace 组头、Host 顺序和提醒生命周期保持不变。Session 开始运行会立刻离开已完成；打开 Session 会在下一次列表快照中离开已完成。被崩溃／重载中断的 Session 会标为 interrupted；`session.list` 随后恢复它，并用一条插件通知续上一轮。
 
 ## Testing
 
