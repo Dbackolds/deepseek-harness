@@ -525,13 +525,9 @@ function applySessionListMetadata(state: SessionListMetadata, event: SessionEven
   const lastPromptAt = event.type === 'user/message' && event.data.source.kind === 'user'
     ? event.time
     : state.lastPromptAt
-  let interrupted = state.interrupted === true
-  if (event.type === 'turn/start') interrupted = false
-  else if (event.type === 'turn/end' && event.data.reason.kind === 'interrupted') interrupted = true
-  if (blank === state.blank && lastPromptAt === state.lastPromptAt && interrupted === (state.interrupted === true)) {
-    return state
-  }
-  return { blank, lastPromptAt, ...interrupted ? { interrupted: true } : {} }
+  return blank === state.blank && lastPromptAt === state.lastPromptAt
+    ? state
+    : { blank, lastPromptAt }
 }
 
 /** Fold exact list metadata for an attached Session. */
@@ -573,7 +569,6 @@ function summarize(session: Session, running: boolean): SessionSummary {
     updatedAt: sessionListUpdatedAt(session.header, metadata),
     running,
     blank: metadata.blank,
-    ...metadata.interrupted === true ? { interrupted: true } : {},
     ...sessionListFields(session.header, session.events),
   }
 }
@@ -643,7 +638,6 @@ async function summarizeCold(
     updatedAt: sessionListUpdatedAt(meta, probed ?? metadata),
     running: false,
     blank: metadata?.blank === false ? false : probed?.blank ?? false,
-    ...((probed ?? metadata)?.interrupted === true ? { interrupted: true } : {}),
     // Header-only: reading the log for a blank-window preset switch would
     // defeat the same index read, and attaching the session replaces this row
     // with `summarize()`, which resolves the switch from the events.
