@@ -7,10 +7,10 @@
  * a key is entered; a blank key materializes a reference-free profile for
  * provider-native authentication);
  * the collapsed 自定义设置 area carries the per-family extras (`baseURL` for
- * both families, DeepSeek's id/name/context-window model catalog, and the
- * display name and wire protocol of a pi-ai route the adapter does not ship —
- * the two fields the create card asked that route for, editable here for the
- * same reason).
+ * both families, DeepSeek's id/name/context-window model catalog, the default
+ * wire protocol every pi-ai route may name, and the display name of a pi-ai
+ * route the adapter does not ship). Each pi-ai model row can override that
+ * protocol and store its own key.
  * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
  * the models under one provider disagree about it, so a provider-scoped
  * control can only be set to a value some of them reject. The composer's
@@ -33,7 +33,7 @@ import {
 import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
-import { deriveKeyRef, messageOf, protocolChoices } from './store.ts'
+import { assignModelKeyRefs, deriveKeyRef, messageOf, protocolChoices } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
@@ -51,14 +51,13 @@ export interface ProviderEditorProps {
   provider: string
   /** Display name for the card title. */
   displayName: string
-  /** Hide the title row (the add card renders its own provider select). */
+  /** Hide the title row (the add card and the setup-card disclosure render their own). */
   hideTitle?: boolean
   /**
    * Whether the adapter reports this route as hand-declared — absent from its
-   * installed catalog. Such a route carries its own wire protocol, chosen when
-   * it was created and editable here for the same reason; a catalog route's
-   * models each carry theirs, so a route-level protocol there could only
-   * override every one of them and the card does not offer it.
+   * installed catalog. Such a route also edits its display name here; every
+   * pi-ai route edits a default wire protocol that models inherit unless a
+   * row names its own.
    */
   declared?: boolean
   /** The owning namespace view (schema, layers, secrets). */
@@ -136,6 +135,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { namespace, settingsPath, api, t } = props
   const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(namespace, settingsPath))
   const [keyDraft, setKeyDraft] = useState('')
+  const [modelKeys, setModelKeys] = useState<ReadonlyMap<string, string>>(() => new Map())
+  const [modelKeyStored, setModelKeyStored] = useState<ReadonlySet<string>>(() => new Set())
   const [keyState, setKeyState] = useState<CredentialView | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
@@ -164,19 +165,39 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   useEffect(() => {
     let stale = false
     setKeyState(undefined)
+    const profile = getPath(namespace.value, settingsPath)
+    const modelRefs = new Map<string, string>()
+    if (typeof profile === 'object' && profile !== null) {
+      const models = (profile as { models?: unknown }).models
+      if (Array.isArray(models)) {
+        for (const model of models) {
+          if (typeof model !== 'object' || model === null) continue
+          const id = (model as { id?: unknown }).id
+          const ref = (model as { apiKeyEnv?: unknown }).apiKeyEnv
+          if (typeof id === 'string' && typeof ref === 'string' && ref.length > 0) modelRefs.set(id, ref)
+        }
+      }
+    }
+    const refs = [keyRef, ...new Set(modelRefs.values())]
     // The key state is a placeholder hint, not a precondition for editing:
     // neither a business rejection nor a transport failure may reach the
     // browser as an unhandled rejection, so the card simply renders without
     // the "already configured" hint.
-    void api.credentials.describe({ refs: [keyRef] }).then(
+    void api.credentials.describe({ refs }).then(
       (response) => {
         if (stale || !response.result.ok) return
-        setKeyState(response.result.value.credentials[keyRef])
+        const described = response.result.value.credentials
+        setKeyState(described[keyRef])
+        const stored = new Set<string>()
+        for (const [id, ref] of modelRefs) {
+          if (described[ref]?.configured === true) stored.add(id)
+        }
+        setModelKeyStored(stored)
       },
       () => undefined,
     )
     return () => { stale = true }
-  }, [api.credentials, keyRef])
+  }, [api.credentials, keyRef, namespace.value, settingsPath])
 
   const stringAt = (source: unknown, key: string): string | undefined => {
     const value = getPath(source, [key])
@@ -213,6 +234,13 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     ...probeApi === undefined ? {} : { api: probeApi },
     ...keyValue.length === 0 ? {} : { apiKey: keyValue },
   }
+  const inheritedModels = (): unknown => {
+    const pinned = getPath(namespace.base, [...settingsPath, 'models'])
+    return pinned ?? nodeAtPath(root, [...settingsPath, 'models'])?.meta.default
+  }
+  const modelKeyFailure = [...modelKeys.values()]
+    .map(apiKeyFailure)
+    .find((failure): failure is NonNullable<typeof failure> => failure !== undefined)
   /**
    * The write for this card, or a failure message. Every edit travels as
    * path ops against the STORED section: the draft comes from the redacted
@@ -221,12 +249,23 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    */
   const applyOnce = async (): Promise<string | undefined> => {
     const ns = namespace.ns
+    const listed = hasPath(draft, ['models'])
+      ? modelDrafts(getPath(draft, ['models']))
+      : modelDrafts(inheritedModels())
+    const assigned = layout === 'pi-ai'
+      ? assignModelKeyRefs(props.provider, listed, modelKeys, keyRef, keyValue)
+      : { models: undefined as Record<string, unknown>[] | undefined, writes: [] as const }
+    const withModels = assigned.models === undefined
+      ? draft
+      : assigned.writes.length === 0 && !hasPath(draft, ['models'])
+        ? draft
+        : setPath(draft, ['models'], assigned.models)
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
-    const next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
+    const next = layout === 'pi-ai' && stringAt(withModels, 'apiKeyEnv') === undefined
       && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
-      ? setPath(draft, ['apiKeyEnv'], keyRef)
-      : draft
+      ? setPath(withModels, ['apiKeyEnv'], keyRef)
+      : withModels
     // The same checker gates the submit button, so a card cannot reach this
     // with a bad row; it stays because the schema check below would refuse
     // the write with a message naming a path instead of the row, and because
@@ -263,7 +302,13 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       const stored = await api.credentials.set({ ref: keyRef, value: keyValue })
       if (!stored.result.ok) return stored.result.error.message
     }
+    for (const write of assigned.writes) {
+      if (write.ref === keyRef && keyValue.length > 0) continue
+      const stored = await api.credentials.set({ ref: write.ref, value: write.value })
+      if (!stored.result.ok) return stored.result.error.message
+    }
     setKeyDraft('')
+    setModelKeys(new Map())
     return undefined
   }
 
@@ -294,18 +339,6 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   }
 
   const keyLocked = keyState?.writable === false
-
-  /**
-   * The catalog beneath the user layer: what the composition entry pinned, or
-   * else the schema default that `resolve` would supply. The effective value
-   * cannot answer this — it still carries the stored override until the unset
-   * is applied, so reading it would echo that override straight back the
-   * moment reset drops it, leaving the rows unchanged until a reload.
-   */
-  const inheritedModels = (): unknown => {
-    const pinned = getPath(namespace.base, [...settingsPath, 'models'])
-    return pinned ?? nodeAtPath(root, [...settingsPath, 'models'])?.meta.default
-  }
 
   /**
    * The curated fields of one known adapter family. The family arrives
@@ -403,9 +436,10 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 }}
               />
             </div>
-            {/* The protocol sits beside the endpoint it describes, as it does
-                on the create card. */}
-            {ownsIdentity
+            {/* The protocol sits beside the endpoint it describes. A catalog
+                route also offers it: models inherit this value unless a row
+                names its own. */}
+            {family === 'pi-ai' && protocols.length > 0
               ? (
                 <div className={styles['field']}>
                   <span className={styles['fieldLabel']}>{t('customApi')}</span>
@@ -414,14 +448,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                     value={probeApi ?? ''}
                     aria-label={t('customApi')}
                     disabled={disabled}
-                    onChange={(event) => { setField('api', event.target.value) }}
+                    onChange={(event) => { setField('api', event.target.value === '' ? undefined : event.target.value) }}
                   >
-                    {/* A profile naming no protocol — hand-written into
-                        settings.yaml with no model to need one — selects
-                        nothing rather than reading as if it had picked the
-                        first choice. The option is named because a screen
-                        reader announces it either way, and an empty one is
-                        announced as a choice with no identity. */}
+                    {/* A profile naming no protocol — a catalog route, or one
+                        hand-written into settings.yaml with no model to need
+                        one — selects nothing rather than reading as if it
+                        had picked the first choice. */}
                     {probeApi === undefined ? <option value="">{t('customApiUnset')}</option> : null}
                     {protocols.map(choice => <option key={choice} value={choice}>{choice}</option>)}
                   </select>
@@ -441,7 +473,25 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                   defaultMaxTokens={typeof defaultMaxTokens === 'number' ? defaultMaxTokens : undefined}
                 />
               )
-              : <ModelListEditor {...catalogProps} probe={probe} probeBlocked={keyFailure} api={api} />}
+              : (
+                <ModelListEditor
+                  {...catalogProps}
+                  probe={probe}
+                  probeBlocked={keyFailure}
+                  api={api}
+                  protocols={protocols}
+                  modelKeys={modelKeys}
+                  modelKeyStored={modelKeyStored}
+                  onModelKeyChange={(id, next) => {
+                    setModelKeys((current) => {
+                      const updated = new Map(current)
+                      if (next.length === 0) updated.delete(id)
+                      else updated.set(id, next)
+                      return updated
+                    })
+                  }}
+                />
+              )}
           </div>
         </details>
       </>
@@ -476,7 +526,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         busy={busy}
         submitDisabled={disabled || layout === 'unknown'
           || modelFailure !== undefined
-          || keyFailure !== undefined}
+          || keyFailure !== undefined
+          || modelKeyFailure !== undefined}
         submitLabel="apply"
         submitBusyLabel="applying"
         onCancel={() => { props.onClose(false) }}

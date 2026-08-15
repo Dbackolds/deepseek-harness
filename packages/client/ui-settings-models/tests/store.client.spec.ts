@@ -1,7 +1,9 @@
 /** Page-store join: directory × namespaces × credentials, with last-good rows on failure. */
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
-import { messageOf, ModelsSettingsStore } from '../src/client/store.ts'
+import {
+  assignModelKeyRefs, deriveKeyRef, deriveModelKeyRef, isPageManagedRef, messageOf, ModelsSettingsStore,
+} from '../src/client/store.ts'
 
 let nextRpc = 0
 function ok<T>(value: T): RpcResponse<T> {
@@ -90,6 +92,7 @@ describe('ModelsSettingsStore', () => {
       configured: true,
       removable: true,
       apiKeyEnv: 'OPENAI_API_KEY',
+      apiKeyEnvs: ['OPENAI_API_KEY'],
       credential: { configured: true },
     })
     expect(byProvider.get('anthropic')).toMatchObject({ configured: false, removable: false })
@@ -122,7 +125,6 @@ describe('ModelsSettingsStore', () => {
 
   it('stringifies a non-Error credential transport rejection', async () => {
     const { face } = api({
-      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the non-Error rejection is the scenario
       describeCredentials: () => Promise.reject('credential transport refusal'),
     })
     const store = new ModelsSettingsStore(face)
@@ -163,6 +165,36 @@ describe('ModelsSettingsStore', () => {
     release?.()
     await Promise.all([first, second])
     expect(store.store.getSnapshot().status).toBe('ready')
+  })
+})
+
+describe('per-model credential references', () => {
+  it('derives a POSIX-safe per-model reference and recognizes page-managed names', () => {
+    expect(deriveKeyRef('acme-gateway')).toBe('ACME_GATEWAY_API_KEY')
+    expect(deriveModelKeyRef('acme-gateway', 'claude-sonnet')).toBe('ACME_GATEWAY_CLAUDE_SONNET_API_KEY')
+    expect(deriveModelKeyRef('acme', '4o')).toBe('ACME_M_4O_API_KEY')
+    expect(isPageManagedRef('acme', 'ACME_API_KEY')).toBe(true)
+    expect(isPageManagedRef('acme', 'ACME_CLAUDE_API_KEY')).toBe(true)
+    expect(isPageManagedRef('acme', 'CUSTOM_REF')).toBe(false)
+  })
+
+  it('shares one reference across models that type the same key', () => {
+    const { models, writes } = assignModelKeyRefs(
+      'acme',
+      [{ id: 'chat' }, { id: 'vision' }, { id: 'claude' }],
+      new Map([['chat', 'shared'], ['vision', 'shared'], ['claude', 'other']]),
+      'ACME_API_KEY',
+      'shared',
+    )
+    expect(models).toEqual([
+      { id: 'chat' },
+      { id: 'vision' },
+      { id: 'claude', apiKeyEnv: 'ACME_CLAUDE_API_KEY' },
+    ])
+    expect(writes).toEqual([
+      { ref: 'ACME_API_KEY', value: 'shared' },
+      { ref: 'ACME_CLAUDE_API_KEY', value: 'other' },
+    ])
   })
 })
 
@@ -222,7 +254,6 @@ describe('edge joins', () => {
 
   it('stringifies a non-Error load failure', async () => {
     // The wire can surface non-Error throwables; the store must stringify them.
-    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the non-Error rejection is the scenario
     const { face } = api({ providers: () => Promise.reject('plain refusal') })
     const store = new ModelsSettingsStore(face)
     await store.load()

@@ -6,7 +6,7 @@ This guide assumes you started the Web UI through the [root README](../../../REA
 
 ## Configure DeepSeek
 
-Open **Settings → Models**. FAC sits above DeepSeek. Each card exposes one API-key field; enter the key and save it. FAC defaults to `https://new.fastaicode.top/v1`.
+Open **Settings → Models**. FAC sits above DeepSeek. Each card exposes one API-key field that every model on that provider inherits unless a model names its own; enter the key and save it. FAC defaults to `https://new.fastaicode.top/v1`.
 
 ![The Models page: the DeepSeek card, with Add provider and Add a custom provider below it](providers-models-page.png)
 
@@ -20,7 +20,7 @@ Providers with native authentication need their native credentials instead. Bedr
 
 ## Add a custom provider
 
-Choose **Add a custom provider** for a company gateway, self-hosted server, or provider absent from the installed catalog. Supply a lowercase Provider ID, base URL, API protocol, credential, and at least one model.
+Choose **Add a custom provider** for a company gateway, self-hosted server, or provider absent from the installed catalog. Supply a lowercase Provider ID, base URL, a default API protocol, credential, and at least one model. Each model can override that protocol and can store its own key. The same typed key on several models stores once and is shared; different typed values become different keys.
 
 ![The custom provider form: Provider ID, display name, base URL, API protocol, and API key](providers-custom-form.png)
 

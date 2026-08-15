@@ -29,8 +29,12 @@ export interface ProviderRow {
   removable: boolean
   /** The credential reference the resolved profile names, when one does. */
   apiKeyEnv: string | undefined
+  /** Every credential reference the route or one of its models names. */
+  apiKeyEnvs: readonly string[]
   /** Credential state for {@link apiKeyEnv}, once described. */
   credential: CredentialView | undefined
+  /** Credential state for every named reference, once described. */
+  credentials: Readonly<Record<string, CredentialView>>
 }
 
 /** Page snapshot. */
@@ -71,6 +75,78 @@ export function deriveKeyRef(provider: string): string {
 }
 
 /**
+ * Conventional credential reference for one model on a route. Distinct model
+ * ids produce distinct references, so two models can store two keys; the
+ * settings page reuses one reference when several models type the same key.
+ * @param provider - provider route id.
+ * @param modelId - model id as stored on the profile entry.
+ * @returns the derived reference name.
+ */
+export function deriveModelKeyRef(provider: string, modelId: string): string {
+  const model = modelId.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+  const stem = model.length === 0 || /^[0-9]/.test(model) ? `M_${model}` : model
+  return `${deriveKeyRef(provider).replace(/_API_KEY$/, '')}_${stem}_API_KEY`
+}
+
+/**
+ * Whether this page created the reference: the route's conventional
+ * `<ROUTE>_API_KEY`, or a per-model `<ROUTE>_<MODEL>_API_KEY` it derived.
+ * Custom names and environment-owned refs stay out of deletion.
+ */
+export function isPageManagedRef(provider: string, ref: string): boolean {
+  if (ref === deriveKeyRef(provider)) return true
+  const prefix = `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_`
+  return ref.startsWith(prefix) && ref.endsWith('_API_KEY')
+}
+
+/** One credential write produced while assigning per-model keys. */
+export interface ModelKeyWrite {
+  /** Credential reference to store. */
+  ref: string
+  /** Typed key value. */
+  value: string
+}
+
+/**
+ * Stamp `apiKeyEnv` onto models that typed a key. Identical typed values
+ * share one reference — the route's, an already-named model's, or a freshly
+ * derived per-model name — so one key can serve several models without a
+ * second stored secret.
+ * @param provider - route id used to derive a fresh reference.
+ * @param models - drafted model rows.
+ * @param drafts - typed-but-unsaved keys keyed by model id.
+ * @param routeKeyRef - the route's conventional or named reference.
+ * @param routeKeyValue - the route field's typed key, empty when unchanged.
+ * @returns the stamped rows and the distinct credential writes.
+ */
+export function assignModelKeyRefs(
+  provider: string,
+  models: readonly Record<string, unknown>[],
+  drafts: ReadonlyMap<string, string>,
+  routeKeyRef: string,
+  routeKeyValue: string,
+): { models: Record<string, unknown>[]; writes: readonly ModelKeyWrite[] } {
+  const valueToRef = new Map<string, string>()
+  if (routeKeyValue.length > 0) valueToRef.set(routeKeyValue, routeKeyRef)
+  const writes = new Map<string, string>()
+  const next = models.map((model) => {
+    const id = typeof model['id'] === 'string' ? model['id'] : ''
+    if (id.length === 0) return { ...model }
+    const typed = drafts.get(id)?.trim() ?? ''
+    if (typed.length === 0) return { ...model }
+    const existing = typeof model['apiKeyEnv'] === 'string' && model['apiKeyEnv'].length > 0
+      ? model['apiKeyEnv']
+      : undefined
+    const ref = valueToRef.get(typed) ?? existing ?? deriveModelKeyRef(provider, id)
+    valueToRef.set(typed, ref)
+    writes.set(ref, typed)
+    if (ref === routeKeyRef && existing === undefined) return { ...model }
+    return existing === ref ? { ...model } : { ...model, apiKeyEnv: ref }
+  })
+  return { models: next, writes: [...writes].map(([ref, value]) => ({ ref, value })) }
+}
+
+/**
  * The wire protocols a hand-declared route may name, read out of the owning
  * namespace's own schema. This stays a schema read rather than a wire field so
  * the choices the page offers cannot drift from the ones the adapter accepts:
@@ -86,13 +162,37 @@ export function protocolChoices(namespace: SettingsNamespaceView | undefined): s
   return list.list.map(entry => entry.value).filter((value): value is string => typeof value === 'string')
 }
 
-/** The credential reference a resolved profile names (its `apiKeyEnv` field). */
-function apiKeyEnvOf(namespace: SettingsNamespaceView | undefined, path: readonly string[]): string | undefined {
-  if (namespace === undefined) return undefined
+/**
+ * Every credential reference a resolved profile names: the route first, then
+ * each model and override that names its own, de-duplicated in encounter
+ * order so a shared key is described once.
+ */
+function credentialRefsOf(
+  namespace: SettingsNamespaceView | undefined,
+  path: readonly string[],
+): string[] {
+  if (namespace === undefined) return []
   const profile = getPath(namespace.value, path)
-  if (typeof profile !== 'object' || profile === null) return undefined
-  const ref = (profile as { apiKeyEnv?: unknown }).apiKeyEnv
-  return typeof ref === 'string' && ref.length > 0 ? ref : undefined
+  if (typeof profile !== 'object' || profile === null) return []
+  const named = profile as { apiKeyEnv?: unknown; models?: unknown; modelOverrides?: unknown }
+  const refs: string[] = []
+  const add = (value: unknown): void => {
+    if (typeof value === 'string' && value.length > 0 && !refs.includes(value)) refs.push(value)
+  }
+  add(named.apiKeyEnv)
+  if (Array.isArray(named.models)) {
+    for (const model of named.models) {
+      if (typeof model === 'object' && model !== null) add((model as { apiKeyEnv?: unknown }).apiKeyEnv)
+    }
+  }
+  if (typeof named.modelOverrides === 'object' && named.modelOverrides !== null) {
+    for (const override of Object.values(named.modelOverrides)) {
+      if (typeof override === 'object' && override !== null) {
+        add((override as { apiKeyEnv?: unknown }).apiKeyEnv)
+      }
+    }
+  }
+  return refs
 }
 
 /** The models settings page controller (one per settings surface). */
@@ -149,15 +249,18 @@ export class ModelsSettingsStore {
         && entry.settingsPath.length > 0
         && hasPath(namespace.user, entry.settingsPath)
         && !hasPath(namespace.base, entry.settingsPath)
+      const apiKeyEnvs = credentialRefsOf(namespace, entry.settingsPath)
       return {
         entry,
         configured,
         removable,
-        apiKeyEnv: apiKeyEnvOf(namespace, entry.settingsPath),
+        apiKeyEnv: apiKeyEnvs[0],
+        apiKeyEnvs,
         credential: undefined,
+        credentials: {},
       }
     })
-    const refs = [...new Set(rows.flatMap(row => row.apiKeyEnv === undefined ? [] : [row.apiKeyEnv]))]
+    const refs = [...new Set(rows.flatMap(row => [...row.apiKeyEnvs]))]
     let credentials: Record<string, CredentialView> = {}
     let credentialError: string | null = null
     if (refs.length > 0) {
@@ -177,12 +280,18 @@ export class ModelsSettingsStore {
       s.error = null
       s.credentialError = credentialError
       s.writable = writable
-      s.rows = rows.map(row => ({
-        ...row,
-        ...row.apiKeyEnv !== undefined && credentials[row.apiKeyEnv] !== undefined
-          ? { credential: credentials[row.apiKeyEnv] }
-          : {},
-      }))
+      s.rows = rows.map((row) => {
+        const held = Object.fromEntries(
+          row.apiKeyEnvs.flatMap(ref => credentials[ref] === undefined ? [] : [[ref, credentials[ref]]]),
+        )
+        return {
+          ...row,
+          credentials: held,
+          ...row.apiKeyEnv !== undefined && held[row.apiKeyEnv] !== undefined
+            ? { credential: held[row.apiKeyEnv] }
+            : {},
+        }
+      })
       s.namespaces = namespaces
     })
   }
@@ -200,12 +309,12 @@ export class ModelsSettingsStore {
  */
 export function providerUsable(row: ProviderRow): boolean {
   if (!row.entry.active) return false
-  if (row.apiKeyEnv === undefined) {
+  if (row.apiKeyEnvs.length === 0) {
     // A composition-owned route with no named reference still needs a key
     // the Models page can store. Treating it as native-auth would hide the
     // FAC setup card behind a usable first-run posture.
     if (!row.removable && row.configured) return false
     return true
   }
-  return row.credential?.configured === true
+  return row.apiKeyEnvs.every(ref => row.credentials[ref]?.configured === true)
 }

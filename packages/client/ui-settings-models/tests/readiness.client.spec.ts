@@ -18,7 +18,9 @@ function otherRow(overrides: Partial<ProviderRow> = {}): ProviderRow {
     configured: true,
     removable: true,
     apiKeyEnv: 'HFAI_API_KEY',
+    apiKeyEnvs: ['HFAI_API_KEY'],
     credential: { configured: true, source: 'file', writable: true },
+    credentials: { HFAI_API_KEY: { configured: true, source: 'file', writable: true } },
     ...overrides,
   }
 }
@@ -27,12 +29,20 @@ describe('providerUsable', () => {
   it('requires a registered route and a stored key for every named reference', () => {
     expect(providerUsable(otherRow())).toBe(true)
     expect(providerUsable(otherRow({ entry: { ...otherRow().entry, active: false } }))).toBe(false)
-    expect(providerUsable(otherRow({ credential: missingCredential }))).toBe(false)
-    expect(providerUsable(otherRow({ credential: undefined }))).toBe(false)
+    expect(providerUsable(otherRow({
+      credential: missingCredential,
+      credentials: { HFAI_API_KEY: missingCredential },
+    }))).toBe(false)
+    expect(providerUsable(otherRow({ credential: undefined, credentials: {} }))).toBe(false)
   })
 
   it('treats a reference-free registered route as provider-native authentication', () => {
-    expect(providerUsable(otherRow({ apiKeyEnv: undefined, credential: undefined }))).toBe(true)
+    expect(providerUsable(otherRow({
+      apiKeyEnv: undefined,
+      apiKeyEnvs: [],
+      credential: undefined,
+      credentials: {},
+    }))).toBe(true)
   })
 
   it('does not treat a composition-owned keyless route as already usable', () => {
@@ -46,7 +56,9 @@ describe('providerUsable', () => {
       },
       removable: false,
       apiKeyEnv: undefined,
+      apiKeyEnvs: [],
       credential: undefined,
+      credentials: {},
     }))).toBe(false)
   })
 })

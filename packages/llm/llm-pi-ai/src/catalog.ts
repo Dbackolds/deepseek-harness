@@ -284,6 +284,19 @@ export interface PiAiModelProfile {
    * section for requests that name this id.
    */
   systemPrompt?: string
+  /**
+   * Wire protocol this model speaks. Absence uses the route's `api`, then the
+   * installed catalog entry, then the protocol the route's shipped siblings
+   * agree on. A model-level value is how one route hosts Completions,
+   * Responses, and Anthropic Messages side by side.
+   */
+  api?: string
+  /**
+   * Credential reference resolved for requests that name this model. Absence
+   * uses the route's `apiKeyEnv`. The same reference on several models is one
+   * stored key serving all of them; distinct references are distinct keys.
+   */
+  apiKeyEnv?: string
 }
 
 /**
@@ -328,7 +341,7 @@ function invalid(provider: string, detail: string): never {
  * a provider's newest release — without restating the protocol its siblings
  * already use. A route whose shipped models disagree (an OpenAI-style catalog
  * spanning Responses and Chat Completions) has no such answer, so a model it
- * does not describe must name its protocol at the route.
+ * does not describe must name its protocol on the model or at the route.
  */
 function sharedCatalogApi(defaults: ReadonlyMap<string, Model<Api>>): string | undefined {
   const apis = new Set<string>()
@@ -487,6 +500,11 @@ export interface RouteCatalog {
    * picked, so only an explicit configuration lands here.
    */
   configuredMaxTokens: ReadonlyMap<string, number>
+  /**
+   * Credential references this profile named on individual models, by model
+   * id. A request for a model absent here uses the route's `apiKeyEnv`.
+   */
+  configuredApiKeys: ReadonlyMap<string, string>
 }
 
 /**
@@ -545,15 +563,22 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
   const seen = new Set<string>()
   const configuredMaxTokens = new Map<string, number>()
   const configuredSystemPrompts = new Map<string, string>()
+  const configuredApiKeys = new Map<string, string>()
   const models = entries.map((entry) => {
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
     seen.add(entry.id)
     const base = defaults.get(entry.id)
-    const api = request.api ?? base?.api ?? routeApi
+    const api = entry.api ?? request.api ?? base?.api ?? routeApi
     if (api === undefined) {
       invalid(provider, `model "${entry.id}" needs an api; the installed catalog does not describe it, so set the`
-        + ' route\'s api to the wire protocol its endpoint speaks')
+        + ' route\'s api or this model\'s api to the wire protocol its endpoint speaks')
+    }
+    if (entry.apiKeyEnv !== undefined) {
+      if (entry.apiKeyEnv.length === 0) {
+        invalid(provider, `model "${entry.id}" has an empty apiKeyEnv`)
+      }
+      configuredApiKeys.set(entry.id, entry.apiKeyEnv)
     }
     const baseUrl = request.baseURL ?? base?.baseUrl ?? providerBaseUrl
     if (baseUrl === undefined) {
@@ -602,5 +627,5 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     invalid(provider, 'sets compat reasoning switches, but no model on the route speaks openai-completions;'
       + ' thinkingFormat and supportsReasoningEffort exist only on that protocol')
   }
-  return { models, configuredMaxTokens, configuredSystemPrompts }
+  return { models, configuredMaxTokens, configuredSystemPrompts, configuredApiKeys }
 }

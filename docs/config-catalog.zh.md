@@ -918,14 +918,18 @@ export interface Config {
 
 /** Configuration for one pi-ai provider route; the `providers` dict key IS the route. */
 export interface PiAiProviderProfile {
-  /** Credential reference (environment-variable name) resolved per request through `ctx.credentials`. */
+  /**
+   * Default credential reference resolved per request through `ctx.credentials`.
+   * A model that names its own `apiKeyEnv` wins for requests that select it.
+   */
   apiKeyEnv?: string
   /** Name shown by configuration surfaces; defaults to the route key. */
   displayName?: string
   /**
-   * Wire protocol every model on this route speaks. Omission keeps each
-   * installed catalog model's own protocol, which is why a catalog route needs
-   * no protocol at all; a route the catalog does not ship must name one.
+   * Default wire protocol for models on this route that do not name their own.
+   * Omission keeps each installed catalog model's own protocol, which is why a
+   * catalog route needs no protocol at all; a route the catalog does not ship
+   * must name one here or on every model.
    */
   api?: string
   /** Endpoint for this route's models; defaults to the installed catalog's endpoint. */
@@ -1038,6 +1042,19 @@ export interface PiAiModelProfile {
    * section for requests that name this id.
    */
   systemPrompt?: string
+  /**
+   * Wire protocol this model speaks. Absence uses the route's `api`, then the
+   * installed catalog entry, then the protocol the route's shipped siblings
+   * agree on. A model-level value is how one route hosts Completions,
+   * Responses, and Anthropic Messages side by side.
+   */
+  api?: string
+  /**
+   * Credential reference resolved for requests that name this model. Absence
+   * uses the route's `apiKeyEnv`. The same reference on several models is one
+   * stored key serving all of them; distinct references are distinct keys.
+   */
+  apiKeyEnv?: string
 }
 
 /**

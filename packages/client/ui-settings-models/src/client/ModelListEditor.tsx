@@ -87,6 +87,18 @@ export interface ModelListEditorProps {
   t: (key: keyof typeof en) => string
   /** Disable every control (read-only deployment or a pending write). */
   disabled: boolean
+  /** Wire protocols a model row may name; absent hides the per-model selector. */
+  protocols?: readonly string[]
+  /**
+   * Typed-but-unsaved keys keyed by model id. An empty string means keep the
+   * stored key, matching the provider field. Absent on a create card that
+   * never stores per-model keys until the parent records them.
+   */
+  modelKeys?: ReadonlyMap<string, string>
+  /** Replace the typed-but-unsaved key for one model id. */
+  onModelKeyChange?: (modelId: string, draft: string) => void
+  /** Stored-key placeholder by model id, shown when the draft is empty. */
+  modelKeyStored?: ReadonlySet<string>
 }
 
 /** Disclosure chevron; rotates to point down while its row is open. */
@@ -417,6 +429,49 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                   />
                 </label>
+                {props.protocols === undefined || props.protocols.length === 0
+                  ? null
+                  : (
+                    <label className={styles['modelField']}>
+                      <span className={styles['modelFieldLabel']}>{t('modelApi')}</span>
+                      <select
+                        className={`${styles['input']} ${styles['selectInput']}`}
+                        value={textOf(model, 'api')}
+                        aria-label={`${t('modelApi')} ${index + 1}`}
+                        disabled={disabled}
+                        onChange={(event) => {
+                          patch(index, { api: event.target.value === '' ? undefined : event.target.value })
+                        }}
+                      >
+                        <option value="">{t('modelApiInherit')}</option>
+                        {props.protocols.map(choice => (
+                          <option key={choice} value={choice}>{choice}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                {props.onModelKeyChange === undefined
+                  ? null
+                  : (
+                    <label className={styles['modelField']}>
+                      <span className={styles['modelFieldLabel']}>{t('modelKeyInput')}</span>
+                      <input
+                        className={styles['input']}
+                        type="password"
+                        autoComplete="off"
+                        value={props.modelKeys?.get(textOf(model, 'id')) ?? ''}
+                        placeholder={textOf(model, 'id').length > 0
+                          && props.modelKeyStored?.has(textOf(model, 'id')) === true
+                          ? t('modelKeyStored')
+                          : t('modelKeyPlaceholder')}
+                        aria-label={`${t('modelKeyInput')} ${index + 1}`}
+                        disabled={disabled || textOf(model, 'id').length === 0}
+                        onChange={(event) => {
+                          props.onModelKeyChange?.(textOf(model, 'id'), event.target.value)
+                        }}
+                      />
+                    </label>
+                  )}
                 <label className={`${styles['modelField']} ${styles['modelSystemPrompt']}`}>
                   <span className={styles['modelFieldLabel']}>{t('modelSystemPrompt')}</span>
                   <textarea

@@ -97,10 +97,10 @@ export interface ProviderSpec {
   /** The route's materialized models, in configuration order. */
   models: readonly Model<Api>[]
   /**
-   * Whether the profile names a credential, which it does through `apiKeyEnv`
-   * alone: configuration carries the reference, never the secret. Only that
-   * decides whether {@link routeAuth} adds the harness's own api-key method to
-   * a catalog provider that offers none; the key itself still arrives per
+   * Whether the profile names a credential on the route or on any model.
+   * Configuration carries the reference, never the secret. Only that decides
+   * whether {@link routeAuth} adds the harness's own api-key method to a
+   * catalog provider that offers none; the key itself still arrives per
    * request, never at construction.
    */
   namesCredential: boolean
@@ -166,29 +166,43 @@ function reuseCatalogProvider(base: Provider, spec: ProviderSpec): Provider {
  */
 export function buildProvider(spec: ProviderSpec): Provider {
   const catalog = catalogProvider(spec.provider)
-  // A catalog route keeping its catalog protocol reuses the catalog provider;
-  // an explicit protocol means the deployment is repointing the route at a
-  // different wire format, which only the protocol table can serve.
-  if (catalog !== undefined && spec.api === undefined) return reuseCatalogProvider(catalog, spec)
-
-  // Every model on this path carries the route's protocol: model resolution
-  // requires one for a route the catalog cannot default, and an explicit one
-  // replaces each catalog model's own. A harness-owned gateway such as FAC
-  // supplies that protocol when the profile names none.
-  const api = spec.api ?? shippedApi(spec.provider)
-  const factory = api === undefined ? undefined : PROTOCOLS[api]
-  if (factory === undefined) {
-    throw new Error(
-      `llm-pi-ai: provider "${spec.provider}" names api "${api}", which this build cannot serve;`
-      + ` supported protocols are ${supportedProtocols().join(', ')}`,
-    )
+  const spoken = [...new Set(spec.models.map(model => model.api))]
+  // A catalog route keeping every model's catalog protocol reuses that
+  // provider. An explicit route protocol, or any model naming a different
+  // one, is a wire-format change only the protocol table can serve.
+  if (catalog !== undefined && spec.api === undefined
+    && spoken.every(api => catalog.getModels().some(model => model.api === api))) {
+    return reuseCatalogProvider(catalog, spec)
   }
+
+  const needed = spoken.length > 0
+    ? spoken
+    : [spec.api ?? shippedApi(spec.provider)]
+  const streams: Partial<Record<string, ProviderStreams>> = {}
+  for (const api of needed) {
+    if (api === undefined) {
+      throw new Error(
+        `llm-pi-ai: provider "${spec.provider}" names no api, which this build cannot serve;`
+        + ` supported protocols are ${supportedProtocols().join(', ')}`,
+      )
+    }
+    const factory = PROTOCOLS[api]
+    if (factory === undefined) {
+      throw new Error(
+        `llm-pi-ai: provider "${spec.provider}" names api "${api}", which this build cannot serve;`
+        + ` supported protocols are ${supportedProtocols().join(', ')}`,
+      )
+    }
+    streams[api] = factory()
+  }
+  const only = needed.length === 1 ? needed[0] : undefined
+  const onlyStreams = only === undefined ? undefined : streams[only]
   return createProvider({
     id: spec.provider,
     name: spec.displayName,
     ...spec.baseURL === undefined ? {} : { baseUrl: spec.baseURL },
     auth: routeAuth(spec, catalog),
     models: spec.models,
-    api: factory(),
+    api: onlyStreams ?? streams,
   })
 }
