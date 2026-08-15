@@ -28,7 +28,7 @@ const READY: GitBranchSeatState = {
   busy: false,
 }
 
-function renderSeat(state: Partial<GitBranchSeatState> = {}, sessionId: string | undefined = 's1') {
+function renderSeat(state: Partial<GitBranchSeatState> = {}) {
   const store = createSnapshotStore<GitBranchSeatState>({ ...READY, ...state })
   const actions = {
     load: vi.fn(() => Promise.resolve()),
@@ -36,7 +36,6 @@ function renderSeat(state: Partial<GitBranchSeatState> = {}, sessionId: string |
     createBranch: vi.fn(() => Promise.resolve()),
   }
   render(<GitBranchSeat {...({
-    sessionId,
     ...actions,
     useWorkspaces: (select: (s: { recentWorkspaceId?: string; items: unknown[] }) => unknown) =>
       select({ recentWorkspaceId: 'ws-1', items: [{ workspaceId: 'ws-1' }] }),
@@ -61,7 +60,7 @@ describe('GitBranchSeat', () => {
   it('renders nothing without a session or repository', () => {
     const { container: missing } = render(<div data-testid="host" />)
     cleanup()
-    renderSeat({ view: null }, undefined)
+    renderSeat({ view: null })
     expect(screen.queryByRole('button')).toBeNull()
     cleanup()
     renderSeat({ unavailable: true, view: null })

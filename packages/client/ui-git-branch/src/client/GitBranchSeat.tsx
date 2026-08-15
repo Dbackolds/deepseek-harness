@@ -42,10 +42,10 @@ export type GitBranchSeatProps =
 /**
  * Render the new-session Git branch chip.
  * @param props - composed slot props.
- * @returns the chip, or null when no session or no Git checkout exists.
+ * @returns the chip, or null when the current workspace is not a Git checkout.
  */
 export function GitBranchSeat({
-  sessionId, useWorkspaces, load, checkout, createBranch, useGitBranchSeat, t,
+  useWorkspaces, load, checkout, createBranch, useGitBranchSeat, t,
 }: GitBranchSeatProps) {
   const state = useGitBranchSeat(snapshot => snapshot)
   const recentWorkspaceId = useWorkspaces(s => s.recentWorkspaceId)
@@ -56,7 +56,7 @@ export function GitBranchSeat({
 
   useEffect(() => {
     void load()
-  }, [load, sessionId, recentWorkspaceId, workspaceCount])
+  }, [load, recentWorkspaceId, workspaceCount])
 
   if (state.unavailable || state.view === null) return null
 
