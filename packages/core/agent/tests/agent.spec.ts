@@ -112,6 +112,47 @@ describe('Inbox', () => {
     expect(() => { inbox.append('next-step', first) }).toThrow(`message "${first.id}" is already pending`)
   })
 
+  it('moves a pending message inside its current list and rejects a cross-list anchor', () => {
+    const session = Session.create(SessionId('move-inbox'))
+    const inserted: UserMessage[] = []
+    const discarded: UserMessage[] = []
+    const inbox = new Inbox(session, {
+      claimed: () => {},
+      inserted: message => void inserted.push(message),
+      discarded: message => void discarded.push(message),
+    })
+    const first = createUserMessage({ content: [{ type: 'text', text: 'first' }], source: { kind: 'user' } })
+    const second = createUserMessage({ content: [{ type: 'text', text: 'second' }], source: { kind: 'user' } })
+    const third = createUserMessage({ content: [{ type: 'text', text: 'third' }], source: { kind: 'user' } })
+    const step = createUserMessage({ content: [{ type: 'text', text: 'step' }], source: { kind: 'user' } })
+    inbox.append('next-turn', first)
+    inbox.append('next-turn', second)
+    inbox.append('next-turn', third)
+    inbox.append('next-step', step)
+    const beforeMove = session.events.length
+    const insertedBeforeMove = inserted.length
+    const discardedBeforeMove = discarded.length
+
+    expect(inbox.move(first.id, first.id)).toBe(false)
+    expect(inbox.move(second.id, third.id)).toBe(false)
+    expect(inbox.move(createUserMessage({
+      content: [{ type: 'text', text: 'missing' }],
+      source: { kind: 'user' },
+    }).id, first.id)).toBe(false)
+    expect(session.events).toHaveLength(beforeMove)
+
+    expect(inbox.move(third.id, first.id)).toBe(true)
+    expect(inbox.nextTurn).toEqual([third, first, second])
+    expect(inbox.move(third.id)).toBe(true)
+    expect(inbox.nextTurn).toEqual([first, second, third])
+    expect(inbox.nextStep).toEqual([step])
+    expect(inserted).toHaveLength(insertedBeforeMove)
+    expect(discarded).toHaveLength(discardedBeforeMove)
+    expect(() => { inbox.move(first.id, step.id) })
+      .toThrow(`cannot move message "${first.id}" across inbox lists`)
+    expect(inbox.nextTurn).toEqual([first, second, third])
+  })
+
   it('clears both pending lists as durable cancellations', () => {
     const session = Session.create(SessionId('clear-inbox'))
     const discarded: UserMessage[] = []

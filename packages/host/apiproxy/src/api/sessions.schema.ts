@@ -336,6 +336,7 @@ export const sessionUpdateQueueRequestSchema = z.object({
     z.object({ kind: z.literal('edit'), content: z.array(contentBlockSchema) }),
     z.object({ kind: z.literal('remove') }),
     z.object({ kind: z.literal('steer') }),
+    z.object({ kind: z.literal('move'), beforeItemId: messageIdSchema.optional() }),
   ]),
 }) as unknown as z.ZodType<RequestPayload<'session.updateQueue'>>
 

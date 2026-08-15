@@ -4,7 +4,7 @@
  * collapse state, removal, strict steering, failure notices, and live retirement.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import {
   EMPTY_CHAT_SNAPSHOT, EMPTY_CONVERSATION_VIEWS,
@@ -24,6 +24,16 @@ afterEach(cleanup)
 
 const SID = 's1' as SessionId
 const iid = (id: string): QueueItemId => id as QueueItemId
+
+/** jsdom lacks DragEvent — the fireEvent fallback drops clientY, so pin it on the built event. */
+function fireDrag(row: HTMLElement, kind: 'dragOver' | 'drop', clientY: number): void {
+  const event = kind === 'dragOver' ? createEvent.dragOver(row) : createEvent.drop(row)
+  Object.defineProperty(event, 'clientY', { value: clientY })
+  Object.defineProperty(event, 'dataTransfer', {
+    value: { effectAllowed: 'move', dropEffect: 'move', setData: vi.fn() },
+  })
+  fireEvent(row, event)
+}
 
 function row(id: string, text: string | null, preview = text ?? '[image]'): QueuedMessage {
   return {
@@ -292,6 +302,98 @@ describe('QueueDock', () => {
     await waitFor(() => {
       expect(updateQueue).toHaveBeenCalledWith(iid('i-1'), { kind: 'remove' })
     })
+  })
+
+  it('drags a queued row to an arbitrary insert position', async () => {
+    const snap = snapshotWith([row('i-1', 'one'), row('i-2', 'two'), row('i-3', 'three')])
+    const source = liveSession(snap)
+    const updateQueue = vi.fn(() => Promise.resolve())
+    const { getByRole, getByText } = render(
+      <QueueDock {...kitFor(snap, { updateQueue })} useSession={source.useSession} />,
+    )
+    fireEvent.click(getByRole('button', { name: '3 条排队消息' }))
+    const first = getByText('one').closest('li') as HTMLLIElement
+    const third = getByText('three').closest('li') as HTMLLIElement
+    expect(first.getAttribute('draggable')).toBe('true')
+    third.getBoundingClientRect = () => ({
+      top: 200, bottom: 236, left: 0, right: 200, width: 200, height: 36, x: 0, y: 200, toJSON: () => ({}),
+    })
+    fireEvent.dragStart(first, {
+      dataTransfer: { effectAllowed: 'none', dropEffect: 'none', setData: vi.fn() },
+    })
+    fireDrag(third, 'dragOver', 230)
+    fireDrag(third, 'drop', 230)
+    await waitFor(() => {
+      expect(updateQueue).toHaveBeenCalledWith(iid('i-1'), { kind: 'move' })
+    })
+
+    fireEvent.dragStart(first, {
+      dataTransfer: { effectAllowed: 'none', dropEffect: 'none', setData: vi.fn() },
+    })
+    fireDrag(third, 'dragOver', 205)
+    fireDrag(third, 'drop', 205)
+    await waitFor(() => {
+      expect(updateQueue).toHaveBeenCalledWith(iid('i-1'), { kind: 'move', beforeItemId: iid('i-3') })
+    })
+
+    fireEvent.dragStart(third, {
+      dataTransfer: { effectAllowed: 'none', dropEffect: 'none', setData: vi.fn() },
+    })
+    first.getBoundingClientRect = () => ({
+      top: 100, bottom: 136, left: 0, right: 200, width: 200, height: 36, x: 0, y: 100, toJSON: () => ({}),
+    })
+    fireDrag(first, 'dragOver', 105)
+    fireDrag(first, 'drop', 105)
+    await waitFor(() => {
+      expect(updateQueue).toHaveBeenCalledWith(iid('i-3'), { kind: 'move', beforeItemId: iid('i-1') })
+    })
+  })
+
+  it('skips a no-op drop and keeps a single row undraggable', () => {
+    const snap = snapshotWith([row('i-1', 'one'), row('i-2', 'two')])
+    const source = liveSession(snap)
+    const updateQueue = vi.fn(() => Promise.resolve())
+    const view = render(
+      <QueueDock {...kitFor(snap, { updateQueue })} useSession={source.useSession} />,
+    )
+    fireEvent.click(view.getByRole('button', { name: '2 条排队消息' }))
+    const first = view.getByText('one').closest('li') as HTMLLIElement
+    first.getBoundingClientRect = () => ({
+      top: 100, bottom: 136, left: 0, right: 200, width: 200, height: 36, x: 0, y: 100, toJSON: () => ({}),
+    })
+    fireEvent.dragStart(first, {
+      dataTransfer: { effectAllowed: 'none', dropEffect: 'none', setData: vi.fn() },
+    })
+    fireDrag(first, 'drop', 105)
+    expect(updateQueue).not.toHaveBeenCalled()
+
+    act(() => { source.push(snapshotWith([row('i-1', 'one')])) })
+    expect((view.getByText('one').closest('li') as HTMLLIElement).hasAttribute('draggable')).toBe(false)
+  })
+
+  it('keeps the row and reports a genuine reorder failure', async () => {
+    const snap = snapshotWith([row('i-1', 'one'), row('i-2', 'two')])
+    const source = liveSession(snap)
+    const notify = vi.fn()
+    const updateQueue = vi.fn(() => Promise.reject(new Error('not found')))
+    const { getByRole, getByText } = render(
+      <QueueDock {...kitFor(snap, { updateQueue, notify })} useSession={source.useSession} />,
+    )
+    fireEvent.click(getByRole('button', { name: '2 条排队消息' }))
+    const first = getByText('one').closest('li') as HTMLLIElement
+    const second = getByText('two').closest('li') as HTMLLIElement
+    second.getBoundingClientRect = () => ({
+      top: 200, bottom: 236, left: 0, right: 200, width: 200, height: 36, x: 0, y: 200, toJSON: () => ({}),
+    })
+    fireEvent.dragStart(first, {
+      dataTransfer: { effectAllowed: 'none', dropEffect: 'none', setData: vi.fn() },
+    })
+    fireDrag(second, 'drop', 230)
+    await waitFor(() => {
+      expect(notify).toHaveBeenCalledWith('error', '调整顺序失败：这条消息可能已经开始发送。')
+    })
+    expect(getByText('one')).toBeTruthy()
+    expect(getByText('two')).toBeTruthy()
   })
 
   it('strictly steers complete row content only while the agent is running', async () => {

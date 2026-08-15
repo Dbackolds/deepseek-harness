@@ -26,18 +26,18 @@
 - button "2 queued messages" [expanded]
 - list:
   - listitem:
-    - text: Edited queue item
+    - text: Queue item preserved after stop
     - button "Edit queued message":
       - img
-    - tooltip "Edit queued message"
     - button "Remove queued message":
       - img
     - button "Steer queued message" [disabled]:
       - img
   - listitem:
-    - text: Queue item preserved after stop
+    - text: Edited queue item
     - button "Edit queued message":
       - img
+    - tooltip "Edit queued message"
     - button "Remove queued message":
       - img
     - button "Steer queued message" [disabled]:

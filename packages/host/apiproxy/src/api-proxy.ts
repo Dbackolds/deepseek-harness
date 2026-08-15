@@ -2695,8 +2695,27 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { itemId },
           }))
         }
+        if (action.kind === 'move' && target !== 'next-turn') {
+          return Promise.resolve(err(request, {
+            code: 'queue-item-not-found',
+            message: 'queued item is no longer pending',
+            details: { itemId },
+          }))
+        }
         if (action.kind === 'edit') {
           agent.inbox.replace(itemId, freezeMessage({ ...message, content: action.content }))
+        } else if (action.kind === 'move') {
+          if (action.beforeItemId !== undefined && action.beforeItemId !== itemId) {
+            const beforePending = agent.inbox.nextTurn.some(candidate => candidate.id === action.beforeItemId)
+            if (!beforePending) {
+              return Promise.resolve(err(request, {
+                code: 'queue-item-not-found',
+                message: 'queued item is no longer pending',
+                details: { itemId: action.beforeItemId },
+              }))
+            }
+          }
+          agent.inbox.move(itemId, action.beforeItemId)
         } else {
           agent.inbox.remove(itemId)
           if (action.kind === 'steer') agent.steer(message)
