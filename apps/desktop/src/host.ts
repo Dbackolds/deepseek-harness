@@ -5,6 +5,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseReadyChunk, type ReadyUrl } from './ready.ts'
@@ -37,6 +38,17 @@ export function findRepoRoot(from: string): string {
 }
 
 /**
+ * Absolute Node locations probed when the Finder-launched process has no
+ * Node on its short GUI `PATH`.
+ */
+const NODE_CANDIDATES = [
+  '/usr/local/bin/node',
+  '/opt/homebrew/bin/node',
+  join(homedir(), '.volta', 'bin', 'node'),
+  join(homedir(), '.asdf', 'shims', 'node'),
+]
+
+/**
  * Node used to boot `dsh web`. Electron's `process.execPath` is the shell
  * binary and cannot run the CLI.
  * @param remembered - last Node path persisted by a successful launch.
@@ -49,6 +61,8 @@ export function resolveNodeExecutable(remembered?: string): string {
   if (process.versions.electron === undefined) return process.execPath
   const fromNpm = process.env.npm_node_execpath
   if (fromNpm !== undefined && fromNpm !== '' && existsSync(fromNpm)) return fromNpm
+  const probed = NODE_CANDIDATES.find(candidate => existsSync(candidate))
+  if (probed !== undefined) return probed
   return 'node'
 }
 
