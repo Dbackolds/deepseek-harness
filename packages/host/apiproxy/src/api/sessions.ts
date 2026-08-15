@@ -41,6 +41,8 @@ export interface SessionListMetadata {
   blank: boolean
   /** Latest source.kind=user message time in the checkpoint prefix. */
   lastPromptAt: number | null
+  /** Latest durable turn ended as crash/reload repair and no later turn started. Absent = false. */
+  interrupted?: boolean
 }
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -184,6 +186,8 @@ export interface SessionSummary {
   updatedAt: number
   /** Status of the attached agent; always false for cold (unattached) sessions. */
   running: boolean
+  /** Latest durable turn was crash/reload-interrupted and no later turn started. Absent = false. */
+  interrupted?: boolean
   /**
    * Derived conversation-not-started bit: true while no turn has run.
    * Standalone plugin events — command lifecycle
