@@ -194,7 +194,6 @@ export class SubagentsStore {
     this.store.update((state) => {
       if (state.draft === null) return
       mutate(state.draft)
-      state.draft.error = null
     })
   }
 
@@ -250,8 +249,10 @@ export class SubagentsStore {
       return
     }
     const definitions = [...state.definitions]
+    let id = draft.id
+    if (id === null) id = slugFromName(name, definitions.map(entry => entry.id))
     const next: DefinitionRow = {
-      id: draft.id === null ? slugFromName(name, definitions.map(entry => entry.id)) : draft.id,
+      id,
       name,
       description: draft.description.trim(),
       persona,
