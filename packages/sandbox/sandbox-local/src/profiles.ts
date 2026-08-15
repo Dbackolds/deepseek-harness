@@ -17,7 +17,8 @@ export function bwrapProfileArgs(policy: SandboxPolicy): string[] {
   const args = ['--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--die-with-parent']
   if (policy.mode === 'workspace-write') {
     args.push('--tmpfs', '/tmp')
-    args.push('--bind', policy.workspaceRoot, policy.workspaceRoot)
+    const roots = [...new Set([policy.workspaceRoot, ...policy.additionalRoots ?? []])]
+    for (const root of roots) args.push('--bind', root, root)
   }
   return args
 }
@@ -30,7 +31,7 @@ export function bwrapProfileArgs(policy: SandboxPolicy): string[] {
 export function landlockProfileArgs(policy: SandboxPolicy): string[] {
   const readWrite = ['/dev/null']
   if (policy.mode === 'workspace-write') {
-    readWrite.push('/tmp', policy.workspaceRoot)
+    readWrite.push('/tmp', policy.workspaceRoot, ...policy.additionalRoots ?? [])
   }
   return landlockGrantArgs({ readOnly: ['/'], readWrite })
 }

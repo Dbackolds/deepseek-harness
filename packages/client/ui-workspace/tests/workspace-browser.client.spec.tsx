@@ -14,6 +14,8 @@ import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
+
+let latestDirectoryFlow: { open: boolean; onPicked: (path: string) => void; onCancel: () => void } | undefined
 beforeEach(() => { localStorage.clear(); createWorkspaceViewStore().create().actions.setOrderBy('manual') })
 
 // The seat's key domain is workspace ∪ common; the stub mirrors the real
@@ -35,7 +37,7 @@ const sessionState = (items: readonly SessionSummary[], overrides: Partial<Sessi
   ...overrides,
 })
 const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView => ({
-  workspaceId: wid(id), path: `/projects/${id}`, title,
+  workspaceId: wid(id), path: `/projects/${id}`, folders: [], title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
 const workspaceState = (items: readonly WorkspaceView[], archivedSessionIds: readonly SessionId[] = []): WorkspaceListState => ({
@@ -79,8 +81,13 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     insertWorkspaceBefore: vi.fn(async () => {}),
     insertSessionBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),
+    addWorkspaceFolder: vi.fn(async () => workspace('created', [])),
+    removeWorkspaceFolder: vi.fn(async () => workspace('created', [])),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
-    renderSlot: ((_name: string, owner: { open: boolean }) => (owner.open ? <div data-testid="directory-flow" /> : null)) as never,
+    renderSlot: ((_name: string, owner: { open: boolean; onPicked: (path: string) => void; onCancel: () => void }) => {
+      latestDirectoryFlow = owner
+      return owner.open ? <div data-testid="directory-flow" /> : null
+    }) as never,
     t,
     ...overrides,
   }
@@ -1009,6 +1016,46 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByRole('dialog')).toBeTruthy()
     await act(async () => { resolveRename() })
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('opens the composed directory flow to add an additional folder', async () => {
+    const addWorkspaceFolder = vi.fn(async () => workspace('alpha', [], 'Alpha'))
+    const startSession = vi.fn()
+    mount({
+      useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
+      addWorkspaceFolder,
+      startSession,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加文件夹…' }))
+    expect(screen.getByTestId('directory-flow')).toBeTruthy()
+    await act(async () => { latestDirectoryFlow!.onPicked('/libs/shared') })
+    expect(addWorkspaceFolder).toHaveBeenCalledWith(wid('alpha'), '/libs/shared')
+    expect(startSession).not.toHaveBeenCalled()
+  })
+
+  it('cancelling the add-folder chooser does not reopen it', async () => {
+    mount({
+      useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
+    })
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加文件夹…' }))
+    expect(screen.getByTestId('directory-flow')).toBeTruthy()
+    await act(async () => { latestDirectoryFlow!.onCancel() })
+    expect(screen.queryByTestId('directory-flow')).toBeNull()
+  })
+
+  it('removes an additional folder from the workspace menu', async () => {
+    const removeWorkspaceFolder = vi.fn(async () => workspace('alpha', [], 'Alpha'))
+    const extra = { ...workspace('alpha', [], 'Alpha'), folders: ['/libs/shared'] }
+    mount({
+      useWorkspaces: hook(workspaceState([extra])),
+      removeWorkspaceFolder,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: '移除文件夹' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '/libs/shared' }))
+    expect(removeWorkspaceFolder).toHaveBeenCalledWith(wid('alpha'), '/libs/shared')
   })
 
   it('rename via Enter, failure surfaces the error, Cancel closes', async () => {

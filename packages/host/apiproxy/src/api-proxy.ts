@@ -1084,6 +1084,7 @@ function workspaceView(workspace: Workspace): WorkspaceView {
   return {
     workspaceId: workspace.id,
     path: workspace.path,
+    folders: [...workspace.folders],
     title: workspace.title,
     sessionIds: [...workspace.sessionIds],
     createdAt: workspace.createdAt,
@@ -1097,6 +1098,7 @@ function changedWorkspaceView(workspaceId: string, value: unknown): WorkspaceVie
   return {
     workspaceId: workspaceId as WorkspaceId,
     path: record.path,
+    folders: [...record.folders],
     title: record.title,
     sessionIds: [...record.sessionIds],
     createdAt: record.createdAt,
@@ -2911,6 +2913,46 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
               sessionId: payload.sessionId,
               ...payload.beforeSessionId === undefined ? {} : { beforeSessionId: payload.beforeSessionId },
             },
+          })
+        }
+        return ok(request, { workspace: workspaceView(workspace) })
+      },
+
+      async addFolder(request) {
+        const { workspaceId, path } = request.payload
+        const workspace = ctx.workspaceRegistry.get(brandWorkspaceId(workspaceId))
+        if (workspace === undefined) return workspaceNotFound(request, workspaceId)
+        const owner = await ctx.workspaceRegistry.resolveByPath(path).catch(() => undefined)
+        if (owner !== undefined && owner.id !== workspace.id) {
+          return err(request, {
+            code: 'workspace-folder-conflict',
+            message: `path "${path}" is already a folder of workspace "${owner.id}"`,
+            details: { path, workspaceId: owner.id },
+          })
+        }
+        try {
+          await workspace.addFolder(path)
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'workspace-invalid-path',
+            message: `cannot add folder "${path}" to workspace "${workspaceId}": ${error instanceof Error ? error.message : String(error)}`,
+            details: { path, workspaceId },
+          })
+        }
+        return ok(request, { workspace: workspaceView(workspace) })
+      },
+
+      async removeFolder(request) {
+        const { workspaceId, path } = request.payload
+        const workspace = ctx.workspaceRegistry.get(brandWorkspaceId(workspaceId))
+        if (workspace === undefined) return workspaceNotFound(request, workspaceId)
+        try {
+          await workspace.removeFolder(path)
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'workspace-invalid-path',
+            message: `cannot remove folder "${path}" from workspace "${workspaceId}": ${error instanceof Error ? error.message : String(error)}`,
+            details: { path, workspaceId },
           })
         }
         return ok(request, { workspace: workspaceView(workspace) })

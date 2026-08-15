@@ -18,7 +18,7 @@ async function bench() {
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
     workspaceId: 'ws-new' as never,
     path: 'name' in input ? `/projects/${input.name}` : input.path,
-    title: 'new', sessionIds: [], createdAt: '0', updatedAt: '0',
+    title: 'new', folders: [], sessionIds: [], createdAt: '0', updatedAt: '0',
   }))
   const startSession = vi.fn()
   const rename = vi.fn(async () => ({}))
@@ -32,8 +32,16 @@ async function bench() {
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
+  const addFolder = vi.fn(async () => ({
+    workspaceId: 'ws-new' as never, path: '/projects/new', folders: ['/extra'], title: 'new',
+    sessionIds: [], createdAt: '0', updatedAt: '0',
+  }))
+  const removeFolder = vi.fn(async () => ({
+    workspaceId: 'ws-new' as never, path: '/projects/new', folders: [], title: 'new',
+    sessionIds: [], createdAt: '0', updatedAt: '0',
+  }))
   ctx.provide('workspaces', {
-    create, startSession, rename, insertSessionBefore,
+    create, startSession, rename, insertSessionBefore, addFolder, removeFolder,
   } as never)
   ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
   const locale = new LocaleRuntime(ctx)

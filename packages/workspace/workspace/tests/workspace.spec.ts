@@ -133,6 +133,7 @@ function record(path: string, sessionIds: string[], createdAt = '2026-07-24T00:0
   return {
     path,
     title: basename(path),
+    folders: [],
     sessionIds: sessionIds.map(SessionId),
     createdAt,
     updatedAt: createdAt,
@@ -723,6 +724,38 @@ describe('Workspace session ordering', () => {
     const attached = workspace.attachSession(SessionId('s1'))
     await Promise.all([detached, attached])
     expect(workspace.sessionIds).toEqual(['s1'])
+  })
+
+  it('adds and removes additional folders without changing the primary path', async () => {
+    const primary = await makeDir('multi-primary')
+    const extra = await makeDir('multi-extra')
+    const result = await harness()
+    const workspace = await result.registry.create(primary)
+    expect(workspace.folders).toEqual([])
+    await workspace.addFolder(extra)
+    expect(workspace.folders).toEqual([extra])
+    await workspace.addFolder(extra)
+    expect(workspace.folders).toEqual([extra])
+    await workspace.addFolder(primary)
+    expect(workspace.folders).toEqual([extra])
+    expect(workspace.path).toBe(primary)
+    await expect(workspace.removeFolder(primary)).rejects.toThrow(/primary folder/)
+    await workspace.removeFolder(extra)
+    expect(workspace.folders).toEqual([])
+    expect(await result.registry.resolveByPath(extra)).toBeUndefined()
+  })
+
+  it('rejects an additional folder already owned by another workspace', async () => {
+    const firstDir = await makeDir('owner-first')
+    const secondDir = await makeDir('owner-second')
+    const extra = await makeDir('owner-extra')
+    const result = await harness()
+    const first = await result.registry.create(firstDir)
+    const second = await result.registry.create(secondDir)
+    await first.addFolder(extra)
+    expect(await result.registry.resolveByPath(extra)).toBe(first)
+    await expect(second.addFolder(extra)).rejects.toThrow(/already claims/)
+    expect(second.folders).toEqual([])
   })
 
 })

@@ -21,7 +21,7 @@ const list = (...items: SessionSummary[]): SessionListState => ({
   phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
 })
 const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView => ({
-  workspaceId: wid(id), path: `/projects/${id}`, title,
+  workspaceId: wid(id), path: `/projects/${id}`, folders: [], title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
 const view = (expandedGroups: readonly string[] = [], ungroupedOrder?: readonly string[]) => ({
@@ -38,6 +38,15 @@ describe('deriveGroups', () => {
     const groups = deriveGroups(sessions, workspaces, noArchive, view(['first']))
     expect(groups.map(group => group.key)).toEqual(['first', 'empty'])
     expect(groups[0]!.sessions.map(session => session.id)).toEqual([sid('older'), sid('newer')])
+    expect(groups[0]!.folders).toEqual([])
+    expect(groups[1]!.folders).toEqual([])
+  })
+
+  it('projects additional folders from the Workspace view onto the group', () => {
+    const extra = { ...workspace('first', []), folders: ['/libs/shared', '/generated'] }
+    const groups = deriveGroups(list(), [extra], noArchive, view())
+    expect(groups[0]!.folders).toEqual(['/libs/shared', '/generated'])
+    expect(groups[0]!.cwd).toBe('/projects/first')
   })
 
   it('projects pending-interaction state into grouped and flat rows', () => {

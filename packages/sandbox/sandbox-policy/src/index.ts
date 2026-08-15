@@ -25,6 +25,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { canonicalPath, type SandboxExecutionPolicy, type SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import { effectiveSandboxMode } from './session-mode.ts'
 
 export { SANDBOX_MODES, effectiveSandboxMode, setSandboxMode } from './session-mode.ts'
@@ -39,8 +40,13 @@ function renderPolicyContext(policy: SandboxExecutionPolicy): string {
   switch (policy.mode) {
     case 'read-only':
       return 'Current DSH file policy: read-only. Any available operation enforced by the DSH file sandbox cannot modify files in the standing mode. Do not refuse a required modification from this policy alone: try an available tool normally and follow any denial and escalation guidance it returns.'
-    case 'workspace-write':
-      return `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(policy.workspaceRoot)}. Some platform temporary areas may also be writable.`
+    case 'workspace-write': {
+      const additional = policy.additionalRoots ?? []
+      const extra = additional.length === 0
+        ? ''
+        : ` Additional writable folders: ${JSON.stringify(additional)}.`
+      return `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(policy.workspaceRoot)}.${extra} Some platform temporary areas may also be writable.`
+    }
     case 'danger-full-access':
       return 'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.'
     /* v8 ignore next 4 -- SandboxMode is a typed same-process closed union; this branch is only the static exhaustiveness guard. */
@@ -126,19 +132,61 @@ export class SandboxPolicyService extends Service {
   /**
    * Resolve the complete policy for one capability call. An approved explicit
    * mode outranks the session's last `sandbox/mode` event, which outranks the
-   * deployment default. A session cwd is its workspace-write boundary; the
+   * deployment default. A session cwd is its primary workspace-write boundary;
+   * additional folders from the owning workspace join the same allow-list. The
    * configured root is the fallback for agentless calls and sessions without a
    * cwd.
    * @param request - optional session and approved mode override.
-   * @returns the fully resolved per-call mode and absolute workspace root.
+   * @returns the fully resolved per-call mode, primary workspace root, and extra folders.
    */
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
     const { session } = request
+    const workspaceRoot = resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot)
+    const additionalRoots = session === undefined ? [] : this.additionalRootsOf(session, workspaceRoot)
     return {
       mode: request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,
-      workspaceRoot: resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot),
+      workspaceRoot,
+      ...additionalRoots.length === 0 ? {} : { additionalRoots },
       ...session === undefined ? {} : { sessionId: session.id },
     }
+  }
+
+  /**
+   * Additional writable folders for one session: the owning workspace's
+   * additional folders, excluding the already-resolved primary root.
+   */
+  private additionalRootsOf(session: Session, workspaceRoot: string): string[] {
+    const registry = this.ctx.get('workspaceRegistry')
+    if (registry === undefined) return []
+    const workspace = this.owningWorkspace(registry.list(), session, workspaceRoot)
+    if (workspace === undefined) return []
+    const extra: string[] = []
+    const seen = new Set([workspaceRoot])
+    for (const folder of workspace.folders) {
+      const root = resolveWorkspaceRoot(folder)
+      if (seen.has(root)) continue
+      seen.add(root)
+      extra.push(root)
+    }
+    return extra
+  }
+
+  /**
+   * The workspace that accounts this session, or the workspace whose primary
+   * path equals the resolved session cwd when the session is not yet attached.
+   */
+  private owningWorkspace(
+    workspaces: readonly Workspace[],
+    session: Session,
+    workspaceRoot: string,
+  ): Workspace | undefined {
+    for (const workspace of workspaces) {
+      if (workspace.sessionIds.includes(session.id)) return workspace
+    }
+    for (const workspace of workspaces) {
+      if (resolveWorkspaceRoot(workspace.path) === workspaceRoot) return workspace
+    }
+    return undefined
   }
 
   /**

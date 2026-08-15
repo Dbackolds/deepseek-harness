@@ -123,6 +123,25 @@ describe('SandboxPolicyService', () => {
     expect(ctx.sandboxPolicy.resolve({ session: session('sess-no-cwd') }).workspaceRoot).toBe(resolve('/fallback'))
   })
 
+  it('includes additional folders from the owning workspace', async () => {
+    const ctx = await mounted({ mode: 'workspace-write', workspaceRoot: '/fallback' })
+    const extra = resolve('/projects/extra')
+    ctx.provide('workspaceRegistry', {
+      list: () => [{
+        id: 'ws-1',
+        path: resolve('/projects/first'),
+        folders: [extra],
+        sessionIds: ['sess-first'],
+      }],
+    } as never)
+    expect(ctx.sandboxPolicy.resolve({ session: session('sess-first', '/projects/first') })).toEqual({
+      mode: 'workspace-write',
+      workspaceRoot: resolve('/projects/first'),
+      additionalRoots: [extra],
+      sessionId: 'sess-first',
+    })
+  })
+
   it('rejects a mode outside the closed vocabulary at load', async () => {
     const ctx = new Context()
     // schemastery rejects the union violation when the plugin loads.

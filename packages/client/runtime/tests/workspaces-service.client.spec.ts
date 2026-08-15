@@ -11,7 +11,7 @@ const wid = (id: string): WorkspaceId => id as WorkspaceId
 
 function workspace(id: string, sessionIds: SessionId[] = [], createdAt = '2026-01-01T00:00:00.000Z'): WorkspaceView {
   return {
-    workspaceId: wid(id), path: `/w/${id}`, title: id, sessionIds,
+    workspaceId: wid(id), path: `/w/${id}`, folders: [], title: id, sessionIds,
     createdAt, updatedAt: createdAt,
   }
 }
@@ -312,6 +312,27 @@ describe('WorkspaceRuntime', () => {
     const rejected = workspaces.create({ path: '/missing' })
     await expect(rejected).rejects.toThrow(/workspace-invalid-path: missing/)
     await expect(rejected).rejects.toBeInstanceOf(WorkspaceCreateError)
+  })
+
+  it('adds and removes additional folders through the Host unary', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceAddFolder = payload => Promise.resolve(ok({
+      workspace: { ...workspace('picked'), folders: [(payload as { path: string }).path] },
+    }))
+    await expect(workspaces.addFolder(wid('picked'), '/w/extra')).resolves.toMatchObject({
+      folders: ['/w/extra'],
+    })
+    expect(api.callsOf('workspace.addFolder')).toEqual([{ workspaceId: 'picked', path: '/w/extra' }])
+    api.onWorkspaceRemoveFolder = () => Promise.resolve(ok({
+      workspace: { ...workspace('picked'), folders: [] },
+    }))
+    await expect(workspaces.removeFolder(wid('picked'), '/w/extra')).resolves.toMatchObject({
+      folders: [],
+    })
+    expect(api.callsOf('workspace.removeFolder')).toEqual([{ workspaceId: 'picked', path: '/w/extra' }])
   })
 
   it('passes native directory selection and cancellation through without local state', async () => {

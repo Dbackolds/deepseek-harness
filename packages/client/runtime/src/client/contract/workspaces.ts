@@ -91,4 +91,18 @@ export interface IWorkspaces {
    * @param sessionId - session to archive.
    */
   archiveSession(sessionId: SessionId): Promise<void>
+  /**
+   * Add an existing directory as an additional folder of a Workspace.
+   * @param workspaceId - target workspace.
+   * @param path - existing host directory.
+   * @returns the updated Workspace view.
+   */
+  addFolder(workspaceId: WorkspaceId, path: string): Promise<WorkspaceView>
+  /**
+   * Remove one additional folder from a Workspace.
+   * @param workspaceId - target workspace.
+   * @param path - additional folder to remove.
+   * @returns the updated Workspace view.
+   */
+  removeFolder(workspaceId: WorkspaceId, path: string): Promise<WorkspaceView>
 }

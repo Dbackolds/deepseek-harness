@@ -66,6 +66,8 @@ describe('rpcErrorSchema', () => {
     expect(rpcErrorSchema.parse({ code: 'workspace-not-found', message: 'm', details: { workspaceId: 'w' } }).code).toBe('workspace-not-found')
     expect(rpcErrorSchema.parse({ code: 'workspace-invalid-path', message: 'm', details: { path: '/x' } }).code).toBe('workspace-invalid-path')
     expect(rpcErrorSchema.parse({ code: 'workspace-name-conflict', message: 'm', details: { name: 'x' } }).code).toBe('workspace-name-conflict')
+    expect(rpcErrorSchema.parse({ code: 'workspace-folder-conflict', message: 'm', details: { path: '/x', workspaceId: 'w' } }).code).toBe('workspace-folder-conflict')
+    expect(rpcErrorSchema.parse({ code: 'workspace-invalid-path', message: 'm', details: { path: '/x', workspaceId: 'w' } }).code).toBe('workspace-invalid-path')
     expect(rpcErrorSchema.parse({ code: 'workspace-move-invalid', message: 'm', details: { workspaceId: 'w', sessionId: 's' } }).code).toBe('workspace-move-invalid')
     expect(rpcErrorSchema.parse({
       code: 'model-unavailable',
@@ -346,7 +348,7 @@ describe('host domain schemas', () => {
 
 describe('workspace domain schemas', () => {
   const view = {
-    workspaceId: 'w1', path: '/p', title: 'p', sessionIds: ['s1'],
+    workspaceId: 'w1', path: '/p', folders: [], title: 'p', sessionIds: ['s1'],
     createdAt: '2026-07-25T00:00:00.000Z', updatedAt: '2026-07-25T00:00:00.000Z',
   }
 
@@ -518,7 +520,7 @@ describe('events frame schemas', () => {
       { type: 'host/session-status', sessionId: 's', running: true },
       { type: 'host/agent-error', sessionId: 's', message: 'boom' },
       { type: 'host/workspace-changed', workspace: {
-        workspaceId: 'w', path: '/w', title: 'w', sessionIds: [],
+        workspaceId: 'w', path: '/w', folders: [], title: 'w', sessionIds: [],
         createdAt: '0', updatedAt: '0',
       } },
       { type: 'host/workspace-removed', workspaceId: 'w' },

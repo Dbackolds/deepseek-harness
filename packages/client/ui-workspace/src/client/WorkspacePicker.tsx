@@ -34,6 +34,16 @@ export interface WorkspacePickFlowProps {
   useWorkspaces: <S>(selector: (state: WorkspaceListState) => S) => S
   /** Adopt a picked host directory as a real Workspace. */
   createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /**
+   * When set, the next picked directory is adopted as an additional folder of
+   * this Workspace instead of creating a new Workspace. The flow opens as
+   * soon as the id is present.
+   */
+  addFolderTo?: WorkspaceId | undefined
+  /** Adopt a picked host directory as an additional folder of `addFolderTo`. */
+  addWorkspaceFolder?: (workspaceId: WorkspaceId, path: string) => Promise<WorkspaceView>
+  /** Clear a cancelled or settled add-folder request so the chooser does not reopen. */
+  onAddFolderSettled?: () => void
   /** Bound occupancy selector hook for this surface's directory-flow hole (empty leaves the surface with no add action). */
   useDirectoryFlow: SnapshotSelectorHook<boolean>
   /** Render this surface's directory-flow hole with the owner conversation (the entry's narrowed renderSlot). */
@@ -61,6 +71,9 @@ export function WorkspacePickFlow({
   anchorRef,
   useWorkspaces,
   createWorkspace,
+  addFolderTo,
+  addWorkspaceFolder,
+  onAddFolderSettled,
   useDirectoryFlow,
   renderDirectoryFlow,
   onPick,
@@ -123,8 +136,20 @@ export function WorkspacePickFlow({
   }
 
   /** Adopt a picked directory; failures land in the folder-error dialog (Choose again reopens the flow). */
-  const adoptDirectory = (path: string): Promise<void> =>
-    createWorkspace({ path }).then((workspace) => {
+  const adoptDirectory = (path: string): Promise<void> => {
+    if (addFolderTo !== undefined && addWorkspaceFolder !== undefined) {
+      return addWorkspaceFolder(addFolderTo, path).then(() => {
+        setFlowOpen(false)
+        onAddFolderSettled?.()
+        onPick(addFolderTo)
+      }).catch((reason: unknown) => {
+        setModalError(reason instanceof Error ? reason.message : String(reason))
+        setFlowOpen(false)
+        onAddFolderSettled?.()
+        setErrorOpen(true)
+      })
+    }
+    return createWorkspace({ path }).then((workspace) => {
       setFlowOpen(false)
       onPick(workspace.workspaceId)
     }).catch((reason: unknown) => {
@@ -132,6 +157,7 @@ export function WorkspacePickFlow({
       setFlowOpen(false)
       setErrorOpen(true)
     })
+  }
 
   const openDirectoryFlow = useCallback((): void => {
     onClose()
@@ -156,6 +182,10 @@ export function WorkspacePickFlow({
     if (open && addIsTheOnlyEntry && !flowBusy) openDirectoryFlow()
   }, [open, addIsTheOnlyEntry, flowBusy, openDirectoryFlow])
 
+  useEffect(() => {
+    if (addFolderTo !== undefined && !flowBusy) openDirectoryFlow()
+  }, [addFolderTo, flowBusy, openDirectoryFlow])
+
   /** Owner side of the flow conversation: adopt keeps the flow open (busy) until the Host answers. */
   const flowOwner: DirectoryFlowOwnerProps = {
     open: flowOpen,
@@ -164,9 +194,13 @@ export function WorkspacePickFlow({
       setPickingFolder(true)
       void adoptDirectory(path).finally(() => { setPickingFolder(false) })
     },
-    onCancel: () => { setFlowOpen(false) },
+    onCancel: () => {
+      setFlowOpen(false)
+      onAddFolderSettled?.()
+    },
     onError: (message) => {
       setFlowOpen(false)
+      onAddFolderSettled?.()
       setModalError(message)
       setErrorOpen(true)
     },

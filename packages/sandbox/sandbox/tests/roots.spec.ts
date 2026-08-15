@@ -36,4 +36,16 @@ describe('writableRoots', () => {
     // Deduplicated after canonicalization (/tmp and os.tmpdir() may coincide).
     expect(new Set(roots).size).toBe(roots.length)
   })
+
+  it('workspace-write includes additional workspace folders', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'dsh-ws-'))
+    const extra = mkdtempSync(join(tmpdir(), 'dsh-extra-'))
+    const roots = writableRoots({
+      mode: 'workspace-write',
+      workspaceRoot: ws,
+      additionalRoots: [extra],
+    })
+    expect(roots).toContain(realpathSync.native(ws))
+    expect(roots).toContain(realpathSync.native(extra))
+  })
 })

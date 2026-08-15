@@ -293,6 +293,30 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
+   * Add an existing directory as an additional folder of a Workspace.
+   * @param workspaceId - target workspace.
+   * @param path - existing host directory.
+   * @returns the updated Workspace view.
+   */
+  async addFolder(workspaceId: WorkspaceId, path: string): Promise<WorkspaceView> {
+    const result = await this.manager.addFolder(workspaceId, path)
+    if (!result.ok) throw new Error(`workspace add folder failed: ${result.error.code}: ${result.error.message}`)
+    return result.value.workspace
+  }
+
+  /**
+   * Remove one additional folder from a Workspace.
+   * @param workspaceId - target workspace.
+   * @param path - additional folder to remove.
+   * @returns the updated Workspace view.
+   */
+  async removeFolder(workspaceId: WorkspaceId, path: string): Promise<WorkspaceView> {
+    const result = await this.manager.removeFolder(workspaceId, path)
+    if (!result.ok) throw new Error(`workspace remove folder failed: ${result.error.code}: ${result.error.message}`)
+    return result.value.workspace
+  }
+
+  /**
    * Move a session within its Workspace's manual order (DOM-insertBefore-like).
    * @param workspaceId - owning workspace.
    * @param sessionId - accounted session to move.

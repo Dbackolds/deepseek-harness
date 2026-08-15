@@ -1554,6 +1554,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   const workspaces: WorkspaceView[] = options.empty ? [] : [{
     workspaceId: wid('fx-ws-fixture'),
     path: '/tmp/fixture',
+    folders: [],
     title: 'fixture',
     sessionIds: [sid('fx-alpha'), sid('fx-beta'), sid('fx-gamma')],
     createdAt: fixtureEpoch,
@@ -2576,6 +2577,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         const created: WorkspaceView = {
           workspaceId: wid(`fx-ws-${nextWorkspace++}`),
           path,
+          folders: [],
           title: path.split('/').filter(Boolean).at(-1) ?? path,
           sessionIds: [],
           createdAt: now,
@@ -2693,6 +2695,55 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           emitHost({ type: 'host/archived-sessions-changed', archivedSessionIds: [...archivedSessionIds] })
         }
         return ok(request, { archivedSessionIds: [...archivedSessionIds] })
+      },
+      addFolder: (request) => {
+        const { workspaceId, path } = request.payload
+        const workspace = workspaces.find(item => item.workspaceId === workspaceId)
+        if (workspace === undefined) {
+          return err(request, {
+            code: 'workspace-not-found',
+            message: `no workspace ${workspaceId}`,
+            details: { workspaceId },
+          })
+        }
+        const owner = workspaces.find(item => item.path === path || item.folders.includes(path))
+        if (owner !== undefined && owner.workspaceId !== workspaceId) {
+          return err(request, {
+            code: 'workspace-folder-conflict',
+            message: `path ${path} is already a folder of workspace ${owner.workspaceId}`,
+            details: { path, workspaceId: owner.workspaceId },
+          })
+        }
+        if (path !== workspace.path && !workspace.folders.includes(path)) {
+          workspace.folders = [...workspace.folders, path]
+          workspace.updatedAt = new Date().toISOString()
+          emitHost({ type: 'host/workspace-changed', workspace: { ...workspace } })
+        }
+        return ok(request, { workspace: { ...workspace } })
+      },
+      removeFolder: (request) => {
+        const { workspaceId, path } = request.payload
+        const workspace = workspaces.find(item => item.workspaceId === workspaceId)
+        if (workspace === undefined) {
+          return err(request, {
+            code: 'workspace-not-found',
+            message: `no workspace ${workspaceId}`,
+            details: { workspaceId },
+          })
+        }
+        if (path === workspace.path) {
+          return err(request, {
+            code: 'workspace-invalid-path',
+            message: `cannot remove the primary folder ${path}`,
+            details: { path, workspaceId },
+          })
+        }
+        if (workspace.folders.includes(path)) {
+          workspace.folders = workspace.folders.filter(folder => folder !== path)
+          workspace.updatedAt = new Date().toISOString()
+          emitHost({ type: 'host/workspace-changed', workspace: { ...workspace } })
+        }
+        return ok(request, { workspace: { ...workspace } })
       },
     },
     agentPresets: {
@@ -3167,6 +3218,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertBefore': return this.api.workspace.insertBefore(request)
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
+      case 'workspace.addFolder': return this.api.workspace.addFolder(request)
+      case 'workspace.removeFolder': return this.api.workspace.removeFolder(request)
       case 'skill.list': return this.api.skills.list(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)

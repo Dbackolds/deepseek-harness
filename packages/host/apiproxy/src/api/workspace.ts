@@ -20,8 +20,13 @@ export type WorkspaceId = Branded<'WorkspaceId'>
 /** One workspace row: the record projection every workspace.* value carries. */
 export interface WorkspaceView {
   workspaceId: WorkspaceId
-  /** Canonical directory path (host-side realpath canon). */
+  /** Canonical primary directory path (host-side realpath canon). Session cwd stays bound to this path. */
   path: string
+  /**
+   * Additional canonical folders in durable add order. Never includes
+   * {@link path}; uniqueness is canonical-path equality.
+   */
+  folders: string[]
   /** Display title (defaults to the path basename at create). */
   title: string
   /**
@@ -95,6 +100,25 @@ export interface WorkspaceApi {
     sessionId: SessionId
     beforeSessionId?: SessionId
   }>): Promise<RpcResponse<{ workspace: WorkspaceView }>>
+
+  /**
+   * Adds an existing directory as an additional folder of a workspace.
+   * The primary path or an already-accounted folder is a no-op success.
+   * A missing or non-directory path fails with `workspace-invalid-path`;
+   * a path already owned by another workspace fails with
+   * `workspace-folder-conflict`. An unknown id fails with
+   * `workspace-not-found`.
+   */
+  addFolder(request: RpcRequest<{ workspaceId: WorkspaceId; path: string }>):
+  Promise<RpcResponse<{ workspace: WorkspaceView }>>
+
+  /**
+   * Removes one additional folder from a workspace. The primary path
+   * cannot be removed this way (`workspace-invalid-path`). An unaccounted
+   * path is a no-op success. An unknown id fails with `workspace-not-found`.
+   */
+  removeFolder(request: RpcRequest<{ workspaceId: WorkspaceId; path: string }>):
+  Promise<RpcResponse<{ workspace: WorkspaceView }>>
 
   /**
    * Adds one session to the registry-global archive set: the session

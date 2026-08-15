@@ -548,7 +548,7 @@ describe('createFixtureApi', () => {
     const listed = await api.workspace.list(req({}))
     if (!listed.result.ok) throw new Error('list failed')
     expect(listed.result.value.items).toEqual([expect.objectContaining({
-      workspaceId: 'fx-ws-fixture', path: '/tmp/fixture', title: 'fixture',
+      workspaceId: 'fx-ws-fixture', path: '/tmp/fixture', folders: [], title: 'fixture',
       sessionIds: ['fx-alpha', 'fx-beta', 'fx-gamma'],
     })])
     // path collision → the existing entity comes back, created:false, no frame.
