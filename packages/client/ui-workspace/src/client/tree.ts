@@ -232,6 +232,55 @@ function sessionNode(
   }
 }
 
+/** Sidebar activity bucket used by the flat list's three status sections. */
+export type SessionActivityBucket = 'unread' | 'running' | 'history'
+
+/**
+ * Classify one visible Session into the flat list's three status sections.
+ * Unviewed completion is exclusive of live work; pending interaction and own
+ * or descendant running occupy Running; everything else is History.
+ * @param node - derived session row.
+ * @returns the section that owns this row.
+ */
+export function sessionActivityBucket(
+  node: Pick<SessionNode, 'pendingInteraction' | 'running' | 'runningSubagentCount' | 'completed'>,
+): SessionActivityBucket {
+  if (node.pendingInteraction !== undefined || node.running || node.runningSubagentCount > 0) {
+    return 'running'
+  }
+  if (node.completed) return 'unread'
+  return 'history'
+}
+
+/** One flat-list status section and the rows that currently belong in it. */
+export interface SessionActivitySection {
+  bucket: SessionActivityBucket
+  sessions: readonly SessionNode[]
+}
+
+/**
+ * Split a flat Session list into Completed / Running / History sections.
+ * Empty sections stay present so the renderer can skip a heading with no rows.
+ * @param sessions - visible flat rows in the current view order.
+ * @returns the three sections in render order.
+ */
+export function partitionSessionActivity(sessions: readonly SessionNode[]): readonly SessionActivitySection[] {
+  const unread: SessionNode[] = []
+  const running: SessionNode[] = []
+  const history: SessionNode[] = []
+  for (const session of sessions) {
+    const bucket = sessionActivityBucket(session)
+    if (bucket === 'unread') unread.push(session)
+    else if (bucket === 'running') running.push(session)
+    else history.push(session)
+  }
+  return [
+    { bucket: 'unread', sessions: unread },
+    { bucket: 'running', sessions: running },
+    { bucket: 'history', sessions: history },
+  ]
+}
+
 /**
  * Derive the workspace browser groups with every session as a top-level row.
  *

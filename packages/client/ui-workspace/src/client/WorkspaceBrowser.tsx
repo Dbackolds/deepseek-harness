@@ -19,8 +19,11 @@ import type {
   SessionId, SessionListState, SessionSearchResultItem, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
-import type { SessionNode, SessionOrderBy } from './tree.ts'
-import { deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY } from './tree.ts'
+import type { SessionActivityBucket, SessionNode, SessionOrderBy } from './tree.ts'
+import {
+  deriveFlat, deriveGroups, deriveSearchResults, partitionSessionActivity, sessionActivityBucket,
+  UNGROUPED_KEY,
+} from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
 import { WorkspacePickFlow } from './WorkspacePicker.tsx'
@@ -37,6 +40,18 @@ const SEARCH_DEBOUNCE_MS = 250
 const SEARCH_QUERY_MAX_CODE_UNITS = 500
 /** Session rows visible per Workspace before the local overflow control. */
 const COLLAPSED_SESSION_LIMIT = 5
+/** History rows visible in the flat list before the local overflow control. */
+const COLLAPSED_HISTORY_LIMIT = 5
+
+/** Localized heading for one flat-list activity section. */
+function activitySectionLabel(
+  bucket: SessionActivityBucket,
+  t: WorkspaceBrowserProps['t'],
+): string {
+  if (bucket === 'unread') return t('section.unread')
+  if (bucket === 'running') return t('section.running')
+  return t('section.history')
+}
 
 /** Keep controlled input and RPC payload inside the session.search wire contract. */
 function sanitizeSearchQuery(value: string): string {
@@ -197,6 +212,8 @@ interface DragState {
   /** Workspace id, or {@link UNGROUPED_KEY} for the browser-local loose-session account. */
   accountKey: string
   sessionId: SessionNode['id']
+  /** Activity section the drag started in; drops stay inside this bucket. */
+  bucket: SessionActivityBucket
   /** Row the marker sits on and which half (insert above/below it). */
   over: { id: SessionNode['id']; half: 'before' | 'after' } | null
 }
@@ -338,21 +355,29 @@ function SessionTree({
     setDrag(null)
     const group = groups.find(candidate => candidate.key === activeDrag.accountKey)
     if (group === undefined) return
-    const targetIndex = group.sessions.findIndex(session => session.id === over.id)
+    const neighbors = partitionSessionActivity(group.sessions)
+      .find(section => section.bucket === activeDrag.bucket)?.sessions ?? []
+    const targetIndex = neighbors.findIndex(session => session.id === over.id)
     if (targetIndex === -1) return
-    const anchor = over.half === 'before' ? over.id : group.sessions[targetIndex + 1]?.id
+    const anchor = over.half === 'before' ? over.id : neighbors[targetIndex + 1]?.id
     if (anchor === activeDrag.sessionId) return
-    const sourceIndex = group.sessions.findIndex(session => session.id === activeDrag.sessionId)
+    const sourceIndex = neighbors.findIndex(session => session.id === activeDrag.sessionId)
+    const remaining = neighbors.filter(session => session.id !== activeDrag.sessionId)
     const anchorIndex = anchor === undefined
-      ? group.sessions.length
-      : group.sessions.findIndex(session => session.id === anchor)
+      ? neighbors.length
+      : neighbors.findIndex(session => session.id === anchor)
     if (sourceIndex !== -1 && (anchorIndex === sourceIndex || anchorIndex === sourceIndex + 1)) return
     const accountSessionIds = activeDrag.accountKey === UNGROUPED_KEY
       ? orderedUngroupedSessionIds
       : orderedWorkspaces.find(workspace => workspace.workspaceId === activeDrag.accountKey)?.sessionIds
     if (accountSessionIds === undefined) return
     const nextOrder = accountSessionIds.filter(id => id !== activeDrag.sessionId)
-    const insertAt = anchor === undefined ? nextOrder.length : nextOrder.indexOf(anchor)
+    const insertAt = anchor === undefined
+      ? (() => {
+        const lastNeighbor = remaining.at(-1)?.id
+        return lastNeighbor === undefined ? nextOrder.length : nextOrder.indexOf(lastNeighbor) + 1
+      })()
+      : nextOrder.indexOf(anchor)
     nextOrder.splice(insertAt === -1 ? nextOrder.length : insertAt, 0, activeDrag.sessionId)
     setSessionOrder(activeDrag.accountKey, nextOrder.map(id => id as string))
     if (orderBy === 'updated' || activeDrag.accountKey === UNGROUPED_KEY) return
@@ -489,62 +514,76 @@ function SessionTree({
                     },
                   }}
               />
-              {(expandedSessionGroups.includes(group.key)
-                ? group.sessions
-                : group.sessions.slice(0, COLLAPSED_SESSION_LIMIT)
-              ).map((node) => {
-              // Session drag never leaves its group. Ungrouped writes only the
-              // browser-local account; real Workspaces may also write Host order.
-                const sameGroupDrag = drag !== null && drag.accountKey === group.key
-                const dragProps = {
-                  start: () => {
-                    sessionDropCommitted.current = false
-                    setDrag({ accountKey: group.key, sessionId: node.id, over: null })
-                  },
-                  active: sameGroupDrag,
-                  marker: sameGroupDrag && drag.over?.id === node.id ? drag.over.half : null,
-                  hover: (half: 'before' | 'after') => {
-                  /* v8 ignore next -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
-                    setDrag(d => (d === null ? d : { ...d, over: { id: node.id, half } }))
-                  },
-                  drop: (half: 'before' | 'after') => {
-                  /* v8 ignore next -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
-                    if (drag === null) return
-                    commitSessionDrag(drag, { id: node.id, half })
-                  },
-                  end: () => {
-                    if (drag?.over !== null && drag?.over !== undefined) commitSessionDrag(drag, drag.over)
-                    else setDrag(null)
-                    sessionDropCommitted.current = false
-                  },
-                }
+              {partitionSessionActivity(group.sessions).map((section) => {
+                if (section.sessions.length === 0) return null
+                const historyCollapsed = section.bucket === 'history' && !expandedSessionGroups.includes(group.key)
+                const visible = historyCollapsed
+                  ? section.sessions.slice(0, COLLAPSED_SESSION_LIMIT)
+                  : section.sessions
                 return (
-                  <SessionNodeItem
-                    key={node.id}
-                    node={node}
-                    currentId={current}
-                    now={now}
-                    onOpen={open}
-                    onRename={onSessionRename}
-                    onFork={forkSession}
-                    onArchive={onSessionArchive}
-                    drag={dragProps}
-                    t={t}
-                  />
+                  <div key={section.bucket} className={css.activitySection}>
+                    <h3 className={css.activityHeading}>{activitySectionLabel(section.bucket, t)}</h3>
+                    {visible.map((node) => {
+                    // Session drag never leaves its group. Ungrouped writes only the
+                    // browser-local account; real Workspaces may also write Host order.
+                      const sameGroupDrag = drag !== null && drag.accountKey === group.key
+                      const dragProps = {
+                        start: () => {
+                          sessionDropCommitted.current = false
+                          setDrag({
+                            accountKey: group.key,
+                            sessionId: node.id,
+                            bucket: sessionActivityBucket(node),
+                            over: null,
+                          })
+                        },
+                        active: sameGroupDrag && drag.bucket === sessionActivityBucket(node),
+                        marker: sameGroupDrag && drag.over?.id === node.id ? drag.over.half : null,
+                        hover: (half: 'before' | 'after') => {
+                        /* v8 ignore next -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
+                          setDrag(d => (d === null ? d : { ...d, over: { id: node.id, half } }))
+                        },
+                        drop: (half: 'before' | 'after') => {
+                        /* v8 ignore next -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
+                          if (drag === null) return
+                          commitSessionDrag(drag, { id: node.id, half })
+                        },
+                        end: () => {
+                          if (drag?.over !== null && drag?.over !== undefined) commitSessionDrag(drag, drag.over)
+                          else setDrag(null)
+                          sessionDropCommitted.current = false
+                        },
+                      }
+                      return (
+                        <SessionNodeItem
+                          key={node.id}
+                          node={node}
+                          currentId={current}
+                          now={now}
+                          onOpen={open}
+                          onRename={onSessionRename}
+                          onFork={forkSession}
+                          onArchive={onSessionArchive}
+                          drag={dragProps}
+                          t={t}
+                        />
+                      )
+                    })}
+                    {section.bucket === 'history' && section.sessions.length > COLLAPSED_SESSION_LIMIT && (
+                      <button
+                        type="button"
+                        className={css.sessionOverflowButton}
+                        aria-expanded={expandedSessionGroups.includes(group.key)}
+                        onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
+                      >
+                        {expandedSessionGroups.includes(group.key)
+                          ? t('sessions.collapse')
+                          : t('sessions.expand', { n: section.sessions.length - COLLAPSED_SESSION_LIMIT })}
+                      </button>
+                    )}
+                  </div>
                 )
               })}
-              {group.sessions.length > COLLAPSED_SESSION_LIMIT && (
-                <button
-                  type="button"
-                  className={css.sessionOverflowButton}
-                  aria-expanded={expandedSessionGroups.includes(group.key)}
-                  onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
-                >
-                  {expandedSessionGroups.includes(group.key)
-                    ? t('sessions.collapse')
-                    : t('sessions.expand', { n: group.sessions.length - COLLAPSED_SESSION_LIMIT })}
-                </button>
-              )}
             </div>
           )
         })}
@@ -608,20 +647,32 @@ function FlatList({
   }, [baseRows, sessionOrderByAccount, sessionIds])
   const [drag, setDrag] = useState<DragState | null>(null)
   const dropCommitted = useRef(false)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
   useNativeDragAcceptance(drag !== null)
+  const sections = useMemo(() => partitionSessionActivity(rows), [rows])
   const commitDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
     if (dropCommitted.current) return
     dropCommitted.current = true
     setDrag(null)
-    const targetIndex = rows.findIndex(row => row.id === over.id)
+    const neighbors = partitionSessionActivity(rows)
+      .find(section => section.bucket === activeDrag.bucket)?.sessions ?? []
+    const targetIndex = neighbors.findIndex(row => row.id === over.id)
     if (targetIndex === -1) return
-    const anchor = over.half === 'before' ? over.id : rows[targetIndex + 1]?.id
+    const remaining = neighbors.filter(row => row.id !== activeDrag.sessionId)
+    const anchor = over.half === 'before' ? over.id : neighbors[targetIndex + 1]?.id
     if (anchor === activeDrag.sessionId) return
-    const sourceIndex = rows.findIndex(row => row.id === activeDrag.sessionId)
-    const anchorIndex = anchor === undefined ? rows.length : rows.findIndex(row => row.id === anchor)
-    if (sourceIndex !== -1 && (anchorIndex === sourceIndex || anchorIndex === sourceIndex + 1)) return
+    const sourceIndex = neighbors.findIndex(row => row.id === activeDrag.sessionId)
+    const remainingAnchor = anchor === undefined
+      ? neighbors.length
+      : neighbors.findIndex(row => row.id === anchor)
+    if (sourceIndex !== -1 && (remainingAnchor === sourceIndex || remainingAnchor === sourceIndex + 1)) return
     const nextOrder = rows.map(row => row.id).filter(id => id !== activeDrag.sessionId)
-    const insertAt = anchor === undefined ? nextOrder.length : nextOrder.indexOf(anchor)
+    const insertAt = anchor === undefined
+      ? (() => {
+        const lastNeighbor = remaining.at(-1)?.id
+        return lastNeighbor === undefined ? nextOrder.length : nextOrder.indexOf(lastNeighbor) + 1
+      })()
+      : nextOrder.indexOf(anchor)
     nextOrder.splice(insertAt === -1 ? nextOrder.length : insertAt, 0, activeDrag.sessionId)
     setSessionOrder(FLAT_SESSION_ORDER_KEY, nextOrder.map(id => id as string))
   }
@@ -632,40 +683,68 @@ function FlatList({
         {rows.length === 0 && (
           <div className={css.empty}>{t('empty.none')}</div>
         )}
-        {rows.map((node) => {
-          const active = drag !== null
+        {sections.map((section) => {
+          if (section.sessions.length === 0) return null
+          const visible = section.bucket === 'history' && !historyExpanded
+            ? section.sessions.slice(0, COLLAPSED_HISTORY_LIMIT)
+            : section.sessions
           return (
-            <SessionNodeItem
-              key={node.id}
-              node={node}
-              currentId={list.current}
-              now={now}
-              onOpen={open}
-              onRename={onSessionRename}
-              onFork={forkSession}
-              onArchive={onSessionArchive}
-              flat
-              drag={{
-                start: () => {
-                  dropCommitted.current = false
-                  setDrag({ accountKey: FLAT_SESSION_ORDER_KEY, sessionId: node.id, over: null })
-                },
-                active,
-                marker: active && drag.over?.id === node.id ? drag.over.half : null,
-                hover: (half) => {
-                  setDrag(current => current === null ? current : { ...current, over: { id: node.id, half } })
-                },
-                drop: (half) => {
-                  if (drag !== null) commitDrag(drag, { id: node.id, half })
-                },
-                end: () => {
-                  if (drag?.over !== null && drag?.over !== undefined) commitDrag(drag, drag.over)
-                  else setDrag(null)
-                  dropCommitted.current = false
-                },
-              }}
-              t={t}
-            />
+            <div key={section.bucket} className={css.activitySection}>
+              <h3 className={css.activityHeading}>{activitySectionLabel(section.bucket, t)}</h3>
+              {visible.map((node) => {
+                const active = drag !== null && drag.bucket === sessionActivityBucket(node)
+                return (
+                  <SessionNodeItem
+                    key={node.id}
+                    node={node}
+                    currentId={list.current}
+                    now={now}
+                    onOpen={open}
+                    onRename={onSessionRename}
+                    onFork={forkSession}
+                    onArchive={onSessionArchive}
+                    flat
+                    drag={{
+                      start: () => {
+                        dropCommitted.current = false
+                        setDrag({
+                          accountKey: FLAT_SESSION_ORDER_KEY,
+                          sessionId: node.id,
+                          bucket: sessionActivityBucket(node),
+                          over: null,
+                        })
+                      },
+                      active,
+                      marker: active && drag.over?.id === node.id ? drag.over.half : null,
+                      hover: (half) => {
+                        setDrag(current => current === null ? current : { ...current, over: { id: node.id, half } })
+                      },
+                      drop: (half) => {
+                        if (drag !== null) commitDrag(drag, { id: node.id, half })
+                      },
+                      end: () => {
+                        if (drag?.over !== null && drag?.over !== undefined) commitDrag(drag, drag.over)
+                        else setDrag(null)
+                        dropCommitted.current = false
+                      },
+                    }}
+                    t={t}
+                  />
+                )
+              })}
+              {section.bucket === 'history' && section.sessions.length > COLLAPSED_HISTORY_LIMIT && (
+                <button
+                  type="button"
+                  className={css.sessionOverflowButton}
+                  aria-expanded={historyExpanded}
+                  onClick={() => { setHistoryExpanded(openHistory => !openHistory) }}
+                >
+                  {historyExpanded
+                    ? t('sessions.collapse')
+                    : t('sessions.expand', { n: section.sessions.length - COLLAPSED_HISTORY_LIMIT })}
+                </button>
+              )}
+            </div>
           )
         })}
       </div>
