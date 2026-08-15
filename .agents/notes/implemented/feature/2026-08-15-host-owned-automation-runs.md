@@ -16,7 +16,7 @@ A second need is an internal open interface: Settings, Host RPC, and later model
 
 Selectors are `after`, `at`, `every` (≥ 300s, latest-only), and `local-clock` (`HH:mm` plus optional ISO weekdays and an explicit IANA zone). There is no Cron evaluator. `onOverlap` is per-rule `skip` | `replace` and looks only at that rule's previous `started` Session: busy means a live Agent with `status === 'running'`. `skip` records `skipped_busy`; `replace` cancels with `{ kind: 'automation', ruleId }` and opens the new Session immediately.
 
-Tools and Host RPC are Consumers of the same service. This note ships the service, durable tables, origin/cancel-cause extensions, model tools, Host RPC, and package tests. Settings UI remains follow-up work on the same interface.
+Tools, Host RPC, and the Web sidebar panel are Consumers of the same service. This note ships the service, durable tables, origin/cancel-cause extensions, model tools, Host RPC, and package tests. The [Web Automation sidebar](2026-08-15-web-automation-sidebar.md) occupies `sidebar.automation` under New Session on that interface.
 
 ## Alternatives considered
 
