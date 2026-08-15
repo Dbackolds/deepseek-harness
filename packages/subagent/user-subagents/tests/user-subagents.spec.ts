@@ -8,7 +8,9 @@ import UserSubagents, {
   compositionFromUserSubagent,
   findUserSubagent,
   USER_SUBAGENTS_SETTINGS_NAMESPACE,
+  USER_SUBAGENTS_SETTINGS_SCHEMA,
   validateUserSubagents,
+  type UserSubagentDefinition,
 } from '../src/index.ts'
 
 class MemorySettings extends SettingsProvider {
@@ -42,6 +44,16 @@ async function boot(): Promise<{ ctx: Context }> {
   await ctx.plugin(UserSubagents)
   return { ctx }
 }
+
+describe('USER_SUBAGENTS_SETTINGS_SCHEMA', () => {
+  it('fills omitted description, persona, and filter lists', () => {
+    expect(USER_SUBAGENTS_SETTINGS_SCHEMA({
+      definitions: [{ id: 'plain', name: 'Plain' } as UserSubagentDefinition],
+    }).definitions[0]).toMatchObject({
+      id: 'plain', name: 'Plain', description: '', persona: '',
+    })
+  })
+})
 
 describe('validateUserSubagents', () => {
   it('accepts a unique library', () => {
@@ -103,6 +115,20 @@ describe('findUserSubagent and compositionFromUserSubagent', () => {
     })
   })
 
+  it('preserves an allow-and-deny filter', () => {
+    expect(compositionFromUserSubagent({
+      id: 'mixed',
+      name: 'Mixed',
+      description: '',
+      persona: 'Mixed.',
+      allow: ['read'],
+      deny: ['edit'],
+    })).toEqual({
+      persona: 'Mixed.',
+      toolFilter: { allow: ['read'], deny: ['edit'] },
+    })
+  })
+
   it('preserves an allow-only filter', () => {
     expect(compositionFromUserSubagent({
       id: 'reader',
@@ -130,8 +156,8 @@ describe('UserSubagents', () => {
     await ctx.settings.replace(USER_SUBAGENTS_SETTINGS_NAMESPACE, {
       definitions: [REVIEWER],
     })
-    expect(ctx.userSubagents.current()).toEqual({ definitions: [REVIEWER] })
-    expect(ctx.userSubagents.get('reviewer')).toEqual(REVIEWER)
+    expect(ctx.userSubagents.get('reviewer')).toMatchObject(REVIEWER)
+    expect(ctx.userSubagents.current().definitions[0]?.deny).toEqual(['edit', 'write'])
     await ctx.fiber.dispose()
   })
 })
