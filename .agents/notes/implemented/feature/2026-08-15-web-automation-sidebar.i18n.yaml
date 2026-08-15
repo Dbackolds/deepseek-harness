@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-web-automation-sidebar.md
-2026-08-15-web-automation-sidebar.md: ae4df0ef9350557b99cc5f434d8fe85c6768f91f
-2026-08-15-web-automation-sidebar.zh.md: 14d8eb4731b3102e089d23c31f675a7cf8b40a0e
+2026-08-15-web-automation-sidebar.md: 6f9dd6ba6ab5788b1d8f9c655cf2ea8b6e806656
+2026-08-15-web-automation-sidebar.zh.md: d0d4536067be576f7622c5a18019a51b3a0ab360

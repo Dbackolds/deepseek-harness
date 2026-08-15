@@ -74,7 +74,18 @@ describe('AutomationStore', () => {
     expect(state.status).toBe('ready')
     expect(state.items).toHaveLength(1)
     expect(state.items[0]?.name).toBe('morning')
+    expect(state.pageOpen).toBe(false)
     expect(calls).toEqual(['list'])
+  })
+
+  it('toggles the center-column page without refetching', () => {
+    const { face, calls } = api()
+    const store = new AutomationStore(face)
+    store.setPageOpen(true)
+    expect(store.store.getSnapshot().pageOpen).toBe(true)
+    store.setPageOpen(false)
+    expect(store.store.getSnapshot().pageOpen).toBe(false)
+    expect(calls).toEqual([])
   })
 
   it('keeps last-good rows when a later list fails', async () => {

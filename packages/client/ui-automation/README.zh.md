@@ -2,9 +2,9 @@
 
 [English](README.md) | 中文
 
-Web Host Automation 特性的归属方：占据 New Session 控件下方的 `sidebar.automation`，触发器打开一个模态框，列出 Host Automation 规则并创建新规则。数据来自 Host 的 `automation.*` 线路；本包除页面快照和创建表单草稿外不持有持久状态。[ui-sidebar](../ui-sidebar/README.md) 声明该 seat，并只传入栏的 `wide` 标志。
+Web Host Automation 特性的归属方：占据 New Session 控件下方的 `sidebar.automation`，用与该控件同几何的时钟图标触发器打开中间栏整页；整页注册在 `shell.overlay`，列出 Host Automation 规则并创建新规则。数据来自 Host 的 `automation.*` 线路；本包除页面快照和创建表单草稿外不持有持久状态。[ui-sidebar](../ui-sidebar/README.md) 声明该 seat，并只传入栏的 `wide` 标志。
 
-触发器始终存在，因此没有规则的 Host 仍有入口。打开模态框时加载一次列表；之后的打开复用快照，直到一次变更或连接重置再次拉取。一行显示规则名称、派生投递状态、选择器摘要、下次开火时刻、列表镜像里有则附上工作区标题，以及任务文本。启用、停用、立即运行和删除都走模型 tool 与 Host RPC 共用的同一 Host 服务。创建恰好接受一种选择器：一次性延迟、UTC 时刻、至少 300 秒的固定间隔，或带 IANA 时区与可选 ISO 星期的本地时钟。
+触发器始终存在，因此没有规则的 Host 仍有入口。打开页面时加载一次列表；之后的打开复用快照，直到一次变更或连接重置再次拉取。一行显示规则名称、派生投递状态、选择器摘要、下次开火时刻、列表镜像里有则附上工作区标题，以及任务文本。启用、停用、立即运行和删除都走模型 tool 与 Host RPC 共用的同一 Host 服务。创建恰好接受一种选择器：一次性延迟、UTC 时刻、至少 300 秒的固定间隔，或带 IANA 时区与可选 ISO 星期的本地时钟。
 
 样式只用 token。文案走本包自己的 `automation` locale 命名空间。Host 约定见 [Host 拥有的 Automation](../../../docs/subsystems/automation.md)；[Host 拥有的 Automation 开火 Agent Note](../../../.agents/notes/implemented/feature/2026-08-15-host-owned-automation-runs.md) 持有服务决策，[Web Automation 侧栏 Agent Note](../../../.agents/notes/implemented/feature/2026-08-15-web-automation-sidebar.md) 持有本呈现。
 

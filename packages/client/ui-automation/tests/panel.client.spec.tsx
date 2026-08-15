@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
-import { AutomationPanel } from '../src/client/AutomationPanel.tsx'
+import { AutomationPage, AutomationPanel } from '../src/client/AutomationPanel.tsx'
 import type { AutomationPanelProps } from '../src/client/AutomationPanel.tsx'
 import { AutomationStore } from '../src/client/store.ts'
 import type { AutomationRuleView } from '../src/client/store.ts'
@@ -123,9 +123,25 @@ function mount(options: {
     setEnabled: (id, enabled) => controller.setEnabled(id, enabled),
     runNow: id => controller.runNow(id),
     remove: id => controller.remove(id),
+    setPageOpen: (open) => { controller.setPageOpen(open) },
     t,
   }
-  render(<AutomationPanel {...props} />)
+  render(
+    <>
+      <AutomationPanel {...props} />
+      <AutomationPage
+        useAutomation={props.useAutomation}
+        useWorkspaces={props.useWorkspaces}
+        load={props.load}
+        create={props.create}
+        setEnabled={props.setEnabled}
+        runNow={props.runNow}
+        remove={props.remove}
+        setPageOpen={props.setPageOpen}
+        t={props.t}
+      />
+    </>,
+  )
   return { calls, controller }
 }
 
@@ -133,21 +149,31 @@ describe('AutomationPanel', () => {
   it('renders the trigger and opens the empty panel', async () => {
     mount({ items: [] })
     const trigger = screen.getByRole('button', { name: 'Automation' })
-    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(trigger.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(trigger)
     await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: 'Automation' })).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy()
     })
     expect(screen.getByText('No rules yet.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy()
   })
 
-  it('closes the panel from the dialog close control', async () => {
+  it('closes the page from the header close control', async () => {
     mount({ items: [] })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
-    await waitFor(() => { expect(screen.getByRole('dialog', { name: 'Automation' })).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy() })
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Automation' })).toBeNull() })
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
+  })
+
+  it('closes the page on Escape', async () => {
+    mount({ items: [] })
+    fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
+    await waitFor(() => { expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy() })
+    fireEvent.keyDown(document, { key: 'Enter' })
+    expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
   })
 
   it('lists a disabled rule without a workspace title', async () => {
@@ -238,26 +264,32 @@ describe('AutomationPanel', () => {
     const controller = new AutomationStore(face as never)
     controllerHolder.current = controller
     const unused = (() => { throw new Error('unused') }) as never
-    render(<AutomationPanel
-      wide
-      useSessions={unused}
-      useWorkspaces={select => select({
-        items: [workspace],
-        archivedSessionIds: [],
-        state: 'idle',
-        phase: 'ready',
-        error: null,
-        baselinesReady: true,
-        recentWorkspaceId: workspace.workspaceId,
-      })}
-      useAutomation={bindSnapshotSelector(controller.store)}
-      load={() => controller.load()}
-      create={input => controller.create(input)}
-      setEnabled={(id, enabled) => controller.setEnabled(id, enabled)}
-      runNow={id => controller.runNow(id)}
-      remove={id => controller.remove(id)}
-      t={t}
-    />)
+    const useWorkspaces: AutomationPanelProps['useWorkspaces'] = select => select({
+      items: [workspace],
+      archivedSessionIds: [],
+      state: 'idle',
+      phase: 'ready',
+      error: null,
+      baselinesReady: true,
+      recentWorkspaceId: workspace.workspaceId,
+    })
+    const shared = {
+      useAutomation: bindSnapshotSelector(controller.store),
+      useWorkspaces,
+      load: () => controller.load(),
+      create: (input: Parameters<AutomationStore['create']>[0]) => controller.create(input),
+      setEnabled: (id: AutomationRuleView['id'], enabled: boolean) => controller.setEnabled(id, enabled),
+      runNow: (id: AutomationRuleView['id']) => controller.runNow(id),
+      remove: (id: AutomationRuleView['id']) => controller.remove(id),
+      setPageOpen: (open: boolean) => { controller.setPageOpen(open) },
+      t,
+    }
+    render(
+      <>
+        <AutomationPanel wide useSessions={unused} {...shared} />
+        <AutomationPage {...shared} />
+      </>,
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
     await waitFor(() => { expect(screen.getByText('morning')).toBeTruthy() })
     await controller.load()

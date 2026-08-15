@@ -22,6 +22,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
     name: 'root',
     children: {
       'sidebar.automation': { kind: 'single', scope: 'root' },
+      'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   const automation = {
@@ -48,21 +49,25 @@ describe('ui-automation browser half', () => {
   it('registers the sidebar occupant, and fiber teardown removes it (HMR safety)', async () => {
     const { ctx, fiber } = await bench()
     expect(ctx.slots.entries('sidebar.automation')).toHaveLength(1)
+    expect(ctx.slots.entries('shell.overlay')).toHaveLength(1)
     const injected = (ctx.slots.entries('sidebar.automation')[0]!.inject as () => {
       load: () => Promise<void>
       create: (input: { task: string; workspaceId: never; afterSeconds: number }) => Promise<string | undefined>
       setEnabled: (id: never, enabled: boolean) => Promise<string | undefined>
       runNow: (id: never) => Promise<string | undefined>
       remove: (id: never) => Promise<string | undefined>
+      setPageOpen: (open: boolean) => void
     })()
     await injected.load()
     await injected.create({ task: 'ping', workspaceId: 'ws-1' as never, afterSeconds: 60 })
     await injected.setEnabled('rule-1' as never, false)
     await injected.runNow('rule-1' as never)
     await injected.remove('rule-1' as never)
+    injected.setPageOpen(true)
     ctx.emit('connection/reset')
     await fiber.dispose()
     expect(ctx.slots.entries('sidebar.automation')).toHaveLength(0)
+    expect(ctx.slots.entries('shell.overlay')).toHaveLength(0)
   })
 
   it('registers both dictionaries under its own namespace and releases them with the fiber', async () => {
