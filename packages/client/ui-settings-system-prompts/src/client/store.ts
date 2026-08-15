@@ -220,6 +220,7 @@ export class SystemPromptsStore {
   })
 
   private generation = 0
+  private writeGeneration = 0
   private view: SettingsNamespaceView | undefined
   private registered: readonly RegisteredPromptSectionView[] = []
 
@@ -485,6 +486,7 @@ export class SystemPromptsStore {
   /** Stop in-flight responses from publishing after plugin disposal. */
   dispose(): void {
     this.generation += 1
+    this.writeGeneration += 1
     this.view = undefined
     this.registered = []
   }
@@ -509,15 +511,26 @@ export class SystemPromptsStore {
     onSuccess?: () => void,
   ): Promise<void> {
     const view = this.view
-    if (view === undefined) return
-    const generation = ++this.generation
+    if (view === undefined) {
+      this.store.update((state) => {
+        state.deleting = false
+        if (state.draft !== null) {
+          state.draft.saving = false
+          state.draft.error = 'unavailable'
+        }
+      })
+      return
+    }
+    // Writes keep their own generation so a document-updated refresh cannot
+    // discard the replace result and leave the draft stuck on saving.
+    const generation = ++this.writeGeneration
     try {
       const response = await this.api.settings.replace({
         ns: USER_SYSTEM_PROMPTS_NS,
         section,
         expectedRevision: view.revision,
       })
-      if (generation !== this.generation) return
+      if (generation !== this.writeGeneration) return
       if (!response.result.ok) throw new Error(response.result.error.message)
       const snapshot = this.store.getSnapshot()
       this.accept(
@@ -530,7 +543,7 @@ export class SystemPromptsStore {
       )
       onSuccess?.()
     } catch (error) {
-      if (generation !== this.generation) return
+      if (generation !== this.writeGeneration) return
       this.store.update((state) => {
         state.error = messageOf(error)
         state.deleting = false

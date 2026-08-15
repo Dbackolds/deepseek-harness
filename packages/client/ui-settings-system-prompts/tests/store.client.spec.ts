@@ -173,6 +173,33 @@ describe('SystemPromptsStore', () => {
     expect(store.store.getSnapshot().prompts).toHaveLength(1)
   })
 
+  it('closes the draft even when a refresh starts during save', async () => {
+    const wire = api()
+    const store = new SystemPromptsStore(wire)
+    await store.load()
+    store.beginCreate()
+    store.setDraftName('Style')
+    store.setDraftText('Be concise.')
+    let finishReplace: ((value: RpcResponse<SettingsNamespaceView>) => void) | undefined
+    wire.replace.mockImplementationOnce(() => new Promise((resolve) => {
+      finishReplace = resolve
+    }))
+    const saving = store.saveDraft()
+    await store.load()
+    const written = view({
+      prompts: [{ id: 'style', name: 'Style', text: 'Be concise.' }],
+      bindings: [],
+      overrides: [],
+    }, 2)
+    finishReplace?.(ok(written))
+    await saving
+    expect(store.store.getSnapshot().draft).toBeNull()
+    expect(store.store.getSnapshot().status).toBe('ready')
+    expect(store.store.getSnapshot().prompts).toEqual([
+      { id: 'style', name: 'Style', text: 'Be concise.' },
+    ])
+  })
+
   it('refuses an empty draft name', async () => {
     const wire = api()
     const store = new SystemPromptsStore(wire)
