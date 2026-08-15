@@ -45,12 +45,12 @@ const workspace = {
   updatedAt: '2026-08-15T12:00:00.000Z',
 }
 
-function t(key: keyof typeof en, vars?: Record<string, string | number>): string {
+const t = ((key: keyof typeof en, vars?: Record<string, string | number>): string => {
   let text: string = en[key]
   if (vars === undefined) return text
   for (const [name, value] of Object.entries(vars)) text = text.replace('{' + name + '}', String(value))
   return text
-}
+}) as AutomationPanelProps['t']
 
 function fail(message: string): RpcResponse<never> {
   return { rpcId: ('r-' + String(nextRpc++)) as never, result: { ok: false, error: { code: 'internal', message, details: {} } } }

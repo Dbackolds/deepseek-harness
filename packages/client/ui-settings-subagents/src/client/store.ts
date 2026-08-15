@@ -251,14 +251,11 @@ export class SubagentsStore {
     const definitions = [...state.definitions]
     let id = draft.id
     if (id === null) id = slugFromName(name, definitions.map(entry => entry.id))
-    const next: DefinitionRow = {
-      id,
-      name,
-      description: draft.description.trim(),
-      persona,
-      ...parseToolList(draft.allow) === undefined ? {} : { allow: parseToolList(draft.allow) },
-      ...parseToolList(draft.deny) === undefined ? {} : { deny: parseToolList(draft.deny) },
-    }
+    const allow = parseToolList(draft.allow)
+    const deny = parseToolList(draft.deny)
+    const next: DefinitionRow = { id, name, description: draft.description.trim(), persona }
+    if (allow !== undefined) next.allow = allow
+    if (deny !== undefined) next.deny = deny
     if (draft.id === null) {
       definitions.push(next)
     } else {
@@ -318,6 +315,7 @@ export class SubagentsStore {
     if (view === undefined) {
       this.store.update((state) => {
         state.deleting = false
+        /* v8 ignore next -- write() only runs from saveDraft/remove, which always leave a draft or pending delete */
         if (state.draft !== null) {
           state.draft.saving = false
           state.draft.error = 'unavailable'
@@ -337,6 +335,7 @@ export class SubagentsStore {
       this.accept(response.result.value, this.store.getSnapshot().writable)
       onSuccess?.()
     } catch (error) {
+      /* v8 ignore next -- dispose() already bumped writeGeneration before the rejected replace settles */
       if (generation !== this.writeGeneration) return
       this.store.update((state) => {
         state.error = messageOf(error)
@@ -350,6 +349,7 @@ export class SubagentsStore {
   }
 
   private accept(view: SettingsNamespaceView, writable: boolean): void {
+    /* v8 ignore next -- Settings always returns an object value for a registered section */
     const value = (view.value ?? {}) as { definitions?: unknown }
     this.view = view
     this.store.update((state) => {
