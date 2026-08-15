@@ -32,7 +32,7 @@ Under **Model catalog**, choose **Fetch available models** to query the base URL
 
 A model you enter by hand is treated as text-only until it says otherwise, because nothing can ask an endpoint which modalities it accepts. Attaching an image to such a model is refused before it is sent, naming the model.
 
-A vision model on a custom provider therefore needs one line. The form has no field for it; add `input` to the model in `$DSH_HOME/settings.yaml`:
+A vision model on a custom provider therefore needs a claim. On the Models page, open the provider, find the model row, and check **Supports images**. That writes `input: [text, image]` for that model. The same field can still be written in `$DSH_HOME/settings.yaml`:
 
 ```yaml
 llm-pi-ai:
@@ -90,7 +90,7 @@ If a saved default names a provider that was deleted, the composer displays **Se
 - **`MISSING_CREDENTIAL`** — Store the provider key through the Models page or supply the referenced environment variable.
 - **`UNKNOWN_MODEL`** — Select a configured model or add the missing model to the custom provider.
 - **Fetching available models returns 401** — Check the key. Model discovery calls the OpenAI-compatible `GET /models` endpoint; enter models manually for endpoints that do not provide it.
-- **An image is refused before sending** — The model declares no image modality. Give a custom provider's model `input: [text, image]`; DeepSeek's own chat-completions route is text-only and cannot be configured otherwise.
+- **An image is refused before sending** — The model declares no image modality. Check **Supports images** on that model under Settings → Models, or give a custom provider's model `input: [text, image]` in `$DSH_HOME/settings.yaml`; DeepSeek's own chat-completions route is text-only and cannot be configured otherwise.
 - **The provider rejects a request carrying an image** — The model declares images its endpoint does not actually serve. Remove `image` from whichever list granted it — the model's `input`, or the route's `defaultInput` — then start a new session: the attached image stays in the session log, so the same request repeats until the session moves off it.
 
 ## Advanced configuration

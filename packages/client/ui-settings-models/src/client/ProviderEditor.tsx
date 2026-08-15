@@ -10,7 +10,7 @@
  * both families, DeepSeek's id/name/context-window model catalog, the default
  * wire protocol every pi-ai route may name, and the display name of a pi-ai
  * route the adapter does not ship). Each pi-ai model row can override that
- * protocol and store its own key.
+ * protocol, store its own key, and declare image input.
  * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
  * the models under one provider disagree about it, so a provider-scoped
  * control can only be set to a value some of them reject. The composer's

@@ -193,12 +193,16 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await dialog.getByLabel('推理强度').count()).toBe(0)
     await dialog.getByRole('button', { name: '添加模型' }).click()
     await dialog.getByLabel('模型 ID 1').fill('acme-large')
+    await dialog.getByLabel('支持图片 1').check()
     await dialog.getByRole('button', { name: '创建提供方', exact: true }).click()
 
     const row = dialog.getByText('Acme Gateway', { exact: true }).first()
     await row.waitFor({ timeout: 10_000 })
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('acme-gateway:')
+    expect(document).toContain('input:')
+    expect(document).toMatch(/-\s+text/)
+    expect(document).toMatch(/-\s+image/)
 
     // The tag follows the adapter's installed catalog: this route is in no
     // catalog, while minimax-cn is — even though both now have profiles.

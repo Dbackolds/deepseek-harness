@@ -227,6 +227,36 @@ describe('model list editing', () => {
     })
   })
 
+  it('writes image input from the row checkbox and drops it when unchecked', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'seeing', input: ['text', 'image'] }, { id: 'bare' }],
+        },
+      },
+    })
+    openEditor('openai')
+
+    const seeing = screen.getByLabelText<HTMLInputElement>(`${en.modelImageInput} 1`)
+    const bare = screen.getByLabelText<HTMLInputElement>(`${en.modelImageInput} 2`)
+    expect(seeing.checked).toBe(true)
+    expect(bare.checked).toBe(false)
+
+    fireEvent.click(seeing)
+    fireEvent.click(bare)
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    // Checking writes the claim a hand-declared vision model needs; unchecking
+    // drops the field rather than storing `[text]`, so a catalog model whose
+    // gateway already serves images keeps that answer.
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([
+      { id: 'seeing' },
+      { id: 'bare', input: ['text', 'image'] },
+    ])
+  })
+
   it('writes a pi-ai systemPrompt and drops an emptied one', async () => {
     const { mutate } = await mountSection()
     openEditor('openai')
@@ -511,7 +541,8 @@ describe('endpoint interrogation', () => {
     fireEvent.click(screen.getByText(en.fetchModels))
     await screen.findByText(en.fetchTitle)
     // The already-configured row starts unchecked; the new one starts checked.
-    const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    const dialog = await screen.findByRole('dialog')
+    const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
     expect(boxes.map(box => box.checked)).toEqual([false, true])
     fireEvent.click(screen.getByText(en.fetchAdopt))
 
@@ -627,7 +658,8 @@ describe('endpoint interrogation', () => {
 
     fireEvent.click(screen.getByText(en.fetchModels))
     await screen.findByText(en.fetchTitle)
-    const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    const dialog = screen.getByRole('dialog')
+    const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
     const first = boxes[0] as HTMLInputElement
     fireEvent.click(first)
     fireEvent.click(first)
