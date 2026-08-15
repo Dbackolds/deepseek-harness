@@ -38,6 +38,8 @@ function renderSeat(state: Partial<GitBranchSeatState> = {}, sessionId: string |
   render(<GitBranchSeat {...({
     sessionId,
     ...actions,
+    useWorkspaces: (select: (s: { recentWorkspaceId?: string; items: unknown[] }) => unknown) =>
+      select({ recentWorkspaceId: 'ws-1', items: [{ workspaceId: 'ws-1' }] }),
     useGitBranchSeat: bindSnapshotSelector(store),
     t: (key: keyof typeof en) => en[key],
   } as unknown as GitBranchSeatProps)} />)

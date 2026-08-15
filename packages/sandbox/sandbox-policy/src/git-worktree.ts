@@ -195,11 +195,11 @@ async function pathExists(path: string): Promise<boolean> {
  */
 export async function describeSessionGit(
   workspacePath: string,
-  session: Session,
+  session?: Pick<Session, 'events'>,
 ): Promise<SessionGitState> {
   const repoRoot = await discoverRepoRoot(workspacePath)
   const workspaceBranch = await currentBranchOf(workspacePath)
-  const overlay = effectiveWorktree(session.events)
+  const overlay = session === undefined ? undefined : effectiveWorktree(session.events)
   const worktreePath = overlay?.path ?? workspacePath
   const currentBranch = overlay?.branch
     ?? workspaceBranch

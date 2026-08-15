@@ -45,18 +45,20 @@ export type GitBranchSeatProps =
  * @returns the chip, or null when no session or no Git checkout exists.
  */
 export function GitBranchSeat({
-  sessionId, load, checkout, createBranch, useGitBranchSeat, t,
+  sessionId, useWorkspaces, load, checkout, createBranch, useGitBranchSeat, t,
 }: GitBranchSeatProps) {
   const state = useGitBranchSeat(snapshot => snapshot)
+  const recentWorkspaceId = useWorkspaces(s => s.recentWorkspaceId)
+  const workspaceCount = useWorkspaces(s => s.items.length)
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState('')
 
   useEffect(() => {
     void load()
-  }, [load, sessionId])
+  }, [load, sessionId, recentWorkspaceId, workspaceCount])
 
-  if (sessionId === undefined || state.unavailable || state.view === null) return null
+  if (state.unavailable || state.view === null) return null
 
   const local = state.view.branches.filter(branch => !branch.remote)
   const remote = state.view.branches.filter(branch => branch.remote)

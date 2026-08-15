@@ -26,7 +26,8 @@ export const sessionGitViewSchema = z.object({
 
 /** git.describe request payload. */
 export const gitDescribeRequestSchema = z.object({
-  sessionId: sessionIdSchema,
+  sessionId: sessionIdSchema.optional(),
+  workspaceId: z.string().min(1).optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'git.describe'>>>
 
 /** git.describe response value. */

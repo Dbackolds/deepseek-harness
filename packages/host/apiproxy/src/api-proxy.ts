@@ -3408,8 +3408,31 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
     git: {
       async describe(request) {
-        return gitOp(request, request.payload.sessionId, (session, workspace) =>
-          describeSessionGit(workspace.path, session))
+        if (request.payload.sessionId !== undefined) {
+          return gitOp(request, request.payload.sessionId, (session, workspace) =>
+            describeSessionGit(workspace.path, session))
+        }
+        const workspaceId = request.payload.workspaceId
+        if (workspaceId === undefined) {
+          return err(request, {
+            code: 'bad-request',
+            message: 'git.describe requires sessionId or workspaceId',
+            details: { issues: [] },
+          })
+        }
+        const workspace = ctx.get('workspaceRegistry')?.get(brandWorkspaceId(workspaceId))
+        if (workspace === undefined) {
+          return err(request, {
+            code: 'workspace-not-found',
+            message: `workspace "${workspaceId}" not found`,
+            details: { workspaceId },
+          })
+        }
+        try {
+          return ok(request, await describeSessionGit(workspace.path))
+        } catch (error: unknown) {
+          return gitError(request, error, workspace.path)
+        }
       },
       async checkout(request) {
         return gitOp(request, request.payload.sessionId, (session, workspace) =>
