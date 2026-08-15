@@ -443,6 +443,11 @@
     - id: user-system-prompts
       name: '@deepseek-ai/dsh-user-system-prompts'
 
+    # User-authored subagent definition library. Empty until the Settings
+    # section supplies definitions; the Web page writes that section.
+    - id: user-subagents
+      name: '@deepseek-ai/dsh-user-subagents'
+
     # Agents created at startup. The base stays empty; raw overlays may create
     # agents, while Web creates sessions on client request.
     - id: agent-loop

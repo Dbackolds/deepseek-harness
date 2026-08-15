@@ -103,6 +103,7 @@ describe('dsh-tool-subagent', () => {
     const props = (schema!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual(['description', 'prompt', 'run_in_background'])
     expect(schema!.description).toContain('job_output')
+    expect(props).not.toHaveProperty('agent')
   })
 
   it('omits run_in_background entirely when the instance disables it (schema and capability never disagree)', async () => {
@@ -622,6 +623,62 @@ describe('dsh-tool-subagent', () => {
     expect(unwrapped.inject).toEqual(['tools', 'subagents', 'systemPrompt'])
     expect(typeof unwrapped.apply).toBe('function')
     expect(unwrapped.Config).toBeDefined()
+  })
+
+  it('lists user definitions as an optional agent enum and applies the selected composition', async () => {
+    let seen: { persona?: string; toolFilter?: unknown } | undefined
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SubagentRuntime)
+    ctx.provide('userSubagents', {
+      current: () => ({
+        definitions: [{
+          id: 'reviewer',
+          name: 'Reviewer',
+          description: 'Reviews a change without editing it.',
+          persona: 'You are a careful reviewer.',
+          deny: ['edit'],
+        }],
+      }),
+      get: (id: string) => id === 'reviewer'
+        ? {
+          id: 'reviewer',
+          name: 'Reviewer',
+          description: 'Reviews a change without editing it.',
+          persona: 'You are a careful reviewer.',
+          deny: ['edit'],
+        }
+        : undefined,
+    } as never)
+    ctx.subagents.registerProvider({
+      name: 'capture',
+      capabilities: { outputSchema: false, depthLimit: true, toolFilter: true, persona: true },
+      inheritsParentContext: false,
+      start: async (request) => {
+        seen = request
+        return {
+          id: SessionId('capture-child'),
+          result: Promise.resolve({
+            stopReason: 'completed' as const,
+            output: [{ type: 'text' as const, text: 'ok' }],
+          }),
+          dispose: async () => {},
+        }
+      },
+    })
+    await ctx.plugin(tool, { provider: 'capture', persona: 'instance persona', toolFilter: { deny: ['write'] } })
+    const schema = ctx.tools.schemas().find(s => s.name === 'subagent')
+    const props = (schema!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
+    expect(Object.keys(props).sort()).toEqual(['agent', 'description', 'prompt', 'run_in_background'])
+    expect((props.agent as { enum?: string[] }).enum).toEqual(['reviewer'])
+    const result = await callSubagent(ctx, { description: 'review', prompt: 'look', agent: 'reviewer' })
+    expect(result.isError).toBe(false)
+    expect(seen?.persona).toBe('You are a careful reviewer.')
+    expect(seen?.toolFilter).toEqual({ deny: ['edit'] })
+    const missing = await callSubagent(ctx, { description: 'review', prompt: 'look', agent: 'missing' })
+    expect(missing.isError).toBe(true)
+    expect(text(missing)).toContain('must be one of')
   })
 
   it('passes persona/toolFilter/maxDepth config through to the start request', async () => {

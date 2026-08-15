@@ -18,6 +18,8 @@ import { assertSubagentMaxDepth, settleRun } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider, SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
 import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import { compositionFromUserSubagent } from '@deepseek-ai/dsh-user-subagents'
+import type { UserSubagentDefinition } from '@deepseek-ai/dsh-user-subagents'
 
 export const name = 'tool-subagent'
 export const inject = ['tools', 'subagents', 'systemPrompt']
@@ -208,6 +210,34 @@ async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResu
  *   scope, or authority inheritance.
  * @returns the tool `description` and the `prompt` parameter description.
  */
+/** Live library rows the model may name in the optional `agent` argument. */
+function listedDefinitions(ctx: Context): readonly UserSubagentDefinition[] {
+  const library = ctx.get('userSubagents')
+  return library === undefined ? [] : library.current().definitions
+}
+
+/**
+ * Optional `agent` parameter when the user library is non-empty. An empty
+ * library omits the field so the schema does not advertise a dead enum.
+ * @param definitions - current library rows.
+ * @returns the `agent` parameter spec, or an empty object.
+ */
+function agentParameter(definitions: readonly UserSubagentDefinition[]): Record<string, unknown> {
+  if (definitions.length === 0) return {}
+  const listed = definitions
+    .map(entry => '`' + entry.id + '` — ' + (entry.description.length > 0 ? entry.description : entry.name))
+    .join('; ')
+  return {
+    agent: {
+      type: 'string' as const,
+      enum: definitions.map(entry => entry.id),
+      description:
+        'Optional user-authored subagent definition to apply as this child\'s persona and tool filter. '
+        + 'Available: ' + listed + '. Omit to keep this tool instance\'s configured composition.',
+    },
+  }
+}
+
 function providerWording(inheritsConversation: boolean): { description: string; promptDescription: string } {
   if (inheritsConversation) {
     return {
@@ -315,6 +345,7 @@ export function apply(ctx: Context, config: Config): void {
           required: true,
           description: wording.promptDescription,
         },
+        ...agentParameter(listedDefinitions(ctx)),
         ...backgroundEnabled ? {
           run_in_background: {
             type: 'boolean' as const,
@@ -374,13 +405,26 @@ export function apply(ctx: Context, config: Config): void {
         }
 
         const maxDepth = typeof config.maxDepth === 'number' ? config.maxDepth : undefined
+        const selectedId = typeof args.agent === 'string' ? args.agent : undefined
+        const selected = selectedId === undefined ? undefined : ctx.get('userSubagents')?.get(selectedId)
+        if (selectedId !== undefined && selected === undefined) {
+          throw new Error(`unknown subagent definition "${selectedId}"`)
+        }
+        const composition = selected === undefined ? undefined : compositionFromUserSubagent(selected)
         const request = {
           label: args.description,
           prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
           parent,
           ...config.agentOptions !== undefined ? { agentOptions: config.agentOptions } : {},
-          ...config.persona !== undefined ? { persona: config.persona } : {},
-          ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
+          ...composition !== undefined
+            ? {
+              persona: composition.persona,
+              ...composition.toolFilter !== undefined ? { toolFilter: composition.toolFilter } : {},
+            }
+            : {
+              ...config.persona !== undefined ? { persona: config.persona } : {},
+              ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
+            },
           ...maxDepth !== undefined ? { maxDepth } : {},
         }
 

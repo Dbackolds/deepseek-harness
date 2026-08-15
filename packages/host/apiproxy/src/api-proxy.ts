@@ -260,6 +260,7 @@ const PRODUCT_SETTINGS_NAMESPACES = new Set([
   'ui-onboarding',
   AGENT_PRESET_SETTINGS_NAMESPACE,
   'user-system-prompts',
+  'user-subagents',
 ])
 
 /** Strict browser-zone profile: UTC or an IANA Area/Location-style identifier. */

@@ -581,6 +581,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   AfterAssemble: 'post-restore hook is owned by packages/core/system-prompt/README.md',
   PromptAssembly: 'assembly result is owned by packages/core/system-prompt/README.md',
   UserSystemPromptsSettings: 'settings section is owned by packages/core/user-system-prompts/README.md',
+  UserSubagentsSettings: 'settings section is owned by packages/subagent/user-subagents/README.md',
+  UserSubagentDefinition: 'settings row is owned by packages/subagent/user-subagents/README.md',
   RequestRunId: 'dynamic-package payload contract is owned by packages/extensions/cordis-host-runner/src/types.ts',
   RpcReceipt: 'carrier-layer receipt is owned by packages/host/apiproxy/src/api/rpc.ts',
   Sandbox: 'external E2B SDK handle is owned by packages/e2b/e2b/README.md',

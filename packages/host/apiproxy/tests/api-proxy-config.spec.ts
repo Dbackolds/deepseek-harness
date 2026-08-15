@@ -230,7 +230,7 @@ function forwardedSettings(ns: string): HostFrame {
     type: 'host/remote-event',
     event: 'settings/document-updated',
     // The revision is the Host's own counter, so the matcher is the assertion.
-    args: [ns, expect.any(Number)], // oxlint-disable-line typescript/no-unsafe-assignment
+    args: [ns, expect.any(Number)],
   }
 }
 
@@ -461,6 +461,28 @@ describe('settings domain', () => {
       })
     expect(expectOk(await api.systemPrompt.list(request({}))).sections.map(section => section.name))
       .toContain('harness:identity')
+  })
+
+  it('serves the user-subagents namespace, so the Subagents page can persist', async () => {
+    const ctx = await harness()
+    ctx.settings.register(settingsNamespace('user-subagents'), z.object({
+      definitions: z.array(z.object({
+        id: z.string(), name: z.string(), description: z.string(), persona: z.string(),
+      })),
+    }))
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    expectOk(await api.settings.replace(request({
+      ns: 'user-subagents',
+      section: {
+        definitions: [{ id: 'reviewer', name: 'Reviewer', description: 'Reviews.', persona: 'Be careful.' }],
+      },
+    })))
+
+    expect(ctx.settings.describe().find(view => String(view.ns) === 'user-subagents')?.value)
+      .toEqual({
+        definitions: [{ id: 'reviewer', name: 'Reviewer', description: 'Reviews.', persona: 'Be careful.' }],
+      })
   })
 
   it('lists an empty registry when systemPrompt is not mounted', async () => {
