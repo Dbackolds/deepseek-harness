@@ -16,6 +16,7 @@ export { workspaceIdSchema } from './sessions.schema.ts'
 export const workspaceViewSchema = z.object({
   workspaceId: workspaceIdSchema,
   path: z.string(),
+  folders: z.array(z.string()),
   title: z.string(),
   sessionIds: z.array(sessionIdSchema),
   createdAt: z.string(),
@@ -88,6 +89,28 @@ export const workspaceInsertSessionBeforeRequestSchema = z.object({
 export const workspaceInsertSessionBeforeValueSchema = z.object({
   workspace: workspaceViewSchema,
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.insertSessionBefore'>>>
+
+/** workspace.addFolder request payload. */
+export const workspaceAddFolderRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  path: z.string(),
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.addFolder'>>>
+
+/** workspace.addFolder response value. */
+export const workspaceAddFolderValueSchema = z.object({
+  workspace: workspaceViewSchema,
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.addFolder'>>>
+
+/** workspace.removeFolder request payload. */
+export const workspaceRemoveFolderRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  path: z.string(),
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.removeFolder'>>>
+
+/** workspace.removeFolder response value. */
+export const workspaceRemoveFolderValueSchema = z.object({
+  workspace: workspaceViewSchema,
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.removeFolder'>>>
 
 /** workspace.archiveSession request payload. */
 export const workspaceArchiveSessionRequestSchema = z.object({

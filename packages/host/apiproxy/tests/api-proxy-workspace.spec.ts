@@ -568,3 +568,38 @@ describe('Host Workspace increments', () => {
     abort.abort()
   })
 })
+
+describe('workspace.addFolder', () => {
+  it('adds and removes additional folders on one workspace', async () => {
+    const { api, root } = await harness()
+    const primary = stageDir(root, 'multi-home')
+    const extra = stageDir(root, 'multi-extra')
+    const workspace = expectOk(await api.workspace.create(request({ path: primary }))).workspace
+    expect(workspace.folders).toEqual([])
+    const added = expectOk(await api.workspace.addFolder(request({
+      workspaceId: workspace.workspaceId,
+      path: extra,
+    }))).workspace
+    expect(added.folders).toEqual([extra])
+    const listed = expectOk(await api.workspace.list(request({}))).items[0]
+    expect(listed?.folders).toEqual([extra])
+    const removed = expectOk(await api.workspace.removeFolder(request({
+      workspaceId: workspace.workspaceId,
+      path: extra,
+    }))).workspace
+    expect(removed.folders).toEqual([])
+  })
+
+  it('rejects a folder already owned by another workspace', async () => {
+    const { api, root } = await harness()
+    const first = expectOk(await api.workspace.create(request({ path: stageDir(root, 'first-home') }))).workspace
+    const second = expectOk(await api.workspace.create(request({ path: stageDir(root, 'second-home') }))).workspace
+    const extra = stageDir(root, 'shared-extra')
+    expectOk(await api.workspace.addFolder(request({ workspaceId: first.workspaceId, path: extra })))
+    const conflict = await api.workspace.addFolder(request({ workspaceId: second.workspaceId, path: extra }))
+    expect(conflict.result).toMatchObject({
+      ok: false,
+      error: { code: 'workspace-folder-conflict' },
+    })
+  })
+})

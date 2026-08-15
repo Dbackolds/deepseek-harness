@@ -2,7 +2,7 @@
 
 [English](workspace.md) | 中文
 
-工作区（workspace）是用户工作目录的持久记录：一个建立在规范路径之上的稳定 id、一个显示标题，以及归属于它的会话的有序账本。该子系统是单个包（package）（[dsh-workspace](../../packages/workspace/workspace)，`ctx.workspaceRegistry`）——一项宿主侧可选能力，不属于 agent loop（智能体循环）主干，并且对模型不可见（没有工具、没有提示词文本、没有会话事件）。它通过[存储领域数据形式](storage.md)存储自己的记录，并对照 [`SessionHeader.cwd`](persistence.md#sessionheader--metadata-beside-the-log) 校验会话成员资格，因此 `storageDomain` 与 `sessionPersistence` 是必需的启动依赖：持久化这一依赖不可用时，插件保持 pending，而不是把这种不可用误当作空历史。设计记录：[领域 KV 存储 Agent Note（agent 决策记录）](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md)；引导与 GUI 顺序：[Workspace UI 产品流程 Agent Note](../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.md)。
+工作区（workspace）是用户主工作目录以及可选附加文件夹的持久记录：一个建立在规范路径之上的稳定 id、额外的规范文件夹、一个显示标题，以及归属于它的会话的有序账本。该子系统是单个包（package）（[dsh-workspace](../../packages/workspace/workspace)，`ctx.workspaceRegistry`）——一项宿主侧可选能力，不属于 agent loop（智能体循环）主干，并且对模型不可见（没有工具、没有提示词文本、没有会话事件）。它通过[存储领域数据形式](storage.md)存储自己的记录，并对照 [`SessionHeader.cwd`](persistence.md#sessionheader--metadata-beside-the-log) 校验会话成员资格，因此 `storageDomain` 与 `sessionPersistence` 是必需的启动依赖：持久化这一依赖不可用时，插件保持 pending，而不是把这种不可用误当作空历史。设计记录：[领域 KV 存储 Agent Note（agent 决策记录）](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md)；引导与 GUI 顺序：[Workspace UI 产品流程 Agent Note](../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.md)。
 
 源码：[`packages/workspace/workspace/src/types.ts`](../../packages/workspace/workspace/src/types.ts)
 
@@ -24,21 +24,30 @@ type WorkspaceId = Branded<'WorkspaceId'>
 
 ```ts type-equiv
 /**
- * One workspace: a stable id over an existing directory, a display title, and
- * an ordered candidate account of sessions. Membership requires both an id in
- * that account and a session header whose canonical cwd equals the workspace
- * path. Consumers only see this interface; the implementation stays private.
+ * One workspace: a stable id over an existing primary directory, optional
+ * additional folders, a display title, and an ordered candidate account of
+ * sessions. Membership requires both an id in that account and a session
+ * header whose canonical cwd equals the workspace path. Consumers only see
+ * this interface; the implementation stays private.
  */
 interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Canonical directory path: the `fs.realpath` of the path given at create
-   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
-   * afterwards, even when the directory disappears (see {@link status}).
+   * Canonical primary directory path: the `fs.realpath` of the path given at
+   * create time (trailing slashes, `..`, and symlinks all resolved). Session
+   * cwd and membership stay bound to this path. Never rewritten afterwards,
+   * even when the directory disappears (see {@link status}).
    */
   readonly path: string
+
+  /**
+   * Additional canonical folders in durable add order. Never includes
+   * {@link path}; uniqueness is canonical-path equality. A missing folder
+   * stays listed until {@link removeFolder} removes it.
+   */
+  readonly folders: readonly string[]
 
   /** Display title. Defaults to `basename(path)` at create; duplicates are allowed. */
   readonly title: string
@@ -110,6 +119,27 @@ interface Workspace {
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
   status(): Promise<'ok' | 'missing-dir'>
+
+  /**
+   * Append an existing directory to {@link folders}. The path is
+   * canonicalized through `fs.realpath`; a nonexistent path rejects with the
+   * original error and a non-directory rejects. The primary {@link path} or
+   * an already-accounted folder resolves without writing, aside from the
+   * durable filtered-candidate prune every accepted mutation performs.
+   * @param path - Existing directory to add, in any path spelling.
+   * @returns resolution after durability.
+   */
+  addFolder(path: string): Promise<void>
+
+  /**
+   * Remove one additional folder from {@link folders}. The primary
+   * {@link path} cannot be removed this way. An unaccounted path is
+   * idempotent: it resolves without writing, aside from the durable
+   * filtered-candidate prune every accepted mutation performs.
+   * @param path - Additional folder to remove, in any path spelling.
+   * @returns resolution after durability.
+   */
+  removeFolder(path: string): Promise<void>
 }
 ```
 

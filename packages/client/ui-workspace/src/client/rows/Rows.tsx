@@ -50,10 +50,11 @@ function createdLabel(createdAt: number, t: RowTranslate): string {
   return t('hover.created', { time: `${date} ${pad2(d.getHours())}:${pad2(d.getMinutes())}` })
 }
 
-/** Hover-card body: workspace title, full directory path, absolute creation time. */
-function WorkspaceHoverContent({ label, cwd, createdAt, t }: {
+/** Hover-card body: workspace title, primary and additional folders, creation time. */
+function WorkspaceHoverContent({ label, cwd, folders, createdAt, t }: {
   label: string
   cwd: string | undefined
+  folders: readonly string[]
   createdAt: number
   t: RowTranslate
 }) {
@@ -61,6 +62,9 @@ function WorkspaceHoverContent({ label, cwd, createdAt, t }: {
     <div className={css.hoverContent}>
       <div className={css.hoverTitle}>{label}</div>
       <div className={css.hoverPath}>{cwd}</div>
+      {folders.map(folder => (
+        <div className={css.hoverPath} key={folder}>{folder}</div>
+      ))}
       <div className={css.hoverTime}>{createdLabel(createdAt, t)}</div>
     </div>
   )
@@ -112,7 +116,12 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   onToggle: () => void
   onCreate: () => void
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
-  actions?: { rename: () => void; delete: () => void } | undefined
+  actions?: {
+    rename: () => void
+    addFolder: () => void
+    removeFolder: (path: string) => void
+    delete: () => void
+  } | undefined
   /** Present only for real Workspace rows in the grouped view. */
   drag?: WorkspaceRowDragProps | undefined
   t: RowTranslate
@@ -124,6 +133,15 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   const [menuOpen, setMenuOpen] = useState(false)
   const workspaceMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
+    { id: 'addFolder', label: t('menu.addFolder'), icon: <IconPlusOutline16 /> },
+    ...row.folders.length === 0
+      ? []
+      : [{
+        id: 'removeFolder',
+        label: t('menu.removeFolder'),
+        icon: <IconFolderClose16 />,
+        submenu: row.folders.map(folder => ({ id: `remove:${folder}`, label: folder })),
+      }],
     { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
   ]
   const ownRow = (
@@ -161,9 +179,14 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
               setMenuOpen(false)
               // Unknown ids leave before the dispatch: a future menu row must
               // not inherit the destructive branch as an else fallback.
-              /* v8 ignore next -- workspaceMenuItems carries exactly these two rows today. */
-              if (id !== 'rename' && id !== 'delete') return
+              if (id.startsWith('remove:')) {
+                actions.removeFolder(id.slice('remove:'.length))
+                return
+              }
+              /* v8 ignore next -- remaining ids are the three static workspace rows. */
+              if (id !== 'rename' && id !== 'addFolder' && id !== 'delete') return
               if (id === 'rename') actions.rename()
+              else if (id === 'addFolder') actions.addFolder()
               else actions.delete()
             }}
             portal
@@ -196,7 +219,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   return (
     <HoverCard
       anchor={ownRow}
-      content={<WorkspaceHoverContent label={row.label} cwd={row.cwd} createdAt={row.createdAt} t={t} />}
+      content={<WorkspaceHoverContent label={row.label} cwd={row.cwd} folders={row.folders} createdAt={row.createdAt} t={t} />}
       disabled={menuOpen}
       copyText={row.cwd}
       copyLabel={t('copy')}

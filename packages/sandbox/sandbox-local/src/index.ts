@@ -361,14 +361,17 @@ export class LocalSandboxProvider extends SandboxProvider {
       return [
         ...this.windowsAclRunnerInvocation(),
         '--workspace', policy.workspaceRoot,
+        ...(policy.additionalRoots ?? []).flatMap(root => ['--workspace', root]),
         '--temp', tmpdir(),
         '--mode', policy.mode,
       ]
     }
-    const temp = this.materializeAclGrant(sessionId, policy.workspaceRoot)
+    const extraRoots = policy.additionalRoots ?? []
+    const temp = this.materializeAclGrant(sessionId, policy.workspaceRoot, extraRoots)
     return [
       ...this.windowsAclRunnerInvocation(),
       '--workspace', policy.workspaceRoot,
+      ...extraRoots.flatMap(root => ['--workspace', root]),
       '--temp', temp.dir,
       '--mode', policy.mode,
       '--write-sid', workspaceWriteSid(policy.workspaceRoot),
@@ -387,15 +390,22 @@ export class LocalSandboxProvider extends SandboxProvider {
    * removed before the error propagates.
    * @param sessionId - the policy's calling-session identity.
    * @param workspaceRoot - the resolved policy root.
+   * @param additionalRoots - extra workspace folders sharing the same write SID.
    * @returns the pair's private temp directory and write capability.
    */
-  private materializeAclGrant(sessionId: SessionId, workspaceRoot: string): AclTempCapability {
+  private materializeAclGrant(
+    sessionId: SessionId,
+    workspaceRoot: string,
+    additionalRoots: readonly string[] = [],
+  ): AclTempCapability {
     assertTempRootOutsideWorkspace(workspaceRoot, tmpdir())
+    for (const extra of additionalRoots) assertTempRootOutsideWorkspace(extra, tmpdir())
     const writeSid = workspaceWriteSid(workspaceRoot)
     if (!this.workspaceGrants.has(workspaceRoot)) {
       const grant = AclWriteGrant.create(writeSid)
       try {
         grant.add(workspaceRoot, true)
+        for (const extra of additionalRoots) grant.add(extra, true)
       } catch (error) {
         // Free the SID; a standing ACE (if the apply succeeded before a
         // post-apply throw) is the intended end state, not an error

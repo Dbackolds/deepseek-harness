@@ -109,6 +109,12 @@ export class WorkspaceRegistry extends Service {
       this.sessionPaths.set(id, path)
       this.invalidSessionPaths.delete(id)
     },
+    ownerOfPath: (path) => {
+      for (const [id, entity] of this.entities) {
+        if (entity.path === path || entity.folders.includes(path)) return id
+      }
+      return undefined
+    },
   }
 
   constructor(ctx: Context) {
@@ -277,7 +283,7 @@ export class WorkspaceRegistry extends Service {
   async resolveByPath(path: string): Promise<Workspace | undefined> {
     const canonical = await realpathNormalize(path)
     for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
+      if (entity.path === canonical || entity.folders.includes(canonical)) return entity
     }
     return undefined
   }
@@ -295,6 +301,7 @@ export class WorkspaceRegistry extends Service {
     const record: WorkspaceRecord = {
       path: canonical,
       title: workspaceName,
+      folders: [],
       sessionIds: [],
       createdAt: now,
       updatedAt: now,
@@ -460,6 +467,7 @@ export class WorkspaceRegistry extends Service {
         const record: WorkspaceRecord = {
           path: group.path,
           title: basename(group.path),
+          folders: [],
           sessionIds,
           createdAt,
           updatedAt: createdAt,
@@ -528,15 +536,26 @@ export class WorkspaceRegistry extends Service {
 
     const paths = new Map<string, WorkspaceId>()
     const accounted = new Map<SessionId, WorkspaceId>()
-    for (const [id, record] of table.entries()) {
-      const pathHolder = paths.get(record.path)
+    const claimPath = (claimed: string, id: WorkspaceId): void => {
+      const pathHolder = paths.get(claimed)
       if (pathHolder !== undefined) {
         throw new Error(
-          `workspace domain is inconsistent: path '${record.path}' is claimed `
+          `workspace domain is inconsistent: path '${claimed}' is claimed `
           + `by both workspace '${pathHolder}' and workspace '${id}'`,
         )
       }
-      paths.set(record.path, id)
+      paths.set(claimed, id)
+    }
+    for (const [id, record] of table.entries()) {
+      claimPath(record.path, id)
+      for (const folder of record.folders) {
+        if (folder === record.path) {
+          throw new Error(
+            `workspace domain is inconsistent: workspace '${id}' lists its primary path as an additional folder`,
+          )
+        }
+        claimPath(folder, id)
+      }
       for (const sessionId of record.sessionIds) {
         const holder = accounted.get(sessionId)
         if (holder !== undefined) {

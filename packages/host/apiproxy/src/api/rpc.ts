@@ -38,8 +38,9 @@ export interface RpcErrorDetailsMap {
   'invalid-time-zone': { value: string }
   'workspace-attach-failed': { sessionId: SessionId; workspaceId: string }
   'workspace-not-found': { workspaceId: string }
-  'workspace-invalid-path': { path: string }
+  'workspace-invalid-path': { path: string; workspaceId?: string }
   'workspace-name-conflict': { name: string }
+  'workspace-folder-conflict': { path: string; workspaceId: string }
   'workspace-move-invalid': { workspaceId: string; sessionId: SessionId; beforeSessionId?: SessionId }
   'directory-unreadable': { path: string }
   'directory-exists': { path: string }

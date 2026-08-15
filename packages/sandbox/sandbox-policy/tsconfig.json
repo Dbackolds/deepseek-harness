@@ -27,6 +27,9 @@
       "path": "../../core/session"
     },
     {
+      "path": "../../workspace/workspace"
+    },
+    {
       "path": "../../core/system-prompt"
     },
     {

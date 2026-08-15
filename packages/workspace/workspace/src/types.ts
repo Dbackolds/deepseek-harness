@@ -15,21 +15,30 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 export type WorkspaceId = Branded<'WorkspaceId'>
 
 /**
- * One workspace: a stable id over an existing directory, a display title, and
- * an ordered candidate account of sessions. Membership requires both an id in
- * that account and a session header whose canonical cwd equals the workspace
- * path. Consumers only see this interface; the implementation stays private.
+ * One workspace: a stable id over an existing primary directory, optional
+ * additional folders, a display title, and an ordered candidate account of
+ * sessions. Membership requires both an id in that account and a session
+ * header whose canonical cwd equals the workspace path. Consumers only see
+ * this interface; the implementation stays private.
  */
 export interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Canonical directory path: the `fs.realpath` of the path given at create
-   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
-   * afterwards, even when the directory disappears (see {@link status}).
+   * Canonical primary directory path: the `fs.realpath` of the path given at
+   * create time (trailing slashes, `..`, and symlinks all resolved). Session
+   * cwd and membership stay bound to this path. Never rewritten afterwards,
+   * even when the directory disappears (see {@link status}).
    */
   readonly path: string
+
+  /**
+   * Additional canonical folders in durable add order. Never includes
+   * {@link path}; uniqueness is canonical-path equality. A missing folder
+   * stays listed until {@link removeFolder} removes it.
+   */
+  readonly folders: readonly string[]
 
   /** Display title. Defaults to `basename(path)` at create; duplicates are allowed. */
   readonly title: string
@@ -101,4 +110,25 @@ export interface Workspace {
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
   status(): Promise<'ok' | 'missing-dir'>
+
+  /**
+   * Append an existing directory to {@link folders}. The path is
+   * canonicalized through `fs.realpath`; a nonexistent path rejects with the
+   * original error and a non-directory rejects. The primary {@link path} or
+   * an already-accounted folder resolves without writing, aside from the
+   * durable filtered-candidate prune every accepted mutation performs.
+   * @param path - Existing directory to add, in any path spelling.
+   * @returns resolution after durability.
+   */
+  addFolder(path: string): Promise<void>
+
+  /**
+   * Remove one additional folder from {@link folders}. The primary
+   * {@link path} cannot be removed this way. An unaccounted path is
+   * idempotent: it resolves without writing, aside from the durable
+   * filtered-candidate prune every accepted mutation performs.
+   * @param path - Additional folder to remove, in any path spelling.
+   * @returns resolution after durability.
+   */
+  removeFolder(path: string): Promise<void>
 }

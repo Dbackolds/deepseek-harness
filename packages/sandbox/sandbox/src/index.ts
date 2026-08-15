@@ -39,8 +39,13 @@ export type ConfinedSandboxMode = Exclude<SandboxMode, 'danger-full-access'>
 export interface SandboxExecutionPolicy {
   /** The file-effect mode this execution runs under. */
   mode: SandboxMode
-  /** Absolute root directory `workspace-write` may write under. */
+  /** Absolute primary root directory `workspace-write` may write under. */
   workspaceRoot: string
+  /**
+   * Additional absolute directories `workspace-write` may write under.
+   * Empty when the calling session has no extra workspace folders.
+   */
+  additionalRoots?: readonly string[]
   /**
    * Opaque identity of the calling session (the branded `dsh-session`
    * SessionId). Backends key per-session state off it (e.g. windows-acl gives

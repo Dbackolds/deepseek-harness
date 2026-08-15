@@ -60,6 +60,14 @@ export interface WorkspaceEntityHost {
    * @param path - Canonical existing directory from the immutable header cwd.
    */
   rememberSessionPath(id: SessionId, path: string): void
+
+  /**
+   * The workspace that already claims a canonical path as primary or additional
+   * folder, if any.
+   * @param path - Canonical existing directory.
+   * @returns the owning workspace id, or `undefined` when the path is free.
+   */
+  ownerOfPath(path: string): WorkspaceId | undefined
 }
 
 /** Chain-slot abort sentinel thrown by the update fn when the record needs no change; only `mutate` observes it. */
@@ -84,6 +92,10 @@ export class WorkspaceEntity implements Workspace {
 
   get path(): string {
     return this.record.path
+  }
+
+  get folders(): readonly string[] {
+    return this.record.folders
   }
 
   get title(): string {
@@ -175,6 +187,42 @@ export class WorkspaceEntity implements Workspace {
     await this.mutate(record => record.sessionIds.includes(sessionId)
       ? { ...record, sessionIds: record.sessionIds.filter(id => id !== sessionId) }
       : record)
+  }
+
+  async addFolder(path: string): Promise<void> {
+    const canonical = await realpathNormalize(path)
+    if (!(await stat(canonical)).isDirectory()) {
+      throw new Error(`cannot add folder '${canonical}' to workspace '${this.record.path}': path is not a directory`)
+    }
+    const owner = this.host.ownerOfPath(canonical)
+    if (owner !== undefined && owner !== this.id) {
+      throw new Error(
+        `cannot add folder '${canonical}' to workspace '${this.record.path}': `
+        + `workspace '${owner}' already claims that path`,
+      )
+    }
+    await this.mutate((record) => {
+      if (canonical === record.path || record.folders.includes(canonical)) return record
+      return { ...record, folders: [...record.folders, canonical] }
+    })
+  }
+
+  async removeFolder(path: string): Promise<void> {
+    let canonical: string
+    try {
+      canonical = await realpathNormalize(path)
+    } catch {
+      // A missing or unreadable spelling still matches a stored folder by
+      // exact string so a vanished additional folder can be removed.
+      canonical = path
+    }
+    await this.mutate((record) => {
+      if (canonical === record.path) {
+        throw new Error(`cannot remove the primary folder '${record.path}' from workspace '${this.id}'`)
+      }
+      if (!record.folders.includes(canonical)) return record
+      return { ...record, folders: record.folders.filter(folder => folder !== canonical) }
+    })
   }
 
   async status(): Promise<'ok' | 'missing-dir'> {

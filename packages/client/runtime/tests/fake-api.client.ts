@@ -14,6 +14,7 @@ function fakeWorkspace(id: string, over: Partial<WorkspaceView> = {}): Workspace
   return {
     workspaceId: id as WorkspaceId,
     path: '/f/ws',
+    folders: [],
     title: 'ws',
     sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -221,6 +222,12 @@ export class FakeApiClient implements IApiClient {
   onWorkspaceArchiveSession: (payload: unknown) => Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>> =
     payload => Promise.resolve(ok({ archivedSessionIds: [(payload as { sessionId: SessionId }).sessionId] }))
 
+  onWorkspaceAddFolder: (payload: unknown) => Promise<RpcResponse<{ workspace: WorkspaceView }>> =
+    () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws') }))
+
+  onWorkspaceRemoveFolder: (payload: unknown) => Promise<RpcResponse<{ workspace: WorkspaceView }>> =
+    () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws') }))
+
   readonly workspace: IApiClient['workspace'] = {
     list: (payload: unknown) => this.record('workspace.list', payload, this.onWorkspaceList(payload).then(response => (
       response.result.ok
@@ -236,6 +243,10 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.insertSessionBefore', payload, this.onWorkspaceInsertSessionBefore(payload)),
     archiveSession: (payload: unknown) =>
       this.record('workspace.archiveSession', payload, this.onWorkspaceArchiveSession(payload)),
+    addFolder: (payload: unknown) =>
+      this.record('workspace.addFolder', payload, this.onWorkspaceAddFolder(payload)),
+    removeFolder: (payload: unknown) =>
+      this.record('workspace.removeFolder', payload, this.onWorkspaceRemoveFolder(payload)),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real

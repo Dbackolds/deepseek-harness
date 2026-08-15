@@ -237,6 +237,10 @@ type SessionTreeProps = Pick<
   onRenameRequest: (workspaceId: WorkspaceId, currentTitle: string) => void
   /** Open the browser-owned delete-confirmation dialog for a real Workspace group. */
   onDeleteRequest: (workspaceId: WorkspaceId, currentTitle: string) => void
+  /** Open the composed directory flow to add an additional folder. */
+  onAddFolderRequest: (workspaceId: WorkspaceId) => void
+  /** Remove one additional folder from a real Workspace group. */
+  onRemoveFolderRequest: (workspaceId: WorkspaceId, path: string) => void
   /** Open the browser-owned session rename dialog. */
   onSessionRename: (sessionId: SessionNode['id'], currentTitle: string) => void
   /** Archive a session (row menu action; the row disappears on the state echo). */
@@ -248,7 +252,7 @@ type SessionTreeProps = Pick<
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
 function SessionTree({
   useSessions, startSession, open, forkSession, workspaces, archivedSessionIds,
-  onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive,
+  onRenameRequest, onDeleteRequest, onAddFolderRequest, onRemoveFolderRequest, onSessionRename, onSessionArchive,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
@@ -470,6 +474,14 @@ function SessionTree({
                     rename: () => {
                     /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
                       if (group.workspaceId !== undefined) onRenameRequest(group.workspaceId, group.label)
+                    },
+                    addFolder: () => {
+                    /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
+                      if (group.workspaceId !== undefined) onAddFolderRequest(group.workspaceId)
+                    },
+                    removeFolder: (path) => {
+                    /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
+                      if (group.workspaceId !== undefined) onRemoveFolderRequest(group.workspaceId, path)
                     },
                     delete: () => {
                     /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
@@ -755,6 +767,8 @@ export function WorkspaceBrowser({
   archiveSession,
   insertSessionBefore,
   createWorkspace,
+  addWorkspaceFolder,
+  removeWorkspaceFolder,
   searchSessions,
   searchResultLimit,
   useDirectoryFlow,
@@ -796,6 +810,7 @@ export function WorkspaceBrowser({
   // Section-header ＋ opens the picker menu (same popover in wide and rail
   // states; the menu anchors on this button).
   const [wsPickerOpen, setWsPickerOpen] = useState(false)
+  const [folderTarget, setFolderTarget] = useState<WorkspaceId | null>(null)
   const wsPlusRef = useRef<HTMLButtonElement>(null)
   const composingRef = useRef(false)
 
@@ -1073,15 +1088,22 @@ export function WorkspaceBrowser({
           anchorRef={wsPlusRef}
           useWorkspaces={useWorkspaces}
           createWorkspace={createWorkspace}
+          addFolderTo={folderTarget ?? undefined}
+          addWorkspaceFolder={addWorkspaceFolder}
+          onAddFolderSettled={() => { setFolderTarget(null) }}
           useDirectoryFlow={useDirectoryFlow}
           renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
           addOnly
           side="right"
           onPick={(workspaceId) => {
+            const addingFolder = folderTarget !== null
             setWsPickerOpen(false)
-            startSession(workspaceId)
+            setFolderTarget(null)
+            if (!addingFolder) startSession(workspaceId)
           }}
-          onClose={() => { setWsPickerOpen(false) }}
+          onClose={() => {
+            setWsPickerOpen(false)
+          }}
         />
       </div>
 
@@ -1161,6 +1183,12 @@ export function WorkspaceBrowser({
                 onDeleteRequest={(workspaceId, title) => {
                   setDeleteTarget({ workspaceId, title })
                   setDeleteError(null)
+                }}
+                onAddFolderRequest={(workspaceId) => {
+                  setFolderTarget(workspaceId)
+                }}
+                onRemoveFolderRequest={(workspaceId, path) => {
+                  void removeWorkspaceFolder(workspaceId, path)
                 }}
               />
             ))}

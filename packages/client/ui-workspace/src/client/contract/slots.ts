@@ -135,6 +135,10 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
   insertSessionBefore: (workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId) => Promise<void>
   /** Adopt a picked host directory as a real Workspace before targeting a Session. */
   createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /** Add an existing directory as an additional folder of a Workspace. */
+  addWorkspaceFolder: (workspaceId: WorkspaceId, path: string) => Promise<WorkspaceView>
+  /** Remove one additional folder from a Workspace. */
+  removeWorkspaceFolder: (workspaceId: WorkspaceId, path: string) => Promise<WorkspaceView>
 }
 
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */

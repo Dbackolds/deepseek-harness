@@ -67,6 +67,10 @@ describe('profile dialects', () => {
   })
 
   it('bwrap workspace-write: adds an ephemeral /tmp and rebinds the workspace root', () => {
+    expect(bwrapProfileArgs({ mode: 'workspace-write', workspaceRoot: '/ws', additionalRoots: ['/extra'] })).toEqual([
+      '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--die-with-parent',
+      '--tmpfs', '/tmp', '--bind', '/ws', '/ws', '--bind', '/extra', '/extra',
+    ])
     expect(bwrapProfileArgs(WW)).toEqual([
       '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--die-with-parent',
       '--tmpfs', '/tmp', '--bind', '/ws', '/ws',
@@ -81,6 +85,8 @@ describe('profile dialects', () => {
 
   it('landlock workspace-write: adds the host /tmp and the workspace root', () => {
     expect(landlockProfileArgs(WW)).toEqual(['--ro', '/', '--rw', '/dev/null', '--rw', '/tmp', '--rw', '/ws'])
+    expect(landlockProfileArgs({ mode: 'workspace-write', workspaceRoot: '/ws', additionalRoots: ['/extra'] }))
+      .toEqual(['--ro', '/', '--rw', '/dev/null', '--rw', '/tmp', '--rw', '/ws', '--rw', '/extra'])
   })
 
   it('seatbelt read-only: allow-default with every file write denied except the /dev/null literal', () => {
@@ -96,6 +102,14 @@ describe('profile dialects', () => {
     const roots = [...new Set(['/ws', realpathSync('/tmp'), realpathSync(tmpdir())])]
     const allow = `(allow file-write* ${roots.map(root => `(subpath "${root}")`).join(' ')})`
     expect(seatbeltProfileArgs(WW)).toEqual(['-p', `${SEATBELT_RO_PROFILE} ${allow}`])
+  })
+
+  it('seatbelt workspace-write includes additional workspace folders', () => {
+    const extra = '/extra'
+    const roots = [...new Set(['/ws', extra, realpathSync('/tmp'), realpathSync(tmpdir())])]
+    const allow = `(allow file-write* ${roots.map(root => `(subpath "${root}")`).join(' ')})`
+    expect(seatbeltProfileArgs({ mode: 'workspace-write', workspaceRoot: '/ws', additionalRoots: [extra] }))
+      .toEqual(['-p', `${SEATBELT_RO_PROFILE} ${allow}`])
   })
 
   it('seatbelt workspace-write dedups a workspace root that already IS the temp dir', () => {

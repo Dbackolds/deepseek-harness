@@ -84,6 +84,7 @@ export class TestWorkspaces implements IWorkspaces {
       workspaceId: `ws-${input.path}` as WorkspaceId,
       title: input.path,
       path: input.path,
+      folders: [],
       sessionIds: [],
     } as unknown as WorkspaceView
   }
@@ -160,7 +161,7 @@ export class TestWorkspaces implements IWorkspaces {
     this.calls.push({ method: 'rename', args: [workspaceId, title] })
     const stub = this.stubs.get('rename')
     if (stub !== undefined) return await (stub(workspaceId, title) as Promise<WorkspaceView>)
-    return { workspaceId, title, path: `/${title}`, sessionIds: [] } as unknown as WorkspaceView
+    return { workspaceId, title, path: `/${title}`, folders: [], sessionIds: [] } as unknown as WorkspaceView
   }
 
   /**
@@ -193,7 +194,49 @@ export class TestWorkspaces implements IWorkspaces {
     this.calls.push({ method: 'insertSessionBefore', args: [workspaceId, sessionId, beforeSessionId] })
     const stub = this.stubs.get('insertSessionBefore')
     if (stub !== undefined) return await (stub(workspaceId, sessionId, beforeSessionId) as Promise<WorkspaceView>)
-    return { workspaceId, title: '', path: '', sessionIds: [sessionId] } as unknown as WorkspaceView
+    return { workspaceId, title: '', path: '', folders: [], sessionIds: [sessionId] } as unknown as WorkspaceView
+  }
+
+  /**
+   * Add an additional folder (recorded). The default echoes the listed view
+   * with the path appended; stub for failure or list-coupled flows.
+   * @param workspaceId - target workspace.
+   * @param path - existing host directory.
+   * @returns the updated view.
+   */
+  async addFolder(workspaceId: WorkspaceId, path: string): Promise<WorkspaceView> {
+    this.calls.push({ method: 'addFolder', args: [workspaceId, path] })
+    const stub = this.stubs.get('addFolder')
+    if (stub !== undefined) return await (stub(workspaceId, path) as Promise<WorkspaceView>)
+    const current = this.list.getSnapshot().items.find(item => item.workspaceId === workspaceId)
+    return {
+      workspaceId,
+      title: current?.title ?? '',
+      path: current?.path ?? '',
+      folders: [...current?.folders ?? [], path],
+      sessionIds: [...current?.sessionIds ?? []],
+    } as unknown as WorkspaceView
+  }
+
+  /**
+   * Remove an additional folder (recorded). The default echoes the listed
+   * view without the path; stub for failure or list-coupled flows.
+   * @param workspaceId - target workspace.
+   * @param path - additional folder to remove.
+   * @returns the updated view.
+   */
+  async removeFolder(workspaceId: WorkspaceId, path: string): Promise<WorkspaceView> {
+    this.calls.push({ method: 'removeFolder', args: [workspaceId, path] })
+    const stub = this.stubs.get('removeFolder')
+    if (stub !== undefined) return await (stub(workspaceId, path) as Promise<WorkspaceView>)
+    const current = this.list.getSnapshot().items.find(item => item.workspaceId === workspaceId)
+    return {
+      workspaceId,
+      title: current?.title ?? '',
+      path: current?.path ?? '',
+      folders: (current?.folders ?? []).filter(folder => folder !== path),
+      sessionIds: [...current?.sessionIds ?? []],
+    } as unknown as WorkspaceView
   }
 
   /**
