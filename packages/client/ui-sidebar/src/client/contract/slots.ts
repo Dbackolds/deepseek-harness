@@ -2,10 +2,11 @@
  * Sidebar slot contract: the registrant-side props composition for the
  * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
  * owns column geometry (fold state machine, brand row, New Session);
- * everything between the section header and the list bottom is the
- * `sidebar.workspaces` registrant's (ui-workspace), and the foot is the
- * `sidebar.settings` registrant's (ui-settings), followed by optional footer
- * actions in `sidebar.footer.action`.
+ * the seat under New Session is `sidebar.automation`; everything between
+ * that seat and the list bottom is the `sidebar.workspaces` registrant's
+ * (ui-workspace), and the foot is the `sidebar.settings` registrant's
+ * (ui-settings), followed by optional footer actions in
+ * `sidebar.footer.action`.
  */
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-layout's SlotMap merge (the 'sidebar' entry) into every
@@ -15,6 +16,11 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    /**
+     * The control under New Session. Declared by this package's 'sidebar'
+     * entry; ui-automation registers the Host Automation trigger and panel.
+     */
+    'sidebar.automation': { kind: 'single'; scope: 'root'; owner: SidebarAutomationOwnerProps }
     /**
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
@@ -40,6 +46,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  * Owner share of the browser hole — the only facts crossing the shell/region
  * boundary. Business data and actions arrive through the region's own inject.
  */
+/**
+ * Owner share of the Automation seat: the column display state the occupant's
+ * trigger must render against (wide row vs rail icon).
+ */
+export interface SidebarAutomationOwnerProps {
+  /** Whether the sidebar renders wide content (false = 56px rail). */
+  wide: boolean
+}
+
 export interface SidebarSectionOwnerProps {
   /** Shell fold-state output: wide renders the full browser, rail the icon column. */
   wide: boolean
@@ -85,5 +100,5 @@ export type SidebarRootInjected = {
  */
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
-  & PropsRenderSlots<'sidebar.workspaces' | 'sidebar.settings' | 'sidebar.footer.action'>
+  & PropsRenderSlots<'sidebar.automation' | 'sidebar.workspaces' | 'sidebar.settings' | 'sidebar.footer.action'>
   & SidebarRootInjected & PropsLocale<'sidebar'>

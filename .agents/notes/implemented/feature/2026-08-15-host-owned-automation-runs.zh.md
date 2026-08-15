@@ -16,7 +16,7 @@ Status: implemented
 
 选择器是 `after`、`at`、`every`（≥ 300 秒，只取最近一次）和 `local-clock`（`HH:mm` 加可选 ISO 星期与显式 IANA 时区）。没有 Cron 求值器。`onOverlap` 是逐条规则的 `skip` | `replace`，只看该规则上一次 `started` Session：忙表示 live Agent 且 `status === 'running'`。`skip` 记录 `skipped_busy`；`replace` 用 `{ kind: 'automation', ruleId }` 取消并立即打开新 Session。
 
-tool 和 Host RPC 是同一服务的 Consumer。本记录交付服务、持久表、origin/cancel-cause 扩展、模型 tool、Host RPC 和包测试。Settings UI 仍是同一接口上的后续工作。
+tool、Host RPC 和 Web 侧栏面板是同一服务的 Consumer。本记录交付服务、持久表、origin/cancel-cause 扩展、模型 tool、Host RPC 和包测试。[Web Automation 侧栏](2026-08-15-web-automation-sidebar.md) 在该接口上占据 New Session 下方的 `sidebar.automation`。
 
 ## 考虑过的替代方案
 

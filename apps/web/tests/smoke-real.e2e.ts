@@ -143,6 +143,7 @@ async function detailsTrack(page: Page): Promise<number> {
 // the frame never appears.
 const UI_PLUGIN_DIRS = [
   'connection', 'runtime', 'ui-theme', 'locale', 'ui-layout', 'ui-sidebar',
+  'ui-automation',
   'ui-settings', 'ui-settings-general', 'ui-settings-models', 'ui-conversation',
   'ui-model-selection', 'ui-user-questions', 'ui-trajectory', '../session-query/session-log-export',
 ]
