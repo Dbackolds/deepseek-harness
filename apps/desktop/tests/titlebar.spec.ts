@@ -23,7 +23,8 @@ describe('titlebar chrome (windows variant)', () => {
     expect(styles).toContain(`${String(TITLEBAR_HEIGHT_PX)}px`)
     expect(styles).toContain('-webkit-app-region: drag')
     expect(styles).toContain(`padding: 0 ${String(WINDOWS_OVERLAY_WIDTH_PX)}px 0 12px`)
-    expect(styles).toContain('padding-top: var(--dsh-desktop-titlebar)')
+    expect(styles).toContain('body { padding-top: var(--dsh-desktop-titlebar); box-sizing: border-box; }')
+    expect(styles).not.toContain('html, body { padding-top')
   })
 
   it('keeps the inject script from covering page content below the reserved strip', () => {
@@ -47,6 +48,7 @@ describe('titlebar chrome (mac variant)', () => {
     expect(styles).toContain(`padding: 0 12px 0 ${String(MAC_TRAFFIC_LIGHT_WIDTH_PX)}px`)
     expect(styles).toContain('-webkit-app-region: drag')
     expect(styles).toContain('padding-top: var(--dsh-desktop-titlebar)')
+    expect(styles).not.toContain('html, body { padding-top')
   })
 
   it('injects and loads with the mac padding', () => {
