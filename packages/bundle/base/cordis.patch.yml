@@ -438,6 +438,11 @@
       config:
         persona: ''
 
+    # User-authored system-prompt library and per-model assembly. Empty until
+    # the Settings section supplies prompts; the Web page writes that section.
+    - id: user-system-prompts
+      name: '@deepseek-ai/dsh-user-system-prompts'
+
     # Agents created at startup. The base stays empty; raw overlays may create
     # agents, while Web creates sessions on client request.
     - id: agent-loop

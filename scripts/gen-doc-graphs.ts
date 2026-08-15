@@ -340,6 +340,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Layers the default ModelSelection through settings so direct and Host-backed Agent entry points share one state owner.',
   },
   {
+    key: 'userSystemPrompts',
+    pkg: 'user-system-prompts',
+    title: 'User system-prompt library',
+    mode: 'core',
+    consumers: ['agent-loop'],
+    note: 'Applies the Settings-backed per-model prompt selection after cooperative assembly and any complete-section restore.',
+  },
+  {
     key: 'agentLoop',
     pkg: 'agent-loop',
     title: 'Concrete loop driver',

@@ -23,7 +23,8 @@ declare module '@deepseek-ai/cordis' {
      * A supplied signal controls only this explicit assembly request and must not
      * be retained to control later turns. A registered complete section is
      * restored after this waterfall, so listeners cannot add to or replace
-     * that scope's system prompt.
+     * that scope's system prompt. Registered `afterAssemble` hooks then run
+     * and may replace the restored prompt.
      * @param assembly - the mutable assembly built from registered providers.
      * @param context - the caller's per-assembly context.
      * @mode waterfall
@@ -300,6 +301,16 @@ type ToolProvider = (context: AssembleContext) => ToolProviderResult
 /** One prompt-variable provider stored in a prompt layer. */
 type VariableProvider = (context: AssembleContext) => string | undefined
 
+/**
+ * Transform applied after cooperative assembly and any complete-section
+ * restore. Hooks run in registration order and each return is authoritative
+ * for the next hook.
+ */
+export type AfterAssemble = (
+  assembly: PromptAssembly,
+  context: AssembleContext,
+) => PromptAssembly | Promise<PromptAssembly>
+
 /** All prompt registrations owned by one global or scoped layer. */
 class PromptLayer implements ScopeLayer {
   readonly sections: NamedEntries<PromptSection>
@@ -348,6 +359,7 @@ export class SystemPrompt extends Service {
     scope => new PromptLayer(scope),
     () => { this.ctx.emit('system-prompt/change') },
   )
+  private readonly afterAssemblers: AfterAssemble[] = []
   private readonly toolOrder: string[] | undefined
 
   constructor(ctx: Context, config: Config) {
@@ -455,13 +467,35 @@ export class SystemPrompt extends Service {
   }
 
   /**
+   * Register a transform that runs after the assembly waterfall and after an
+   * effective complete section is restored. Use this when a contribution must
+   * see — and may replace — the prompt the model would otherwise receive.
+   * Registration and disposal emit `system-prompt/change`.
+   * @param hook - receives the post-restore assembly and returns the next one.
+   * @returns the exact Cordis effect disposer.
+   */
+  afterAssemble(hook: AfterAssemble): () => void {
+    return this.ctx.effect(() => {
+      this.afterAssemblers.push(hook)
+      this.ctx.emit('system-prompt/change')
+      return () => {
+        const index = this.afterAssemblers.indexOf(hook)
+        if (index >= 0) this.afterAssemblers.splice(index, 1)
+        this.ctx.emit('system-prompt/change')
+      }
+    }, 'systemPrompt.afterAssemble()')
+  }
+
+  /**
    * Assemble global and scoped providers, detach tool parameters, apply
    * canonical ordering, then run the assembly waterfall. Scoped sections and
    * variables shadow globals. The returned waterfall value is authoritative
    * except that an effective complete section is restored afterwards as the
-   * sole prompt section.
+   * sole prompt section. Registered {@link afterAssemble} hooks then run in
+   * registration order and may replace that restored prompt.
    * @param context - the optional scope and plugin-defined assembly fields.
-   * @returns the post-waterfall assembly with any complete prompt enforced.
+   * @returns the post-waterfall assembly with any complete prompt enforced
+   *   and after-assemble hooks applied.
    */
   // Keep configuration failures on the declared asynchronous error path.
   async assemble(context: AssembleContext = {}): Promise<PromptAssembly> {
@@ -533,12 +567,17 @@ export class SystemPrompt extends Service {
       scopeTarget(this, scope), 'system-prompt/assemble', assembly, context,
       () => Promise.resolve(assembly),
     )
-    if (completeSection === undefined && !runtimeContextSuppressed) return transformed
-    return {
-      ...transformed,
-      sections: completeSection === undefined ? transformed.sections : [completeSection],
-      contexts: runtimeContextSuppressed ? [] : transformed.contexts,
+    let result = completeSection === undefined && !runtimeContextSuppressed
+      ? transformed
+      : {
+        ...transformed,
+        sections: completeSection === undefined ? transformed.sections : [completeSection],
+        contexts: runtimeContextSuppressed ? [] : transformed.contexts,
+      }
+    for (const hook of this.afterAssemblers) {
+      result = await hook(result, context)
     }
+    return result
   }
 }
 

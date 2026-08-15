@@ -430,6 +430,34 @@ describe('settings domain', () => {
     expect(frames).toEqual([forwardedSettings('ui-onboarding'), forwardedSettings('ui-theme')])
   })
 
+  it('serves the user-system-prompts namespace, so the System prompts page can persist', async () => {
+    const ctx = await harness()
+    ctx.settings.register(settingsNamespace('user-system-prompts'), z.object({
+      prompts: z.array(z.object({ id: z.string(), name: z.string(), text: z.string() })),
+      bindings: z.array(z.object({
+        provider: z.string(),
+        model: z.string(),
+        promptIds: z.array(z.string()),
+        override: z.boolean(),
+      })),
+    }))
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    expectOk(await api.settings.replace(request({
+      ns: 'user-system-prompts',
+      section: {
+        prompts: [{ id: 'style', name: 'Style', text: 'Be concise.' }],
+        bindings: [],
+      },
+    })))
+
+    expect(ctx.settings.describe().find(view => String(view.ns) === 'user-system-prompts')?.value)
+      .toEqual({
+        prompts: [{ id: 'style', name: 'Style', text: 'Be concise.' }],
+        bindings: [],
+      })
+  })
+
   it('serves the agent-preset namespace, so a browser preset picker can persist its choice', async () => {
     const ctx = await harness()
     ctx.settings.register(settingsNamespace('agent-presets'), z.object({ default: z.string() }))
