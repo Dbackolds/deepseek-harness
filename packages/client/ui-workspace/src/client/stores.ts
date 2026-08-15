@@ -25,6 +25,8 @@ type WorkspaceViewState = {
   sessionOrderByAccount: Record<string, string[]>
   /** Last observed update timestamps per order account for one-time promotion events. */
   sessionUpdatedAtByAccount: Record<string, Record<string, number>>
+  /** Folded activity sections, keyed as `${accountKey}:${bucket}`. Absent = expanded. */
+  activityExpansion: Record<string, boolean>
 }
 
 /**
@@ -43,6 +45,7 @@ type WorkspaceViewActions = {
     updatedAt: Record<string, number>,
   ) => void
   setSessionOrder: (draft: WorkspaceViewState, accountKey: string, order: string[]) => void
+  setActivityExpanded: (draft: WorkspaceViewState, key: string, expanded: boolean) => void
 }
 
 /**
@@ -57,8 +60,9 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       groupExpansion: {},
       sessionOrderByAccount: {},
       sessionUpdatedAtByAccount: {},
+      activityExpansion: {},
     }),
-    persist: 'dsh.workspace.view.v5',
+    persist: 'dsh.workspace.view.v6',
     actions: {
       setGroupBy: (d, mode: SessionGroupBy) => { d.groupBy = mode },
       setOrderBy: (d, mode: SessionOrderBy) => { d.orderBy = mode },
@@ -74,6 +78,12 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
         d.sessionUpdatedAtByAccount = Object.fromEntries(
           Object.entries(d.sessionUpdatedAtByAccount).filter(([key]) => retained.has(key)),
         )
+        d.activityExpansion = Object.fromEntries(
+          Object.entries(d.activityExpansion).filter(([key]) => {
+            const sep = key.lastIndexOf(':')
+            return sep !== -1 && retained.has(key.slice(0, sep))
+          }),
+        )
       },
       syncSessionOrderAccount: (d, accountKey: string, order: string[], updatedAt: Record<string, number>) => {
         d.sessionOrderByAccount[accountKey] = order
@@ -81,6 +91,9 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       },
       setSessionOrder: (d, accountKey: string, order: string[]) => {
         d.sessionOrderByAccount[accountKey] = order
+      },
+      setActivityExpanded: (d, key: string, expanded: boolean) => {
+        d.activityExpansion[key] = expanded
       },
     },
   })

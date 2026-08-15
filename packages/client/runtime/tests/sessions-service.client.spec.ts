@@ -34,6 +34,7 @@ type FeedRow = {
   parentId?: string
   origin?: 'subagent' | 'automation'
   running?: boolean
+  interrupted?: boolean
   blank?: boolean
   agentPreset?: string
 }
@@ -42,6 +43,7 @@ async function feedList(b: Bench, rows: FeedRow[]): Promise<void> {
   b.api.onList = () => Promise.resolve(ok({
     items: rows.map(r => ({
       sessionId: sid(r.id), updatedAt: 1, running: r.running ?? false, blank: r.blank ?? false,
+      ...(r.interrupted === true ? { interrupted: true } : {}),
       ...(r.cwd !== undefined ? { cwd: r.cwd } : {}),
       ...(r.parentId !== undefined ? { parentSessionId: sid(r.parentId) } : {}),
       ...(r.origin !== undefined ? { origin: r.origin } : {}),
@@ -70,6 +72,12 @@ describe('list store projection', () => {
       displayTitle: 's2', parentId: 's1', origin: 'subagent', running: true,
     })
     expect(state.byId[sid('s2')]?.title).toBeUndefined()
+  })
+
+  it('projects a crash/reload interruption onto the list row', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1', interrupted: true }])
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]).toMatchObject({ interrupted: true, running: false })
   })
 
   it('reprojects a blank session whose composition switched and nothing else moved', async () => {

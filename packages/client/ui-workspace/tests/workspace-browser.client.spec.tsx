@@ -148,7 +148,7 @@ describe('WorkspaceBrowser', () => {
     expect(b.store.getSnapshot().groupBy).toBe('flat')
     expect(screen.getByText('会话')).toBeTruthy()
     expect(screen.queryByText('alpha')).toBeNull()
-    expect(screen.getByRole('heading', { name: '历史记录' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '历史记录' })).toBeTruthy()
     expect(screen.getByText('alpha-s')).toBeTruthy()
     expect(screen.getByText('beta-s')).toBeTruthy()
 
@@ -220,12 +220,13 @@ describe('WorkspaceBrowser', () => {
     ])
   })
 
-  it('splits the flat list into Completed, Running, and History and folds History after five rows', () => {
+  it('splits the flat list into Completed, Running, Abnormal, and History and folds History after five rows', () => {
     const items = [
       summary('done-a', 9, { completed: true }),
       summary('done-b', 8, { completed: true }),
       summary('live', 7, { running: true }),
       summary('waiting', 6, { pendingInteraction: 'question' }),
+      summary('crash', 5.5, { interrupted: true }),
       ...Array.from({ length: 6 }, (_, index) => summary(`old-${index + 1}`, 5 - index)),
     ]
     mount({
@@ -234,16 +235,27 @@ describe('WorkspaceBrowser', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
-    expect(screen.getByRole('heading', { name: '已完成' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '运行中' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '历史记录' })).toBeTruthy()
+    const completed = screen.getByRole('button', { name: '已完成 2 个' })
+    const running = screen.getByRole('button', { name: '运行中 2 个' })
+    const abnormal = screen.getByRole('button', { name: '异常 1 个' })
+    const history = screen.getByRole('button', { name: '历史记录' })
+    expect(completed).toBeTruthy()
+    expect(running).toBeTruthy()
+    expect(abnormal).toBeTruthy()
+    expect(history).toBeTruthy()
     expect(screen.getByText('done-a')).toBeTruthy()
-    expect(screen.getByText('done-b')).toBeTruthy()
-    expect(screen.getByText('live')).toBeTruthy()
-    expect(screen.getByText('waiting')).toBeTruthy()
-    expect(screen.getByText('old-1')).toBeTruthy()
+    expect(screen.getByText('crash')).toBeTruthy()
     expect(screen.getByText('old-5')).toBeTruthy()
     expect(screen.queryByText('old-6')).toBeNull()
+    fireEvent.click(completed)
+    expect(completed.getAttribute('aria-expanded')).toBe('false')
+    expect(completed.parentElement?.nextElementSibling?.getAttribute('aria-hidden')).toBe('true')
+    fireEvent.click(completed)
+    expect(completed.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(history)
+    expect(history.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(history)
+    expect(history.getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '展开其余 1 个会话' }))
     expect(screen.getByText('old-6')).toBeTruthy()
   })
@@ -274,7 +286,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('session-6')).toBeNull()
     expect(screen.queryByText('session-7')).toBeNull()
 
-    expect(screen.getByRole('heading', { name: '历史记录' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '历史记录' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '展开其余 2 个会话' }))
     expect(screen.getByText('session-6')).toBeTruthy()
     expect(screen.getByText('session-7')).toBeTruthy()
@@ -453,30 +465,31 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('b')).toBeNull()
   })
 
-  it('shows only the current blank session as the localized New Session, excluded from search', () => {
+  it('hides blank sessions from the list and from search until the first prompt', () => {
     const currentBlank = summary('alpha-blank', 9, { blank: true })
     const staleBlank = summary('beta-blank', 8, { blank: true })
+    const sent = summary('alpha-sent', 7, { running: true })
     const sessions = sessionState(
-      [currentBlank, staleBlank],
+      [currentBlank, staleBlank, sent],
       { current: currentBlank.id },
     )
     const b = mount({
       useSessions: hook(sessions),
       useWorkspaces: hook(workspaceState([
-        workspace('alpha', ['alpha-blank']), workspace('beta', ['beta-blank']),
+        workspace('alpha', ['alpha-blank', 'alpha-sent']), workspace('beta', ['beta-blank']),
       ])),
     })
-    expect(screen.getByText('新会话')).toBeTruthy()
+    expect(screen.queryByText('新会话')).toBeNull()
     expect(screen.queryByText('alpha-blank')).toBeNull()
     expect(screen.queryByText('beta-blank')).toBeNull()
+    expect(screen.getByText('alpha-sent')).toBeTruthy()
 
     rerender(b, { useSessions: hook({ ...sessions, current: staleBlank.id }) })
-    expect(screen.getAllByText('新会话')).toHaveLength(1)
+    expect(screen.queryByText('新会话')).toBeNull()
     b.store.actions.setGroupBy('flat')
     rerender(b, {})
-    expect(screen.getAllByText('新会话')).toHaveLength(1)
-    // Search excludes blank rows entirely — neither the canonical stored
-    // title nor the localized display label participates in matching.
+    expect(screen.queryByText('新会话')).toBeNull()
+    expect(screen.getByText('alpha-sent')).toBeTruthy()
     fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: 'new session' } })
     expect(screen.queryByText('新会话')).toBeNull()
     fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: '新会话' } })

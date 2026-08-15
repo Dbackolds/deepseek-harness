@@ -10,9 +10,9 @@ The sidebar already marks finished-unviewed, running, and idle Sessions with dot
 
 ## Decision
 
-`ui-workspace` splits every visible Session list — Workspace groups and the flat list — into three status sections in this order: **Completed** (`completed` reminder, no live work), **Running** (pending interaction or own or descendant activity), and **History** (every remaining idle Session). Classification is a pure function of the existing row bits; opening a Session still clears the reminder through `SessionManager`, so that row moves from Completed to History without a second read store.
+`ui-workspace` splits every visible Session list — Workspace groups and the flat list — into four status sections in this order: **Completed** (`completed` reminder, no live work), **Running** (pending interaction or own or descendant activity), **Abnormal** (crash/reload interruption, not running again), and **History** (every remaining idle Session). Classification is a pure function of the existing row bits. Leaving a finished Session consumes the reminder through `SessionManager`, so the row then moves to History.
 
-Completed and Running stay fully expanded. History keeps the existing five-row fold and transient **Show more** control from [Workspace Sidebar Order and Folding](2026-08-11-workspace-sidebar-order-and-folding.md). Session drag stays inside the section it started in; the persisted account order still holds every Session, and a drop only rewrites neighbors that share that section.
+Every activity heading has a disclosure chevron and persists its fold in the workspace view store. Completed, Running, and Abnormal also show a colored count badge. History keeps the existing five-row overflow control from [Workspace Sidebar Order and Folding](2026-08-11-workspace-sidebar-order-and-folding.md) while the section is open. Session drag stays inside the section it started in.
 
 ## Alternatives considered
 
@@ -24,8 +24,8 @@ Completed and Running stay fully expanded. History keeps the existing five-row f
 
 ## Consequences
 
-The three headings are presentation-only. Search stays one flat match list. Workspace headers, Host order, and the reminder lifetime stay as they are. A Session that starts running leaves Completed immediately; a Session that is opened leaves Completed on the next list snapshot. A crash/reload-interrupted Session is listed as interrupted; `session.list` then resumes it and wakes one plugin-notice continuation turn.
+The four headings are presentation-only. Search stays one flat match list. Workspace headers, Host order, and the reminder lifetime stay as they are. A Session that starts running leaves Completed immediately; leaving a finished Session moves it to History. A crash/reload-interrupted Session sits in Abnormal until it is running again; `session.list` then resumes it and wakes one plugin-notice continuation turn.
 
 ## Testing
 
-Tree tests cover the three-way classification and empty-section placeholders. Browser tests cover the flat-list headings, History fold after five idle rows, and the existing Workspace History fold copy.
+Tree tests cover the four-way classification, empty-section placeholders, and persisted activity folds. Browser tests cover the flat-list headings, count badges, Completed fold, History overflow after five idle rows, and the existing Workspace History fold copy.
