@@ -15,6 +15,7 @@ const S2 = 'fk-m2' as SessionId
 type SummaryOver = Partial<{
   updatedAt: number
   running: boolean
+  interrupted: boolean
   blank: boolean
   parentSessionId: SessionId
   origin: 'subagent'
@@ -1039,7 +1040,7 @@ describe('completed reminder', () => {
   const entry = (manager: SessionManager, sessionId: SessionId) =>
     manager.getListSnapshot().items.find(item => item.sessionId === sessionId)
 
-  it('arms on a running→idle flip of a non-selected session and clears on select', () => {
+  it('arms on a running→idle flip and clears only after focus leaves', () => {
     const manager = new SessionManager(new FakeApiClient(), fakeRemote())
     manager.handleHostEnvelope(added('h1', S1))
     manager.handleHostEnvelope(added('h2', S2))
@@ -1048,24 +1049,22 @@ describe('completed reminder', () => {
     manager.handleHostEnvelope(status('s1', S2, true))
     manager.handleHostEnvelope(status('s2', S2, false))
     expect(entry(manager, S2)?.completed).toBe(true)
-    // Opening the session consumes the reminder.
     manager.select(S2)
+    expect(entry(manager, S2)?.completed).toBe(true)
+    manager.select(S1)
     expect(entry(manager, S2)?.completed).toBe(false)
   })
 
-  it('never arms for the session being watched and re-arms after a switch-away re-run', () => {
+  it('arms the watched session and keeps the reminder until focus leaves', () => {
     const manager = new SessionManager(new FakeApiClient(), fakeRemote())
     manager.handleHostEnvelope(added('h1', S1))
     manager.handleHostEnvelope(added('h2', S2))
     manager.select(S2)
     manager.handleHostEnvelope(status('s1', S2, true))
     manager.handleHostEnvelope(status('s2', S2, false))
-    expect(entry(manager, S2)?.completed).toBe(false) // watched to completion: no reminder
-    // Switch away; a fresh run completing again arms the reminder.
-    manager.select(S1)
-    manager.handleHostEnvelope(status('s3', S2, true))
-    manager.handleHostEnvelope(status('s4', S2, false))
     expect(entry(manager, S2)?.completed).toBe(true)
+    manager.select(S1)
+    expect(entry(manager, S2)?.completed).toBe(false)
   })
 
   it('a re-run disarms the reminder while running and re-arms on its completion', () => {
@@ -1107,6 +1106,44 @@ describe('completed reminder', () => {
     api.onList = () => Promise.resolve(ok({ items: [summary(S1), summary(S2, { updatedAt: 200, running: false })] as never[] }))
     await manager.refreshList()
     expect(entry(manager, S2)?.completed).toBe(true)
+  })
+
+  it('restores a persisted Completed reminder across a new manager', () => {
+    const storage = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => { storage.set(key, value) },
+      removeItem: (key: string) => { storage.delete(key) },
+    })
+    try {
+      const first = new SessionManager(new FakeApiClient(), fakeRemote())
+      first.handleHostEnvelope(added('h1', S1))
+      first.handleHostEnvelope(added('h2', S2))
+      first.select(S1)
+      first.handleHostEnvelope(status('s1', S2, true))
+      first.handleHostEnvelope(status('s2', S2, false))
+      expect(entry(first, S2)?.completed).toBe(true)
+      const restored = new SessionManager(new FakeApiClient(), fakeRemote())
+      restored.handleHostEnvelope(added('h3', S1))
+      restored.handleHostEnvelope(added('h4', S2))
+      expect(entry(restored, S2)?.completed).toBe(true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('projects a crash/reload interruption onto the list row', () => {
+    const manager = new SessionManager(new FakeApiClient(), fakeRemote())
+    manager.handleHostEnvelope({
+      rpcId: 'h1' as never,
+      payload: { type: 'host/session-added', sessionId: S1, blank: false },
+    })
+    const api = new FakeApiClient()
+    api.onList = () => Promise.resolve(ok({ items: [summary(S1, { interrupted: true })] as never[] }))
+    const listed = new SessionManager(api, fakeRemote())
+    return listed.refreshList().then(() => {
+      expect(entry(listed, S1)?.interrupted).toBe(true)
+    })
   })
 
   it('never arms for sessions already idle at first observation', async () => {

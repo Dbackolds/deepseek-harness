@@ -33,6 +33,39 @@ import type { SessionRemotes } from './remotes.ts'
  */
 export type SessionListPhase = 'pending' | 'ready'
 
+/** Browser-local Completed reminder ids; survives reload until focus leaves. */
+const COMPLETED_STORAGE_KEY = 'dsh.sessions.completed'
+
+/**
+ * Load persisted Completed reminder ids.
+ * @returns the restored set, or empty when storage is missing or unreadable.
+ */
+function readCompletedNotifications(): Set<SessionId> {
+  if (typeof localStorage === 'undefined') return new Set()
+  try {
+    const raw = localStorage.getItem(COMPLETED_STORAGE_KEY)
+    if (raw === null) return new Set()
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed.filter((id): id is string => typeof id === 'string') as SessionId[])
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * Persist Completed reminder ids. Storage failures leave the in-memory set intact.
+ * @param ids - current reminder set.
+ */
+function writeCompletedNotifications(ids: ReadonlySet<SessionId>): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(COMPLETED_STORAGE_KEY, JSON.stringify([...ids]))
+  } catch {
+    // quota / private mode — reminder stays in memory for this generation
+  }
+}
+
 /** Request-local content hit returned to sidebar search consumers. */
 export interface SessionSearchResultItem {
   sessionId: SessionId
@@ -115,11 +148,11 @@ export class SessionManager {
    *  still-pending requests — and on session-removed. */
   private readonly pendingInteractions = new Map<SessionId, Map<string, PendingInteractionStatus>>()
   /**
-   * Sessions that finished running while not selected — the sidebar's green
-   * "done" reminder (manager-owned, survives connection generations; cleared
-   * on select and session-removed, re-armed by the next completion).
+   * Sessions that finished and have not lost focus since that completion —
+   * the sidebar Completed section. Manager-owned, persisted across reloads,
+   * cleared when focus leaves, on session-removed, and on the next run.
    */
-  private readonly completedNotifications = new Set<SessionId>()
+  private readonly completedNotifications = readCompletedNotifications()
   /** Last-observed running bits per session; the true→false edge here arms {@link completedNotifications}. */
   private readonly prevRunning = new Map<SessionId, boolean>()
   /** Per-session projection value stores, retained independently of instance arrival (the
@@ -194,9 +227,9 @@ export class SessionManager {
         ? false
         : this.catalogs.get(address.parentSessionId)?.parentAvailable ?? false,
     )
+    const previous = this.selected
     this.selected = sessionId
-    // Looking at the session consumes its completion reminder (dot clears).
-    this.completedNotifications.delete(sessionId)
+    this.consumeCompletedOnLeave(previous, sessionId)
     void this.refreshSubagents(sessionId)
     this.notifier.notifyNow()
   }
@@ -213,16 +246,30 @@ export class SessionManager {
     }
     this.addresses.set(address.childSessionId, address)
     this.sessions.get(address.childSessionId)?.configureSubagent(address, catalog?.parentAvailable ?? false)
+    const previous = this.selected
     this.selected = address.childSessionId
-    this.completedNotifications.delete(address.childSessionId)
+    this.consumeCompletedOnLeave(previous, address.childSessionId)
     void this.refreshSubagents(address.childSessionId)
     this.notifier.notifyNow()
   }
 
   /** Clear the selection (the layout falls to the no-session view state). */
   clearSelection(): void {
+    const previous = this.selected
     this.selected = undefined
+    this.consumeCompletedOnLeave(previous, undefined)
     this.notifier.notifyNow()
+  }
+
+  /**
+   * Drop the Completed reminder only after focus leaves that Session.
+   * @param previous - previously selected Session, if any.
+   * @param next - newly selected Session, if any.
+   */
+  private consumeCompletedOnLeave(previous: SessionId | undefined, next: SessionId | undefined): void {
+    if (previous === undefined || previous === next) return
+    if (!this.completedNotifications.delete(previous)) return
+    writeCompletedNotifications(this.completedNotifications)
   }
 
   /**
@@ -829,6 +876,7 @@ export class SessionManager {
         }
         this.pendingBuffers.delete(frame.sessionId) // a removed session's buffered frames must not replay on a future instantiation
         this.pendingInteractions.delete(frame.sessionId) // a removed session cannot wait on anyone
+        if (this.completedNotifications.delete(frame.sessionId)) writeCompletedNotifications(this.completedNotifications)
         // Owner disposal already dropped these registry-side, but that lands on
         // the mux stream while this frame rides the host stream, so the two have
         // no relative order. Clearing here makes a detached Activation's rows
@@ -988,12 +1036,15 @@ export class SessionManager {
   /**
    * Reconcile completion reminders against the latest summaries, eagerly after
    * every mutation and pull (a snapshot-build-time pass would collapse
-   * consecutive status frames into one observation). A running→idle edge of a
-   * non-selected session arms its reminder; running disarms it; removal drops
-   * it. First observation only records the running bit — sessions already
-   * idle at load get no reminder.
+   * consecutive status frames into one observation). A running→idle edge arms
+   * the reminder even for the selected Session; running disarms it; removal
+   * drops it. First observation only records the running bit — sessions
+   * already idle at load get no new reminder, but a persisted reminder stays.
+   * Missing ids are pruned only after the first successful list, so a reload
+   * does not wipe storage against an empty pending snapshot.
    */
   private syncCompletedNotifications(): void {
+    const before = this.completedNotifications.size
     const seen = new Set<SessionId>()
     for (const s of this.summaries) {
       seen.add(s.sessionId)
@@ -1003,7 +1054,7 @@ export class SessionManager {
         continue
       }
       if (prev && !s.running) {
-        if (s.sessionId !== this.selected) this.completedNotifications.add(s.sessionId)
+        this.completedNotifications.add(s.sessionId)
       } else if (s.running) {
         this.completedNotifications.delete(s.sessionId)
       }
@@ -1012,9 +1063,12 @@ export class SessionManager {
     for (const id of this.prevRunning.keys()) {
       if (!seen.has(id)) this.prevRunning.delete(id)
     }
-    for (const id of this.completedNotifications) {
-      if (!seen.has(id)) this.completedNotifications.delete(id)
+    if (this.listPhase === 'ready') {
+      for (const id of this.completedNotifications) {
+        if (!seen.has(id)) this.completedNotifications.delete(id)
+      }
     }
+    if (before !== this.completedNotifications.size) writeCompletedNotifications(this.completedNotifications)
   }
 
   private buildListSnapshot(): SessionListSnapshot {
@@ -1049,6 +1103,7 @@ export class SessionManager {
         && prev.pendingInteraction === entry.pendingInteraction
         && prev.projectionValues === entry.projectionValues
         && prev.completed === entry.completed
+        && prev.interrupted === entry.interrupted
       ) return prev
       this.entryCache.set(entry.sessionId, entry)
       return entry

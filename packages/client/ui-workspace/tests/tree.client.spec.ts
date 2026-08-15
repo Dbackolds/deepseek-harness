@@ -78,7 +78,7 @@ describe('deriveGroups', () => {
     ])
   })
 
-  it('shows only the current blank session in its Workspace count and tree', () => {
+  it('hides every blank session from its Workspace count and tree', () => {
     const currentBlank = { ...summary('current-blank', 5), blank: true }
     const staleBlank = { ...summary('stale-blank', 4), blank: true }
     const real = summary('shown', 3)
@@ -89,15 +89,10 @@ describe('deriveGroups', () => {
     const groups = deriveGroups(
       sessions, [workspace('first', ['shown', 'current-blank', 'stale-blank'])], noArchive, view(['first']),
     )
-    expect(groups[0]!.sessions.map(session => session.id)).toEqual([real.id, currentBlank.id])
-    const blankNode = groups[0]!.sessions.find(session => session.id === currentBlank.id)!
-    // The stored placeholder title stays canonical; the renderer swaps in
-    // the localized New Session label via the blank flag.
-    expect(blankNode.title).toBe('New Session')
-    expect(blankNode.blank).toBe(true)
-    expect(groups[0]!.sessions.find(session => session.id === real.id)!.blank).toBe(false)
-    expect(groups[0]!.sessionCount).toBe(2)
-    // A non-current blank stray never surfaces an Ungrouped bucket either.
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([real.id])
+    expect(groups[0]!.sessions[0]!.blank).toBe(false)
+    expect(groups[0]!.sessionCount).toBe(1)
+    // A blank stray never surfaces an Ungrouped bucket either.
     const strayGroups = deriveGroups(list({ ...summary('stray', 2), blank: true }), [workspace('first', [])], noArchive, view())
     expect(strayGroups.map(group => group.key)).toEqual(['first'])
   })
@@ -241,7 +236,7 @@ describe('deriveFlat', () => {
     expect(deriveFlat(partial, noArchive).map(row => row.id)).toEqual([sid('present')])
   })
 
-  it('shows only the current blank session and excludes blanks from search', () => {
+  it('hides every blank session from the flat list', () => {
     const currentBlank = { ...summary('current-blank', 9), blank: true }
     const staleBlank = { ...summary('stale-blank', 8), blank: true }
     const sessions = {
@@ -249,9 +244,8 @@ describe('deriveFlat', () => {
       current: currentBlank.id,
     }
     const rows = deriveFlat(sessions, noArchive)
-    expect(rows.map(row => row.id)).toEqual([currentBlank.id, sid('real')])
-    expect(rows.map(row => row.title)).toEqual(['New Session', 'real'])
-    expect(rows.map(row => row.blank)).toEqual([true, false])
+    expect(rows.map(row => row.id)).toEqual([sid('real')])
+    expect(rows.map(row => row.blank)).toEqual([false])
   })
 
   it('hides archived sessions in flat mode', () => {
@@ -316,6 +310,7 @@ describe('deriveSearchResults', () => {
           title: 'Needle title',
           workspace: 'Alpha',
           running: false,
+          interrupted: false,
           runningSubagentCount: 0,
           pendingInteraction: 'plan-review',
           completed: false,
@@ -326,6 +321,7 @@ describe('deriveSearchResults', () => {
           title: 'Ordinary title',
           workspace: 'Needle Workspace',
           running: false,
+          interrupted: false,
           runningSubagentCount: 0,
           completed: false,
         },
@@ -334,6 +330,7 @@ describe('deriveSearchResults', () => {
           title: 'content-hit',
           workspace: 'c',
           running: false,
+          interrupted: false,
           runningSubagentCount: 0,
           completed: false,
           snippet: 'body needle excerpt',
@@ -403,34 +400,39 @@ describe('deriveSearchResults', () => {
 
 describe('sessionActivityBucket', () => {
   it('puts live work in Running ahead of an unviewed completion reminder', () => {
-    const unread = { running: false, runningSubagentCount: 0, completed: true }
-    const waiting = { pendingInteraction: 'question' as const, running: false, runningSubagentCount: 0, completed: true }
-    const ownRun = { running: true, runningSubagentCount: 0, completed: true }
-    const descendant = { running: false, runningSubagentCount: 1, completed: true }
-    const history = { running: false, runningSubagentCount: 0, completed: false }
+    const unread = { running: false, interrupted: false, runningSubagentCount: 0, completed: true }
+    const waiting = { pendingInteraction: 'question' as const, running: false, interrupted: false, runningSubagentCount: 0, completed: true }
+    const ownRun = { running: true, interrupted: false, runningSubagentCount: 0, completed: true }
+    const descendant = { running: false, interrupted: false, runningSubagentCount: 1, completed: true }
+    const crashed = { running: false, interrupted: true, runningSubagentCount: 0, completed: false }
+    const history = { running: false, interrupted: false, runningSubagentCount: 0, completed: false }
     expect(sessionActivityBucket(unread)).toBe('unread')
     expect(sessionActivityBucket(waiting)).toBe('running')
     expect(sessionActivityBucket(ownRun)).toBe('running')
     expect(sessionActivityBucket(descendant)).toBe('running')
+    expect(sessionActivityBucket(crashed)).toBe('abnormal')
     expect(sessionActivityBucket(history)).toBe('history')
   })
 })
 
 describe('partitionSessionActivity', () => {
-  it('keeps Completed, Running, and History in that order and preserves empty sections', () => {
+  it('keeps Completed, Running, Abnormal, and History in that order and preserves empty sections', () => {
     const sessions = [
-      { id: sid('done'), title: 'done', blank: false, running: false, runningSubagentCount: 0, completed: true, updatedAt: 3 },
-      { id: sid('live'), title: 'live', blank: false, running: true, runningSubagentCount: 0, completed: false, updatedAt: 2 },
-      { id: sid('read'), title: 'read', blank: false, running: false, runningSubagentCount: 0, completed: false, updatedAt: 1 },
+      { id: sid('done'), title: 'done', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: true, updatedAt: 4 },
+      { id: sid('live'), title: 'live', blank: false, running: true, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 3 },
+      { id: sid('crash'), title: 'crash', blank: false, running: false, interrupted: true, runningSubagentCount: 0, completed: false, updatedAt: 2 },
+      { id: sid('read'), title: 'read', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 1 },
     ]
     expect(partitionSessionActivity(sessions).map(section => [section.bucket, section.sessions.map(row => row.id)])).toEqual([
       ['unread', [sid('done')]],
       ['running', [sid('live')]],
+      ['abnormal', [sid('crash')]],
       ['history', [sid('read')]],
     ])
     expect(partitionSessionActivity([]).map(section => [section.bucket, section.sessions])).toEqual([
       ['unread', []],
       ['running', []],
+      ['abnormal', []],
       ['history', []],
     ])
   })
@@ -446,12 +448,14 @@ describe('createWorkspaceViewStore', () => {
     store.actions.setGroupExpanded('alpha', true)
     store.actions.syncSessionOrderAccount('alpha', ['two', 'one'], { one: 1, two: 2 })
     store.actions.setSessionOrder('alpha', ['one', 'two'])
+    store.actions.setActivityExpanded('alpha:unread', false)
     expect(store.getSnapshot().groupBy).toBe('flat')
     expect(store.getSnapshot()).toMatchObject({
       orderBy: 'updated',
       groupExpansion: { alpha: true },
       sessionOrderByAccount: { alpha: ['one', 'two'] },
       sessionUpdatedAtByAccount: { alpha: { one: 1, two: 2 } },
+      activityExpansion: { 'alpha:unread': false },
     })
   })
 
@@ -462,6 +466,8 @@ describe('createWorkspaceViewStore', () => {
     store.actions.setGroupExpanded('deleted', true)
     store.actions.syncSessionOrderAccount('alpha', ['alpha-session'], { 'alpha-session': 2 })
     store.actions.syncSessionOrderAccount('deleted', ['deleted-session'], { 'deleted-session': 1 })
+    store.actions.setActivityExpanded('alpha:running', false)
+    store.actions.setActivityExpanded('deleted:abnormal', false)
 
     store.actions.retainAccountKeys(['', 'alpha'])
 
@@ -469,6 +475,7 @@ describe('createWorkspaceViewStore', () => {
     expect(snapshot.groupExpansion).toEqual({ '': true, alpha: true })
     expect(snapshot.sessionOrderByAccount).toEqual({ alpha: ['alpha-session'] })
     expect(snapshot.sessionUpdatedAtByAccount).toEqual({ alpha: { 'alpha-session': 2 } })
+    expect(snapshot.activityExpansion).toEqual({ 'alpha:running': false })
   })
 })
 

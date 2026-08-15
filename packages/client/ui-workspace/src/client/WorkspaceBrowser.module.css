@@ -366,6 +366,82 @@
   line-height: 24px;
 }
 
+.activityToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.activityChevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.activityChevronOpen {
+  transform: rotate(90deg);
+}
+
+.activityLabel {
+  min-width: 0;
+}
+
+.activityBody {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.activityBodyCollapsed {
+  grid-template-rows: 0fr;
+  pointer-events: none;
+}
+
+.activityBodyInner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.activityBodyInner > * + * {
+  margin-top: 2px;
+}
+
+.activityCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: var(--dsw-alias-label-primary-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.activityCount_unread {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.activityCount_running {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.activityCount_abnormal {
+  background: var(--dsw-alias-state-error-primary);
+}
+
 .activitySection > * + *,
 .searchTree > [role='treeitem'] + [role='treeitem'] {
   margin-top: 2px;

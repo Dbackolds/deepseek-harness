@@ -19,6 +19,8 @@ export interface SessionListEntry {
   title?: string
   updatedAt: number
   running: boolean
+  /** Latest durable turn was crash/reload-interrupted and no later turn started. Absent = false. */
+  interrupted?: boolean
   /** Empty-log bit mirrored from the summary; lists hide blank sessions (filtering stays with the consumer). */
   blank: boolean
   parentSessionId?: SessionId

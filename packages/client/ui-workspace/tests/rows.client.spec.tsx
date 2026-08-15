@@ -60,7 +60,7 @@ describe('workspace browser rows', () => {
   it('omits only an empty leading status slot in the hierarchy-free flat list', () => {
     const idle: SessionNode = {
       id: sid('flat'), title: 'Flat Session', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0,
+      interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
     }
     const view = render(<SessionNodeItem node={idle} currentId={undefined} now={0} onOpen={vi.fn()}
       onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} flat t={t} />)
@@ -79,6 +79,7 @@ describe('workspace browser rows', () => {
       title: 'Result title',
       workspace: 'Workspace context',
       running: true,
+      interrupted: false,
       runningSubagentCount: 0,
       completed: false,
       snippet: 'matching message excerpt',
@@ -102,7 +103,7 @@ describe('workspace browser rows', () => {
   ] as const)('shows %s ahead of running in search results', (pendingInteraction, label) => {
     const result: SearchResultNode = {
       id: sid(pendingInteraction), title: 'Needs input', workspace: 'Project',
-      pendingInteraction, running: true, runningSubagentCount: 0, completed: false,
+      pendingInteraction, running: true, interrupted: false, runningSubagentCount: 0, completed: false,
     }
     render(<SearchResultItem result={result} currentId={undefined} onOpen={vi.fn()} t={t} />)
     const row = screen.getByRole('treeitem')
@@ -131,7 +132,7 @@ describe('workspace browser rows', () => {
   it('renders and opens a selected running Session row', () => {
     const node: SessionNode = {
       id: sid('session'), title: 'Session', blank: false, running: true,
-      runningSubagentCount: 0, completed: false, updatedAt: 0,
+      interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
     }
     const onOpen = vi.fn()
     render(
@@ -152,7 +153,7 @@ describe('workspace browser rows', () => {
       <SessionNodeItem
         node={{
           id: sid('s1'), title: 'One', blank: false, running: false,
-          runningSubagentCount: 0, completed: false, updatedAt: 0, ...over,
+          interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0, ...over,
         }}
         currentId={undefined} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t}
@@ -184,7 +185,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('owner'), title: 'Delegating', blank: false, running: false,
-        runningSubagentCount: 2, completed: false, updatedAt: 0,
+        interrupted: false, runningSubagentCount: 2, completed: false, updatedAt: 0,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -206,7 +207,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('owner'), title: 'Delegating', blank: false, running: true,
-        runningSubagentCount: 1, completed: false, updatedAt: 0,
+        interrupted: false, runningSubagentCount: 1, completed: false, updatedAt: 0,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -227,7 +228,7 @@ describe('workspace browser rows', () => {
   it('keeps child activity as a secondary status while user attention is primary', () => {
     const node: SessionNode = {
       id: sid('owner'), title: 'Needs input', blank: false, pendingInteraction: 'question',
-      running: false, runningSubagentCount: 1, completed: false, updatedAt: 0,
+      running: false, interrupted: false, runningSubagentCount: 1, completed: false, updatedAt: 0,
     }
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
       onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -238,11 +239,22 @@ describe('workspace browser rows', () => {
     expect(screen.getByText('1 个子代理运行中')).toBeTruthy()
   })
 
+  it('shows the error dot on an interrupted session row', () => {
+    const node: SessionNode = {
+      id: sid('crash'), title: 'Crashed', blank: false, running: false,
+      interrupted: true, runningSubagentCount: 0, completed: false, updatedAt: 0,
+    }
+    render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
+    expect(screen.getByRole('treeitem').querySelector('[data-state="error"]')).not.toBeNull()
+    expect(screen.getByText('异常中断')).toBeTruthy()
+  })
+
   it('shows the green done dot on a finished search result row', () => {
     render(<SearchResultItem
       result={{
         id: sid('result'), title: 'Done', workspace: 'Workspace', running: false,
-        runningSubagentCount: 0, completed: true,
+        interrupted: false, runningSubagentCount: 0, completed: true,
       }}
       currentId={undefined} onOpen={vi.fn()} t={t}
     />)
@@ -325,7 +337,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s-blank'), title: 'ignored', blank: true, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0,
+        interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
       }
       render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -352,7 +364,7 @@ describe('workspace browser rows', () => {
     const onArchive = vi.fn()
     const node: SessionNode = {
       id: sid('s1'), title: 'One', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0,
+      interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
     }
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
       onRename={onRename} onFork={onFork} onArchive={onArchive} t={t} />)
@@ -386,7 +398,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s1'), title: 'Hovered', blank: false, running: true,
-        runningSubagentCount: 0, completed: false, updatedAt: 0,
+        interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={60_000} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -417,7 +429,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid(pendingInteraction), title: 'Needs input', blank: false,
-        pendingInteraction, running: true, runningSubagentCount: 0, completed: false, updatedAt: 0,
+        pendingInteraction, running: true, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
       }
       const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -444,7 +456,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s1'), title: 'Quiet', blank: false, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0,
+        interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -462,7 +474,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s1'), title: 'Done', blank: false, running: false,
-        runningSubagentCount: 0, completed: true, updatedAt: 0,
+        interrupted: false, runningSubagentCount: 0, completed: true, updatedAt: 0,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -478,7 +490,7 @@ describe('workspace browser rows', () => {
   it('draggable row wires start/end and gates hover/drop on an active same-group drag', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'Drag me', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0,
+      interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
     }
     const inactive = dragProps()
     const { rerender } = render(

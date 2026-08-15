@@ -10,9 +10,9 @@ A session the operator delegated work to and then left (switched to another conv
 
 ## Decision
 
-`SessionManager` owns a client-side completion-reminder set, a sibling of the pending-interaction bit: a running→idle edge of a session that is not the selected one arms its reminder; `select()`/`selectSubagent()` consume it; starting a new run disarms it and its completion re-arms it; removal prunes it. The bit rides `SessionListEntry` → `SessionSummary` (optional, absent = no reminder) into the workspace browser, whose session and search rows render the existing `StateDot` `done` state — running keeps the ongoing spinner, an idle session without a reminder shows nothing — and whose hover card labels the reminder 已完成 / Completed.
+`SessionManager` owns a client-side completion-reminder set, a sibling of the pending-interaction bit: a running→idle edge arms the reminder even for the selected Session; `select()` / `selectSubagent()` / `clearSelection()` consume it only after focus leaves that Session; starting a new run disarms it and its completion re-arms it; removal prunes it immediately. The bit rides `SessionListEntry` → `SessionSummary` (optional, absent = no reminder) into the workspace browser, whose session and search rows render the existing `StateDot` `done` state — running keeps the ongoing spinner, an idle session without a reminder shows nothing — and whose hover card labels the reminder 已完成 / Completed.
 
-The reminder is in-memory and per browser. It survives connection generations — a transport blip does not invalidate "you have not looked yet" — but not a page reload.
+The reminder is persisted in `localStorage` key `dsh.sessions.completed`. It survives reload and connection generations. Missing ids are pruned only after the first successful `session.list`, so a cold start does not wipe storage against an empty pending snapshot.
 
 ## Consequences
 
@@ -22,4 +22,4 @@ The sidebar row states become three disjoint signals: green = finished and unvie
 
 - **Component-local UI state.** Rejected because the sidebar unmounts on collapse and multiple surfaces (grouped tree, flat list, search) need the same bit; the manager already owns the running transitions and the selection, so a manager-owned set is the one source all surfaces can project.
 - **Event-driven arming from status frames only.** Rejected because a list pull can also carry a running→idle transition (a session finished while the refresh was in flight); the reminder is reconciled against every mutation and pull.
-- **Persisting the reminder.** Rejected because the reminder means "you have not looked at this session yet" in this browser; reload restores the selection and the user is looking at the list again, so a durable bit would only go stale.
+- **Keep the reminder memory-only.** Rejected after close/reopen dumped every finished Session into History. The reminder means "focus has not left this finished Session yet"; reload must restore that set.

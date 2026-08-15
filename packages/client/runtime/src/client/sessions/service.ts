@@ -56,6 +56,8 @@ export interface SessionSummary {
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent' | 'automation'
   running: boolean
+  /** Latest durable turn was crash/reload-interrupted and no later turn started. Absent = false. */
+  interrupted?: boolean
   /** User interaction currently blocking this session (sidebar amber-dot state). */
   pendingInteraction?: PendingInteractionStatus
   /** Finished while not selected and not yet opened — the sidebar's green "done" reminder. Absent = false. */
@@ -63,8 +65,8 @@ export interface SessionSummary {
   /**
    * Empty-log bit (host summary derivation mirror). New Session reuses a blank
    * one targeting the same workspace. Filtering stays with the consumer: the
-   * store carries every row, while the Workspace browser shows only the
-   * selected blank entry.
+   * store carries every row, while the Workspace browser hides every blank
+   * row until the first accepted prompt.
    */
   blank: boolean
   updatedAt: number
@@ -669,6 +671,7 @@ export class SessionRuntime implements ISessions {
         id: entry.sessionId,
         displayTitle: displayTitleOf(entry.title, entry.cwd, entry.sessionId),
         running: entry.running,
+        ...(entry.interrupted === true ? { interrupted: true } : {}),
         ...(entry.completed ? { completed: true } : {}),
         blank: entry.blank,
         updatedAt: entry.updatedAt,

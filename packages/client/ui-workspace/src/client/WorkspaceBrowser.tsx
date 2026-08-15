@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCloseFill14, IconPersonalizationOutline16,
-  IconProjectAddOutline16, IconSearchOutline16, Menu, Modal, Tooltip,
+  IconProjectAddOutline16, IconSearchOutline16, IconTriangleRightFill14, Menu, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   SessionId, SessionListState, SessionSearchResultItem, WorkspaceId, WorkspaceView,
@@ -21,8 +21,8 @@ import type {
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
 import type { SessionActivityBucket, SessionNode, SessionOrderBy } from './tree.ts'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, partitionSessionActivity, sessionActivityBucket,
-  UNGROUPED_KEY,
+  BADGED_ACTIVITY_BUCKETS, deriveFlat, deriveGroups, deriveSearchResults, partitionSessionActivity,
+  sessionActivityBucket, UNGROUPED_KEY,
 } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
@@ -43,14 +43,69 @@ const COLLAPSED_SESSION_LIMIT = 5
 /** History rows visible in the flat list before the local overflow control. */
 const COLLAPSED_HISTORY_LIMIT = 5
 
-/** Localized heading for one flat-list activity section. */
+/** Localized heading for one activity section. */
 function activitySectionLabel(
   bucket: SessionActivityBucket,
   t: WorkspaceBrowserProps['t'],
 ): string {
   if (bucket === 'unread') return t('section.unread')
   if (bucket === 'running') return t('section.running')
+  if (bucket === 'abnormal') return t('section.abnormal')
   return t('section.history')
+}
+
+/**
+ * Persist key for one activity section's fold inside a Workspace or the flat list.
+ * @param accountKey - Workspace group key or the flat-list account.
+ * @param bucket - activity section.
+ * @returns store key `${accountKey}:${bucket}`.
+ */
+function activityExpansionKey(accountKey: string, bucket: SessionActivityBucket): string {
+  return `${accountKey}:${bucket}`
+}
+
+/**
+ * True when the section heading shows a count badge.
+ * @param bucket - activity section.
+ * @returns whether the heading includes a count.
+ */
+function isBadgedActivityBucket(
+  bucket: SessionActivityBucket,
+): bucket is typeof BADGED_ACTIVITY_BUCKETS[number] {
+  return BADGED_ACTIVITY_BUCKETS.includes(bucket as typeof BADGED_ACTIVITY_BUCKETS[number])
+}
+
+/** Foldable heading for every activity section; Completed / Running / Abnormal also show a count. */
+function ActivitySectionHeading({
+  bucket, count, expanded, onToggle, t,
+}: {
+  bucket: SessionActivityBucket
+  count: number
+  expanded: boolean
+  onToggle: () => void
+  t: WorkspaceBrowserProps['t']
+}) {
+  const label = activitySectionLabel(bucket, t)
+  const badged = isBadgedActivityBucket(bucket)
+  return (
+    <h3 className={css.activityHeading}>
+      <button
+        type="button"
+        className={css.activityToggle}
+        aria-expanded={expanded}
+        aria-label={badged ? t('section.count.aria', { label, n: count }) : label}
+        onClick={onToggle}
+      >
+        <IconTriangleRightFill14 className={clsx(css.activityChevron, expanded && css.activityChevronOpen)} />
+        <span className={css.activityLabel}>{label}</span>
+        {badged && (
+          <span className={clsx(css.activityCount, css[`activityCount_${bucket}`])} aria-hidden="true">
+            {count}
+          </span>
+        )}
+      </button>
+    </h3>
+  )
 }
 
 /** Keep controlled input and RPC payload inside the session.search wire contract. */
@@ -248,6 +303,10 @@ type SessionTreeProps = Pick<
   syncSessionOrderAccount: (accountKey: string, order: string[], updatedAt: Record<string, number>) => void
   /** Apply a drag to one shared order. */
   setSessionOrder: (accountKey: string, order: string[]) => void
+  /** Folded activity sections keyed as `${accountKey}:${bucket}`. Absent = expanded. */
+  activityExpansion: Readonly<Record<string, boolean>>
+  /** Persist one activity section's fold. */
+  setActivityExpanded: (key: string, expanded: boolean) => void
   /** Registry-global archive set (hidden rows). */
   archivedSessionIds: readonly SessionNode['id'][]
   /** Open the browser-owned rename dialog for a real Workspace group. */
@@ -272,7 +331,8 @@ function SessionTree({
   onRenameRequest, onDeleteRequest, onAddFolderRequest, onRemoveFolderRequest, onSessionRename, onSessionArchive,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
-  sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
+  sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
+  activityExpansion, setActivityExpanded, t,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const current = list.current
@@ -516,71 +576,87 @@ function SessionTree({
               />
               {partitionSessionActivity(group.sessions).map((section) => {
                 if (section.sessions.length === 0) return null
+                const foldKey = activityExpansionKey(group.key, section.bucket)
+                const sectionExpanded = activityExpansion[foldKey] !== false
                 const historyCollapsed = section.bucket === 'history' && !expandedSessionGroups.includes(group.key)
                 const visible = historyCollapsed
                   ? section.sessions.slice(0, COLLAPSED_SESSION_LIMIT)
                   : section.sessions
                 return (
                   <div key={section.bucket} className={css.activitySection}>
-                    <h3 className={css.activityHeading}>{activitySectionLabel(section.bucket, t)}</h3>
-                    {visible.map((node) => {
-                    // Session drag never leaves its group. Ungrouped writes only the
-                    // browser-local account; real Workspaces may also write Host order.
-                      const sameGroupDrag = drag !== null && drag.accountKey === group.key
-                      const dragProps = {
-                        start: () => {
-                          sessionDropCommitted.current = false
-                          setDrag({
-                            accountKey: group.key,
-                            sessionId: node.id,
-                            bucket: sessionActivityBucket(node),
-                            over: null,
-                          })
-                        },
-                        active: sameGroupDrag && drag.bucket === sessionActivityBucket(node),
-                        marker: sameGroupDrag && drag.over?.id === node.id ? drag.over.half : null,
-                        hover: (half: 'before' | 'after') => {
-                        /* v8 ignore next -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
-                          setDrag(d => (d === null ? d : { ...d, over: { id: node.id, half } }))
-                        },
-                        drop: (half: 'before' | 'after') => {
-                        /* v8 ignore next -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
-                          if (drag === null) return
-                          commitSessionDrag(drag, { id: node.id, half })
-                        },
-                        end: () => {
-                          if (drag?.over !== null && drag?.over !== undefined) commitSessionDrag(drag, drag.over)
-                          else setDrag(null)
-                          sessionDropCommitted.current = false
-                        },
-                      }
-                      return (
-                        <SessionNodeItem
-                          key={node.id}
-                          node={node}
-                          currentId={current}
-                          now={now}
-                          onOpen={open}
-                          onRename={onSessionRename}
-                          onFork={forkSession}
-                          onArchive={onSessionArchive}
-                          drag={dragProps}
-                          t={t}
-                        />
-                      )
-                    })}
-                    {section.bucket === 'history' && section.sessions.length > COLLAPSED_SESSION_LIMIT && (
-                      <button
-                        type="button"
-                        className={css.sessionOverflowButton}
-                        aria-expanded={expandedSessionGroups.includes(group.key)}
-                        onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
-                      >
-                        {expandedSessionGroups.includes(group.key)
-                          ? t('sessions.collapse')
-                          : t('sessions.expand', { n: section.sessions.length - COLLAPSED_SESSION_LIMIT })}
-                      </button>
-                    )}
+                    <ActivitySectionHeading
+                      bucket={section.bucket}
+                      count={section.sessions.length}
+                      expanded={sectionExpanded}
+                      onToggle={() => { setActivityExpanded(foldKey, !sectionExpanded) }}
+                      t={t}
+                    />
+                    <div
+                      className={clsx(css.activityBody, !sectionExpanded && css.activityBodyCollapsed)}
+                      aria-hidden={!sectionExpanded}
+                    >
+                      <div className={css.activityBodyInner}>
+                        {visible.map((node) => {
+                          // Session drag never leaves its group. Ungrouped writes only the
+                          // browser-local account; real Workspaces may also write Host order.
+                          const sameGroupDrag = drag !== null && drag.accountKey === group.key
+                          const dragProps = {
+                            start: () => {
+                              sessionDropCommitted.current = false
+                              setDrag({
+                                accountKey: group.key,
+                                sessionId: node.id,
+                                bucket: sessionActivityBucket(node),
+                                over: null,
+                              })
+                            },
+                            active: sameGroupDrag && drag.bucket === sessionActivityBucket(node),
+                            marker: sameGroupDrag && drag.over?.id === node.id ? drag.over.half : null,
+                            hover: (half: 'before' | 'after') => {
+                              /* v8 ignore next -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
+                              setDrag(d => (d === null ? d : { ...d, over: { id: node.id, half } }))
+                            },
+                            drop: (half: 'before' | 'after') => {
+                              /* v8 ignore next -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
+                              if (drag === null) return
+                              commitSessionDrag(drag, { id: node.id, half })
+                            },
+                            end: () => {
+                              if (drag?.over !== null && drag?.over !== undefined) commitSessionDrag(drag, drag.over)
+                              else setDrag(null)
+                              sessionDropCommitted.current = false
+                            },
+                          }
+                          return (
+                            <SessionNodeItem
+                              key={node.id}
+                              node={node}
+                              currentId={current}
+                              now={now}
+                              onOpen={open}
+                              onRename={onSessionRename}
+                              onFork={forkSession}
+                              onArchive={onSessionArchive}
+                              drag={dragProps}
+                              t={t}
+                            />
+                          )
+                        })}
+                        {section.bucket === 'history' && section.sessions.length > COLLAPSED_SESSION_LIMIT && (
+                          <button
+                            type="button"
+                            className={css.sessionOverflowButton}
+                            aria-expanded={expandedSessionGroups.includes(group.key)}
+                            tabIndex={sectionExpanded ? undefined : -1}
+                            onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
+                          >
+                            {expandedSessionGroups.includes(group.key)
+                              ? t('sessions.collapse')
+                              : t('sessions.expand', { n: section.sessions.length - COLLAPSED_SESSION_LIMIT })}
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )
               })}
@@ -596,7 +672,8 @@ function SessionTree({
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
   useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds,
-  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
+  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
+  activityExpansion, setActivityExpanded, t,
 }: Pick<
   SessionTreeProps,
   | 'useSessions'
@@ -610,6 +687,8 @@ function FlatList({
   | 'sessionUpdatedAtByAccount'
   | 'syncSessionOrderAccount'
   | 'setSessionOrder'
+  | 'activityExpansion'
+  | 'setActivityExpanded'
   | 't'
 >) {
   const list = useSessions(s => s)
@@ -685,65 +764,81 @@ function FlatList({
         )}
         {sections.map((section) => {
           if (section.sessions.length === 0) return null
+          const foldKey = activityExpansionKey(FLAT_SESSION_ORDER_KEY, section.bucket)
+          const sectionExpanded = activityExpansion[foldKey] !== false
           const visible = section.bucket === 'history' && !historyExpanded
             ? section.sessions.slice(0, COLLAPSED_HISTORY_LIMIT)
             : section.sessions
           return (
             <div key={section.bucket} className={css.activitySection}>
-              <h3 className={css.activityHeading}>{activitySectionLabel(section.bucket, t)}</h3>
-              {visible.map((node) => {
-                const active = drag !== null && drag.bucket === sessionActivityBucket(node)
-                return (
-                  <SessionNodeItem
-                    key={node.id}
-                    node={node}
-                    currentId={list.current}
-                    now={now}
-                    onOpen={open}
-                    onRename={onSessionRename}
-                    onFork={forkSession}
-                    onArchive={onSessionArchive}
-                    flat
-                    drag={{
-                      start: () => {
-                        dropCommitted.current = false
-                        setDrag({
-                          accountKey: FLAT_SESSION_ORDER_KEY,
-                          sessionId: node.id,
-                          bucket: sessionActivityBucket(node),
-                          over: null,
-                        })
-                      },
-                      active,
-                      marker: active && drag.over?.id === node.id ? drag.over.half : null,
-                      hover: (half) => {
-                        setDrag(current => current === null ? current : { ...current, over: { id: node.id, half } })
-                      },
-                      drop: (half) => {
-                        if (drag !== null) commitDrag(drag, { id: node.id, half })
-                      },
-                      end: () => {
-                        if (drag?.over !== null && drag?.over !== undefined) commitDrag(drag, drag.over)
-                        else setDrag(null)
-                        dropCommitted.current = false
-                      },
-                    }}
-                    t={t}
-                  />
-                )
-              })}
-              {section.bucket === 'history' && section.sessions.length > COLLAPSED_HISTORY_LIMIT && (
-                <button
-                  type="button"
-                  className={css.sessionOverflowButton}
-                  aria-expanded={historyExpanded}
-                  onClick={() => { setHistoryExpanded(openHistory => !openHistory) }}
-                >
-                  {historyExpanded
-                    ? t('sessions.collapse')
-                    : t('sessions.expand', { n: section.sessions.length - COLLAPSED_HISTORY_LIMIT })}
-                </button>
-              )}
+              <ActivitySectionHeading
+                bucket={section.bucket}
+                count={section.sessions.length}
+                expanded={sectionExpanded}
+                onToggle={() => { setActivityExpanded(foldKey, !sectionExpanded) }}
+                t={t}
+              />
+              <div
+                className={clsx(css.activityBody, !sectionExpanded && css.activityBodyCollapsed)}
+                aria-hidden={!sectionExpanded}
+              >
+                <div className={css.activityBodyInner}>
+                  {visible.map((node) => {
+                    const active = drag !== null && drag.bucket === sessionActivityBucket(node)
+                    return (
+                      <SessionNodeItem
+                        key={node.id}
+                        node={node}
+                        currentId={list.current}
+                        now={now}
+                        onOpen={open}
+                        onRename={onSessionRename}
+                        onFork={forkSession}
+                        onArchive={onSessionArchive}
+                        flat
+                        drag={{
+                          start: () => {
+                            dropCommitted.current = false
+                            setDrag({
+                              accountKey: FLAT_SESSION_ORDER_KEY,
+                              sessionId: node.id,
+                              bucket: sessionActivityBucket(node),
+                              over: null,
+                            })
+                          },
+                          active,
+                          marker: active && drag.over?.id === node.id ? drag.over.half : null,
+                          hover: (half) => {
+                            setDrag(current => current === null ? current : { ...current, over: { id: node.id, half } })
+                          },
+                          drop: (half) => {
+                            if (drag !== null) commitDrag(drag, { id: node.id, half })
+                          },
+                          end: () => {
+                            if (drag?.over !== null && drag?.over !== undefined) commitDrag(drag, drag.over)
+                            else setDrag(null)
+                            dropCommitted.current = false
+                          },
+                        }}
+                        t={t}
+                      />
+                    )
+                  })}
+                  {section.bucket === 'history' && section.sessions.length > COLLAPSED_HISTORY_LIMIT && (
+                    <button
+                      type="button"
+                      className={css.sessionOverflowButton}
+                      aria-expanded={historyExpanded}
+                      tabIndex={sectionExpanded ? undefined : -1}
+                      onClick={() => { setHistoryExpanded(openHistory => !openHistory) }}
+                    >
+                      {historyExpanded
+                        ? t('sessions.collapse')
+                        : t('sessions.expand', { n: section.sessions.length - COLLAPSED_HISTORY_LIMIT })}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )
         })}
@@ -865,6 +960,7 @@ export function WorkspaceBrowser({
   const groupExpansion = useStore(s => s.groupExpansion)
   const sessionOrderByAccount = useStore(s => s.sessionOrderByAccount)
   const sessionUpdatedAtByAccount = useStore(s => s.sessionUpdatedAtByAccount)
+  const activityExpansion = useStore(s => s.activityExpansion)
   useEffect(() => {
     if (workspacePhase !== 'ready') return
     actions.retainAccountKeys([
@@ -1231,6 +1327,8 @@ export function WorkspaceBrowser({
                 sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
                 syncSessionOrderAccount={actions.syncSessionOrderAccount}
                 setSessionOrder={actions.setSessionOrder}
+                activityExpansion={activityExpansion}
+                setActivityExpanded={actions.setActivityExpanded}
                 t={t}
               />
             )
@@ -1247,6 +1345,8 @@ export function WorkspaceBrowser({
                 sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
                 syncSessionOrderAccount={actions.syncSessionOrderAccount}
                 setSessionOrder={actions.setSessionOrder}
+                activityExpansion={activityExpansion}
+                setActivityExpanded={actions.setActivityExpanded}
                 archivedSessionIds={archivedSessionIds}
                 startSession={startSession}
                 open={open}

@@ -243,7 +243,7 @@ interface SessionStatus {
  * outranks completion reminders.
  */
 function sessionStatuses(
-  node: Pick<SessionNode, 'pendingInteraction' | 'running' | 'runningSubagentCount' | 'completed'>,
+  node: Pick<SessionNode, 'pendingInteraction' | 'running' | 'interrupted' | 'runningSubagentCount' | 'completed'>,
   t: RowTranslate,
 ): readonly [SessionStatus, ...SessionStatus[]] {
   const subagents: SessionStatus | undefined = node.runningSubagentCount === 0
@@ -277,6 +277,7 @@ function sessionStatuses(
     const primary: SessionStatus = { state: 'ongoing', label: t('status.running') }
     return subagents === undefined ? [primary] : [primary, subagents]
   }
+  if (node.interrupted) return [{ state: 'error', label: t('status.abnormal') }]
   if (subagents !== undefined) return [subagents]
   if (node.completed) return [{ state: 'done', label: t('status.completed') }]
   return [{ state: 'done', label: t('status.idle') }]
