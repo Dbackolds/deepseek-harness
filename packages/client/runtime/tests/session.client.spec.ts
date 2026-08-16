@@ -274,7 +274,26 @@ describe('live event path', () => {
     feed(ev.commandDone(1, 'cmd-perm', 'success', 'preset danger-full-access'))
     const snapshot = session.getSnapshot()
     expect(chatSeqs(snapshot)).toEqual([0, 1])
-    expect(snapshot.composerPhase).toBe('blank')
+    expect(snapshot.blank).toBe(true)
+    expect(snapshot.composerPhase).toBe('active')
+  })
+
+  it('shows a generic command card on a fresh session without a later prompt', async () => {
+    const { session } = await opened([])
+    session.handleBlank(true)
+    expect(session.getSnapshot()).toMatchObject({ blank: true, composerPhase: 'blank' })
+    session.handleMuxEnvelope('r' as never, {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.commandRun(0, 'cmd-reload', 'reload', ''),
+    })
+    session.handleMuxEnvelope('r' as never, {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.commandDone(1, 'cmd-reload', 'success', '重载完成。已重载 29 个插件'),
+    })
+    expect(session.getSnapshot()).toMatchObject({ blank: true, composerPhase: 'active' })
+    expect(chatSeqs(session.getSnapshot())).toEqual([0, 1])
   })
 
   it('activates a fresh conversation for a command-input View Node without opening a model turn', async () => {
