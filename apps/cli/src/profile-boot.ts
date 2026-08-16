@@ -7,7 +7,8 @@
  *
  * App flags are not the launcher's business: the invocation's inner arguments
  * are provided to the tree through `ctx.cmdlineArgs`, where any injected app
- * plugin may read the same immutable snapshot.
+ * plugin may read the same immutable snapshot. The booted profile's identity
+ * is published as `ctx.profile` in the same prepare hook.
  * @module @deepseek-ai/dsh/profile-boot
  */
 
@@ -26,6 +27,7 @@ import {
   loadOverlayPatches,
   loadProfile,
   PROFILE_PATCH_FILENAME,
+  provideProfile,
   watchUserPatches,
   type Profile,
 } from '@deepseek-ai/dsh-app-boot'
@@ -250,6 +252,11 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     // Before any config-tree entry mounts, so plugins resolve all launch-time
     // environment values from the same immutable provenance snapshot.
     hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)
+    provideProfile(hostCtx, {
+      name: composed.profile.name,
+      dir: composed.profile.dir,
+      installAnchor: INSTALL_ANCHOR,
+    })
     // The command line and bounded exit request are launcher facts available
     // to every app plugin that injects the argument snapshot.
     provideCmdline(hostCtx, {

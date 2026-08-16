@@ -12,7 +12,7 @@
 
 ## 扩展点
 
-本分区声明根级列表 slot `settings.plugins.tab`，其标签会成为有序标签页。某个标签页首次被选择后会保持挂载，因此本地草稿与只读快照在切换标签页时不会丢失。本包注册自己的 `configurable` 贡献，由它声明嵌套的 `settings.plugin.item` 列表 slot。带浏览器半侧的插件把自己的卡片注册进这个嵌套 slot 并拥有其控件；本包既不枚举命名空间，也不渲染未被交给它的表单。两层排序都遵循贡献的 `order`。
+本分区以 `priority: 1` 把设置导航行注册到 `settings.section` 的 id `plugins`。提供 `pluginMarketplaceUi` 并以默认 priority 注册同一单元格的树外市场会占用该页；此时本包不再占据该导航行及其 `configurable` 标签页，以便市场声明 `settings.plugin.item`。三张宿主平面卡片仍会在市场声明该 item slot 后注入进去。本分区声明根级列表 slot `settings.plugins.tab`，其标签会成为有序标签页。某个标签页首次被选择后会保持挂载，因此本地草稿与只读快照在切换标签页时不会丢失。本包注册自己的 `configurable` 贡献，由它声明嵌套的 `settings.plugin.item` 列表 slot。带浏览器半侧的插件把自己的卡片注册进这个嵌套 slot 并拥有其控件；本包既不枚举命名空间，也不渲染未被交给它的表单。两层排序都遵循贡献的 `order`。
 
 ## 写入
 

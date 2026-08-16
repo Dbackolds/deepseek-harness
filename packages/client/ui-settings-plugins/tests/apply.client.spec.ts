@@ -44,6 +44,27 @@ function declareRoot(slots: SlotRegistry): () => void {
   } as never, () => null)
 }
 
+const MARKETPLACE_PLUGIN = '@starpivot/dsh-plugin-marketplace'
+
+/** Stamp the Loader entry name the browser boot graph uses. Dual-face client modules do not export `name`. */
+function stampMarketplaceEntry(ctx: Context): () => void {
+  return ctx.on('internal/plugin', (fiber) => {
+    (fiber as { entry?: { options: { name: string } } }).entry = {
+      options: { name: MARKETPLACE_PLUGIN },
+    }
+  }, { prepend: true })
+}
+
+function marketplaceApply(scope: Context): void {
+  scope.provide('pluginMarketplaceUi', true)
+  scope.slots.register({
+    name: 'settings.section',
+    id: 'plugins',
+    order: 15,
+    children: { 'settings.plugin.item': { kind: 'list', scope: 'root' } },
+  } as never, () => null)
+}
+
 describe('ui-settings-plugins apply', () => {
   it('declares the services it uses', () => {
     expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'settingsScope'])
@@ -56,7 +77,7 @@ describe('ui-settings-plugins apply', () => {
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     const section = slots.entries('settings.section')[0]!
-    expect(section.options).toMatchObject({ id: 'plugins', order: 15 })
+    expect(section.options).toMatchObject({ id: 'plugins', order: 15, priority: 1 })
     // The nav label is a locale-following thunk; owners resolve it at read time.
     expect(resolveSlotLabel(section.options.label)).toBe('插件')
     expect(slots.spec('settings.plugins.tab')).toMatchObject({ kind: 'list', scope: 'root' })
@@ -141,6 +162,55 @@ describe('ui-settings-plugins apply', () => {
     declareRoot(slots)
 
     await vi.waitFor(() => { expect(slots.entries('settings.section')).toHaveLength(1) })
+  })
+
+  it('stays off the Plugins chrome when a marketplace fiber is already present', async () => {
+    const { ctx, slots } = await bench()
+    declareRoot(slots)
+    const unstamp = stampMarketplaceEntry(ctx)
+    await ctx.plugin({ inject: ['slots'], apply: marketplaceApply }).await()
+    unstamp()
+
+    await ctx.plugin({ inject: [...inject], apply }).await()
+
+    expect(slots.entries('settings.section')).toHaveLength(1)
+    expect(slots.entries('settings.section')[0]!.options.priority ?? 0).toBe(0)
+    expect(slots.spec('settings.plugins.tab')).toBeUndefined()
+    expect(slots.entries('settings.plugin.item').map(entry => entry.options.id))
+      .toEqual(['bash', 'agent-loop', 'web-search'])
+  })
+
+  it('stays off the Plugins chrome when a marketplace fiber exists before it applies', async () => {
+    const { ctx, slots } = await bench()
+    declareRoot(slots)
+    const unstamp = stampMarketplaceEntry(ctx)
+    ctx.plugin({ inject: ['slots', 'marketplaceReady'], apply: marketplaceApply })
+    unstamp()
+
+    await ctx.plugin({ inject: [...inject], apply }).await()
+
+    expect(slots.entries('settings.section')).toHaveLength(0)
+    expect(slots.spec('settings.plugins.tab')).toBeUndefined()
+    expect(slots.spec('settings.plugin.item')).toBeUndefined()
+  })
+
+  it('yields the Plugins chrome before a later marketplace declares the same children', async () => {
+    const { ctx, slots } = await bench()
+    declareRoot(slots)
+    await ctx.plugin({ inject: [...inject], apply }).await()
+    expect(slots.entries('settings.section')[0]!.options.priority).toBe(1)
+
+    const unstamp = stampMarketplaceEntry(ctx)
+    await ctx.plugin({ inject: ['slots'], apply: marketplaceApply }).await()
+    unstamp()
+
+    expect(slots.entries('settings.section')).toHaveLength(1)
+    expect(slots.entries('settings.section')[0]!.options.priority ?? 0).toBe(0)
+    expect(slots.spec('settings.plugins.tab')).toBeUndefined()
+    await vi.waitFor(() => {
+      expect(slots.entries('settings.plugin.item').map(entry => entry.options.id))
+        .toEqual(['bash', 'agent-loop', 'web-search'])
+    })
   })
 
   it('collapses every contribution on teardown', async () => {
