@@ -45,9 +45,7 @@ function dragPadding(variant: TitlebarVariant): string {
  */
 export function titlebarMarkup(variant: TitlebarVariant): string {
   return `<div id="${TITLEBAR_ID}" data-dsh-desktop-titlebar="true" data-dsh-desktop-variant="${variant}">`
-    + '<div class="dsh-desktop-drag" data-dsh-desktop-drag="true">'
-    + '<span class="dsh-desktop-title">DeepSeek Harness</span>'
-    + '</div>'
+    + '<div class="dsh-desktop-drag" data-dsh-desktop-drag="true"></div>'
     + '</div>'
 }
 
@@ -74,7 +72,6 @@ export function titlebarStyles(variant: TitlebarVariant): string {
   flex: 1; display: flex; align-items: center; ${dragPadding(variant)}
   -webkit-app-region: drag;
 }
-#${TITLEBAR_ID} .dsh-desktop-title { opacity: 0.72; pointer-events: none; }
 body { padding-top: var(--dsh-desktop-titlebar); box-sizing: border-box; }
 `
 }
