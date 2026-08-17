@@ -70,7 +70,7 @@ export function GitBranchSeat({
   if (remote.length > 0) {
     items.push({ type: 'separator', id: 'remote-sep' })
     items.push({ type: 'label', id: 'remote', text: t('menu.remote') })
-    for (const branch of remote) items.push({ id: `remote:${branch.name}`, label: branch.name })
+    for (const branch of remote) items.push({ id: branch.name, label: branch.name })
   }
   items.push({ type: 'separator', id: 'create-sep' })
   items.push({ id: '__create__', label: t('menu.create') })
@@ -89,8 +89,7 @@ export function GitBranchSeat({
             setCreating(true)
             return
           }
-          const branch = id.startsWith('remote:') ? id.slice('remote:'.length) : id
-          void checkout(branch)
+          void checkout(id)
         }}
         align="start"
         portal

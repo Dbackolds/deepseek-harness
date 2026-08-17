@@ -9,7 +9,7 @@ import type { RpcRequest, RpcResponse } from './rpc.ts'
 
 /** One local or remote-tracking branch a workspace repository advertises. */
 export interface GitBranchView {
-  /** Branch name without the refs/heads/ prefix. */
+  /** Local short name, or remote-tracking name including the remote. */
   name: string
   /** True when this name is the repository current HEAD. */
   current: boolean
@@ -19,7 +19,7 @@ export interface GitBranchView {
 
 /** Snapshot a session branch picker needs. */
 export interface SessionGitView {
-  /** Branch this session operates on. */
+  /** Branch or detached label this session operates on. */
   currentBranch: string
   /** Absolute directory this session operates in. */
   worktreePath: string

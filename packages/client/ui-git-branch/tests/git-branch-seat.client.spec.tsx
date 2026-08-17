@@ -20,7 +20,7 @@ const READY: GitBranchSeatState = {
     branches: [
       { name: 'main', current: true, remote: false },
       { name: 'feature', current: false, remote: false },
-      { name: 'origin-dev', current: false, remote: true },
+      { name: 'origin/dev', current: false, remote: true },
     ],
   },
   unavailable: false,
@@ -106,10 +106,10 @@ describe('GitBranchSeat', () => {
     expect((screen.getByRole('button', { name: /main/ }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('checks out a remote-tracking name without the remote: prefix', () => {
+  it('checks out a remote-tracking name including the remote', () => {
     const actions = renderSeat()
     fireEvent.click(screen.getByRole('button', { name: /main/ }))
-    fireEvent.click(screen.getByText('origin-dev'))
-    expect(actions.checkout).toHaveBeenCalledWith('origin-dev')
+    fireEvent.click(screen.getByText('origin/dev'))
+    expect(actions.checkout).toHaveBeenCalledWith('origin/dev')
   })
 })

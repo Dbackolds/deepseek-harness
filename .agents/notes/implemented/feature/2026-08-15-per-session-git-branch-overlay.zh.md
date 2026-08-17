@@ -12,7 +12,7 @@ Status: implemented
 
 继续把 `SessionHeader.cwd` 当作工作区成员关系键。用一条只进日志的 `git/worktree` 事件记录逐会话 overlay。最后一条事件是工具、`{{cwd}}` 和 `sandboxPolicy.resolve()` 使用的目录；没有这条事件时它们继续使用 header cwd。检出工作区 HEAD 会复用工作区 checkout。任何其他名字都会在 `$DSH_HOME/worktrees/<workspace-id>/<session-id>` 创建或复用一个关联 worktree，因此两个会话可以停在不同分支上。
 
-Web 芯片填充现有 hero 芯片旁边的 `conversation.hero.branch`。它调用 `git.describe`／`git.checkout`／`git.createBranch`。不是 Git 仓库的工作区会隐藏该芯片。
+Web 芯片填充现有 hero 芯片旁边的 `conversation.hero.branch`。它调用 `git.describe`／`git.checkout`／`git.createBranch`。不是 Git 仓库的工作区会隐藏该芯片。选择器列出本地短名，以及带远程前缀的远程跟踪名（`origin/master`）；它不会把远程跟踪名折叠进同名本地头。工作区 HEAD 处于 detached、且只指向一个本地或远程跟踪名时显示该名字；同一提交上有多个名字时显示短对象 id，而不是字面量 `HEAD`。
 
 ## 考虑过的替代方案
 
@@ -28,4 +28,4 @@ Web 芯片填充现有 hero 芯片旁边的 `conversation.hero.branch`。它调�
 
 ## 测试
 
-overlay fold、沙箱策略解析、宿主 `git.*` RPC，以及隔离 worktree 的创建／检出／返回路径，由针对真实 Git 仓库的包测试钉住。hero 芯片的加载、非仓库时隐藏、检出、创建，以及 HMR 安全的 slot 注册路径，由 `ui-git-branch` 客户端测试钉住。
+overlay fold、沙箱策略解析、宿主 `git.*` RPC、隔离 worktree 的创建／检出／返回路径、保留远程前缀的远程跟踪名，以及 detached HEAD 标签，由针对真实 Git 仓库的包测试钉住。hero 芯片的加载、非仓库时隐藏、检出、远程跟踪检出、创建，以及 HMR 安全的 slot 注册路径，由 `ui-git-branch` 客户端测试钉住。

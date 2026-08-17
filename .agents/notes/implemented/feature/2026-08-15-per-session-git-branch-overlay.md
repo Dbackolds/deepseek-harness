@@ -12,7 +12,7 @@ The new-session composer already has a workspace chip and an agent-preset chip. 
 
 Keep `SessionHeader.cwd` as the workspace membership key. Record a per-session overlay as one log-only `git/worktree` event. The last event is the directory tools, `{{cwd}}`, and `sandboxPolicy.resolve()` use; without one they keep the header cwd. Checking out the workspace HEAD reuses the workspace checkout. Any other name creates or reuses a linked worktree at `$DSH_HOME/worktrees/<workspace-id>/<session-id>` so two sessions can sit on different branches.
 
-The Web chip fills `conversation.hero.branch` beside the existing hero chips. It talks to `git.describe` / `git.checkout` / `git.createBranch`. A workspace that is not a Git checkout hides the chip.
+The Web chip fills `conversation.hero.branch` beside the existing hero chips. It talks to `git.describe` / `git.checkout` / `git.createBranch`. A workspace that is not a Git checkout hides the chip. The picker lists local short names and remote-tracking names that include the remote (`origin/master`); it does not collapse a remote-tracking name onto a same-named local head. A detached workspace HEAD that uniquely matches one local or remote-tracking name shows that name; several names at the same commit show the short object id instead of the literal `HEAD`.
 
 ## Alternatives considered
 
@@ -28,4 +28,4 @@ Each session can hold a different branch without moving workspace membership. Is
 
 ## Testing
 
-The overlay fold, sandbox-policy resolve, host `git.*` RPCs, and isolated worktree create/checkout/return paths are pinned by package tests against a real Git repository. The hero chip load, hide-when-not-a-repo, checkout, create, and HMR-safe slot registration paths are pinned by `ui-git-branch` client tests.
+The overlay fold, sandbox-policy resolve, host `git.*` RPCs, isolated worktree create/checkout/return paths, remote-tracking names that keep the remote prefix, and detached HEAD labels are pinned by package tests against a real Git repository. The hero chip load, hide-when-not-a-repo, checkout, remote-tracking checkout, create, and HMR-safe slot registration paths are pinned by `ui-git-branch` client tests.

@@ -60,16 +60,38 @@ describe('git-worktree manager', () => {
     expect(created.isolated).toBe(true)
   })
 
-  it('skips remote HEAD rows and keeps the first of a local/remote pair', async () => {
+  it('keeps remote-tracking names distinct from local heads and skips remote HEAD', async () => {
     const { cwd, session } = repo()
     git(cwd, ['remote', 'add', 'origin', cwd])
     git(cwd, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
     git(cwd, ['update-ref', 'refs/remotes/origin/HEAD', 'HEAD'])
     git(cwd, ['branch', 'zzz'])
     const described = await describeSessionGit(cwd, session)
-    expect(described.branches.filter(branch => branch.name === 'main')).toHaveLength(1)
-    expect(described.branches.some(branch => branch.name === 'HEAD')).toBe(false)
+    expect(described.branches.map(branch => branch.name)).toEqual(['main', 'zzz', 'origin/main'])
+    expect(described.branches.find(branch => branch.name === 'origin/main')?.remote).toBe(true)
+    expect(described.branches.some(branch => branch.name === 'HEAD' || branch.name === 'origin')).toBe(false)
     expect(described.branches[0]?.name).toBe('main')
+  })
+
+  it('labels a uniquely pointed detached HEAD with that ref name', async () => {
+    const { cwd, session } = repo()
+    git(cwd, ['checkout', '--detach', 'HEAD'])
+    const described = await describeSessionGit(cwd, session)
+    expect(described.workspaceBranch).toBeNull()
+    expect(described.currentBranch).toBe('main')
+  })
+
+  it('labels an ambiguous detached HEAD with the short commit', async () => {
+    const { cwd, session } = repo()
+    git(cwd, ['branch', 'other'])
+    git(cwd, ['checkout', '--detach', 'HEAD'])
+    const described = await describeSessionGit(cwd, session)
+    expect(described.workspaceBranch).toBeNull()
+    expect(described.currentBranch).toMatch(/^[0-9a-f]{7,}$/)
+    expect(described.currentBranch).not.toBe('HEAD')
+    const same = await checkoutSessionBranch('ws-1', cwd, session, described.currentBranch)
+    expect(same.isolated).toBe(false)
+    expect(same.currentBranch).toBe(described.currentBranch)
   })
 
   it('rejects a path that is not a repository', async () => {
@@ -86,5 +108,14 @@ describe('git-worktree manager', () => {
     const second = await checkoutSessionBranch('ws-1', cwd, session, 'other')
     expect(second.currentBranch).toBe('other')
     expect(second.worktreePath).toBe(first.worktreePath)
+  })
+
+  it('checks out a remote-tracking name without inventing a local branch', async () => {
+    const { cwd, session } = repo()
+    git(cwd, ['update-ref', 'refs/remotes/origin/topic', 'HEAD'])
+    const checked = await checkoutSessionBranch('ws-1', cwd, session, 'origin/topic')
+    expect(checked.currentBranch).toBe('origin/topic')
+    expect(checked.isolated).toBe(true)
+    expect(checked.branches.some(branch => branch.name === 'topic' && !branch.remote)).toBe(false)
   })
 })
