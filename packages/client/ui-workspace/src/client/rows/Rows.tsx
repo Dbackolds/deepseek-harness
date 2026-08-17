@@ -1,10 +1,10 @@
 /**
  * Workspace browser tree row components (figma Cell set 14:3080): pure presentational —
  * all data and callbacks arrive via props. Hover swaps (folder->chevron,
- * time->ellipsis, action buttons) are CSS-only. The same workspace
- * Rename/Delete and session Rename/Fork/Archive menu opens from the trailing
- * ellipsis or a right-click on a row that already has those verbs; the
- * session and workspace hover cards are suppressed while a menu is open.
+ * time->ellipsis, action buttons) are CSS-only. Workspace Rename/Delete and
+ * session Rename/Fork/Archive each have two independent menus: the trailing
+ * ellipsis dropdown and a pointer-placed context menu. Hover cards are
+ * suppressed while either menu is open.
  */
 import { useState, type MouseEvent } from 'react'
 import clsx from 'clsx'
@@ -30,6 +30,44 @@ function displayTitle(node: SessionNode, t: RowTranslate): string {
 /** Cursor-sized portal rect so a right-click menu opens at the pointer. */
 function pointerAnchorRect(event: MouseEvent): DOMRect {
   return new DOMRect(event.clientX, event.clientY, 0, 0)
+}
+
+type WorkspaceRowActions = {
+  rename: () => void
+  addFolder: () => void
+  removeFolder: (path: string) => void
+  delete: () => void
+}
+
+type SessionRowMenuActions = {
+  onRename: (id: SessionNode['id'], currentTitle: string) => void
+  onFork: (id: SessionNode['id']) => void
+  onArchive: (id: SessionNode['id']) => void
+}
+
+/** Dispatch one Session row-menu id. Unknown ids leave without a fallback. */
+function selectSessionMenu(
+  id: string,
+  sessionId: SessionNode['id'],
+  currentTitle: string,
+  actions: SessionRowMenuActions,
+): void {
+  if (id === 'rename') actions.onRename(sessionId, currentTitle)
+  if (id === 'fork') actions.onFork(sessionId)
+  if (id === 'archive') actions.onArchive(sessionId)
+}
+
+/** Dispatch one Workspace row-menu id. Unknown ids leave without a fallback. */
+function selectWorkspaceMenu(id: string, actions: WorkspaceRowActions): void {
+  if (id.startsWith('remove:')) {
+    actions.removeFolder(id.slice('remove:'.length))
+    return
+  }
+  /* v8 ignore next -- remaining ids are the three static workspace rows. */
+  if (id !== 'rename' && id !== 'addFolder' && id !== 'delete') return
+  if (id === 'rename') actions.rename()
+  else if (id === 'addFolder') actions.addFolder()
+  else actions.delete()
 }
 
 /** Localized compact relative time ("刚刚"/"5分钟" in zh, "now"/"5min" in en). */
@@ -108,7 +146,7 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
 /**
  * Project (workspace) header row: folder + title;
  * hover reveals the chevron and create button, a right-click on a real
- * Workspace opens the same row menu at the pointer, and dwelling on a real
+ * Workspace opens a separate context menu at the pointer, and dwelling on a real
  * Workspace shows its hover card (the ungrouped bucket has none).
  * `containsCurrent` arrives on the node (derivation fact, no renderer scan).
  * @param props.group - derived group node.
@@ -123,12 +161,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   onToggle: () => void
   onCreate: () => void
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
-  actions?: {
-    rename: () => void
-    addFolder: () => void
-    removeFolder: (path: string) => void
-    delete: () => void
-  } | undefined
+  actions?: WorkspaceRowActions | undefined
   /** Present only for real Workspace rows in the grouped view. */
   drag?: WorkspaceRowDragProps | undefined
   t: RowTranslate
@@ -138,7 +171,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
+  const [contextMenu, setContextMenu] = useState<DOMRect | null>(null)
   const workspaceMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
     { id: 'addFolder', label: t('menu.addFolder'), icon: <IconPlusOutline16 /> },
@@ -154,7 +187,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   ]
   const ownRow = (
     <div
-      className={clsx(css.projectRow, menuOpen && css.menuOpen)}
+      className={clsx(css.projectRow, (menuOpen || contextMenu !== null) && css.menuOpen)}
       role="treeitem"
       aria-expanded={row.expanded}
       onClick={onToggle}
@@ -162,8 +195,8 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
         event.preventDefault()
         event.stopPropagation()
         if (actions === undefined) return
-        setMenuAnchor(pointerAnchorRect(event))
-        setMenuOpen(true)
+        setMenuOpen(false)
+        setContextMenu(pointerAnchorRect(event))
       }}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
@@ -191,43 +224,45 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
       </span>
       <span className={css.rowActions}>
         {actions !== undefined && (
-          <Menu
-            open={menuOpen}
-            onClose={() => { setMenuOpen(false); setMenuAnchor(null) }}
-            items={workspaceMenuItems}
-            onSelect={(id) => {
-              setMenuOpen(false)
-              setMenuAnchor(null)
-              // Unknown ids leave before the dispatch: a future menu row must
-              // not inherit the destructive branch as an else fallback.
-              if (id.startsWith('remove:')) {
-                actions.removeFolder(id.slice('remove:'.length))
-                return
-              }
-              /* v8 ignore next -- remaining ids are the three static workspace rows. */
-              if (id !== 'rename' && id !== 'addFolder' && id !== 'delete') return
-              if (id === 'rename') actions.rename()
-              else if (id === 'addFolder') actions.addFolder()
-              else actions.delete()
-            }}
-            portal
-            closeOnPointerLeave={menuAnchor === null}
-            {...(menuAnchor === null ? {} : { getAnchorRect: () => menuAnchor })}
-            anchor={(
-              <button
-                type="button"
-                className={css.iconButton}
-                aria-label={t('actions.workspace.aria', { name: label })}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setMenuAnchor(null)
-                  setMenuOpen(v => !v)
-                }}
-              >
-                <IconEllipsisOutline16 />
-              </button>
-            )}
-          />
+          <>
+            <Menu
+              open={menuOpen}
+              onClose={() => { setMenuOpen(false) }}
+              items={workspaceMenuItems}
+              onSelect={(id) => {
+                setMenuOpen(false)
+                selectWorkspaceMenu(id, actions)
+              }}
+              portal
+              closeOnPointerLeave
+              anchor={(
+                <button
+                  type="button"
+                  className={css.iconButton}
+                  aria-label={t('actions.workspace.aria', { name: label })}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setContextMenu(null)
+                    setMenuOpen(v => !v)
+                  }}
+                >
+                  <IconEllipsisOutline16 />
+                </button>
+              )}
+            />
+            <Menu
+              open={contextMenu !== null}
+              onClose={() => { setContextMenu(null) }}
+              items={workspaceMenuItems}
+              onSelect={(id) => {
+                setContextMenu(null)
+                selectWorkspaceMenu(id, actions)
+              }}
+              portal
+              getAnchorRect={() => contextMenu}
+              anchor={<span />}
+            />
+          </>
         )}
         <button
           type="button"
@@ -246,7 +281,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
     <HoverCard
       anchor={ownRow}
       content={<WorkspaceHoverContent label={row.label} cwd={row.cwd} folders={row.folders} createdAt={row.createdAt} t={t} />}
-      disabled={menuOpen}
+      disabled={menuOpen || contextMenu !== null}
       copyText={row.cwd}
       copyLabel={t('copy')}
       copiedLabel={t('hover.copied')}
@@ -387,8 +422,8 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
 
 /**
  * One top-level 34px session row: status dot (pending user interaction outranks
- * own or descendant activity), title, relative time, and the row actions menu
- * opened from the trailing ellipsis or a right-click on a non-blank row.
+ * own or descendant activity), title, relative time, the trailing ellipsis
+ * menu, and a separate right-click context menu on a non-blank row.
  * @param props.node - derived session node.
  * @param props.currentId - selected session id (row highlight).
  * @param props.now - epoch ms for relative-time formatting.
@@ -425,7 +460,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   const primaryStatus = statuses[0]
   const showStatus = primaryStatus.state !== 'done' || row.completed
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
+  const [contextMenu, setContextMenu] = useState<DOMRect | null>(null)
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
   // confirmation dialog.
@@ -439,7 +474,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   const ownRow = (
     <div
       className={clsx(
-        css.sessionRow, selected && css.selected, menuOpen && css.menuOpen,
+        css.sessionRow, selected && css.selected, (menuOpen || contextMenu !== null) && css.menuOpen,
         flat && !showStatus && css.flatSessionRowWithoutStatus,
         drag?.marker === 'before' && css.dropBefore, drag?.marker === 'after' && css.dropAfter,
       )}
@@ -450,8 +485,8 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
         event.preventDefault()
         event.stopPropagation()
         if (row.blank) return
-        setMenuAnchor(pointerAnchorRect(event))
-        setMenuOpen(true)
+        setMenuOpen(false)
+        setContextMenu(pointerAnchorRect(event))
       }}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
@@ -496,18 +531,14 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
         <span className={css.rowActions}>
           <Menu
             open={menuOpen}
-            onClose={() => { setMenuOpen(false); setMenuAnchor(null) }}
+            onClose={() => { setMenuOpen(false) }}
             items={sessionMenuItems}
             onSelect={(id) => {
               setMenuOpen(false)
-              setMenuAnchor(null)
-              if (id === 'rename') onRename(node.id, row.title)
-              if (id === 'fork') onFork(node.id)
-              if (id === 'archive') onArchive(node.id)
+              selectSessionMenu(id, node.id, row.title, { onRename, onFork, onArchive })
             }}
             portal
-            closeOnPointerLeave={menuAnchor === null}
-            {...(menuAnchor === null ? {} : { getAnchorRect: () => menuAnchor })}
+            closeOnPointerLeave
             anchor={(
               <button
                 type="button"
@@ -515,13 +546,25 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
                 aria-label={t('actions.session.aria', { name: title })}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setMenuAnchor(null)
+                  setContextMenu(null)
                   setMenuOpen(v => !v)
                 }}
               >
                 <IconEllipsisOutline16 />
               </button>
             )}
+          />
+          <Menu
+            open={contextMenu !== null}
+            onClose={() => { setContextMenu(null) }}
+            items={sessionMenuItems}
+            onSelect={(id) => {
+              setContextMenu(null)
+              selectSessionMenu(id, node.id, row.title, { onRename, onFork, onArchive })
+            }}
+            portal
+            getAnchorRect={() => contextMenu}
+            anchor={<span />}
           />
         </span>
       )}
@@ -531,7 +574,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
     <HoverCard
       anchor={ownRow}
       content={<SessionHoverContent node={node} now={now} t={t} />}
-      disabled={menuOpen || drag?.active === true}
+      disabled={menuOpen || contextMenu !== null || drag?.active === true}
       copyText={row.blank ? undefined : row.title}
       copyLabel={t('copy')}
       copiedLabel={t('hover.copied')}
