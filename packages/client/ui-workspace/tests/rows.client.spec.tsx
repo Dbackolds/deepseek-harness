@@ -331,6 +331,8 @@ describe('workspace browser rows', () => {
     }
     render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
     expect(screen.queryByRole('button', { name: /工作区/ })).toBeNull()
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(false)
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 
   it('blank New Session rows carry no menu, no time label, and no hover-card time', () => {
@@ -344,6 +346,8 @@ describe('workspace browser rows', () => {
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
       // The placeholder has no content yet: no row verbs, no "now" stamp.
       expect(screen.queryByRole('button', { name: /会话.*的操作/ })).toBeNull()
+      expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(false)
+      expect(screen.queryByRole('menu')).toBeNull()
       expect(screen.queryByText('刚刚')).toBeNull()
       // The hover card keeps title + status but drops the timestamp line.
       const wrapper = screen.getByRole('treeitem').parentElement as HTMLElement
@@ -393,6 +397,43 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('workspace and session row menus open from a right-click at the pointer', () => {
+    const onToggle = vi.fn()
+    const onRenameWorkspace = vi.fn()
+    const onOpen = vi.fn()
+    const onRenameSession = vi.fn()
+    const group: GroupNode = {
+      key: 'project', workspaceId: wid('project'), cwd: '/projects/project', folders: [], createdAt: 0, label: 'Project',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    const node: SessionNode = {
+      id: sid('s1'), title: 'One', blank: false, running: false,
+      interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
+    }
+    const { rerender } = render(<ProjectRowItem
+      group={group} onToggle={onToggle} onCreate={vi.fn()}
+      actions={{ rename: onRenameWorkspace, addFolder: vi.fn(), removeFolder: vi.fn(), delete: vi.fn() }} t={t}
+    />)
+    const workspaceRow = screen.getByRole('treeitem')
+    expect(fireEvent.contextMenu(workspaceRow, { clientX: 48, clientY: 96 })).toBe(false)
+    expect(onToggle).not.toHaveBeenCalled()
+    expect(screen.getByRole('menu').style.left).toBe('48px')
+    expect(screen.getByRole('menu').style.top).toBe('100px')
+    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    expect(onRenameWorkspace).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    rerender(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
+      onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
+    const sessionRow = screen.getByRole('treeitem')
+    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(screen.getByRole('menu').style.left).toBe('72px')
+    expect(screen.getByRole('menu').style.top).toBe('144px')
+    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    expect(onRenameSession).toHaveBeenCalledWith(node.id, 'One')
+    expect(onOpen).not.toHaveBeenCalled()
+  })
 
   it('shows the hover card after the dwell and suppresses it while the row menu is open', () => {
     vi.useFakeTimers()
