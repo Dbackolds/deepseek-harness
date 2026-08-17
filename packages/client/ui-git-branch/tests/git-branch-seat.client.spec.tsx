@@ -17,6 +17,8 @@ const READY: GitBranchSeatState = {
     currentBranch: 'main',
     worktreePath: '/repo',
     isolated: false,
+    dirtyCount: 0,
+    unpushedCount: 0,
     branches: [
       { name: 'main', current: true, remote: false },
       { name: 'feature', current: false, remote: false },
@@ -40,7 +42,11 @@ function renderSeat(state: Partial<GitBranchSeatState> = {}) {
     useWorkspaces: (select: (s: { recentWorkspaceId?: string; items: unknown[] }) => unknown) =>
       select({ recentWorkspaceId: 'ws-1', items: [{ workspaceId: 'ws-1' }] }),
     useGitBranchSeat: bindSnapshotSelector(store),
-    t: (key: keyof typeof en) => en[key],
+    t: (key: keyof typeof en, params?: Record<string, unknown>) => {
+      const raw = en[key]
+      if (params === undefined) return raw
+      return raw.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? ''))
+    },
   } as unknown as GitBranchSeatProps)} />)
   return actions
 }
@@ -48,7 +54,7 @@ function renderSeat(state: Partial<GitBranchSeatState> = {}) {
 describe('GitBranchSeat', () => {
   it('still offers create when the repository has no listed branches', () => {
     const actions = renderSeat({
-      view: { currentBranch: 'HEAD', worktreePath: '/repo', isolated: false, branches: [] },
+      view: { currentBranch: 'HEAD', worktreePath: '/repo', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] },
     })
     fireEvent.click(screen.getByRole('button', { name: /HEAD/ }))
     fireEvent.click(screen.getByText(en['menu.create']))
@@ -104,6 +110,41 @@ describe('GitBranchSeat', () => {
   it('disables the chip while a switch is in flight', () => {
     renderSeat({ busy: true })
     expect((screen.getByRole('button', { name: /main/ }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('shows dirty and unpushed counts under a detached current checkout', () => {
+    renderSeat({
+      view: {
+        currentBranch: 'cf9fb80',
+        worktreePath: '/repo',
+        isolated: false,
+        dirtyCount: 2,
+        unpushedCount: 1,
+        branches: [{ name: 'main', current: false, remote: false }],
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /cf9fb80/ }))
+    expect(screen.getByText('Uncommitted changes: 2 files')).toBeTruthy()
+    expect(screen.getByText(en['status.unpushedOne'])).toBeTruthy()
+  })
+
+  it('shows dirty and unpushed counts under the current branch', () => {
+    renderSeat({
+      view: {
+        currentBranch: 'main',
+        worktreePath: '/repo',
+        isolated: false,
+        dirtyCount: 1,
+        unpushedCount: 3,
+        branches: [
+          { name: 'main', current: true, remote: false },
+          { name: 'feature', current: false, remote: false },
+        ],
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /main/ }))
+    expect(screen.getByText(en['status.dirtyOne'])).toBeTruthy()
+    expect(screen.getByText('Unpushed commits: 3')).toBeTruthy()
   })
 
   it('checks out a remote-tracking name including the remote', () => {

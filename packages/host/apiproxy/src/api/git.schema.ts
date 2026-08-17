@@ -21,6 +21,8 @@ export const sessionGitViewSchema = z.object({
   currentBranch: z.string().min(1),
   worktreePath: z.string().min(1),
   isolated: z.boolean(),
+  dirtyCount: z.number().int().nonnegative(),
+  unpushedCount: z.number().int().nonnegative(),
   branches: z.array(gitBranchViewSchema),
 }) satisfies z.ZodType<Wire<SessionGitView>>
 

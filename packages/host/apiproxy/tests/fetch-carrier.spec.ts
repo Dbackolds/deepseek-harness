@@ -208,19 +208,19 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       describe(request: RpcRequest<{ sessionId?: string; workspaceId?: string }>) {
         return Promise.resolve({
           rpcId: request.rpcId,
-          result: { ok: true as const, value: { currentBranch: 'main', worktreePath: '/w', isolated: false, branches: [] } },
+          result: { ok: true as const, value: { currentBranch: 'main', worktreePath: '/w', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] } },
         })
       },
       checkout(request: RpcRequest<{ sessionId: string; branch: string }>) {
         return Promise.resolve({
           rpcId: request.rpcId,
-          result: { ok: true as const, value: { currentBranch: request.payload.branch, worktreePath: '/w', isolated: false, branches: [] } },
+          result: { ok: true as const, value: { currentBranch: request.payload.branch, worktreePath: '/w', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] } },
         })
       },
       createBranch(request: RpcRequest<{ sessionId: string; branch: string }>) {
         return Promise.resolve({
           rpcId: request.rpcId,
-          result: { ok: true as const, value: { currentBranch: request.payload.branch, worktreePath: '/w', isolated: true, branches: [] } },
+          result: { ok: true as const, value: { currentBranch: request.payload.branch, worktreePath: '/w', isolated: true, dirtyCount: 0, unpushedCount: 0, branches: [] } },
         })
       },
     },

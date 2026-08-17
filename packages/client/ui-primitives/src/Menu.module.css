@@ -178,6 +178,12 @@
   white-space: nowrap;
 }
 
+.itemLabel:has(> *) {
+  display: flex;
+  white-space: normal;
+  text-overflow: unset;
+}
+
 .check {
   flex: none;
   color: var(--dsw-alias-label-primary);

@@ -25,6 +25,10 @@ export interface SessionGitView {
   worktreePath: string
   /** True when the session uses an isolated worktree rather than the workspace checkout. */
   isolated: boolean
+  /** Uncommitted paths in this session worktree, including untracked files. */
+  dirtyCount: number
+  /** Commits on the current branch that the upstream does not have; 0 when there is no upstream. */
+  unpushedCount: number
   /** Local and remote-tracking branches, workspace HEAD first. */
   branches: readonly GitBranchView[]
 }

@@ -34,6 +34,8 @@ describe('git-worktree manager', () => {
     const described = await describeSessionGit(cwd, session)
     expect(described.currentBranch).toBe('main')
     expect(described.isolated).toBe(false)
+    expect(described.dirtyCount).toBe(0)
+    expect(described.unpushedCount).toBe(0)
     const created = await createSessionBranch('ws-1', cwd, session, 'feature')
     expect(created.currentBranch).toBe('feature')
     expect(created.isolated).toBe(true)
@@ -92,6 +94,19 @@ describe('git-worktree manager', () => {
     const same = await checkoutSessionBranch('ws-1', cwd, session, described.currentBranch)
     expect(same.isolated).toBe(false)
     expect(same.currentBranch).toBe(described.currentBranch)
+  })
+
+  it('counts uncommitted paths and unpushed commits on the current checkout', async () => {
+    const { cwd, session } = repo()
+    writeFileSync(join(cwd, 'dirty.txt'), 'x\n')
+    writeFileSync(join(cwd, 'README.md'), 'changed\n')
+    git(cwd, ['commit', '--allow-empty', '-m', 'ahead'])
+    git(cwd, ['remote', 'add', 'origin', cwd])
+    git(cwd, ['update-ref', 'refs/remotes/origin/main', 'HEAD~1'])
+    git(cwd, ['branch', '--set-upstream-to=origin/main', 'main'])
+    const described = await describeSessionGit(cwd, session)
+    expect(described.dirtyCount).toBe(2)
+    expect(described.unpushedCount).toBe(1)
   })
 
   it('rejects a path that is not a repository', async () => {

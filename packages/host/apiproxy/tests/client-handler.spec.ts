@@ -94,9 +94,9 @@ function scriptedApi(overrides: {
     },
     skills: { list: r => ok(r, { skills: [] }), ...overrides.skills },
     git: {
-      describe: r => ok(r, { currentBranch: 'main', worktreePath: '/t', isolated: false, branches: [] }),
-      checkout: r => ok(r, { currentBranch: r.payload.branch, worktreePath: '/t', isolated: false, branches: [] }),
-      createBranch: r => ok(r, { currentBranch: r.payload.branch, worktreePath: '/t', isolated: true, branches: [] }),
+      describe: r => ok(r, { currentBranch: 'main', worktreePath: '/t', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] }),
+      checkout: r => ok(r, { currentBranch: r.payload.branch, worktreePath: '/t', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] }),
+      createBranch: r => ok(r, { currentBranch: r.payload.branch, worktreePath: '/t', isolated: true, dirtyCount: 0, unpushedCount: 0, branches: [] }),
     },
     agentPresets: {
       list: r => ok(r, { presets: [], authorable: false, hasDocument: false }),

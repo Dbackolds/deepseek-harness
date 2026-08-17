@@ -38,6 +38,10 @@ export interface SessionGitState {
   readonly worktreePath: string
   /** True when the session uses an isolated worktree rather than the workspace checkout. */
   readonly isolated: boolean
+  /** Uncommitted paths in this session worktree, including untracked files. */
+  readonly dirtyCount: number
+  /** Commits on the current branch that the upstream does not have; 0 when there is no upstream. */
+  readonly unpushedCount: number
   /** Local and remote-tracking branches, workspace HEAD first. */
   readonly branches: readonly GitBranchEntry[]
 }
@@ -220,6 +224,36 @@ async function detachedCheckoutLabel(path: string): Promise<string | null> {
   }
 }
 
+/**
+ * Count uncommitted paths, including untracked files, in one checkout.
+ * @param path - checkout or worktree directory.
+ * @returns path count, or 0 when status cannot be read.
+ */
+async function dirtyPathCount(path: string): Promise<number> {
+  try {
+    const raw = await git(path, ['status', '--porcelain', '-uall'])
+    if (raw.length === 0) return 0
+    return raw.split('\n').filter(line => line.length > 0).length
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Count commits on the current branch that the upstream does not have.
+ * @param path - checkout or worktree directory.
+ * @returns commit count, or 0 when there is no upstream.
+ */
+async function unpushedCommitCount(path: string): Promise<number> {
+  try {
+    const raw = await git(path, ['rev-list', '--count', '@{upstream}..HEAD'])
+    const count = Number.parseInt(raw, 10)
+    return Number.isFinite(count) ? count : 0
+  } catch {
+    return 0
+  }
+}
+
 function worktreeHome(workspaceId: string, sessionId: string): string {
   return dshHomePath('worktrees', workspaceId, sessionId)
 }
@@ -258,6 +292,8 @@ export async function describeSessionGit(
     currentBranch,
     worktreePath,
     isolated: overlay !== undefined && resolve(overlay.path) !== resolve(workspacePath),
+    dirtyCount: await dirtyPathCount(worktreePath),
+    unpushedCount: await unpushedCommitCount(worktreePath),
     branches: await listBranches(repoRoot),
   }
 }
