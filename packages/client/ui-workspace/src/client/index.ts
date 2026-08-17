@@ -91,6 +91,7 @@ export function apply(ctx: ClientContext): void {
     },
     markUnread: (sessionId) => { ctx.sessions.markUnread(sessionId) },
     openPath: async (path) => { await ctx.workspaces.openPath(path) },
+    openSplit: (sessionId) => { ctx.sessions.open(sessionId) },
     renameWorkspace: async (workspaceId, title) => { await ctx.workspaces.rename(workspaceId, title) },
     deleteWorkspace: async (workspaceId) => { await ctx.workspaces.delete(workspaceId) },
     insertWorkspaceBefore: async (workspaceId, beforeWorkspaceId) => {

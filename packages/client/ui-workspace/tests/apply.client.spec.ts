@@ -117,6 +117,8 @@ describe('ui-workspace apply', () => {
     expect(b.markUnread).toHaveBeenCalledWith('session')
     await browser.openPath('/projects/project')
     expect(b.openPath).toHaveBeenCalledWith('/projects/project')
+    browser.openSplit('session' as never)
+    expect(b.open).toHaveBeenCalledWith('session')
     await browser.renameWorkspace('ws' as never, 'renamed')
     expect(b.rename).toHaveBeenCalledWith('ws', 'renamed')
     await browser.insertSessionBefore('ws' as never, 's1' as never, 's2' as never)

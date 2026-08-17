@@ -116,6 +116,8 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
   markUnread: (sessionId: SessionId) => void
   /** Open a filesystem path in the Host operating system's default application. */
   openPath: (path: string) => Promise<void>
+  /** Open a Session and show it beside the current conversation. */
+  openSplit: (sessionId: SessionId) => void
   /** Rename a Host Workspace (rejects on name conflict; resolves on durability). */
   renameWorkspace: (workspaceId: WorkspaceId, title: string) => Promise<void>
   /** Delete only a Host Workspace registration; directory and Session logs remain. */

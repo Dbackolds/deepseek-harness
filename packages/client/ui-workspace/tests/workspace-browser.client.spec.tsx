@@ -80,6 +80,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     archiveSession: vi.fn(async () => {}),
     markUnread: vi.fn(),
     openPath: vi.fn(async () => {}),
+    openSplit: vi.fn(),
     insertWorkspaceBefore: vi.fn(async () => {}),
     insertSessionBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),

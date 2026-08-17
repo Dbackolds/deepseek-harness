@@ -412,6 +412,8 @@ describe('sessionActivityBucket', () => {
     expect(sessionActivityBucket(descendant)).toBe('running')
     expect(sessionActivityBucket(crashed)).toBe('abnormal')
     expect(sessionActivityBucket(history)).toBe('history')
+    expect(sessionActivityBucket({ ...history, pinned: true })).toBe('pinned')
+    expect(sessionActivityBucket({ ...ownRun, pinned: true })).toBe('pinned')
   })
 })
 
@@ -424,12 +426,14 @@ describe('partitionSessionActivity', () => {
       { id: sid('read'), title: 'read', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 1 },
     ]
     expect(partitionSessionActivity(sessions).map(section => [section.bucket, section.sessions.map(row => row.id)])).toEqual([
+      ['pinned', []],
       ['unread', [sid('done')]],
       ['running', [sid('live')]],
       ['abnormal', [sid('crash')]],
       ['history', [sid('read')]],
     ])
     expect(partitionSessionActivity([]).map(section => [section.bucket, section.sessions])).toEqual([
+      ['pinned', []],
       ['unread', []],
       ['running', []],
       ['abnormal', []],
@@ -449,6 +453,12 @@ describe('createWorkspaceViewStore', () => {
     store.actions.syncSessionOrderAccount('alpha', ['two', 'one'], { one: 1, two: 2 })
     store.actions.setSessionOrder('alpha', ['one', 'two'])
     store.actions.setActivityExpanded('alpha:unread', false)
+    store.actions.pinSession('one')
+    store.actions.pinSession('two')
+    store.actions.pinSession('one')
+    expect(store.getSnapshot().pinnedSessionIds).toEqual(['two', 'one'])
+    store.actions.unpinSession('two')
+    expect(store.getSnapshot().pinnedSessionIds).toEqual(['one'])
     expect(store.getSnapshot().groupBy).toBe('flat')
     expect(store.getSnapshot()).toMatchObject({
       orderBy: 'updated',

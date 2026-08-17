@@ -49,6 +49,7 @@ type SessionRowMenuActions = {
 type SessionContextMenuActions = SessionRowMenuActions & {
   onPin: (id: SessionNode['id']) => void
   onMarkUnread: (id: SessionNode['id']) => void
+  onSplit: (id: SessionNode['id']) => void
   onReveal: (path: string) => void
   onCopy: (text: string) => void
 }
@@ -75,10 +76,23 @@ function selectSessionContextMenu(
   if (id === 'rename') actions.onRename(node.id, node.title)
   if (id === 'archive') actions.onArchive(node.id)
   if (id === 'unread') actions.onMarkUnread(node.id)
+  if (id === 'split') actions.onSplit(node.id)
   if (id === 'reveal' && node.cwd !== undefined) actions.onReveal(node.cwd)
   if (id === 'copyPath' && node.cwd !== undefined) actions.onCopy(node.cwd)
   if (id === 'copyTaskPath' && node.cwd !== undefined) actions.onCopy(node.cwd)
+  if (id === 'copyLogPath') actions.onCopy(sessionLogPath(node))
   if (id === 'copySessionId') actions.onCopy(node.id)
+}
+
+/** Browser-local guess of the JSONL session log under ~/.dsh/sessions. */
+function sessionLogPath(node: SessionNode): string {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+  const home = env?.HOME ?? env?.USERPROFILE ?? ''
+  const root = home === '' ? '.dsh/sessions' : `${home}/.dsh/sessions`
+  const project = node.cwd === undefined || node.cwd === ''
+    ? '_no-cwd'
+    : `--${node.cwd.replace(/[/\\:]+/g, '-').replace(/^-+/, '') || 'root'}--`
+  return `${root}/${project}/${node.id}/session.jsonl`
 }
 
 /** Dispatch one Workspace row-menu id. Unknown ids leave without a fallback. */
@@ -462,7 +476,7 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  */
 export function SessionNodeItem({
   node, currentId, now, onOpen, onRename, onFork, onArchive,
-  onPin = () => {}, onMarkUnread = () => {}, onReveal = () => {},
+  onPin = () => {}, onMarkUnread = () => {}, onSplit = () => {}, onReveal = () => {},
   drag, flat = false, t,
 }: {
   node: SessionNode
@@ -479,6 +493,8 @@ export function SessionNodeItem({
   onPin?: (id: SessionNode['id']) => void
   /** Restore the Completed reminder for this session. */
   onMarkUnread?: (id: SessionNode['id']) => void
+  /** Open this session and show it beside the current conversation. */
+  onSplit?: (id: SessionNode['id']) => void
   /** Reveal a filesystem path in the Host operating system. */
   onReveal?: (path: string) => void
   /** Present only on draggable rows (workspace-group sessions outside search). */
@@ -510,12 +526,12 @@ export function SessionNodeItem({
     { id: 'rename', label: t('menu.renameTask') },
     { id: 'archive', label: t('menu.archiveTask') },
     { id: 'unread', label: t('menu.markUnread') },
-    { id: 'split', label: t('menu.openSplit'), disabled: true },
+    { id: 'split', label: t('menu.openSplit') },
     { type: 'separator', id: 'paths' },
     { id: 'reveal', label: t('menu.revealInFinder'), disabled: !hasPath },
     { id: 'copyPath', label: t('menu.copyPath'), disabled: !hasPath },
     { id: 'copyTaskPath', label: t('menu.copyTaskPath'), disabled: !hasPath },
-    { id: 'copyLogPath', label: t('menu.copyLogPath'), disabled: true },
+    { id: 'copyLogPath', label: t('menu.copyLogPath') },
     { id: 'copySessionId', label: t('menu.copySessionId') },
   ]
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
@@ -580,11 +596,10 @@ export function SessionNodeItem({
           open={contextMenu !== null}
           onClose={() => { setContextMenu(null) }}
           items={sessionContextItems}
-          compact
           onSelect={(id) => {
             setContextMenu(null)
             selectSessionContextMenu(id, node, {
-              onRename, onFork, onArchive, onPin, onMarkUnread, onReveal,
+              onRename, onFork, onArchive, onPin, onMarkUnread, onSplit, onReveal,
               onCopy: (text) => { void writeClipboard(text) },
             })
           }}

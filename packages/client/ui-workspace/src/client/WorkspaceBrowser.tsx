@@ -48,6 +48,7 @@ function activitySectionLabel(
   bucket: SessionActivityBucket,
   t: WorkspaceBrowserProps['t'],
 ): string {
+  if (bucket === 'pinned') return t('section.pinned')
   if (bucket === 'unread') return t('section.unread')
   if (bucket === 'running') return t('section.running')
   if (bucket === 'abnormal') return t('section.abnormal')
@@ -288,7 +289,7 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessions' | 'startSession' | 'open' | 'forkSession'
-  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 'markUnread' | 'openPath' | 't'
+  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 'markUnread' | 'openPath' | 'openSplit' | 't'
 > & {
   workspaces: readonly WorkspaceView[]
   /** Explicit persisted zero-or-five-session state by Workspace group. */
@@ -321,8 +322,10 @@ type SessionTreeProps = Pick<
   onSessionRename: (sessionId: SessionNode['id'], currentTitle: string) => void
   /** Archive a session (row menu action; the row disappears on the state echo). */
   onSessionArchive: (sessionId: SessionNode['id']) => void
-  /** Move a session to the front of its current list account. */
+  /** Pin a session under the Workspace header. */
   onSessionPin: (sessionId: SessionNode['id']) => void
+  /** Session ids currently pinned under Workspace headers. */
+  pinnedSessionIds: readonly string[]
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
 }
@@ -331,7 +334,8 @@ type SessionTreeProps = Pick<
 function SessionTree({
   useSessions, startSession, open, forkSession, workspaces, archivedSessionIds,
   onRenameRequest, onDeleteRequest, onAddFolderRequest, onRemoveFolderRequest, onSessionRename, onSessionArchive,
-  onSessionPin, insertWorkspaceBefore, insertSessionBefore, markUnread, openPath, orderBy,
+  onSessionPin, insertWorkspaceBefore, insertSessionBefore, markUnread, openPath, openSplit,
+  pinnedSessionIds, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   activityExpansion, setActivityExpanded, t,
@@ -401,15 +405,18 @@ function SessionTree({
     () => reconciledSessionOrder(ungroupedSessionIds, sessionOrderByAccount[UNGROUPED_KEY]),
     [sessionOrderByAccount, ungroupedSessionIds],
   )
-  const groups = useMemo(
-    () => deriveGroups(list, orderedWorkspaces, archivedSessionIds, {
+  const groups = useMemo(() => {
+    const pinned = new Set(pinnedSessionIds)
+    return deriveGroups(list, orderedWorkspaces, archivedSessionIds, {
       expandedGroups,
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }),
-    [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount],
-  )
+    }).map(group => ({
+      ...group,
+      sessions: group.sessions.map(session => pinned.has(session.id) ? { ...session, pinned: true } : session),
+    }))
+  }, [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount, pinnedSessionIds])
   const now = Date.now()
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
     if (sessionDropCommitted.current) return
@@ -643,6 +650,7 @@ function SessionTree({
                               onArchive={onSessionArchive}
                               onPin={onSessionPin}
                               onMarkUnread={markUnread}
+                              onSplit={openSplit}
                               onReveal={(path) => { void openPath(path) }}
                               drag={dragProps}
                               t={t}
@@ -679,7 +687,7 @@ function SessionTree({
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
   useSessions, open, forkSession, onSessionRename, onSessionArchive, onSessionPin,
-  markUnread, openPath, archivedSessionIds,
+  markUnread, openPath, openSplit, pinnedSessionIds, archivedSessionIds,
   orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   activityExpansion, setActivityExpanded, t,
 }: Pick<
@@ -692,6 +700,8 @@ function FlatList({
   | 'onSessionPin'
   | 'markUnread'
   | 'openPath'
+  | 'openSplit'
+  | 'pinnedSessionIds'
   | 'archivedSessionIds'
   | 'orderBy'
   | 'sessionOrderByAccount'
@@ -703,10 +713,12 @@ function FlatList({
   | 't'
 >) {
   const list = useSessions(s => s)
-  const baseRows = useMemo(
-    () => deriveFlat(list, archivedSessionIds),
-    [list, archivedSessionIds],
-  )
+  const baseRows = useMemo(() => {
+    const pinned = new Set(pinnedSessionIds)
+    return deriveFlat(list, archivedSessionIds).map(session => (
+      pinned.has(session.id) ? { ...session, pinned: true } : session
+    ))
+  }, [list, archivedSessionIds, pinnedSessionIds])
   const sessionIds = useMemo(() => baseRows.map(row => row.id), [baseRows])
   const previousOrderBy = useRef(orderBy)
   useEffect(() => {
@@ -808,6 +820,7 @@ function FlatList({
                         onArchive={onSessionArchive}
                         onPin={onSessionPin}
                         onMarkUnread={markUnread}
+                        onSplit={openSplit}
                         onReveal={(path) => { void openPath(path) }}
                         flat
                         drag={{
@@ -955,6 +968,7 @@ export function WorkspaceBrowser({
   archiveSession,
   markUnread,
   openPath,
+  openSplit,
   insertSessionBefore,
   createWorkspace,
   addWorkspaceFolder,
@@ -977,6 +991,7 @@ export function WorkspaceBrowser({
   const sessionOrderByAccount = useStore(s => s.sessionOrderByAccount)
   const sessionUpdatedAtByAccount = useStore(s => s.sessionUpdatedAtByAccount)
   const activityExpansion = useStore(s => s.activityExpansion)
+  const pinnedSessionIds = useStore(s => s.pinnedSessionIds)
   useEffect(() => {
     if (workspacePhase !== 'ready') return
     actions.retainAccountKeys([
@@ -1116,25 +1131,7 @@ export function WorkspaceBrowser({
     setSessionRenameError(null)
   }
   const pinSession = (sessionId: SessionNode['id']) => {
-    const accountKey = groupBy === 'flat'
-      ? FLAT_SESSION_ORDER_KEY
-      : (workspaces.find(workspace => workspace.sessionIds.includes(sessionId))?.workspaceId as string | undefined)
-        ?? UNGROUPED_KEY
-    const currentOrder = groupBy === 'flat'
-      ? sessionOrderByAccount[FLAT_SESSION_ORDER_KEY] ?? []
-      : accountKey === UNGROUPED_KEY
-        ? sessionOrderByAccount[UNGROUPED_KEY] ?? []
-        : sessionOrderByAccount[accountKey]
-          ?? workspaces.find(workspace => workspace.workspaceId === accountKey)?.sessionIds
-          ?? []
-    if (currentOrder[0] === sessionId) return
-    const nextOrder = [sessionId as string, ...currentOrder.filter(id => id !== sessionId).map(id => id as string)]
-    actions.setSessionOrder(accountKey, nextOrder)
-    if (groupBy === 'workspace' && accountKey !== UNGROUPED_KEY) {
-      insertSessionBefore(accountKey as WorkspaceId, sessionId, nextOrder[1] as SessionNode['id'] | undefined).catch((reason: unknown) => {
-        console.warn('session pin rejected:', reason)
-      })
-    }
+    actions.pinSession(sessionId as string)
   }
   const confirmSessionRename = () => {
     if (sessionRenameBlocked) return
@@ -1359,6 +1356,7 @@ export function WorkspaceBrowser({
                 useSessions={useSessions} open={open} forkSession={forkSession}
                 onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
                 onSessionPin={pinSession} markUnread={markUnread} openPath={openPath}
+                openSplit={openSplit} pinnedSessionIds={pinnedSessionIds}
                 archivedSessionIds={archivedSessionIds}
                 orderBy={orderBy}
                 sessionOrderByAccount={sessionOrderByAccount}
@@ -1378,6 +1376,8 @@ export function WorkspaceBrowser({
                 onSessionPin={pinSession}
                 markUnread={markUnread}
                 openPath={openPath}
+                openSplit={openSplit}
+                pinnedSessionIds={pinnedSessionIds}
                 forkSession={forkSession}
                 workspaces={workspaces}
                 groupExpansion={groupExpansion}
