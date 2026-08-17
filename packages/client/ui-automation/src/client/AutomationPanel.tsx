@@ -6,7 +6,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   Button, IconClockOutline16, IconCloseOutline16, IconPlayOutline16, IconPlusOutline16,
-  IconTrashOutline16, Input, Modal, Tooltip,
+  IconTrashOutline16, IconWarningOutline16, Input, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore, WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -17,6 +17,7 @@ import {
 } from './format.ts'
 import { NS, type AutomationKey } from './locales.ts'
 import type { AutomationRuleView, AutomationState, AutomationStore } from './store.ts'
+import { AUTOMATION_TEMPLATES, applyTemplate, type AutomationTemplate } from './templates.ts'
 import css from './AutomationPanel.module.css'
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
@@ -27,6 +28,8 @@ export interface AutomationPanelInjected {
   hooks: {
     /** Page snapshot bound by the renderer as useAutomation. */
     automation: SnapshotStore<AutomationState>
+    /** Durable keep-awake preference bound as useKeepAwake. */
+    keepAwake: SnapshotStore<boolean>
   }
   /** Fetch the rule list when the page first opens. */
   load: () => Promise<void>
@@ -40,6 +43,8 @@ export interface AutomationPanelInjected {
   remove: AutomationStore['remove']
   /** Show or hide the center-column page. */
   setPageOpen: (open: boolean) => void
+  /** Persist whether a live Host holds an OS sleep assertion. */
+  setKeepAwake: (enabled: boolean) => void
 }
 
 /** Sidebar trigger props. */
@@ -84,8 +89,12 @@ export function AutomationPanel(props: AutomationPanelProps): ReactNode {
  * @returns the full-column page, or null while closed.
  */
 export function AutomationPage(props: AutomationPageProps): ReactNode {
-  const { useAutomation, useWorkspaces, load, create, setEnabled, runNow, remove, setPageOpen, t } = props
+  const {
+    useAutomation, useKeepAwake, useWorkspaces, load, create, setEnabled, runNow, remove,
+    setPageOpen, setKeepAwake, t,
+  } = props
   const state = useAutomation(snapshot => snapshot)
+  const keepAwake = useKeepAwake(value => value)
   const workspaces = useWorkspaces(snapshot => snapshot.items)
 
   useEffect(() => {
@@ -106,6 +115,7 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
   return (
     <AutomationPageChrome
       state={state}
+      keepAwake={keepAwake}
       workspaces={workspaces}
       load={load}
       create={create}
@@ -113,15 +123,17 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
       runNow={runNow}
       remove={remove}
       setPageOpen={setPageOpen}
+      setKeepAwake={setKeepAwake}
       t={t}
     />
   )
 }
 
 function AutomationPageChrome({
-  state, workspaces, load, create, setEnabled, runNow, remove, setPageOpen, t,
+  state, keepAwake, workspaces, load, create, setEnabled, runNow, remove, setPageOpen, setKeepAwake, t,
 }: {
   state: AutomationState
+  keepAwake: boolean
   workspaces: readonly WorkspaceView[]
   load: () => Promise<void>
   create: AutomationStore['create']
@@ -129,9 +141,15 @@ function AutomationPageChrome({
   runNow: AutomationStore['runNow']
   remove: AutomationStore['remove']
   setPageOpen: (open: boolean) => void
+  setKeepAwake: (enabled: boolean) => void
   t: AutomationPanelProps['t']
 }): ReactNode {
   const [adding, setAdding] = useState(false)
+  const [seed, setSeed] = useState<AutomationTemplate | undefined>(undefined)
+  const openCreate = (template?: AutomationTemplate): void => {
+    setSeed(template)
+    setAdding(true)
+  }
   return (
     <section className={css.page} aria-label={t('title')}>
       <header className={css.pageHeader}>
@@ -146,7 +164,7 @@ function AutomationPageChrome({
                 variant="primary"
                 icon={<IconPlusOutline16 size={16} />}
                 disabled={adding}
-                onClick={() => { setAdding(true) }}
+                onClick={() => { openCreate() }}
               >
                 {t('add')}
               </Button>
@@ -160,14 +178,21 @@ function AutomationPageChrome({
       <div className={css.pageScroll}>
         <AutomationBody
           state={state}
+          keepAwake={keepAwake}
           workspaces={workspaces}
           adding={adding}
-          onAdded={() => { setAdding(false) }}
+          seed={seed}
+          onAdd={openCreate}
+          onAdded={() => {
+            setAdding(false)
+            setSeed(undefined)
+          }}
           load={load}
           create={create}
           setEnabled={setEnabled}
           runNow={runNow}
           remove={remove}
+          setKeepAwake={setKeepAwake}
           t={t}
         />
       </div>
@@ -177,19 +202,23 @@ function AutomationPageChrome({
 
 interface BodyProps {
   state: AutomationState
+  keepAwake: boolean
   workspaces: readonly WorkspaceView[]
   adding: boolean
+  seed: AutomationTemplate | undefined
+  onAdd: (template?: AutomationTemplate) => void
   onAdded: () => void
   load: () => Promise<void>
   create: AutomationStore['create']
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
   remove: AutomationStore['remove']
+  setKeepAwake: (enabled: boolean) => void
   t: AutomationPanelProps['t']
 }
 
 function AutomationBody({
-  state, workspaces, adding, onAdded, load, create, setEnabled, runNow, remove, t,
+  state, keepAwake, workspaces, adding, seed, onAdd, onAdded, load, create, setEnabled, runNow, remove, setKeepAwake, t,
 }: BodyProps): ReactNode {
   if (state.status === 'error' && state.items.length === 0) {
     return (
@@ -202,6 +231,25 @@ function AutomationBody({
   return (
     <div className={css.body}>
       {state.error !== null && <p className={css.notice} role="alert">{state.error}</p>}
+      <div className={css.keepAwake}>
+        <IconWarningOutline16 size={14} />
+        <div className={css.keepAwakeCopy}>
+          <span>{t('keepAwake')}</span>
+          <span className={css.keepAwakeHint}>{t('keepAwake.hint')}</span>
+        </div>
+        <button
+          type="button"
+          className={css.switch}
+          role="switch"
+          aria-checked={keepAwake}
+          aria-label={t('keepAwake')}
+          onClick={() => { setKeepAwake(!keepAwake) }}
+        >
+          <span className={css.track} data-on={keepAwake || undefined} aria-hidden="true">
+            <span className={css.thumb} />
+          </span>
+        </button>
+      </div>
       {state.items.length === 0 && !adding
         ? <p className={css.empty}>{t('empty')}</p>
         : (
@@ -223,12 +271,15 @@ function AutomationBody({
         ? (
           <CreateForm
             workspaces={workspaces}
+            seed={seed}
             create={create}
             onClose={onAdded}
             t={t}
           />
         )
-        : null}
+        : (
+          <TemplateGrid onUse={onAdd} t={t} />
+        )}
     </div>
   )
 }
@@ -327,20 +378,50 @@ function RuleRow({
   )
 }
 
+function TemplateGrid({
+  onUse, t,
+}: {
+  onUse: (template: AutomationTemplate) => void
+  t: AutomationPanelProps['t']
+}): ReactNode {
+  return (
+    <section className={css.templates} aria-labelledby="automation-templates">
+      <h2 id="automation-templates" className={css.sectionTitle}>{t('templates')}</h2>
+      <ul className={css.templateCards}>
+        {AUTOMATION_TEMPLATES.map(template => (
+          <li key={template.id} className={css.templateCard}>
+            <div className={css.templateCopy}>
+              <div className={css.templateTitle}>{t(template.titleKey)}</div>
+              <p className={css.templateDescription}>{t(template.descriptionKey)}</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => { onUse(template) }}>
+              {t('template.use')}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 function CreateForm({
-  workspaces, create, onClose, t,
+  workspaces, seed, create, onClose, t,
 }: {
   workspaces: readonly WorkspaceView[]
+  seed: AutomationTemplate | undefined
   create: AutomationStore['create']
   onClose: () => void
   t: AutomationPanelProps['t']
 }): ReactNode {
-  const [draft, setDraft] = useState<AutomationDraft>(() => ({
-    ...EMPTY_DRAFT,
-    workspaceId: workspaces[0]?.workspaceId ?? '',
-    /* v8 ignore next -- browsers always resolve a timeZone string */
-    clockZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-  }))
+  const [draft, setDraft] = useState<AutomationDraft>(() => {
+    const empty: AutomationDraft = {
+      ...EMPTY_DRAFT,
+      workspaceId: workspaces[0]?.workspaceId ?? '',
+      /* v8 ignore next -- browsers always resolve a timeZone string */
+      clockZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    }
+    return seed === undefined ? empty : applyTemplate(empty, seed, t)
+  })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
   const patch = (next: Partial<AutomationDraft>): void => {

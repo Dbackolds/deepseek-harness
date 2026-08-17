@@ -73,6 +73,7 @@ export function formatSelector(selector: unknown, t: AutomationTranslate): strin
           .filter((day): day is number => typeof day === 'number' && day >= 1 && day <= 7)
           .flatMap((day) => {
             const key = WEEKDAY_KEYS[day - 1]
+            /* v8 ignore next -- the 1–7 filter already closed the index */
             return key === undefined ? [] : [t(key)]
           })
           .join(' ')

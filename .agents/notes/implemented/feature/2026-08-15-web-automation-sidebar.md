@@ -12,7 +12,7 @@ Host Automation already owns durable rules, Host RPC, and model tools, but the W
 
 `ui-sidebar` declares `sidebar.automation` under New Session. `@deepseek-ai/dsh-client-ui-automation` occupies that seat with a clock-icon trigger that matches New Session geometry, and occupies `shell.overlay` with a center-column page over the existing `automation.*` wire: list, create (exactly one of after / at / every / local-clock), enable, run-now, and delete. The Host remains the fact source. The collection stays off Settings, because the product request is a sibling of New Session.
 
-Create stays on the four selectors the service already accepts. The form does not parse natural language and does not edit an existing selector.
+Create stays on the four selectors the service already accepts. Built-in templates prefill that form and do not persist a rule until submit. The keep-awake switch writes the `ui-automation.keepAwake` Host setting; a live Host then holds an OS sleep assertion and releases it when the switch turns off or the plugin unloads. The form does not parse natural language and does not edit an existing selector.
 
 ## Alternatives considered
 
@@ -24,7 +24,7 @@ Create stays on the four selectors the service already accepts. The form does no
 
 ## Verification
 
-Package tests cover slot registration and HMR disposal, store list/create/enable/run-now/delete and page visibility, selector summaries, draft validation, and the trigger plus center-column page. The Web e2e scenario creates an `after` rule through the real Host and asserts it on the page. Sidebar shell snapshots include the empty `sidebar.automation` hole.
+Package tests cover slot registration and HMR disposal, store list/create/enable/run-now/delete and page visibility, selector summaries, draft validation, keep-awake preference and OS hold, template overlay, and the trigger plus center-column page. The Web e2e scenario creates an `after` rule through the real Host and asserts it on the page. Sidebar shell snapshots include the empty `sidebar.automation` hole.
 
 ## Consequences
 

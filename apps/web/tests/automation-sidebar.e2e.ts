@@ -35,6 +35,8 @@ describe('web e2e: sidebar Automation under New Session', () => {
     await trigger.click()
     const pageView = page.getByRole('region', { name: '自动化' })
     await pageView.waitFor({ timeout: 10_000 })
+    await expect.poll(() => pageView.getByRole('switch', { name: '运行会话时保持电脑唤醒。' }).count(), { timeout: 10_000 }).toBe(1)
+    await expect.poll(() => pageView.getByText('定时任务模板').count(), { timeout: 10_000 }).toBe(1)
     await pageView.getByRole('button', { name: '新建规则' }).click()
     await pageView.getByPlaceholder('新会话要执行的任务').fill('ping from automation e2e')
     await pageView.getByLabel('延迟秒数').fill('3600')
