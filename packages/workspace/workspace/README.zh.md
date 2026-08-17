@@ -30,7 +30,7 @@ DeepSeek Harness 的 Workspace 实体注册表（`ctx.workspaceRegistry`）：�
 
 #### 模型看到的内容
 
-没有。`ctx.workspaceRegistry` 只向宿主侧消费方提供 workspace 记录：此包不注册工具、不注入提示词、不写入会话事件，因此没有请求字段会携带此包数据。
+本包本身不直接向模型提供内容。`ctx.workspaceRegistry` 仍不注册工具、也不写入会话事件。当会话所属 workspace 有附加文件夹时，`dsh-sandbox-policy` 会把该列表复制进运行时上下文快照的 `workspace:folders`，默认 grep／glob 以及指令／技能发现也复用同一份列表。
 
 #### Token 影响
 

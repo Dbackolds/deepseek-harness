@@ -167,7 +167,12 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
         <IconTriangleRightFill14 className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
       </span>
       <span className={css.projectText}>
-        <span className={css.title}>{label}</span>
+        <span className={css.title}>
+          {label}
+          {row.folders.length > 0 && (
+            <span className={css.folderCount}>{t('folders.extra', { n: row.folders.length })}</span>
+          )}
+        </span>
       </span>
       <span className={css.rowActions}>
         {actions !== undefined && (

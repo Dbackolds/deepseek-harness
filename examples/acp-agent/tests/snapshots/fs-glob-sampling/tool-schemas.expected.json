@@ -20,7 +20,7 @@
           },
           "workdir": {
             "type": "string",
-            "description": "Working directory for this command. Defaults to the session workspace; a relative path is resolved against it."
+            "description": "Working directory for this command. Defaults to the session current working directory; a relative path is resolved against it. Additional workspace folders are not the default cwd — pass their absolute path here."
           },
           "run_in_background": {
             "type": "boolean",
@@ -45,7 +45,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Directory to search in. Defaults to the session workspace; a relative path resolves against it."
+            "description": "Directory to search in. Defaults to every folder in the session workspace; a relative path resolves against the current working directory."
           }
         },
         "required": [
@@ -65,7 +65,7 @@
           },
           "path": {
             "type": "string",
-            "description": "File or directory to search. Defaults to the session workspace; a relative path resolves against it."
+            "description": "File or directory to search. Defaults to every folder in the session workspace; a relative path resolves against the current working directory."
           },
           "include": {
             "type": "string",

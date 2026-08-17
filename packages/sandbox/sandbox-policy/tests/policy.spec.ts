@@ -4,14 +4,17 @@
  * override kit (fold + write path) every enforcing capability reads.
  */
 
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
-import SandboxPolicyService, { SANDBOX_MODES, effectiveSandboxMode, setSandboxMode, setSessionWorktree } from '@deepseek-ai/dsh-sandbox-policy'
+import SandboxPolicyService, {
+  SANDBOX_MODES, effectiveSandboxMode, renderWorkspaceFoldersContext, sessionSearchRoots,
+  setSandboxMode, setSessionWorktree,
+} from '@deepseek-ai/dsh-sandbox-policy'
 import SystemPrompt, { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 
 async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}) {
@@ -37,6 +40,18 @@ function agentFor(activeSession: Session): Agent {
 async function policyContext(ctx: Context, activeSession: Session): Promise<string | undefined> {
   return (await ctx.systemPrompt.assemble({ agent: agentFor(activeSession) }))
     .contexts.find(context => context.name === 'sandbox:policy')?.text
+}
+
+async function foldersContext(ctx: Context, activeSession: Session): Promise<string | undefined> {
+  return (await ctx.systemPrompt.assemble({ agent: agentFor(activeSession) }))
+    .contexts.find(context => context.name === 'workspace:folders')?.text
+}
+
+async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}): Promise<Context> {
+  const ctx = new Context()
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(SandboxPolicyService, config)
+  return ctx
 }
 
 describe('SandboxPolicyService', () => {
@@ -168,17 +183,11 @@ describe('SandboxPolicyService', () => {
     await fiber.dispose()
     expect(ctx.get('sandboxPolicy')).toBeUndefined()
     expect((await ctx.systemPrompt.assemble()).contexts.find(context => context.name === 'sandbox:policy')).toBeUndefined()
+    expect((await ctx.systemPrompt.assemble()).contexts.find(context => context.name === 'workspace:folders')).toBeUndefined()
   })
 })
 
 describe('sandbox:policy request context', () => {
-  async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}): Promise<Context> {
-    const ctx = new Context()
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(SandboxPolicyService, config)
-    return ctx
-  }
-
   it.each(['read-only', 'workspace-write', 'danger-full-access'] as const)('renders the exact %s policy without a capability inventory', async (mode) => {
     const ctx = await promptMounted({ mode, workspaceRoot: '/fallback' })
     const workspaceRoot = resolve('/projects/current')
@@ -234,6 +243,97 @@ describe('sandbox:policy request context', () => {
 
     expect(await policyContext(ctx, resumed)).toContain('workspace-write')
     expect((await ctx.systemPrompt.assemble()).contexts.find(context => context.name === 'sandbox:policy')?.text).toBe('')
+  })
+})
+
+describe('workspace:folders request context', () => {
+  function workspace(path: string, folders: string[], sessionIds: string[] = ['sess-folders']) {
+    return { id: 'ws-1', path, folders, sessionIds }
+  }
+
+  it.each(['read-only', 'workspace-write', 'danger-full-access'] as const)('lists additional folders under %s', async (mode) => {
+    const extra = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-policy-extra-')))
+    try {
+      const ctx = await promptMounted({ mode, workspaceRoot: '/fallback' })
+      ctx.provide('workspaceRegistry', {
+        list: () => [workspace(resolve('/projects/current'), [extra])],
+      } as never)
+      const text = await foldersContext(ctx, session('sess-folders', '/projects/current'))
+      expect(text).toBe(renderWorkspaceFoldersContext({
+        cwd: resolve('/projects/current'),
+        additional: [{ path: extra, missing: false }],
+      }))
+      expect(text).toContain('multiple folders')
+      expect(text).toContain(JSON.stringify(extra))
+    } finally {
+      rmSync(extra, { recursive: true, force: true })
+    }
+  })
+
+  it('omits the map when the owning workspace has no extra folders', async () => {
+    const ctx = await promptMounted({ mode: 'danger-full-access' })
+    ctx.provide('workspaceRegistry', {
+      list: () => [workspace(resolve('/projects/current'), [])],
+    } as never)
+    expect(await foldersContext(ctx, session('sess-folders', '/projects/current'))).toBe('')
+  })
+
+  it('lists folders for an unattached session whose cwd matches the primary path', async () => {
+    const extra = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-policy-unattached-')))
+    try {
+      const ctx = await promptMounted({ mode: 'danger-full-access' })
+      ctx.provide('workspaceRegistry', {
+        list: () => [workspace(resolve('/projects/current'), [extra], [])],
+      } as never)
+      const text = await foldersContext(ctx, session('sess-unattached', '/projects/current'))
+      expect(text).toContain(JSON.stringify(extra))
+    } finally {
+      rmSync(extra, { recursive: true, force: true })
+    }
+  })
+
+  it('marks a vanished additional folder instead of dropping it', async () => {
+    const extra = resolve('/projects/vanished-extra')
+    const ctx = await promptMounted({ mode: 'read-only' })
+    ctx.provide('workspaceRegistry', {
+      list: () => [workspace(resolve('/projects/current'), [extra])],
+    } as never)
+    const text = await foldersContext(ctx, session('sess-folders', '/projects/current'))
+    expect(text).toContain(`${JSON.stringify(extra)} (missing)`)
+    expect(sessionSearchRoots({
+      cwd: resolve('/projects/current'),
+      additional: [{ path: extra, missing: true }],
+    })).toEqual([resolve('/projects/current')])
+  })
+
+  it('marks a non-directory additional folder as missing', async () => {
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-policy-file-')))
+    const extra = join(root, 'not-a-dir')
+    writeFileSync(extra, 'x')
+    try {
+      const ctx = await promptMounted({ mode: 'read-only' })
+      ctx.provide('workspaceRegistry', {
+        list: () => [workspace(resolve('/projects/current'), [extra])],
+      } as never)
+      expect(await foldersContext(ctx, session('sess-folders', '/projects/current')))
+        .toContain(`${JSON.stringify(extra)} (missing)`)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('refreshes the map after the owning workspace folder list changes', async () => {
+    const extra = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-policy-live-')))
+    try {
+      const record = workspace(resolve('/projects/current'), [extra])
+      const ctx = await promptMounted({ mode: 'danger-full-access' })
+      ctx.provide('workspaceRegistry', { list: () => [record] } as never)
+      expect(await foldersContext(ctx, session('sess-folders', '/projects/current'))).toContain(JSON.stringify(extra))
+      record.folders = []
+      expect(await foldersContext(ctx, session('sess-folders', '/projects/current'))).toBe('')
+    } finally {
+      rmSync(extra, { recursive: true, force: true })
+    }
   })
 })
 

@@ -333,6 +333,31 @@ describe('workspace context instruction discovery', () => {
     }
   })
 
+  it('loads each extra workspace folder as its own instruction chain', async () => {
+    const root = await tempRepo()
+    const extra = await tempRepo()
+    const home = await tempRepo()
+    try {
+      await mkdir(join(root, '.git'), { recursive: true })
+      await mkdir(join(extra, '.git'), { recursive: true })
+      await write(join(root, 'AGENTS.md'), 'primary rules')
+      await write(join(extra, 'AGENTS.md'), 'extra rules')
+      const files = await discoverBaselineInstructionFiles({ cwd: root, dshHome: home, extraRoots: [extra] })
+      expect(files.map(file => file.displayPath)).toEqual([
+        'AGENTS.md',
+        join(extra, 'AGENTS.md'),
+      ])
+      const loaded = await loadBaselineInstructions({ cwd: root, dshHome: home, extraRoots: [extra], maxBytes: 65536 })
+      expect(loaded?.text).toContain('primary rules')
+      expect(loaded?.text).toContain('extra rules')
+      expect(loaded?.text).toContain(join(extra, 'AGENTS.md'))
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(extra, { recursive: true, force: true })
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
   it('loads a same-directory local overlay in addition to the base file by default', async () => {
     const root = await tempRepo()
     const home = await tempRepo()

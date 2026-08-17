@@ -30,7 +30,7 @@ Create and delete persist an explicit pending-mutation marker before their recor
 
 #### What the model sees
 
-Nothing. `ctx.workspaceRegistry` serves workspace records to host-side consumers only: the package registers no tools, injects no prompts, and writes no session events, so no request field ever carries this package's data.
+Nothing from this package directly. `ctx.workspaceRegistry` still registers no tools and writes no session events. When a session's owning workspace has additional folders, `dsh-sandbox-policy` copies that list into the runtime-context snapshot as `workspace:folders`, and default grep/glob plus instruction/skill discovery reuse the same list.
 
 #### Token effect
 

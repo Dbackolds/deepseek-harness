@@ -180,6 +180,13 @@
   line-height: 20px;
 }
 
+.folderCount {
+  margin-left: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .renameInput {
   min-width: 0;
   font-size: 14px;

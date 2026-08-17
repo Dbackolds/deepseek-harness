@@ -74,7 +74,7 @@ export function setSessionWorktree(session: Session, overlay: SessionWorktree): 
  */
 export function sessionWorkingDirectory(session: {
   header: { cwd?: string }
-  events: readonly SessionEvent[]
+  events?: readonly SessionEvent[]
 }): string | undefined {
-  return effectiveWorktree(session.events)?.path ?? session.header.cwd
+  return effectiveWorktree(session.events ?? [])?.path ?? session.header.cwd
 }

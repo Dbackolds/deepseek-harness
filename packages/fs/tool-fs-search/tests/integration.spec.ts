@@ -115,6 +115,21 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       expect(output).toContain('notes.md\nLine 1: alpha appears here too')
     })
 
+    it('defaults to every additional workspace folder when path is omitted', async () => {
+      const extra = await mkdtemp(join(tmpdir(), 'dsh-search-extra-'))
+      try {
+        await writeFile(join(extra, 'extra.ts'), 'export const extraAlpha = 1\n')
+        ctx.provide('sandboxPolicy', {
+          foldersOf: () => ({ cwd: dir, additional: [{ path: extra, missing: false }] }),
+        } as never)
+        const result = await call('grep', { pattern: 'extraAlpha' }, agent())
+        expect(result.isError).toBe(false)
+        expect(text(result)).toContain(join(extra, 'extra.ts'))
+      } finally {
+        await rm(extra, { recursive: true, force: true })
+      }
+    })
+
     it('greps a single FILE target', async () => {
       const result = await call('grep', { pattern: 'alpha', path: 'notes.md' }, agent())
       expect(text(result)).toBe('Found 1 match\n\nnotes.md\nLine 1: alpha appears here too')

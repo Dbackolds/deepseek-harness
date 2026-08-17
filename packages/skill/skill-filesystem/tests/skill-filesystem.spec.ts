@@ -205,6 +205,21 @@ describe('FileSystemSkillProvider', () => {
     expect((await ctx.skills.list({ cwd: noGit })).map(skill => skill.name)).toContain('fallback-root')
   })
 
+  it('discovers unique skills from extra workspace project roots', async () => {
+    const home = await tempDir('skill-extra-home')
+    const project = await tempDir('skill-extra-primary')
+    const extra = await tempDir('skill-extra-folder')
+    await mkdir(join(project, '.git'), { recursive: true })
+    await mkdir(join(extra, '.git'), { recursive: true })
+    await writeSkill(join(project, '.dsh/skills'), 'same', 'primary skill')
+    await writeSkill(join(extra, '.dsh/skills'), 'extra-only', 'extra skill')
+    await writeSkill(join(extra, '.dsh/skills'), 'same', 'extra same skill')
+    const ctx = await setupLocal(home)
+    const skills = await ctx.skills.list({ cwd: project, extraRoots: [extra] })
+    expect(skills.find(skill => skill.name === 'extra-only')?.description).toBe('extra skill')
+    expect(skills.find(skill => skill.name === 'same')?.description).toBe('primary skill')
+  })
+
   it('lets project skills override runtime while runtime overrides custom and user skills', async () => {
     const home = await tempDir('skill-runtime-priority')
     const project = await tempDir('skill-runtime-project')

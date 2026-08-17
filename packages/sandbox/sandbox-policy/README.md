@@ -17,7 +17,9 @@ Filesystem tools, one-shot bash commands, and terminal sessions may enforce the 
 
 - `ctx.sandboxPolicy.resolve({ session?, mode? })` — resolves one complete per-call policy. An explicit approved mode outranks the session's last `sandbox/mode` event, which outranks `defaultMode`; the session's last `git/worktree` overlay outranks its immutable header `cwd` before becoming `workspaceRoot`, otherwise the configured fallback applies. Additional folders from the owning workspace become `additionalRoots` on the same policy. Canonicalization precedes lexical normalization so `symlink/..` agrees with process working-directory resolution.
 - `ctx.sandboxPolicy.defaultMode` / `ctx.sandboxPolicy.workspaceRoot` — the deployment default and fallback root used by `resolve()`.
+- `ctx.sandboxPolicy.foldersOf(session)` / `sessionSearchRoots(folders)` — the owning workspace's additional folders plus the existing-directory subset used by default grep/glob.
 - `sandbox:policy` — a request-time cache-safe context contribution derived directly from `resolve({ session })`. It states the mode's capability-neutral file-effect contract and the canonical session workspace under `workspace-write`; tool owners retain operation-specific denial and escalation guidance.
+- `workspace:folders` — a request-time cache-safe context contribution from `foldersOf(session)`. Empty for a single-folder workspace; otherwise it lists the session current working directory and every additional folder, including vanished ones marked `(missing)`.
 - `effectiveSandboxMode(events)` — the pure fold of a session's `sandbox/mode` events (the last switch wins, or `undefined`), used inside `resolve()`.
 - `setSandboxMode(session, mode)` — THE write path for a per-session override: appends exactly one `sandbox/mode` event. The switch IS its event; nothing mutates the mode out of band.
 - `sessionWorkingDirectory(session)` / `setSessionWorktree(session, overlay)` — the last `git/worktree` overlay, or the header cwd; THE write path appends exactly one `git/worktree` event.
@@ -55,9 +57,25 @@ Current DSH file policy: workspace-write. Any available operation enforced by th
 Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.
 ```
 
+### Multi-folder workspace map
+
+#### What the model sees
+
+When the owning workspace has additional folders, the same runtime-context snapshot also carries `workspace:folders`, independent of the file-sandbox mode.
+
+```markdown
+This session's workspace has multiple folders.
+Current working directory (relative tool paths resolve here): "<cwd>".
+Additional folders in this workspace:
+- "<extra>"
+These additional folders are part of the same workspace. Use their absolute paths with bash workdir, read/write/edit, grep, and glob. Do not assume the checkout at the current working directory is the only tree.
+```
+
+A vanished additional folder stays listed with `(missing)`. A single-folder workspace contributes nothing.
+
 #### Token effect
 
-One concise durable context message on the first request and each effective policy change; unchanged requests add nothing. `workspace-write` carries only the canonical session workspace path; platform-specific temporary paths are summarized without adding host-dependent bytes.
+One concise durable context message on the first request and each effective policy or folder-list change; unchanged requests add nothing. `workspace-write` carries only the canonical session workspace path; platform-specific temporary paths are summarized without adding host-dependent bytes. The multi-folder map adds its folder list only while extra folders exist.
 
 #### KV Cache effect
 
@@ -65,6 +83,6 @@ The stable system prompt remains byte-identical across mode changes. A changed f
 
 ## Known Limitations and Deferred Work
 
-- **One primary workspace root per session** — policy resolves the last `git/worktree` overlay or `SessionHeader.cwd`; extra writable roots remain the owning workspace folders.
+- **One primary workspace root per session** — policy resolves the last `git/worktree` overlay or `SessionHeader.cwd` as the process cwd; extra folders remain the owning workspace folders and appear in `workspace:folders` plus default grep/glob roots.
 - **File-effect modes only** — `SandboxMode` governs file effects; network and process policy are outside its vocabulary, so no knob here restricts them.
 - **Temporary areas are deliberately summarized** — enforcing backends grant different platform temporary areas, which are selected after policy resolution and therefore cannot be enumerated truthfully in the current context.

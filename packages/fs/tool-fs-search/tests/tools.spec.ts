@@ -362,6 +362,20 @@ describe('command construction (plain argv)', () => {
       .toEqual(['--json', '--regexp=x', '--glob=*.{ts,tsx}', '--', '-leading-dash'])
   })
 
+  it('omitted path searches every extra workspace root', () => {
+    expect(buildGrepCommand({ pattern: 'x' }, ['/primary', '/extra'])).toEqual([
+      '--json', '--regexp=x', '--', '/primary', '/extra',
+    ])
+    expect(buildGlobCommand({ pattern: '*.ts' }, ['/primary', '/extra']).slice(-3)).toEqual([
+      '--', '/primary', '/extra',
+    ])
+  })
+
+  it('an explicit path still wins over extra workspace roots', () => {
+    expect(buildGrepCommand({ pattern: 'x', path: 'src' }, ['/primary', '/extra']))
+      .toEqual(['--json', '--regexp=x', '--', 'src'])
+  })
+
   it.each([
     ['a command-substitution pattern', '$(rm -rf /)'],
     ['a backtick pattern', '`touch pwned`'],

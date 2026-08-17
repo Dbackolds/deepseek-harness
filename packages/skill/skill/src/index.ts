@@ -104,6 +104,8 @@ export type SkillRegistration = Omit<SkillDefinition, 'invocation' | 'provider'>
 export interface SkillLookupOptions {
   /** Workspace selector for the current lookup. */
   readonly cwd?: string | undefined
+  /** Extra workspace folders whose project skill roots also participate. */
+  readonly extraRoots?: readonly string[] | undefined
   /** Abort discovery or loading work for the current caller. */
   readonly signal?: AbortSignal | undefined
 }
@@ -525,7 +527,7 @@ export class SkillRegistry extends Service {
       // The chain is part of the key rather than assumed stable: a blank-session
       // recompose re-parents an existing scope without touching this registry,
       // and only a chain-bearing key makes the next read see the new preset.
-      const key = this.collectCacheKey(options.cwd, scopeChainOf(options.scope), revision)
+      const key = this.collectCacheKey(options.cwd, options.extraRoots, scopeChainOf(options.scope), revision)
       const cached = this.collectCache.get(key)
       if (cached !== undefined) return { entries: cached, cacheable: true }
 
@@ -641,8 +643,13 @@ export class SkillRegistry extends Service {
     return id
   }
 
-  private collectCacheKey(cwd: string | undefined, chain: ScopeKey[], revision: number): string {
-    return JSON.stringify({ cwd, scopes: chain.map(key => this.scopeId(key)), revision })
+  private collectCacheKey(
+    cwd: string | undefined,
+    extraRoots: readonly string[] | undefined,
+    chain: ScopeKey[],
+    revision: number,
+  ): string {
+    return JSON.stringify({ cwd, extraRoots: extraRoots ?? [], scopes: chain.map(key => this.scopeId(key)), revision })
   }
 
   /** Notify catalog observers without making their refresh work load-bearing. */

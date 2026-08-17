@@ -15,6 +15,7 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { Config, resolveConfig, workspaceBaselineIdentity, type ResolvedConfig } from './config.ts'
 import { findProjectRoot, loadBaselineInstructionSet } from './files.ts'
 import {
@@ -122,8 +123,11 @@ export function apply(ctx: Context, config: Config): void {
     const authorityMessages = [...claimed]
     /* v8 ignore next -- normal agents carry an absolute session cwd. */
     const cwd = agent.session.header.cwd ?? process.cwd()
+    const extraRoots = ctx.get('sandboxPolicy')?.foldersOf(agent.session).additional
+      .filter(folder => !folder.missing)
+      .map(folder => folder.path) ?? []
     const projectRoot = await findProjectRoot(cwd, resolved.projectRootMarkers, fileSystem, signal)
-    const identity = workspaceBaselineIdentity(resolved, cwd, projectRoot)
+    const identity = workspaceBaselineIdentity(resolved, cwd, projectRoot, extraRoots)
     const visibleBaseline = visibleBaselineSource(agent, authorityMessages)
     const baselinePresent = visibleBaseline !== undefined
     const keepVisibleBaseline = visibleBaseline?.baselineIdentity === identity
@@ -143,6 +147,7 @@ export function apply(ctx: Context, config: Config): void {
         instructionFileCandidates: resolved.instructionFileCandidates,
         localInstructionFileCandidates: resolved.localInstructionFileCandidates,
         projectRoot,
+        extraRoots,
         replacePreviousBaseline,
         signal,
       }, fileSystem)

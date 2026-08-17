@@ -180,7 +180,7 @@ export class FileSystemSkillProvider implements SkillProvider {
    *   failure returns readable candidates as an incomplete observation.
    */
   async list(options: SkillLookupOptions): Promise<SkillCandidate[] | SkillProviderObservation> {
-    const roots = await this.roots(options.cwd)
+    const roots = await this.roots(options.cwd, options.extraRoots)
     let complete = true
     try {
       await this.watchManager.observeRoots(roots)
@@ -238,14 +238,22 @@ export class FileSystemSkillProvider implements SkillProvider {
     return this.disposal
   }
 
-  private async roots(cwd: string | undefined): Promise<SkillRoot[]> {
+  private async roots(cwd: string | undefined, extraRoots?: readonly string[]): Promise<SkillRoot[]> {
     const roots: SkillRoot[] = []
-    if (this.includeDefaultRoots && cwd !== undefined) {
-      const projectRoot = await findProjectRoot(resolve(cwd), optionalFileSystem(this.ctx))
-      roots.push(
-        { path: join(projectRoot, '.dsh/skills'), source: 'project-dsh', rank: PROJECT_DSH_RANK, projectRoot },
-        { path: join(projectRoot, '.agents/skills'), source: 'project-agents', rank: PROJECT_AGENTS_RANK, projectRoot },
-      )
+    if (this.includeDefaultRoots) {
+      const seen = new Set<string>()
+      const addProject = async (dir: string | undefined): Promise<void> => {
+        if (dir === undefined) return
+        const projectRoot = await findProjectRoot(resolve(dir), optionalFileSystem(this.ctx))
+        if (seen.has(projectRoot)) return
+        seen.add(projectRoot)
+        roots.push(
+          { path: join(projectRoot, '.dsh/skills'), source: 'project-dsh', rank: PROJECT_DSH_RANK, projectRoot },
+          { path: join(projectRoot, '.agents/skills'), source: 'project-agents', rank: PROJECT_AGENTS_RANK, projectRoot },
+        )
+      }
+      await addProject(cwd)
+      for (const extra of extraRoots ?? []) await addProject(extra)
     }
     roots.push(...this.customSkillDirs.map(path => ({ path, source: 'custom' as const, rank: CUSTOM_RANK })))
     if (this.includeDefaultRoots) {

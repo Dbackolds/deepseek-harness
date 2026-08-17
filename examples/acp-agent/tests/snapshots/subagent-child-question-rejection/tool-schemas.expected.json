@@ -83,7 +83,7 @@
           },
           "workdir": {
             "type": "string",
-            "description": "Working directory for this command. Defaults to the session workspace; a relative path is resolved against it."
+            "description": "Working directory for this command. Defaults to the session current working directory; a relative path is resolved against it. Additional workspace folders are not the default cwd — pass their absolute path here."
           },
           "run_in_background": {
             "type": "boolean",
