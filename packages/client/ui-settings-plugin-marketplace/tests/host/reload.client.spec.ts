@@ -153,7 +153,8 @@ await pinAutoReloadOff(hmr)
 assert(writes.length === 0, 'already-off is left alone')
 hmr.autoReload = true
 await pinAutoReloadOff(hmr)
-assert(hmr.autoReload === false, 'true autoReload is forced off')
+const forcedOff: boolean | undefined = hmr.autoReload
+assert(forcedOff === false, 'true autoReload is forced off')
 const exploding = {
   get() { return { autoReload: true } },
   update() { throw new Error('settings namespace "client-hmr" is not registered') },
