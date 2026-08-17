@@ -390,6 +390,38 @@ describe('Issue lifecycle workflow', () => {
   })
 })
 
+describe('Desktop release workflow', () => {
+  it('packs one installer per native runner and publishes only from a desktop-v tag', () => {
+    const workflow = loadWorkflow('.github/workflows/release-desktop.yml')
+    const push = workflowEvent(workflow, 'push')
+    const dispatch = workflowEvent(workflow, 'workflow_dispatch')
+    const pack = workflowJob(workflow, 'pack')
+    const publish = workflowJob(workflow, 'publish')
+    if (!isRecord(dispatch.inputs)
+      || !isRecord(dispatch.inputs.publish)
+      || !isRecord(pack.strategy)
+      || !isRecord(pack.strategy.matrix)
+      || !Array.isArray(pack.strategy.matrix.include)
+      || !Array.isArray(pack.steps)
+      || !Array.isArray(publish.steps)) {
+      throw new TypeError('Desktop release workflow must define publish input, pack matrix, and steps')
+    }
+
+    expect(push.tags).toEqual(['desktop-v*'])
+    expect(dispatch.inputs.publish).toMatchObject({ type: 'boolean', default: false })
+    expect(pack.strategy.matrix.include).toEqual([
+      { platform: 'darwin', runner: 'macos-latest', name: 'macOS arm64 zip' },
+      { platform: 'linux', runner: 'ubuntu-24.04', name: 'Linux x64 AppImage' },
+      { platform: 'win32', runner: 'windows-latest', name: 'Windows x64 NSIS' },
+    ])
+    expect(JSON.stringify(pack.steps)).toContain('scripts/desktop/pack.ts --platform')
+    expect(publish.if).toBe("github.event_name == 'push' || inputs.publish")
+    expect(publish.permissions).toEqual({ contents: 'write' })
+    expect(JSON.stringify(publish.steps)).toContain('gh release create')
+    expect(JSON.stringify(publish.steps)).toContain('verifyDesktopTag')
+  })
+})
+
 describe('Git hooks', () => {
   it('leaves frozen Agent Note sidecars to the archive verifier', () => {
     const lefthook = loadWorkflow('lefthook.yml')

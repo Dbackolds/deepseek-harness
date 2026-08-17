@@ -1,0 +1,154 @@
+# Pack DeepSeek Harness desktop installers and publish them as a GitHub
+# Release. Pack is credential-free and runs from a desktop-v* tag or a
+# manual dispatch; publication is a separate job that consumes those bytes.
+name: Release (desktop)
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish packed installers as a GitHub Release. Must run from a desktop-v* tag.
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  pack:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin
+            runner: macos-latest
+            name: macOS arm64 zip
+          - platform: linux
+            runner: ubuntu-24.04
+            name: Linux x64 AppImage
+          - platform: win32
+            runner: windows-latest
+            name: Windows x64 NSIS
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        shell: bash
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
+          echo "path=$store_path" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify desktop tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          node --import tsx/esm -e '
+            import { desktopVersion, verifyDesktopTag } from "./scripts/desktop/pack.ts"
+            verifyDesktopTag(desktopVersion(), process.env.GITHUB_REF ?? "")
+          '
+
+      - name: Pack desktop installer
+        shell: bash
+        run: pnpm exec tsx scripts/desktop/pack.ts --platform ${{ matrix.platform }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: dist-desktop/release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' || inputs.publish
+    needs: pack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install (immutable, no package scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Authorize publication
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          node --import tsx/esm -e '
+            import { desktopVersion, verifyDesktopTag } from "./scripts/desktop/pack.ts"
+            verifyDesktopTag(desktopVersion(), process.env.REF ?? "")
+          '
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: dist-desktop/release
+          merge-multiple: true
+
+      - name: Record artifact hashes
+        working-directory: dist-desktop/release
+        run: |
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node --import tsx/esm -e 'import { desktopVersion } from "./scripts/desktop/pack.ts"; process.stdout.write(desktopVersion())')"
+          tag="desktop-v${version}"
+          gh release create "$tag" \
+            --title "DeepSeek Harness Desktop ${version}" \
+            --notes "Desktop installers for DeepSeek Harness ${version}. Each archive carries the Electron window, a Node 24 binary, and a pnpm deploy of @deepseek-ai/dsh." \
+            --verify-tag \
+            dist-desktop/release/*

@@ -45,4 +45,4 @@ The [CLI behavior reference](reference/README.md) owns exact layer precedence, f
 
 ## Development
 
-Production runs require built package and frontend artifacts. From the repository root, run `pnpm run build` separately, then use `pnpm dsh <args...>` to run the TypeScript entry and forward every argument; the [source-execution reference](reference/README.md#source-execution) owns the module-resolution contract. `pnpm desktop` or `pnpm dsh desktop` opens the Electron window around that same built Host.
+Production runs require built package and frontend artifacts. From the repository root, run `pnpm run build` separately, then use `pnpm dsh <args...>` to run the TypeScript entry and forward every argument; the [source-execution reference](reference/README.md#source-execution) owns the module-resolution contract. `pnpm desktop` or `pnpm dsh desktop` opens the Electron window around that same built Host. Downloadable installers are a separate `desktop-v*` GitHub Release ([desktop package](../desktop/README.md)).
