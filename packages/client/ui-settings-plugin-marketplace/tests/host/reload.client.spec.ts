@@ -134,8 +134,12 @@ assert(argvWithPort(['web', '--port', '0'], 57758).join(' ') === 'web --port 577
 assert(argvWithPort(['web', '--port=0'], 57758).join(' ') === 'web --port=57758', 'equals port form is rewritten')
 assert(argvWithPort(['web'], 57758).join(' ') === 'web --port 57758', 'missing port is added')
 const writes: object[] = []
-const hmr = {
-  autoReload: undefined as boolean | undefined,
+const hmr: {
+  autoReload: boolean | undefined
+  get(): { autoReload: boolean } | undefined
+  update(_ns: unknown, patch: object): Promise<void>
+} = {
+  autoReload: undefined,
   get() { return this.autoReload === undefined ? undefined : { autoReload: this.autoReload } },
   async update(_ns: unknown, patch: object) {
     writes.push(patch)
