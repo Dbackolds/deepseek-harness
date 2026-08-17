@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   builderTarget,
+  desktopReleaseNotes,
   desktopReleaseTag,
   desktopVersion,
   expectedArtifacts,
@@ -38,6 +39,23 @@ describe('desktop release naming', () => {
     verifyDesktopTag('0.1.0-rc.5', 'refs/tags/desktop-v0.1.0-rc.5')
     expect(() => verifyDesktopTag('0.1.0-rc.5', 'refs/heads/master')).toThrow(/publishing requires/)
     expect(() => verifyDesktopTag('0.1.0-rc.5', 'refs/tags/dsh-v0.1.0-rc.5')).toThrow(/desktop-v0\.1\.0-rc\.5/)
+  })
+
+  it('summarizes commits since the previous desktop tag', () => {
+    const notes = desktopReleaseNotes('0.1.0-rc.5.1', [
+      'feat(web): 内置插件目录源与插件市场',
+      '',
+      '将 StarPivot catalog.json 作为 Host 具名路由随 web profile 交付。',
+      '',
+    ].join('\n'))
+    expect(notes).toContain('Desktop archives for DeepSeek Harness 0.1.0-rc.5.1.')
+    expect(notes).toContain('## Changes since the previous desktop release')
+    expect(notes).toContain('feat(web): 内置插件目录源与插件市场')
+    expect(notes).toContain('将 StarPivot catalog.json 作为 Host 具名路由随 web profile 交付。')
+  })
+
+  it('says so when the previous desktop tag has no later commits', () => {
+    expect(desktopReleaseNotes('0.1.0-rc.5.1', '  \n')).toContain('No commits since the previous desktop tag.')
   })
 })
 

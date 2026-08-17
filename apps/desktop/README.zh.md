@@ -32,7 +32,7 @@ macOS 上窗口使用 `titleBarStyle: hiddenInset`：原生红绿灯按钮位于
 pnpm run desktop:pack -- --platform darwin
 ```
 
-`Release (desktop)`（`.github/workflows/release-desktop.yml`）打包这三份安装包，并把它们发布为该标签的 GitHub Release。desktop 包保持 `private`，不是 npm family 成员。序列说明见 [desktop GitHub Release Agent Note](../../.agents/notes/implemented/process/2026-08-17-desktop-github-release.md)。
+`Release (desktop)`（`.github/workflows/release-desktop.yml`）打包这三份安装包，并把它们发布为该标签的 GitHub Release。说明会列出距上一个 `desktop-v*` 标签的提交。desktop 包保持 `private`，不是 npm family 成员。序列说明见 [desktop GitHub Release Agent Note](../../.agents/notes/implemented/process/2026-08-17-desktop-github-release.md)。
 
 ## Known Limitations and Deferred Work
 

@@ -31,7 +31,7 @@ Status: implemented
 | `ubuntu-24.04` | `DeepSeek Harness-<version>.AppImage` |
 | `windows-latest` | `DeepSeek Harness-<version>-win.zip` |
 
-推送 `desktop-v*` 会打包并发布。`publish=false` 的手动触发只打包。发布必须来自匹配标签；`contents: write` 仅限于 publish job。publish job 只上传 `*.zip`、`*.AppImage` 和 `SHA256SUMS`；像 `linux-unpacked` 这样的 electron-builder 残留目录不会进入 Release。
+推送 `desktop-v*` 会打包并发布。`publish=false` 的手动触发只打包。发布必须来自匹配标签；`contents: write` 仅限于 publish job。publish job 只上传 `*.zip`、`*.AppImage` 和 `SHA256SUMS`；像 `linux-unpacked` 这样的 electron-builder 残留目录不会进入 Release。Release 说明先写归档约定，再列出距上一个 `desktop-v*` 标签的提交（`scripts/desktop/pack.ts` 中的 `desktopReleaseNotes`）。
 
 ## Alternatives considered
 
@@ -60,4 +60,4 @@ Status: implemented
 
 ## Testing
 
-`scripts/desktop/pack.spec.ts` 固定标签命名、产物名、平台 flag、Windows 上的 `pnpm.cmd` 启动，以及发布标签拒绝。`apps/desktop/tests/host.spec.ts` 固定打包 Host 识别、对内置 Node 的优先选择，以及 512px 安装包图标。工作流是实际执行的打包与发布路径。
+`scripts/desktop/pack.spec.ts` 固定标签命名、产物名、平台 flag、Windows 上的 `pnpm.cmd` 启动、发布标签拒绝，以及 changelog 说明。`apps/desktop/tests/host.spec.ts` 固定打包 Host 识别、对内置 Node 的优先选择，以及 512px 安装包图标。工作流是实际执行的打包与发布路径。

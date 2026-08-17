@@ -31,7 +31,7 @@ A packaged window resolves `process.resourcesPath/host/dsh/lib/bin.js` and the b
 | `ubuntu-24.04` | `DeepSeek Harness-<version>.AppImage` |
 | `windows-latest` | `DeepSeek Harness-<version>-win.zip` |
 
-Pushing `desktop-v*` packs and publishes. A manual dispatch with `publish=false` only packs. Publication requires the matching tag; `contents: write` is limited to the publish job. The publish job uploads only `*.zip`, `*.AppImage`, and `SHA256SUMS`; electron-builder leftover directories such as `linux-unpacked` stay out of the Release.
+Pushing `desktop-v*` packs and publishes. A manual dispatch with `publish=false` only packs. Publication requires the matching tag; `contents: write` is limited to the publish job. The publish job uploads only `*.zip`, `*.AppImage`, and `SHA256SUMS`; electron-builder leftover directories such as `linux-unpacked` stay out of the Release. Release notes name the archive contract, then list commits since the previous `desktop-v*` tag (`desktopReleaseNotes` in `scripts/desktop/pack.ts`).
 
 ## Alternatives considered
 
@@ -60,4 +60,4 @@ What this costs:
 
 ## Testing
 
-`scripts/desktop/pack.spec.ts` pins tag naming, artifact names, platform flags, the Windows `pnpm.cmd` spawn, and publish-tag rejection. `apps/desktop/tests/host.spec.ts` pins packaged Host detection, bundled Node preference, and the 512px installer mark. The workflow is the executed pack-and-publish path.
+`scripts/desktop/pack.spec.ts` pins tag naming, artifact names, platform flags, the Windows `pnpm.cmd` spawn, publish-tag rejection, and changelog notes. `apps/desktop/tests/host.spec.ts` pins packaged Host detection, bundled Node preference, and the 512px installer mark. The workflow is the executed pack-and-publish path.

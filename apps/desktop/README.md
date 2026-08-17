@@ -32,7 +32,7 @@ From the repository root, after `pnpm run build`:
 pnpm run desktop:pack -- --platform darwin
 ```
 
-`Release (desktop)` (`.github/workflows/release-desktop.yml`) packs those three installers and publishes them as that tag's GitHub Release. The desktop package stays `private`; it is not an npm family member. The [desktop GitHub Release Agent Note](../../.agents/notes/implemented/process/2026-08-17-desktop-github-release.md) owns the sequence.
+`Release (desktop)` (`.github/workflows/release-desktop.yml`) packs those three installers and publishes them as that tag's GitHub Release. The notes list commits since the previous `desktop-v*` tag. The desktop package stays `private`; it is not an npm family member. The [desktop GitHub Release Agent Note](../../.agents/notes/implemented/process/2026-08-17-desktop-github-release.md) owns the sequence.
 
 ## Known Limitations and Deferred Work
 

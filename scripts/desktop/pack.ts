@@ -107,6 +107,27 @@ export function verifyDesktopTag(version: string, ref: string): void {
 }
 
 /**
+ * GitHub Release notes for one desktop tag: the archive contract plus commits
+ * since the previous `desktop-v*` tag, or every commit when this is the first.
+ * @param version - desktop package version being published.
+ * @param gitLog - raw `git log` lines, already formatted as `subject\n\nbody`.
+ * @returns markdown notes.
+ */
+export function desktopReleaseNotes(version: string, gitLog: string): string {
+  const intro = [
+    `Desktop archives for DeepSeek Harness ${version}. Each archive carries the Electron window, a Node 24 binary, and a pnpm deploy of @deepseek-ai/dsh.`,
+    '',
+    '## Changes since the previous desktop release',
+    '',
+  ]
+  const changes = gitLog.trim()
+  if (changes.length === 0) {
+    return [...intro, 'No commits since the previous desktop tag.', ''].join('\n')
+  }
+  return [...intro, changes, ''].join('\n')
+}
+
+/**
  * Parse one platform name from `--platform`.
  * @param value - raw CLI value.
  * @returns the platform.

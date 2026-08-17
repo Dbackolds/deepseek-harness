@@ -108,6 +108,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -153,11 +154,22 @@ jobs:
         run: |
           version="$(node --import tsx/esm -e 'import { desktopVersion } from "./scripts/desktop/pack.ts"; process.stdout.write(desktopVersion())')"
           tag="desktop-v${version}"
+          previous="$(git describe --tags --abbrev=0 --match 'desktop-v*' "${tag}^" 2>/dev/null || true)"
+          if [ -n "$previous" ]; then
+            range="${previous}..${tag}"
+          else
+            range="$tag"
+          fi
+          log="$(git log --no-merges --format='%s%n%n%b' "$range")"
+          notes="$(NOTES_VERSION="$version" NOTES_LOG="$log" node --import tsx/esm -e '
+            import { desktopReleaseNotes } from "./scripts/desktop/pack.ts"
+            process.stdout.write(desktopReleaseNotes(process.env.NOTES_VERSION ?? "", process.env.NOTES_LOG ?? ""))
+          ')"
           shopt -s nullglob
           archives=(dist-desktop/release/*.zip dist-desktop/release/*.AppImage)
           gh release create "$tag" \
             --title "DeepSeek Harness Desktop ${version}" \
-            --notes "Desktop archives for DeepSeek Harness ${version}. Each archive carries the Electron window, a Node 24 binary, and a pnpm deploy of @deepseek-ai/dsh." \
+            --notes "$notes" \
             --verify-tag \
             --prerelease \
             "${archives[@]}" \
