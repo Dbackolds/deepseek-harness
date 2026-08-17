@@ -40,7 +40,7 @@ import { en, zh } from './locales.ts'
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /**
-     * Present when an out-of-tree marketplace owns the Settings Plugins page.
+     * Present when the in-box marketplace owns the Settings Plugins page.
      * The shipped section stays off that nav row so both halves do not occupy
      * `settings.section` id `plugins` at the same priority.
      */
@@ -129,7 +129,7 @@ export function apply(ctx: ClientContext): void {
   // The nav row still uses `priority: 1` so a marketplace that registers
   // the same cell at the default priority can shadow a row that mounted
   // first. Lowest priority renders.
-  const MARKETPLACE_PLUGIN = '@starpivot/dsh-plugin-marketplace'
+  const MARKETPLACE_PLUGIN = '@deepseek-ai/dsh-client-ui-settings-plugin-marketplace'
   // Dual-face client modules are `{ apply, inject }`. Cordis copies
   // `plugin.name` onto `runtime.name`, so the package id lives on the
   // Loader entry the boot graph already stamped (`fiber.entry.options.name`).

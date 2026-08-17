@@ -44,7 +44,7 @@ function declareRoot(slots: SlotRegistry): () => void {
   } as never, () => null)
 }
 
-const MARKETPLACE_PLUGIN = '@starpivot/dsh-plugin-marketplace'
+const MARKETPLACE_PLUGIN = '@deepseek-ai/dsh-client-ui-settings-plugin-marketplace'
 
 /** Stamp the Loader entry name the browser boot graph uses. Dual-face client modules do not export `name`. */
 function stampMarketplaceEntry(ctx: Context): () => void {
