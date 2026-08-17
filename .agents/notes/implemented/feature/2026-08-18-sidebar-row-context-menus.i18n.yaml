@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-sidebar-row-context-menus.md
-2026-08-18-sidebar-row-context-menus.md: ca1ff591ceb78f4c8a8d19a8e3c7640cdb5b1479
-2026-08-18-sidebar-row-context-menus.zh.md: 9ee5a787c89ed53c19d8e730d8d1c46786260b94
+2026-08-18-sidebar-row-context-menus.md: 6469b5105eb0fad470d787c081de84648edc540b
+2026-08-18-sidebar-row-context-menus.zh.md: dd0906c69488b892434519c452a7fc75f0038508

@@ -12,7 +12,7 @@ The ellipsis dropdown is a leave-to-close control anchored on the trigger button
 
 ## Decision
 
-A real Workspace row and a non-blank Session row each own two `Menu` instances. The trailing ellipsis keeps its original dropdown: it measures the trigger button, closes when the pointer leaves, and is unchanged for hover users. The context menu is a second portal list placed from a zero-size rect at `clientX`/`clientY`. Opening one closes the other. Both lists offer the same verbs — Workspace Rename / Add folder / Remove folder / Delete workspace, Session Rename / Fork session / Archive session — through one shared select helper per row kind. Hover cards stay suppressed while either menu is open.
+A real Workspace row and a non-blank Session row each own two `Menu` instances. The trailing ellipsis keeps its original dropdown inside the hover-only `rowActions` cell: it measures the trigger button, closes when the pointer leaves, and is unchanged for hover users. The context menu is a second portal list rendered outside that hidden cell and placed from a zero-size rect at `clientX`/`clientY`. Opening one closes the other. Both lists offer the same verbs — Workspace Rename / Add folder / Remove folder / Delete workspace, Session Rename / Fork session / Archive session — through one shared select helper per row kind. Hover cards stay suppressed while either menu is open. The live GUI serves `lib/client.js`, not sources; `/reboot` restarts the session and does not rebuild or swap that bundle.
 
 The ungrouped bucket and a blank New Session row still have no verbs. Their right-click only calls `preventDefault` so the browser menu does not cover the list.
 

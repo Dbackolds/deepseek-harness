@@ -222,47 +222,47 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
           )}
         </span>
       </span>
+      {actions !== undefined && (
+        <Menu
+          open={contextMenu !== null}
+          onClose={() => { setContextMenu(null) }}
+          items={workspaceMenuItems}
+          onSelect={(id) => {
+            setContextMenu(null)
+            selectWorkspaceMenu(id, actions)
+          }}
+          portal
+          getAnchorRect={() => contextMenu}
+          anchor={<span />}
+        />
+      )}
       <span className={css.rowActions}>
         {actions !== undefined && (
-          <>
-            <Menu
-              open={menuOpen}
-              onClose={() => { setMenuOpen(false) }}
-              items={workspaceMenuItems}
-              onSelect={(id) => {
-                setMenuOpen(false)
-                selectWorkspaceMenu(id, actions)
-              }}
-              portal
-              closeOnPointerLeave
-              anchor={(
-                <button
-                  type="button"
-                  className={css.iconButton}
-                  aria-label={t('actions.workspace.aria', { name: label })}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setContextMenu(null)
-                    setMenuOpen(v => !v)
-                  }}
-                >
-                  <IconEllipsisOutline16 />
-                </button>
-              )}
-            />
-            <Menu
-              open={contextMenu !== null}
-              onClose={() => { setContextMenu(null) }}
-              items={workspaceMenuItems}
-              onSelect={(id) => {
-                setContextMenu(null)
-                selectWorkspaceMenu(id, actions)
-              }}
-              portal
-              getAnchorRect={() => contextMenu}
-              anchor={<span />}
-            />
-          </>
+          <Menu
+            open={menuOpen}
+            onClose={() => { setMenuOpen(false) }}
+            items={workspaceMenuItems}
+            onSelect={(id) => {
+              setMenuOpen(false)
+              selectWorkspaceMenu(id, actions)
+            }}
+            portal
+            closeOnPointerLeave
+            anchor={(
+              <button
+                type="button"
+                className={css.iconButton}
+                aria-label={t('actions.workspace.aria', { name: label })}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setContextMenu(null)
+                  setMenuOpen(v => !v)
+                }}
+              >
+                <IconEllipsisOutline16 />
+              </button>
+            )}
+          />
         )}
         <button
           type="button"
@@ -528,6 +528,20 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
           exist — both trailing cells stay off until the first prompt. */}
       {!row.blank && <span className={css.time}>{timeLabel(row.updatedAt, now, t)}</span>}
       {!row.blank && (
+        <Menu
+          open={contextMenu !== null}
+          onClose={() => { setContextMenu(null) }}
+          items={sessionMenuItems}
+          onSelect={(id) => {
+            setContextMenu(null)
+            selectSessionMenu(id, node.id, row.title, { onRename, onFork, onArchive })
+          }}
+          portal
+          getAnchorRect={() => contextMenu}
+          anchor={<span />}
+        />
+      )}
+      {!row.blank && (
         <span className={css.rowActions}>
           <Menu
             open={menuOpen}
@@ -553,18 +567,6 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
                 <IconEllipsisOutline16 />
               </button>
             )}
-          />
-          <Menu
-            open={contextMenu !== null}
-            onClose={() => { setContextMenu(null) }}
-            items={sessionMenuItems}
-            onSelect={(id) => {
-              setContextMenu(null)
-              selectSessionMenu(id, node.id, row.title, { onRename, onFork, onArchive })
-            }}
-            portal
-            getAnchorRect={() => contextMenu}
-            anchor={<span />}
           />
         </span>
       )}
