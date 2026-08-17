@@ -31,7 +31,7 @@ A packaged window resolves `process.resourcesPath/host/dsh/lib/bin.js` and the b
 | `ubuntu-24.04` | `DeepSeek Harness-<version>.AppImage` |
 | `windows-latest` | `DeepSeek Harness-<version>-win.zip` |
 
-Pushing `desktop-v*` packs and publishes. A manual dispatch with `publish=false` only packs. Publication requires the matching tag; `contents: write` is limited to the publish job.
+Pushing `desktop-v*` packs and publishes. A manual dispatch with `publish=false` only packs. Publication requires the matching tag; `contents: write` is limited to the publish job. The publish job uploads only `*.zip`, `*.AppImage`, and `SHA256SUMS`; electron-builder leftover directories such as `linux-unpacked` stay out of the Release.
 
 ## Alternatives considered
 

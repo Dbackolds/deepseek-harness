@@ -31,7 +31,7 @@ Status: implemented
 | `ubuntu-24.04` | `DeepSeek Harness-<version>.AppImage` |
 | `windows-latest` | `DeepSeek Harness-<version>-win.zip` |
 
-推送 `desktop-v*` 会打包并发布。`publish=false` 的手动触发只打包。发布必须来自匹配标签；`contents: write` 仅限于 publish job。
+推送 `desktop-v*` 会打包并发布。`publish=false` 的手动触发只打包。发布必须来自匹配标签；`contents: write` 仅限于 publish job。publish job 只上传 `*.zip`、`*.AppImage` 和 `SHA256SUMS`；像 `linux-unpacked` 这样的 electron-builder 残留目录不会进入 Release。
 
 ## Alternatives considered
 

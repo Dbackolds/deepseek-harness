@@ -138,7 +138,13 @@ jobs:
       - name: Record artifact hashes
         working-directory: dist-desktop/release
         run: |
-          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          shopt -s nullglob
+          archives=(*.zip *.AppImage)
+          if [ "${#archives[@]}" -eq 0 ]; then
+            echo "desktop release: no zip or AppImage archives under dist-desktop/release"
+            exit 1
+          fi
+          sha256sum "${archives[@]}" | sort -k2 > SHA256SUMS
           cat SHA256SUMS
 
       - name: Create GitHub Release
@@ -147,8 +153,12 @@ jobs:
         run: |
           version="$(node --import tsx/esm -e 'import { desktopVersion } from "./scripts/desktop/pack.ts"; process.stdout.write(desktopVersion())')"
           tag="desktop-v${version}"
+          shopt -s nullglob
+          archives=(dist-desktop/release/*.zip dist-desktop/release/*.AppImage)
           gh release create "$tag" \
             --title "DeepSeek Harness Desktop ${version}" \
-            --notes "Desktop installers for DeepSeek Harness ${version}. Each archive carries the Electron window, a Node 24 binary, and a pnpm deploy of @deepseek-ai/dsh." \
+            --notes "Desktop archives for DeepSeek Harness ${version}. Each archive carries the Electron window, a Node 24 binary, and a pnpm deploy of @deepseek-ai/dsh." \
             --verify-tag \
-            dist-desktop/release/*
+            --prerelease \
+            "${archives[@]}" \
+            dist-desktop/release/SHA256SUMS
