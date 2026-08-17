@@ -2,17 +2,18 @@
  * Workspace browser tree row components (figma Cell set 14:3080): pure presentational —
  * all data and callbacks arrive via props. Hover swaps (folder->chevron,
  * time->ellipsis, action buttons) are CSS-only. Workspace Rename/Delete and
- * session Rename/Fork/Archive each have two independent menus: the trailing
- * ellipsis dropdown and a pointer-placed context menu. Hover cards are
- * suppressed while either menu is open.
+ * session Rename/Fork/Archive keep the trailing ellipsis dropdown. A
+ * separate pointer-placed context menu uses the text-only task list. Hover
+ * cards are suppressed while either menu is open.
  */
 import { useState, type MouseEvent } from 'react'
 import clsx from 'clsx'
 import {
   HoverCard, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16,
   IconEllipsisOutline16, IconFolderClose16, IconFolderOpen16, IconPlusOutline16,
-  IconTrashOutline16, IconTriangleRightFill14, Menu, StateDot,
+  IconTrashOutline16, IconTriangleRightFill14, Menu, StateDot, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
@@ -45,7 +46,14 @@ type SessionRowMenuActions = {
   onArchive: (id: SessionNode['id']) => void
 }
 
-/** Dispatch one Session row-menu id. Unknown ids leave without a fallback. */
+type SessionContextMenuActions = SessionRowMenuActions & {
+  onPin: (id: SessionNode['id']) => void
+  onMarkUnread: (id: SessionNode['id']) => void
+  onReveal: (path: string) => void
+  onCopy: (text: string) => void
+}
+
+/** Dispatch one Session ellipsis-menu id. Unknown ids leave without a fallback. */
 function selectSessionMenu(
   id: string,
   sessionId: SessionNode['id'],
@@ -55,6 +63,22 @@ function selectSessionMenu(
   if (id === 'rename') actions.onRename(sessionId, currentTitle)
   if (id === 'fork') actions.onFork(sessionId)
   if (id === 'archive') actions.onArchive(sessionId)
+}
+
+/** Dispatch one Session context-menu id. Unknown or disabled ids leave. */
+function selectSessionContextMenu(
+  id: string,
+  node: SessionNode,
+  actions: SessionContextMenuActions,
+): void {
+  if (id === 'pin') actions.onPin(node.id)
+  if (id === 'rename') actions.onRename(node.id, node.title)
+  if (id === 'archive') actions.onArchive(node.id)
+  if (id === 'unread') actions.onMarkUnread(node.id)
+  if (id === 'reveal' && node.cwd !== undefined) actions.onReveal(node.cwd)
+  if (id === 'copyPath' && node.cwd !== undefined) actions.onCopy(node.cwd)
+  if (id === 'copyTaskPath' && node.cwd !== undefined) actions.onCopy(node.cwd)
+  if (id === 'copySessionId') actions.onCopy(node.id)
 }
 
 /** Dispatch one Workspace row-menu id. Unknown ids leave without a fallback. */
@@ -436,7 +460,11 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  * @param props.t - the browser root's locale seat.
  * @returns the session row.
  */
-export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false, t }: {
+export function SessionNodeItem({
+  node, currentId, now, onOpen, onRename, onFork, onArchive,
+  onPin = () => {}, onMarkUnread = () => {}, onReveal = () => {},
+  drag, flat = false, t,
+}: {
   node: SessionNode
   currentId: string | undefined
   now: number
@@ -447,6 +475,12 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   onFork: (id: SessionNode['id']) => void
   /** Archive this session (row menu action; commits without a dialog). */
   onArchive: (id: SessionNode['id']) => void
+  /** Move this session to the front of its current list account. */
+  onPin?: (id: SessionNode['id']) => void
+  /** Restore the Completed reminder for this session. */
+  onMarkUnread?: (id: SessionNode['id']) => void
+  /** Reveal a filesystem path in the Host operating system. */
+  onReveal?: (path: string) => void
   /** Present only on draggable rows (workspace-group sessions outside search). */
   drag?: RowDragProps | undefined
   /** The row is rendered without a parent Workspace header. */
@@ -469,6 +503,20 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
     { id: 'fork', label: t('menu.fork'), icon: <IconBranchOutline16 /> },
     // 20-native glyph in the menu's 16px icon slot (Menu.module.css .itemIcon).
     { id: 'archive', label: t('menu.archiveSession'), icon: <IconArchiveOutline20 size={16} /> },
+  ]
+  const hasPath = node.cwd !== undefined && node.cwd !== ''
+  const sessionContextItems: MenuEntry[] = [
+    { id: 'pin', label: t('menu.pin') },
+    { id: 'rename', label: t('menu.renameTask') },
+    { id: 'archive', label: t('menu.archiveTask') },
+    { id: 'unread', label: t('menu.markUnread') },
+    { id: 'split', label: t('menu.openSplit'), disabled: true },
+    { type: 'separator', id: 'paths' },
+    { id: 'reveal', label: t('menu.revealInFinder'), disabled: !hasPath },
+    { id: 'copyPath', label: t('menu.copyPath'), disabled: !hasPath },
+    { id: 'copyTaskPath', label: t('menu.copyTaskPath'), disabled: !hasPath },
+    { id: 'copyLogPath', label: t('menu.copyLogPath'), disabled: true },
+    { id: 'copySessionId', label: t('menu.copySessionId') },
   ]
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
@@ -531,10 +579,14 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
         <Menu
           open={contextMenu !== null}
           onClose={() => { setContextMenu(null) }}
-          items={sessionMenuItems}
+          items={sessionContextItems}
+          compact
           onSelect={(id) => {
             setContextMenu(null)
-            selectSessionMenu(id, node.id, row.title, { onRename, onFork, onArchive })
+            selectSessionContextMenu(id, node, {
+              onRename, onFork, onArchive, onPin, onMarkUnread, onReveal,
+              onCopy: (text) => { void writeClipboard(text) },
+            })
           }}
           portal
           getAnchorRect={() => contextMenu}

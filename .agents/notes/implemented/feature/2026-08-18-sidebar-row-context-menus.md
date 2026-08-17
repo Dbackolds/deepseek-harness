@@ -12,7 +12,7 @@ The ellipsis dropdown is a leave-to-close control anchored on the trigger button
 
 ## Decision
 
-A real Workspace row and a non-blank Session row each own two `Menu` instances. The trailing ellipsis keeps its original dropdown inside the hover-only `rowActions` cell: it measures the trigger button, closes when the pointer leaves, and is unchanged for hover users. The context menu is a second portal list rendered outside that hidden cell and placed from a zero-size rect at `clientX`/`clientY`. Opening one closes the other. Both lists offer the same verbs — Workspace Rename / Add folder / Remove folder / Delete workspace, Session Rename / Fork session / Archive session — through one shared select helper per row kind. Hover cards stay suppressed while either menu is open. The live GUI serves `lib/client.js`, not sources; `/reboot` restarts the session and does not rebuild or swap that bundle.
+A real Workspace row and a non-blank Session row each own two `Menu` instances. The trailing ellipsis keeps its original icon dropdown inside the hover-only `rowActions` cell. The Session context menu is a separate compact text-only list at the pointer: Pin task, Rename task, Archive task, Mark as unread, a disabled Open in split view row, then Reveal in Finder and the copy-path rows. Pin writes the current list account to the front. Mark as unread restores the Completed reminder through `sessions.markUnread`. Reveal and the cwd copy rows use the session's projected directory. Split view and Copy log path stay disabled because this client has no split session surface and no session-log path. Opening one menu closes the other. Hover cards stay suppressed while either menu is open. The live GUI serves `lib/client.js`, not sources; `/reboot` restarts the session and does not rebuild or swap that bundle.
 
 The ungrouped bucket and a blank New Session row still have no verbs. Their right-click only calls `preventDefault` so the browser menu does not cover the list.
 
@@ -22,14 +22,14 @@ The ungrouped bucket and a blank New Session row still have no verbs. Their righ
 
 **Ship the context menu from an out-of-tree sidebar plugin.** Rejected because the verbs and dialogs already live in `ui-workspace`; a plugin would have to re-implement or reach across the slot contract to rename, fork, archive, and delete.
 
-**Give the context menu a different item set from the ellipsis.** Rejected for this change: the missing gesture is an opener, not a new verb set.
+**Keep the context menu on the same three ellipsis verbs.** Rejected after the product list arrived: the right-click list is a text-only task menu, while the ellipsis stays the existing icon dropdown.
 
 **Leave the native browser menu on rows without verbs.** Rejected because a right-click on Ungrouped or a blank New Session would still cover the history list with page-level items that do not apply to that row.
 
 ## Consequences
 
-Each eligible row has two menu instances and one item list. Pointer placement uses the existing portal `getAnchorRect` seat; `Menu` itself does not grow a context-menu mode. Search result rows still have no row menu, so a right-click there remains the browser menu.
+Each eligible Session row has two menu instances and two item lists. Pointer placement uses the existing portal `getAnchorRect` seat; `Menu` itself does not grow a context-menu mode. Search result rows still have no row menu, so a right-click there remains the browser menu.
 
 ## Testing
 
-`rows.client.spec.tsx` opens the context menu from a right-click at a known pointer, then opens the ellipsis menu and asserts a different instance and a different placement. It dispatches Rename from the ellipsis path, keeps the existing ellipsis cases, and asserts that Ungrouped and blank New Session rows suppress the browser menu without rendering items.
+`rows.client.spec.tsx` opens the Session context menu from a right-click, asserts the text-only task rows including the disabled split and log-path items, pins and reveals from that menu, then opens the ellipsis menu and dispatches Rename from the original icon list. Manager tests restore a Completed reminder through `markUnread`. Ungrouped and blank New Session rows still suppress the browser menu without rendering items.

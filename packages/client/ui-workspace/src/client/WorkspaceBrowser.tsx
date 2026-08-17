@@ -288,7 +288,7 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessions' | 'startSession' | 'open' | 'forkSession'
-  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 't'
+  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 'markUnread' | 'openPath' | 't'
 > & {
   workspaces: readonly WorkspaceView[]
   /** Explicit persisted zero-or-five-session state by Workspace group. */
@@ -321,6 +321,8 @@ type SessionTreeProps = Pick<
   onSessionRename: (sessionId: SessionNode['id'], currentTitle: string) => void
   /** Archive a session (row menu action; the row disappears on the state echo). */
   onSessionArchive: (sessionId: SessionNode['id']) => void
+  /** Move a session to the front of its current list account. */
+  onSessionPin: (sessionId: SessionNode['id']) => void
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
 }
@@ -329,7 +331,7 @@ type SessionTreeProps = Pick<
 function SessionTree({
   useSessions, startSession, open, forkSession, workspaces, archivedSessionIds,
   onRenameRequest, onDeleteRequest, onAddFolderRequest, onRemoveFolderRequest, onSessionRename, onSessionArchive,
-  insertWorkspaceBefore, insertSessionBefore, orderBy,
+  onSessionPin, insertWorkspaceBefore, insertSessionBefore, markUnread, openPath, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   activityExpansion, setActivityExpanded, t,
@@ -613,11 +615,13 @@ function SessionTree({
                             active: sameGroupDrag && drag.bucket === sessionActivityBucket(node),
                             marker: sameGroupDrag && drag.over?.id === node.id ? drag.over.half : null,
                             hover: (half: 'before' | 'after') => {
-                              /* v8 ignore next -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
+                              /* v8 ignore next -- narrowing guard: Rows gates hover on `active`,
+                                 which is false while the drag state is null. */
                               setDrag(d => (d === null ? d : { ...d, over: { id: node.id, half } }))
                             },
                             drop: (half: 'before' | 'after') => {
-                              /* v8 ignore next -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
+                              /* v8 ignore next -- narrowing guard: Rows gates drop on `active`,
+                                 which is false while the drag state is null. */
                               if (drag === null) return
                               commitSessionDrag(drag, { id: node.id, half })
                             },
@@ -637,6 +641,9 @@ function SessionTree({
                               onRename={onSessionRename}
                               onFork={forkSession}
                               onArchive={onSessionArchive}
+                              onPin={onSessionPin}
+                              onMarkUnread={markUnread}
+                              onReveal={(path) => { void openPath(path) }}
                               drag={dragProps}
                               t={t}
                             />
@@ -671,7 +678,8 @@ function SessionTree({
 
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
-  useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds,
+  useSessions, open, forkSession, onSessionRename, onSessionArchive, onSessionPin,
+  markUnread, openPath, archivedSessionIds,
   orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   activityExpansion, setActivityExpanded, t,
 }: Pick<
@@ -681,6 +689,9 @@ function FlatList({
   | 'forkSession'
   | 'onSessionRename'
   | 'onSessionArchive'
+  | 'onSessionPin'
+  | 'markUnread'
+  | 'openPath'
   | 'archivedSessionIds'
   | 'orderBy'
   | 'sessionOrderByAccount'
@@ -795,6 +806,9 @@ function FlatList({
                         onRename={onSessionRename}
                         onFork={forkSession}
                         onArchive={onSessionArchive}
+                        onPin={onSessionPin}
+                        onMarkUnread={markUnread}
+                        onReveal={(path) => { void openPath(path) }}
                         flat
                         drag={{
                           start: () => {
@@ -939,6 +953,8 @@ export function WorkspaceBrowser({
   deleteWorkspace,
   insertWorkspaceBefore,
   archiveSession,
+  markUnread,
+  openPath,
   insertSessionBefore,
   createWorkspace,
   addWorkspaceFolder,
@@ -1098,6 +1114,27 @@ export function WorkspaceBrowser({
     if (sessionRenaming) return
     setSessionRenameTarget(null)
     setSessionRenameError(null)
+  }
+  const pinSession = (sessionId: SessionNode['id']) => {
+    const accountKey = groupBy === 'flat'
+      ? FLAT_SESSION_ORDER_KEY
+      : (workspaces.find(workspace => workspace.sessionIds.includes(sessionId))?.workspaceId as string | undefined)
+        ?? UNGROUPED_KEY
+    const currentOrder = groupBy === 'flat'
+      ? sessionOrderByAccount[FLAT_SESSION_ORDER_KEY] ?? []
+      : accountKey === UNGROUPED_KEY
+        ? sessionOrderByAccount[UNGROUPED_KEY] ?? []
+        : sessionOrderByAccount[accountKey]
+          ?? workspaces.find(workspace => workspace.workspaceId === accountKey)?.sessionIds
+          ?? []
+    if (currentOrder[0] === sessionId) return
+    const nextOrder = [sessionId as string, ...currentOrder.filter(id => id !== sessionId).map(id => id as string)]
+    actions.setSessionOrder(accountKey, nextOrder)
+    if (groupBy === 'workspace' && accountKey !== UNGROUPED_KEY) {
+      insertSessionBefore(accountKey as WorkspaceId, sessionId, nextOrder[1] as SessionNode['id'] | undefined).catch((reason: unknown) => {
+        console.warn('session pin rejected:', reason)
+      })
+    }
   }
   const confirmSessionRename = () => {
     if (sessionRenameBlocked) return
@@ -1321,6 +1358,7 @@ export function WorkspaceBrowser({
               <FlatList
                 useSessions={useSessions} open={open} forkSession={forkSession}
                 onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
+                onSessionPin={pinSession} markUnread={markUnread} openPath={openPath}
                 archivedSessionIds={archivedSessionIds}
                 orderBy={orderBy}
                 sessionOrderByAccount={sessionOrderByAccount}
@@ -1337,6 +1375,9 @@ export function WorkspaceBrowser({
                 useSessions={useSessions}
                 onSessionRename={onSessionRename}
                 onSessionArchive={onSessionArchive}
+                onSessionPin={pinSession}
+                markUnread={markUnread}
+                openPath={openPath}
                 forkSession={forkSession}
                 workspaces={workspaces}
                 groupExpansion={groupExpansion}

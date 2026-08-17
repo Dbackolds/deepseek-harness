@@ -22,6 +22,8 @@ export interface SessionNode {
   title: string
   /** The provisional blank session (renderer shows the localized New Session title). */
   blank: boolean
+  /** Workspace directory of this session, when the Host projected one. */
+  cwd?: string
   /** The runtime Session list reports an interaction awaiting this user. */
   pendingInteraction?: PendingInteractionStatus
   running: boolean
@@ -231,6 +233,7 @@ function sessionNode(
     id: s.id,
     title: sessionTitle(s),
     blank: s.blank,
+    ...(s.cwd === undefined ? {} : { cwd: s.cwd }),
     running: s.running,
     interrupted: s.interrupted === true,
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,

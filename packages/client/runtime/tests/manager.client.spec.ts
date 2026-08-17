@@ -1053,6 +1053,11 @@ describe('completed reminder', () => {
     expect(entry(manager, S2)?.completed).toBe(true)
     manager.select(S1)
     expect(entry(manager, S2)?.completed).toBe(false)
+    manager.markUnread(S2)
+    expect(entry(manager, S2)?.completed).toBe(true)
+    manager.markUnread(S2)
+    expect(entry(manager, S2)?.completed).toBe(true)
+    expect(() => { manager.markUnread('missing' as SessionId) }).toThrow(/unknown session/)
   })
 
   it('arms the watched session and keeps the reminder until focus leaves', () => {

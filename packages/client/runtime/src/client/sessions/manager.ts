@@ -253,6 +253,20 @@ export class SessionManager {
     this.notifier.notifyNow()
   }
 
+  /**
+   * Restore the Completed reminder for a listed Session.
+   * @param sessionId - listed Session id.
+   */
+  markUnread(sessionId: SessionId): void {
+    if (!this.summaries.some(summary => summary.sessionId === sessionId)) {
+      throw new Error(`sessions.markUnread: unknown session ${sessionId}`)
+    }
+    if (this.completedNotifications.has(sessionId)) return
+    this.completedNotifications.add(sessionId)
+    writeCompletedNotifications(this.completedNotifications)
+    this.notifier.notifyNow()
+  }
+
   /** Clear the selection (the layout falls to the no-session view state). */
   clearSelection(): void {
     const previous = this.selected

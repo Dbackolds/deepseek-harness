@@ -426,6 +426,14 @@ export class SessionRuntime implements ISessions {
   }
 
   /**
+   * Restore the Completed reminder for a listed Session.
+   * @param id - listed session id.
+   */
+  markUnread(id: SessionId): void {
+    this.manager.markUnread(id)
+  }
+
+  /**
    * Refresh the real Session baseline, reusing an in-flight pull.
    * @returns completion of the current or newly started baseline pull.
    */
