@@ -63,6 +63,7 @@ export function GitBranchSeat({
 
   const local = view.branches.filter(branch => !branch.remote)
   const remote = view.branches.filter(branch => branch.remote)
+  const currentName = view.detached ? t('menu.detached') : view.currentBranch
   const statusLines: string[] = []
   if (view.dirtyCount === 1) statusLines.push(t('status.dirtyOne'))
   else if (view.dirtyCount > 1) statusLines.push(t('status.dirtyMany', { count: String(view.dirtyCount) }))
@@ -71,15 +72,15 @@ export function GitBranchSeat({
     statusLines.push(t('status.unpushedMany', { count: String(view.unpushedCount) }))
   }
   const currentLabel = statusLines.length === 0
-    ? view.currentBranch
+    ? currentName
     : (
       <span className={css.branchLabel}>
-        <span>{view.currentBranch}</span>
+        <span>{currentName}</span>
         {statusLines.map(line => <span key={line} className={css.branchStatus}>{line}</span>)}
       </span>
     )
   const items: MenuEntry[] = []
-  const listed = view.branches.some(branch => branch.name === view.currentBranch)
+  const listed = !view.detached && view.branches.some(branch => branch.name === view.currentBranch)
   if (!listed) items.push({ id: view.currentBranch, label: currentLabel })
   if (local.length > 0) {
     items.push({ type: 'label', id: 'local', text: t('menu.local') })
@@ -127,12 +128,12 @@ export function GitBranchSeat({
             className={css.seat}
             aria-haspopup="menu"
             aria-expanded={open}
-            title={state.error ?? t('seat.hint')}
+            title={state.error ?? (view.detached ? t('seat.detached') : t('seat.hint'))}
             disabled={state.busy}
             onClick={() => { setOpen(value => !value) }}
           >
             <IconBranchOutline16 className={css.seatIcon} />
-            {state.view.currentBranch}
+            {view.detached ? t('seat.detached') : view.currentBranch}
             <IconChevronDownOutline14 className={css.chevron} />
           </button>
         )}

@@ -15,6 +15,7 @@ const READY: GitBranchSeatState = {
   sessionId: 's1',
   view: {
     currentBranch: 'main',
+    detached: false,
     worktreePath: '/repo',
     isolated: false,
     dirtyCount: 0,
@@ -54,9 +55,9 @@ function renderSeat(state: Partial<GitBranchSeatState> = {}) {
 describe('GitBranchSeat', () => {
   it('still offers create when the repository has no listed branches', () => {
     const actions = renderSeat({
-      view: { currentBranch: 'HEAD', worktreePath: '/repo', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] },
+      view: { currentBranch: 'HEAD', detached: true, worktreePath: '/repo', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] },
     })
-    fireEvent.click(screen.getByRole('button', { name: /HEAD/ }))
+    fireEvent.click(screen.getByRole('button', { name: en['seat.detached'] }))
     fireEvent.click(screen.getByText(en['menu.create']))
     fireEvent.change(screen.getByPlaceholderText(en['create.placeholder']), { target: { value: '   ' } })
     fireEvent.click(screen.getByRole('button', { name: en['create.confirm'] }))
@@ -116,6 +117,7 @@ describe('GitBranchSeat', () => {
     renderSeat({
       view: {
         currentBranch: 'cf9fb80',
+        detached: true,
         worktreePath: '/repo',
         isolated: false,
         dirtyCount: 2,
@@ -123,7 +125,8 @@ describe('GitBranchSeat', () => {
         branches: [{ name: 'main', current: false, remote: false }],
       },
     })
-    fireEvent.click(screen.getByRole('button', { name: /cf9fb80/ }))
+    fireEvent.click(screen.getByRole('button', { name: en['seat.detached'] }))
+    expect(screen.getAllByText(en['menu.detached']).length).toBeGreaterThan(0)
     expect(screen.getByText('Uncommitted changes: 2 files')).toBeTruthy()
     expect(screen.getByText(en['status.unpushedOne'])).toBeTruthy()
   })
@@ -132,6 +135,7 @@ describe('GitBranchSeat', () => {
     renderSeat({
       view: {
         currentBranch: 'main',
+        detached: false,
         worktreePath: '/repo',
         isolated: false,
         dirtyCount: 1,

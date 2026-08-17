@@ -19,6 +19,7 @@ export const gitBranchViewSchema = z.object({
 /** SessionGitView of git.describe / git.checkout / git.createBranch. */
 export const sessionGitViewSchema = z.object({
   currentBranch: z.string().min(1),
+  detached: z.boolean(),
   worktreePath: z.string().min(1),
   isolated: z.boolean(),
   dirtyCount: z.number().int().nonnegative(),

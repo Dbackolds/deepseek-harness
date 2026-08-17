@@ -34,6 +34,8 @@ export interface SessionGitState {
   readonly workspaceBranch: string | null
   /** Branch or detached label this session operates on. */
   readonly currentBranch: string
+  /** True when this session checkout is not on a branch. */
+  readonly detached: boolean
   /** Absolute directory this session operates in. */
   readonly worktreePath: string
   /** True when the session uses an isolated worktree rather than the workspace checkout. */
@@ -281,15 +283,16 @@ export async function describeSessionGit(
   const workspaceBranch = await currentBranchOf(workspacePath)
   const overlay = session === undefined ? undefined : effectiveWorktree(session.events)
   const worktreePath = overlay?.path ?? workspacePath
+  const checkoutBranch = workspaceBranch ?? await currentBranchOf(worktreePath)
   const currentBranch = overlay?.branch
-    ?? workspaceBranch
-    ?? (await currentBranchOf(worktreePath))
+    ?? checkoutBranch
     ?? (await detachedCheckoutLabel(worktreePath))
     ?? 'HEAD'
   return {
     repoRoot,
     workspaceBranch,
     currentBranch,
+    detached: checkoutBranch === null && overlay?.branch === undefined,
     worktreePath,
     isolated: overlay !== undefined && resolve(overlay.path) !== resolve(workspacePath),
     dirtyCount: await dirtyPathCount(worktreePath),

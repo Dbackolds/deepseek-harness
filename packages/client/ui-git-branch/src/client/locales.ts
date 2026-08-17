@@ -7,7 +7,9 @@ export const NS = 'gitBranch'
 export const zh = {
   'seat.hint': '当前会话使用的 Git 分支',
   'seat.unavailable': '当前工作区不是 Git 仓库',
+  'seat.detached': '游离 HEAD',
   'menu.local': '本地分支',
+  'menu.detached': '游离 HEAD',
   'menu.remote': '远程分支',
   'menu.create': '新建分支…',
   'status.dirtyOne': '未提交的更改：1 个文件',
@@ -27,7 +29,9 @@ export const zh = {
 export const en: Record<GitBranchKey, string> = {
   'seat.hint': 'Git branch this session uses',
   'seat.unavailable': 'This workspace is not a Git repository',
+  'seat.detached': 'Detached HEAD',
   'menu.local': 'Local branches',
+  'menu.detached': 'Detached HEAD',
   'menu.remote': 'Remote branches',
   'menu.create': 'Create branch…',
   'status.dirtyOne': 'Uncommitted changes: 1 file',

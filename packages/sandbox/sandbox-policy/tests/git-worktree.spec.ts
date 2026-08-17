@@ -33,6 +33,7 @@ describe('git-worktree manager', () => {
     const { cwd, session } = repo()
     const described = await describeSessionGit(cwd, session)
     expect(described.currentBranch).toBe('main')
+    expect(described.detached).toBe(false)
     expect(described.isolated).toBe(false)
     expect(described.dirtyCount).toBe(0)
     expect(described.unpushedCount).toBe(0)
@@ -81,6 +82,7 @@ describe('git-worktree manager', () => {
     const described = await describeSessionGit(cwd, session)
     expect(described.workspaceBranch).toBeNull()
     expect(described.currentBranch).toBe('main')
+    expect(described.detached).toBe(true)
   })
 
   it('labels an ambiguous detached HEAD with the short commit', async () => {
@@ -91,6 +93,7 @@ describe('git-worktree manager', () => {
     expect(described.workspaceBranch).toBeNull()
     expect(described.currentBranch).toMatch(/^[0-9a-f]{7,}$/)
     expect(described.currentBranch).not.toBe('HEAD')
+    expect(described.detached).toBe(true)
     const same = await checkoutSessionBranch('ws-1', cwd, session, described.currentBranch)
     expect(same.isolated).toBe(false)
     expect(same.currentBranch).toBe(described.currentBranch)

@@ -200,15 +200,15 @@ export class FakeApiClient implements IApiClient {
 
   readonly git: IApiClient['git'] = {
     describe: (payload: unknown) => this.record('git.describe', payload, Promise.resolve(ok({
-      currentBranch: 'main', worktreePath: '/tmp', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [],
+      currentBranch: 'main', detached: false, worktreePath: '/tmp', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [],
     }))),
     checkout: (payload: { branch: string }) =>
       this.record('git.checkout', payload, Promise.resolve(ok({
-        currentBranch: payload.branch, worktreePath: '/tmp', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [],
+        currentBranch: payload.branch, detached: false, worktreePath: '/tmp', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [],
       }))),
     createBranch: (payload: { branch: string }) =>
       this.record('git.createBranch', payload, Promise.resolve(ok({
-        currentBranch: payload.branch, worktreePath: '/tmp', isolated: true, dirtyCount: 0, unpushedCount: 0, branches: [],
+        currentBranch: payload.branch, detached: false, worktreePath: '/tmp', isolated: true, dirtyCount: 0, unpushedCount: 0, branches: [],
       }))),
   }
 

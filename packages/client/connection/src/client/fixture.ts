@@ -2749,6 +2749,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     git: {
       describe: request => ok(request, {
         currentBranch: 'main',
+        detached: false,
         worktreePath: '/tmp/fixture',
         isolated: false,
         dirtyCount: 0,
@@ -2757,6 +2758,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       }),
       checkout: request => ok(request, {
         currentBranch: request.payload.branch,
+        detached: false,
         worktreePath: '/tmp/fixture',
         isolated: request.payload.branch !== 'main',
         dirtyCount: 0,
@@ -2765,6 +2767,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       }),
       createBranch: request => ok(request, {
         currentBranch: request.payload.branch,
+        detached: false,
         worktreePath: '/tmp/fixture',
         isolated: true,
         dirtyCount: 0,

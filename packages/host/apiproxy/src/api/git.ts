@@ -21,6 +21,8 @@ export interface GitBranchView {
 export interface SessionGitView {
   /** Branch or detached label this session operates on. */
   currentBranch: string
+  /** True when this session checkout is not on a branch. */
+  detached: boolean
   /** Absolute directory this session operates in. */
   worktreePath: string
   /** True when the session uses an isolated worktree rather than the workspace checkout. */
