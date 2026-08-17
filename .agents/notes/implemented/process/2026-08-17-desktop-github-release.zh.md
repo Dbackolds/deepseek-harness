@@ -19,7 +19,7 @@ Status: implemented
 - `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` 写入 `dist-desktop/staging/host/dsh`。
 - runner 上的 Node 24 二进制复制到该树旁，名为 `host/node` 或 `host/node.exe`。
 - 编译后的 desktop `lib/`、`assets/` 和 `package.json` 复制到 `dist-desktop/staging/app`，避免 electron-builder 遍历 workspace。
-- electron-builder 打包该叶子，并带上 `extraResources/host`。
+- electron-builder 打包该叶子，并带上 `extraResources/host`。暂存应用名是 `dsh-desktop`，Linux/Windows 可执行文件名是 `DeepSeekHarness`，因为 AppImage 拒绝 scoped npm 名。macOS 和 Linux 使用 `icon-512.png`；Windows 使用多尺寸 ICO。Windows 上打包器启动 `pnpm.cmd`。
 
 打包后的窗口先解析 `process.resourcesPath/host/dsh/lib/bin.js` 和内置 Node，再考虑 checkout 或记住的系统 Node。checkout 启动方式不变。
 
@@ -58,4 +58,4 @@ Status: implemented
 
 ## Testing
 
-`scripts/desktop/pack.spec.ts` 固定标签命名、产物名、平台 flag，以及发布标签拒绝。`apps/desktop/tests/host.spec.ts` 固定打包 Host 识别和对内置 Node 的优先选择。工作流是实际执行的打包与发布路径。
+`scripts/desktop/pack.spec.ts` 固定标签命名、产物名、平台 flag、Windows 上的 `pnpm.cmd` 启动，以及发布标签拒绝。`apps/desktop/tests/host.spec.ts` 固定打包 Host 识别、对内置 Node 的优先选择，以及 512px 安装包图标。工作流是实际执行的打包与发布路径。

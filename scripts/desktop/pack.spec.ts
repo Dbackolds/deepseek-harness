@@ -10,6 +10,7 @@ import {
   desktopVersion,
   expectedArtifacts,
   parsePlatform,
+  pnpmBin,
   verifyDesktopTag,
 } from './pack.ts'
 
@@ -57,5 +58,9 @@ describe('desktop builder targets', () => {
     expect(parsePlatform(undefined)).toBe(process.platform)
     expect(parsePlatform('linux')).toBe('linux')
     expect(() => parsePlatform('android')).toThrow(/--platform must be one of/)
+  })
+
+  it('spawns pnpm.cmd on Windows so pack does not look for pnpm.exe', () => {
+    expect(pnpmBin()).toBe(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
   })
 })

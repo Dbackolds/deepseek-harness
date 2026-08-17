@@ -133,17 +133,20 @@ function run(command: string, args: readonly string[], cwd: string = root): void
     cwd,
     stdio: 'inherit',
     env: { ...process.env, CI: 'true' },
+    shell: process.platform === 'win32',
   })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) throw new Error(`desktop pack: ${command} ${args.join(' ')} exited with ${String(result.status)}`)
 }
 
 /**
- * pnpm executable used by the rest of the repository scripts.
- * @returns `pnpm`.
+ * pnpm executable the packer can spawn.
+ * Windows GitHub runners put `pnpm.cmd` on PATH; `spawnSync('pnpm')` without a
+ * shell looks for `pnpm.exe` and fails with ENOENT.
+ * @returns `pnpm.cmd` on Windows, otherwise `pnpm`.
  */
-function pnpmBin(): string {
-  return 'pnpm'
+export function pnpmBin(): string {
+  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 }
 
 /**
@@ -206,8 +209,10 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
       output: outDir,
     },
     extraMetadata: {
+      name: 'dsh-desktop',
       version,
     },
+    executableName: 'DeepSeekHarness',
     files: [
       'lib/**/*',
       'assets/**/*',
@@ -227,13 +232,14 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
         : 'DeepSeek Harness-${version}.${ext}',
     mac: {
       category: 'public.app-category.developer-tools',
-      icon: join(desktopRoot, 'assets', 'icon.png'),
+      icon: join(desktopRoot, 'assets', 'icon-512.png'),
       identity: null,
       target: ['zip'],
     },
     linux: {
       category: 'Development',
-      icon: join(desktopRoot, 'assets', 'icon.png'),
+      executableName: 'DeepSeekHarness',
+      icon: join(desktopRoot, 'assets', 'icon-512.png'),
       target: ['AppImage'],
     },
     win: {

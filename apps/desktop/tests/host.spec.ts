@@ -39,6 +39,7 @@ describe('desktop host resolution', () => {
   it('ships the DeepSeek whale mark next to the desktop package', () => {
     const assets = join(findRepoRoot(here), 'apps', 'desktop', 'assets')
     expect(existsSync(join(assets, 'icon.png'))).toBe(true)
+    expect(existsSync(join(assets, 'icon-512.png'))).toBe(true)
     expect(existsSync(join(assets, 'icon.ico'))).toBe(true)
     expect(desktopIconPath(join(assets, '..', 'lib')).replaceAll('\\', '/')).toMatch(/apps\/desktop\/assets\/icon\.(ico|png)$/)
   })

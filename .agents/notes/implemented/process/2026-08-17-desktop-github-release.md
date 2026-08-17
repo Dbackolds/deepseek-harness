@@ -19,7 +19,7 @@ The published version is `apps/desktop/package.json`'s `version`, which already 
 - `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` writes `dist-desktop/staging/host/dsh`.
 - The runner's Node 24 binary is copied beside that tree as `host/node` or `host/node.exe`.
 - The compiled desktop `lib/`, `assets/`, and `package.json` are copied into `dist-desktop/staging/app` so electron-builder does not walk the workspace.
-- electron-builder packages that leaf with `extraResources/host`.
+- electron-builder packages that leaf with `extraResources/host`. The staged app name is `dsh-desktop` and the Linux/Windows executable is `DeepSeekHarness`, because AppImage rejects the scoped npm name. macOS and Linux take `icon-512.png`; Windows takes the multi-size ICO. On Windows the packer spawns `pnpm.cmd`.
 
 A packaged window resolves `process.resourcesPath/host/dsh/lib/bin.js` and the bundled Node before any checkout or remembered system Node. Checkout launch is unchanged.
 
@@ -58,4 +58,4 @@ What this costs:
 
 ## Testing
 
-`scripts/desktop/pack.spec.ts` pins tag naming, artifact names, platform flags, and publish-tag rejection. `apps/desktop/tests/host.spec.ts` pins packaged Host detection and bundled Node preference. The workflow is the executed pack-and-publish path.
+`scripts/desktop/pack.spec.ts` pins tag naming, artifact names, platform flags, the Windows `pnpm.cmd` spawn, and publish-tag rejection. `apps/desktop/tests/host.spec.ts` pins packaged Host detection, bundled Node preference, and the 512px installer mark. The workflow is the executed pack-and-publish path.
