@@ -79,15 +79,15 @@ The user block is append-only conversation growth. Entering or leaving plan mode
 
 #### What the model sees
 
-The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) remains available in both states; execution outside plan mode fails, while an approved in-mode review returns the canonical `{ approved: true }` value and renders the existing confirmation text. Rejection remains a failed call carrying review feedback, and a dismissed review a failed call naming the user's takeover.
+The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) remains available in both states; execution outside plan mode fails, while an approved in-mode review returns the canonical `{ approved: true }` value, renders the implement-now confirmation, and defers a plugin-sourced kickoff context onto the next request of the same turn. Rejection remains a failed call carrying review feedback, and a dismissed review a failed call naming the user's takeover.
 
 #### Token effect
 
-The stable schema is paid according to ToolRuntime mode, and each plan argument and review result remains in conversation history.
+The stable schema is paid according to ToolRuntime mode, and each plan argument, review result, and approved-kickoff context remains in conversation history.
 
 #### KV Cache effect
 
-Mode transitions do not change the tool catalog; plan arguments and review results extend the conversation normally.
+Mode transitions do not change the tool catalog; plan arguments, review results, and the approved-kickoff context extend the conversation normally.
 
 ## Known Limitations and Deferred Work
 
