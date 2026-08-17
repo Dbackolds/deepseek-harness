@@ -48,6 +48,7 @@ type SessionRowMenuActions = {
 
 type SessionContextMenuActions = SessionRowMenuActions & {
   onPin: (id: SessionNode['id']) => void
+  onUnpin: (id: SessionNode['id']) => void
   onMarkUnread: (id: SessionNode['id']) => void
   onSplit: (id: SessionNode['id']) => void
   onReveal: (path: string) => void
@@ -73,6 +74,7 @@ function selectSessionContextMenu(
   actions: SessionContextMenuActions,
 ): void {
   if (id === 'pin') actions.onPin(node.id)
+  if (id === 'unpin') actions.onUnpin(node.id)
   if (id === 'rename') actions.onRename(node.id, node.title)
   if (id === 'archive') actions.onArchive(node.id)
   if (id === 'unread') actions.onMarkUnread(node.id)
@@ -476,7 +478,7 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  */
 export function SessionNodeItem({
   node, currentId, now, onOpen, onRename, onFork, onArchive,
-  onPin = () => {}, onMarkUnread = () => {}, onSplit = () => {}, onReveal = () => {},
+  onPin = () => {}, onUnpin = () => {}, onMarkUnread = () => {}, onSplit = () => {}, onReveal = () => {},
   drag, flat = false, t,
 }: {
   node: SessionNode
@@ -491,6 +493,8 @@ export function SessionNodeItem({
   onArchive: (id: SessionNode['id']) => void
   /** Move this session to the front of its current list account. */
   onPin?: (id: SessionNode['id']) => void
+  /** Remove this session from the global pinned section. */
+  onUnpin?: (id: SessionNode['id']) => void
   /** Restore the Completed reminder for this session. */
   onMarkUnread?: (id: SessionNode['id']) => void
   /** Open this session and show it beside the current conversation. */
@@ -522,7 +526,7 @@ export function SessionNodeItem({
   ]
   const hasPath = node.cwd !== undefined && node.cwd !== ''
   const sessionContextItems: MenuEntry[] = [
-    { id: 'pin', label: t('menu.pin') },
+    { id: node.pinned === true ? 'unpin' : 'pin', label: node.pinned === true ? t('menu.unpin') : t('menu.pin') },
     { id: 'rename', label: t('menu.renameTask') },
     { id: 'archive', label: t('menu.archiveTask') },
     { id: 'unread', label: t('menu.markUnread') },
@@ -599,7 +603,7 @@ export function SessionNodeItem({
           onSelect={(id) => {
             setContextMenu(null)
             selectSessionContextMenu(id, node, {
-              onRename, onFork, onArchive, onPin, onMarkUnread, onSplit, onReveal,
+              onRename, onFork, onArchive, onPin, onUnpin, onMarkUnread, onSplit, onReveal,
               onCopy: (text) => { void writeClipboard(text) },
             })
           }}

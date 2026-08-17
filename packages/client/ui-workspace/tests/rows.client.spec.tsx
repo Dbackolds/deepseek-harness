@@ -440,6 +440,8 @@ describe('workspace browser rows', () => {
     expect(sessionContext.style.left).toBe('72px')
     expect(sessionContext.style.top).toBe('144px')
     expect(screen.getByRole('menuitem', { name: '置顶任务' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: '取消置顶' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: '取消置顶' })).toBeNull()
     expect(screen.getByRole('menuitem', { name: '在分屏打开' })).toHaveProperty('disabled', false)
     expect(screen.getByRole('menuitem', { name: '复制日志路径' })).toHaveProperty('disabled', false)
     fireEvent.click(screen.getByRole('menuitem', { name: '在分屏打开' }))
