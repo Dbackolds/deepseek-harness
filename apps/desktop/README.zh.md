@@ -24,7 +24,7 @@ macOS 上窗口使用 `titleBarStyle: hiddenInset`：原生红绿灯按钮位于
 
 ## Release
 
-`desktop-v<version>` 标签上的 GitHub Release 为每个 runner 提供一份安装包：macOS arm64 zip、Linux x64 AppImage 和 Windows x64 NSIS 安装程序。每个归档内嵌 Electron 窗口、该 runner 上的 Node 24 二进制，以及对 `@deepseek-ai/dsh` 的 `pnpm deploy`。窗口仍启动 `dsh web --port 0` 并加载 loopback URL；打包后的 Host 不再需要仓库 checkout 或系统 Node。
+`desktop-v<version>` 标签上的 GitHub Release 为每个 runner 提供一份归档：macOS arm64 zip、Linux x64 AppImage 和 Windows x64 zip。每个归档内嵌 Electron 窗口、该 runner 上的 Node 24 二进制，以及对 `@deepseek-ai/dsh` 的 `pnpm deploy`。窗口仍启动 `dsh web --port 0` 并加载 loopback URL；打包后的 Host 不再需要仓库 checkout 或系统 Node。
 
 在仓库根目录完成 `pnpm run build` 后：
 

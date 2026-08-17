@@ -24,7 +24,7 @@ On macOS the window uses `titleBarStyle: hiddenInset`: the native traffic lights
 
 ## Release
 
-A GitHub Release on a `desktop-v<version>` tag carries one installer per runner: a macOS arm64 zip, a Linux x64 AppImage, and a Windows x64 NSIS setup. Each archive embeds the Electron window, a Node 24 binary copied from that runner, and a `pnpm deploy` of `@deepseek-ai/dsh`. The window still starts `dsh web --port 0` and loads the loopback URL; the packaged Host no longer needs a repository checkout or a system Node.
+A GitHub Release on a `desktop-v<version>` tag carries one archive per runner: a macOS arm64 zip, a Linux x64 AppImage, and a Windows x64 zip. Each archive embeds the Electron window, a Node 24 binary copied from that runner, and a `pnpm deploy` of `@deepseek-ai/dsh`. The window still starts `dsh web --port 0` and loads the loopback URL; the packaged Host no longer needs a repository checkout or a system Node.
 
 From the repository root, after `pnpm run build`:
 

@@ -65,7 +65,7 @@ export function builderTarget(platform: DesktopPlatform): { flag: '--mac' | '--l
     case 'linux':
       return { flag: '--linux', target: 'AppImage' }
     case 'win32':
-      return { flag: '--win', target: 'nsis' }
+      return { flag: '--win', target: 'zip' }
     default: {
       const exhaustive: never = platform
       throw new Error(`desktop pack: unsupported platform ${String(exhaustive)}`)
@@ -86,7 +86,7 @@ export function expectedArtifacts(version: string, platform: DesktopPlatform): r
     case 'linux':
       return [`DeepSeek Harness-${version}.AppImage`]
     case 'win32':
-      return [`DeepSeek Harness Setup ${version}.exe`]
+      return [`DeepSeek Harness-${version}-win.zip`]
     default: {
       const exhaustive: never = platform
       throw new Error(`desktop pack: unsupported platform ${String(exhaustive)}`)
@@ -225,10 +225,10 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
       },
     ],
     asar: true,
-    artifactName: platform === 'win32'
-      ? 'DeepSeek Harness Setup ${version}.${ext}'
-      : platform === 'darwin'
-        ? 'DeepSeek Harness-${version}-mac.${ext}'
+    artifactName: platform === 'darwin'
+      ? 'DeepSeek Harness-${version}-mac.${ext}'
+      : platform === 'win32'
+        ? 'DeepSeek Harness-${version}-win.${ext}'
         : 'DeepSeek Harness-${version}.${ext}',
     mac: {
       category: 'public.app-category.developer-tools',
@@ -244,11 +244,7 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
     },
     win: {
       icon: join(desktopRoot, 'assets', 'icon.ico'),
-      target: ['nsis'],
-    },
-    nsis: {
-      oneClick: false,
-      allowToChangeInstallationDirectory: true,
+      target: ['zip'],
     },
   }
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`)

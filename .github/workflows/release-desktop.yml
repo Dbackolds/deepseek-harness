@@ -43,7 +43,7 @@ jobs:
             name: Linux x64 AppImage
           - platform: win32
             runner: windows-latest
-            name: Windows x64 NSIS
+            name: Windows x64 zip
     steps:
       - uses: actions/checkout@v6
         with:

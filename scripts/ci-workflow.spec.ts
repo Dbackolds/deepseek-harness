@@ -412,7 +412,7 @@ describe('Desktop release workflow', () => {
     expect(pack.strategy.matrix.include).toEqual([
       { platform: 'darwin', runner: 'macos-latest', name: 'macOS arm64 zip' },
       { platform: 'linux', runner: 'ubuntu-24.04', name: 'Linux x64 AppImage' },
-      { platform: 'win32', runner: 'windows-latest', name: 'Windows x64 NSIS' },
+      { platform: 'win32', runner: 'windows-latest', name: 'Windows x64 zip' },
     ])
     expect(JSON.stringify(pack.steps)).toContain('scripts/desktop/pack.ts --platform')
     expect(publish.if).toBe("github.event_name == 'push' || inputs.publish")

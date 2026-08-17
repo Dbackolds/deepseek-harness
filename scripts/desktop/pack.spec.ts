@@ -45,13 +45,13 @@ describe('desktop builder targets', () => {
   it('maps each platform to one electron-builder target', () => {
     expect(builderTarget('darwin')).toEqual({ flag: '--mac', target: 'zip' })
     expect(builderTarget('linux')).toEqual({ flag: '--linux', target: 'AppImage' })
-    expect(builderTarget('win32')).toEqual({ flag: '--win', target: 'nsis' })
+    expect(builderTarget('win32')).toEqual({ flag: '--win', target: 'zip' })
   })
 
   it('names the artifacts the workflow uploads', () => {
     expect(expectedArtifacts('1.0.0', 'darwin')).toEqual(['DeepSeek Harness-1.0.0-mac.zip'])
     expect(expectedArtifacts('1.0.0', 'linux')).toEqual(['DeepSeek Harness-1.0.0.AppImage'])
-    expect(expectedArtifacts('1.0.0', 'win32')).toEqual(['DeepSeek Harness Setup 1.0.0.exe'])
+    expect(expectedArtifacts('1.0.0', 'win32')).toEqual(['DeepSeek Harness-1.0.0-win.zip'])
   })
 
   it('defaults --platform to the host and rejects an unknown name', () => {

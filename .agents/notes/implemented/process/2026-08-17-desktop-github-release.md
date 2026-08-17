@@ -19,7 +19,7 @@ The published version is `apps/desktop/package.json`'s `version`, which already 
 - `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` writes `dist-desktop/staging/host/dsh`.
 - The runner's Node 24 binary is copied beside that tree as `host/node` or `host/node.exe`.
 - The compiled desktop `lib/`, `assets/`, and `package.json` are copied into `dist-desktop/staging/app` so electron-builder does not walk the workspace.
-- electron-builder packages that leaf with `extraResources/host`. The staged app name is `dsh-desktop` and the Linux/Windows executable is `DeepSeekHarness`, because AppImage rejects the scoped npm name. macOS and Linux take `icon-512.png`; Windows takes the multi-size ICO. On Windows the packer spawns `pnpm.cmd`.
+- electron-builder packages that leaf with `extraResources/host`. The staged app name is `dsh-desktop` and the Linux/Windows executable is `DeepSeekHarness`, because AppImage rejects the scoped npm name. macOS and Linux take `icon-512.png`; Windows takes the multi-size ICO. On Windows the packer spawns `pnpm.cmd` and writes a zip, not NSIS, because `pnpm dlx` nests NSIS templates behind a path that makensis cannot open.
 
 A packaged window resolves `process.resourcesPath/host/dsh/lib/bin.js` and the bundled Node before any checkout or remembered system Node. Checkout launch is unchanged.
 
@@ -29,7 +29,7 @@ A packaged window resolves `process.resourcesPath/host/dsh/lib/bin.js` and the b
 |---|---|
 | `macos-latest` | `DeepSeek Harness-<version>-mac.zip` |
 | `ubuntu-24.04` | `DeepSeek Harness-<version>.AppImage` |
-| `windows-latest` | `DeepSeek Harness Setup <version>.exe` |
+| `windows-latest` | `DeepSeek Harness-<version>-win.zip` |
 
 Pushing `desktop-v*` packs and publishes. A manual dispatch with `publish=false` only packs. Publication requires the matching tag; `contents: write` is limited to the publish job.
 
@@ -44,6 +44,8 @@ Pushing `desktop-v*` packs and publishes. A manual dispatch with `publish=false`
 **One Ubuntu job that cross-packages every target.** Rejected because the bundled Node binary must come from a matching runner, and electron-builder's native targets are already assigned per OS.
 
 **Code-signed, auto-updating installers in this sequence.** Rejected as a later product step. This sequence publishes unsigned archives so a tag can produce a downloadable app.
+
+**Windows NSIS setup through `pnpm dlx` electron-builder.** Rejected because makensis cannot open `StdUtils.nsh` after `pnpm dlx` nests app-builder-lib templates behind a path longer than NSIS accepts. The Windows artifact is a zip of the packaged app.
 
 ## Consequences
 
