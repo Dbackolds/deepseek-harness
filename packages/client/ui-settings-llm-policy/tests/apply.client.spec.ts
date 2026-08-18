@@ -114,6 +114,6 @@ describe('ui-settings-llm-policy apply', () => {
     expect(b.slots.entries(SLOT)).toHaveLength(1)
     await fiber.dispose()
     expect(b.slots.entries(SLOT)).toHaveLength(0)
-    expect(b.locale.bind(SETTINGS_NS)('title')).toBe('title')
+    expect(b.locale.bind(SETTINGS_NS)('retries.title')).toBe('retries.title')
   })
 })
