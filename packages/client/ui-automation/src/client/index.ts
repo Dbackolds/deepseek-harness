@@ -50,6 +50,7 @@ export function apply(ctx: ClientContext): void {
     create: input => controller.create(input),
     setEnabled: (id, enabled) => controller.setEnabled(id, enabled),
     runNow: id => controller.runNow(id),
+    openLastSession: id => controller.openLastSession(id),
     remove: id => controller.remove(id),
     setPageOpen: (open) => { controller.setPageOpen(open) },
     setKeepAwake: (enabled) => { keepAwake.setKeepAwake(enabled) },

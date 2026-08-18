@@ -215,7 +215,8 @@
 }
 
 .cardHead { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.cardName {
+.cardName,
+.cardOpen {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -224,6 +225,18 @@
   font-weight: 600;
   line-height: 22px;
 }
+.cardOpen {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cardOpen:hover { color: var(--dsw-alias-brand-primary); }
 .cardTask {
   overflow: hidden;
   display: -webkit-box;

@@ -23,6 +23,8 @@ export interface AutomationListedRule {
   rule: AutomationRuleView
   /** Absent while listRuns has not landed or that call failed. */
   runCount?: number
+  /** Latest started Session for this rule, when listRuns returned one. */
+  lastSessionId?: SessionId
 }
 
 /** Page snapshot. */
@@ -108,7 +110,13 @@ export class AutomationStore {
       const previousById = new Map(previous.items.map(item => [item.rule.id, item]))
       const items = value.items.map((rule) => {
         const known = previousById.get(rule.id)
-        return known?.runCount === undefined ? { rule } : { rule, runCount: known.runCount }
+        return known === undefined
+          ? { rule }
+          : {
+            rule,
+            ...known.runCount === undefined ? {} : { runCount: known.runCount },
+            ...known.lastSessionId === undefined ? {} : { lastSessionId: known.lastSessionId },
+          }
       })
       this.store.update((draft) => {
         draft.status = 'ready'
@@ -117,9 +125,12 @@ export class AutomationStore {
       })
       const counted = await Promise.all(value.items.map(async (rule) => {
         try {
+          const runs = valueOf(await this.api.automation.listRuns({ id: rule.id, limit: 10_000 })).items
+          const lastStarted = runs.find(run => run.sessionId !== undefined)
           return {
             rule,
-            runCount: valueOf(await this.api.automation.listRuns({ id: rule.id, limit: 10_000 })).items.length,
+            runCount: runs.length,
+            ...lastStarted?.sessionId === undefined ? {} : { lastSessionId: lastStarted.sessionId },
           }
         } catch {
           // A missing count is a card-local gap; the rule list itself already landed.
@@ -189,17 +200,14 @@ export class AutomationStore {
     try {
       const run = valueOf(await this.api.automation.runNow({ id })).run
       if (run.outcome === 'started' && run.sessionId !== undefined) {
-        try {
-          await waitForListedSession(this.sessions, run.sessionId, this.listedSessionWaitMs)
-        } catch {
-          // waitForListedSession rejects only when the list never carries the Session.
-          return 'missing_session'
-        }
-        this.setPageOpen(false)
-        this.sessions.open(run.sessionId)
-        return undefined
+        return this.openRunSession(run.sessionId)
       }
       if (run.outcome === 'skipped_busy') {
+        const previousId = this.lastSessionId(id)
+        if (previousId !== undefined) {
+          const opened = await this.openRunSession(previousId)
+          return opened ?? 'skipped_busy'
+        }
         return run.errorCode === 'max_concurrent_runs' ? 'max_concurrent_runs' : 'skipped_busy'
       }
       if (run.outcome === 'failed') return 'failed'
@@ -228,6 +236,33 @@ export class AutomationStore {
    * Show or hide the center-column Automation page.
    * @param open - next page visibility.
    */
+  /**
+   * Open the latest started Session for a rule without firing again.
+   * @param id - existing rule.
+   * @returns the failure message, or undefined once the Session is current.
+   */
+  async openLastSession(id: AutomationRuleView['id']): Promise<string | undefined> {
+    const sessionId = this.lastSessionId(id)
+    if (sessionId === undefined) return 'missing_session'
+    return this.openRunSession(sessionId)
+  }
+
+  lastSessionId(id: AutomationRuleView['id']): SessionId | undefined {
+    return this.store.getSnapshot().items.find(item => item.rule.id === id)?.lastSessionId
+  }
+
+  async openRunSession(sessionId: SessionId): Promise<string | undefined> {
+    try {
+      await waitForListedSession(this.sessions, sessionId, this.listedSessionWaitMs)
+    } catch {
+      // waitForListedSession rejects only when the list never carries the Session.
+      return 'missing_session'
+    }
+    this.setPageOpen(false)
+    this.sessions.open(sessionId)
+    return undefined
+  }
+
   setPageOpen(open: boolean): void {
     this.store.update((draft) => {
       draft.pageOpen = open

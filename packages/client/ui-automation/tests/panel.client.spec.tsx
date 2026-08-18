@@ -68,6 +68,7 @@ function mount(options: {
   runNowError?: string
   listed?: boolean
   listedWaitMs?: number
+  lastSession?: boolean
 } = {}) {
   const items = options.items ?? [rule()]
   const calls: Array<{ name: string; payload: unknown }> = []
@@ -98,7 +99,11 @@ function mount(options: {
         const run = options.run ?? { outcome: 'started', sessionId: 'session-1' }
         return Promise.resolve(ok({ run: { id: 'run-1', ...run } }))
       },
-      listRuns: () => Promise.resolve(ok({ items: [{ id: 'run-1' }] })),
+      listRuns: () => Promise.resolve(ok({
+        items: options.lastSession === false
+          ? []
+          : [{ id: 'run-1', sessionId: 'session-1', outcome: 'started' }],
+      })),
       delete: (payload: unknown) => {
         calls.push({ name: 'delete', payload })
         if (options.deleteError !== undefined) {
@@ -141,6 +146,7 @@ function mount(options: {
     create: input => controller.create(input),
     setEnabled: (id, enabled) => controller.setEnabled(id, enabled),
     runNow: id => controller.runNow(id),
+    openLastSession: id => controller.openLastSession(id),
     remove: id => controller.remove(id),
     setPageOpen: (open) => { controller.setPageOpen(open) },
     setKeepAwake: (enabled) => { keepAwake.set(enabled) },
@@ -157,6 +163,7 @@ function mount(options: {
         create={props.create}
         setEnabled={props.setEnabled}
         runNow={props.runNow}
+        openLastSession={props.openLastSession}
         remove={props.remove}
         setPageOpen={props.setPageOpen}
         setKeepAwake={props.setKeepAwake}
@@ -241,12 +248,20 @@ describe('AutomationPanel', () => {
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
   })
 
+  it('opens the last Session from the card title', async () => {
+    mount()
+    fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'morning' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'morning' }))
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
+  })
+
   it.each([
     [{ outcome: 'skipped_busy' }, 'The previous session is still running, so this run was skipped.'],
     [{ outcome: 'skipped_busy', errorCode: 'max_concurrent_runs' }, 'Too many automation sessions are already running.'],
     [{ outcome: 'failed' }, 'This fire failed.'],
   ] as const)('localizes run-now outcome %j', async (run, message) => {
-    mount({ run })
+    mount({ run, lastSession: false })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
     await waitFor(() => { expect(screen.getByText('morning')).toBeTruthy() })
     fireEvent.click(screen.getByRole('button', { name: 'Run now' }))
@@ -314,7 +329,7 @@ describe('AutomationPanel', () => {
         create: () => Promise.resolve(ok({ rule: rule() })),
         setEnabled: () => Promise.resolve(ok({ rule: rule() })),
         runNow: () => Promise.resolve(ok({ run: { id: 'run-1', outcome: 'started', sessionId: 'session-1' } })),
-        listRuns: () => Promise.resolve(ok({ items: [{ id: 'run-1' }] })),
+        listRuns: () => Promise.resolve(ok({ items: [{ id: 'run-1', sessionId: 'session-1', outcome: 'started' }] })),
         delete: () => Promise.resolve(ok({ id: 'rule-1', deleted: true })),
       },
     }
@@ -347,6 +362,7 @@ describe('AutomationPanel', () => {
       create: (input: Parameters<AutomationStore['create']>[0]) => controller.create(input),
       setEnabled: (id: AutomationRuleView['id'], enabled: boolean) => controller.setEnabled(id, enabled),
       runNow: (id: AutomationRuleView['id']) => controller.runNow(id),
+      openLastSession: (id: AutomationRuleView['id']) => controller.openLastSession(id),
       remove: (id: AutomationRuleView['id']) => controller.remove(id),
       setPageOpen: (open: boolean) => { controller.setPageOpen(open) },
       setKeepAwake: (enabled: boolean) => { keepAwake.set(enabled) },

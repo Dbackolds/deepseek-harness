@@ -64,7 +64,9 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
       },
       listRuns: (payload: unknown) => {
         calls.push('listRuns')
-        return (handlers.listRuns ?? (() => Promise.resolve(ok({ items: [{ id: 'run-1' }] }))))(payload)
+        return (handlers.listRuns ?? (() => Promise.resolve(ok({
+          items: [{ id: 'run-1', sessionId: 'session-1', outcome: 'started' }],
+        }))))(payload)
       },
       delete: (payload: unknown) => {
         calls.push('delete')
@@ -104,6 +106,7 @@ describe('AutomationStore', () => {
     expect(state.items).toHaveLength(1)
     expect(state.items[0]?.rule.name).toBe('morning')
     expect(state.items[0]?.runCount).toBe(1)
+    expect(state.items[0]?.lastSessionId).toBe('session-1')
     expect(state.pageOpen).toBe(false)
     expect(calls).toEqual(['list', 'listRuns'])
   })
@@ -180,8 +183,22 @@ describe('AutomationStore', () => {
     expect(sessions.opened).toEqual(['session-1'])
   })
 
-  it('keeps the page open when the previous Session is still running', async () => {
+  it('opens the previous Session when a skip finds a last started run', async () => {
     const { face } = api({
+      runNow: () => Promise.resolve(ok({ run: { id: 'run-2', outcome: 'skipped_busy' } })),
+    })
+    const sessions = sessionsFace()
+    const store = new AutomationStore(face, sessions.face)
+    await store.load()
+    store.setPageOpen(true)
+    expect(await store.runNow(rule().id)).toBe('skipped_busy')
+    expect(store.store.getSnapshot().pageOpen).toBe(false)
+    expect(sessions.opened).toEqual(['session-1'])
+  })
+
+  it('keeps the page open when a skip has no last Session', async () => {
+    const { face } = api({
+      listRuns: () => Promise.resolve(ok({ items: [] })),
       runNow: () => Promise.resolve(ok({ run: { id: 'run-1', outcome: 'skipped_busy' } })),
     })
     const sessions = sessionsFace()

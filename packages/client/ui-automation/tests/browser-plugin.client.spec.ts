@@ -66,6 +66,7 @@ describe('ui-automation browser half', () => {
       create: (input: { task: string; workspaceId: never; afterSeconds: number }) => Promise<string | undefined>
       setEnabled: (id: never, enabled: boolean) => Promise<string | undefined>
       runNow: (id: never) => Promise<string | undefined>
+      openLastSession: (id: never) => Promise<string | undefined>
       remove: (id: never) => Promise<string | undefined>
       setPageOpen: (open: boolean) => void
       setKeepAwake: (enabled: boolean) => void
@@ -74,6 +75,7 @@ describe('ui-automation browser half', () => {
     await injected.create({ task: 'ping', workspaceId: 'ws-1' as never, afterSeconds: 60 })
     await injected.setEnabled('rule-1' as never, false)
     await injected.runNow('rule-1' as never)
+    await injected.openLastSession('rule-1' as never)
     await injected.remove('rule-1' as never)
     injected.setPageOpen(true)
     injected.setKeepAwake(true)

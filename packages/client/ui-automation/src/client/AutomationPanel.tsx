@@ -62,6 +62,8 @@ export interface AutomationPanelInjected {
   setEnabled: AutomationStore['setEnabled']
   /** Fire one rule immediately and open the started Session. */
   runNow: AutomationStore['runNow']
+  /** Open the latest started Session for a rule. */
+  openLastSession: AutomationStore['openLastSession']
   /** Delete one rule. */
   remove: AutomationStore['remove']
   /** Show or hide the center-column page. */
@@ -113,7 +115,7 @@ export function AutomationPanel(props: AutomationPanelProps): ReactNode {
  */
 export function AutomationPage(props: AutomationPageProps): ReactNode {
   const {
-    useAutomation, useKeepAwake, useWorkspaces, load, create, setEnabled, runNow, remove,
+    useAutomation, useKeepAwake, useWorkspaces, load, create, setEnabled, runNow, openLastSession, remove,
     setPageOpen, setKeepAwake, t,
   } = props
   const state = useAutomation(snapshot => snapshot)
@@ -144,6 +146,7 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
       create={create}
       setEnabled={setEnabled}
       runNow={runNow}
+      openLastSession={openLastSession}
       remove={remove}
       setPageOpen={setPageOpen}
       setKeepAwake={setKeepAwake}
@@ -153,7 +156,7 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
 }
 
 function AutomationPageChrome({
-  state, keepAwake, workspaces, load, create, setEnabled, runNow, remove, setPageOpen, setKeepAwake, t,
+  state, keepAwake, workspaces, load, create, setEnabled, runNow, openLastSession, remove, setPageOpen, setKeepAwake, t,
 }: {
   state: AutomationState
   keepAwake: boolean
@@ -162,6 +165,7 @@ function AutomationPageChrome({
   create: AutomationStore['create']
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
+  openLastSession: AutomationStore['openLastSession']
   remove: AutomationStore['remove']
   setPageOpen: (open: boolean) => void
   setKeepAwake: (enabled: boolean) => void
@@ -233,6 +237,7 @@ function AutomationPageChrome({
           create={create}
           setEnabled={setEnabled}
           runNow={runNow}
+          openLastSession={openLastSession}
           remove={remove}
           setKeepAwake={setKeepAwake}
           t={t}
@@ -254,13 +259,14 @@ interface BodyProps {
   create: AutomationStore['create']
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
+  openLastSession: AutomationStore['openLastSession']
   remove: AutomationStore['remove']
   setKeepAwake: (enabled: boolean) => void
   t: AutomationPanelProps['t']
 }
 
 function AutomationBody({
-  state, keepAwake, workspaces, adding, seed, onAdd, onAdded, load, create, setEnabled, runNow, remove, setKeepAwake, t,
+  state, keepAwake, workspaces, adding, seed, onAdd, onAdded, load, create, setEnabled, runNow, openLastSession, remove, setKeepAwake, t,
 }: BodyProps): ReactNode {
   if (state.status === 'error' && state.items.length === 0) {
     return (
@@ -312,6 +318,7 @@ function AutomationBody({
                   workspaceTitle={workspaces.find(workspace => workspace.workspaceId === item.rule.workspaceId)?.title}
                   setEnabled={setEnabled}
                   runNow={runNow}
+                  openLastSession={openLastSession}
                   remove={remove}
                   t={t}
                 />
@@ -337,12 +344,13 @@ function AutomationBody({
 }
 
 function RuleCard({
-  item, workspaceTitle, setEnabled, runNow, remove, t,
+  item, workspaceTitle, setEnabled, runNow, openLastSession, remove, t,
 }: {
   item: AutomationListedRule
   workspaceTitle: string | undefined
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
+  openLastSession: AutomationStore['openLastSession']
   remove: AutomationStore['remove']
   t: AutomationPanelProps['t']
 }): ReactNode {
@@ -361,10 +369,21 @@ function RuleCard({
   }
   const stateClass = stateClassOf(rule.state)
   const nextWhen = formatNextIn(rule.nextAt, t)
+  const canOpen = item.lastSessionId !== undefined
   return (
     <li className={css.card}>
       <div className={css.cardHead}>
-        <div className={css.cardName}>{rule.name}</div>
+        {canOpen
+          ? (
+            <button
+              type="button"
+              className={css.cardOpen}
+              onClick={() => { run(() => openLastSession(rule.id)) }}
+            >
+              {rule.name}
+            </button>
+          )
+          : <div className={css.cardName}>{rule.name}</div>}
         <div className={css.cardTask}>{rule.task}</div>
         {workspaceTitle === undefined ? null : <div className={css.cardWorkspace}>{workspaceTitle}</div>}
       </div>
