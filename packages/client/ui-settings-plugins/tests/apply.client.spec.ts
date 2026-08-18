@@ -80,7 +80,7 @@ function marketplaceApply(scope: Context): void {
     name: 'settings.section',
     id: 'plugins',
     order: 15,
-    children: { 'settings.plugin.item': { kind: 'list', scope: 'root' } },
+    children: { 'settings.plugin.item': { kind: 'keyed', scope: 'root' } },
   } as never, () => null)
 }
 
@@ -239,8 +239,8 @@ describe('ui-settings-plugins apply', () => {
     expect(slots.entries('settings.section')).toHaveLength(1)
     expect(slots.entries('settings.section')[0]!.options.priority ?? 0).toBe(0)
     expect(slots.spec('settings.plugins.tab')).toBeUndefined()
-    expect(slots.entries('settings.plugin.item').map(entry => entry.options.id))
-      .toEqual(['bash', 'agent-loop', 'web-search'])
+    expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
+      .toEqual(['shell', 'agent-loop', 'web-search-deepseek'])
   })
 
   it('stays off the Plugins chrome when a marketplace fiber exists before it applies', async () => {
@@ -271,8 +271,8 @@ describe('ui-settings-plugins apply', () => {
     expect(slots.entries('settings.section')[0]!.options.priority ?? 0).toBe(0)
     expect(slots.spec('settings.plugins.tab')).toBeUndefined()
     await vi.waitFor(() => {
-      expect(slots.entries('settings.plugin.item').map(entry => entry.options.id))
-        .toEqual(['bash', 'agent-loop', 'web-search'])
+      expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
+        .toEqual(['shell', 'agent-loop', 'web-search-deepseek'])
     })
   })
 

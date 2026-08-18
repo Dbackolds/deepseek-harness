@@ -1,11 +1,11 @@
 /**
  * The `settings.plugin.item` slot type — one host-plane card inside the
- * marketplace Configure tab. Options: `id` (card key), `order` (card position).
+ * marketplace Configure tab. Options: `key` (the settings namespace the card edits).
  */
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** One plugin card inside the marketplace Configure tab. */
-    'settings.plugin.item': { kind: 'list'; scope: 'root'; owner: SettingsPluginItemOwnerProps }
+    'settings.plugin.item': { kind: 'keyed'; scope: 'root'; owner: SettingsPluginItemOwnerProps }
   }
 }
 

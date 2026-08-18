@@ -170,6 +170,8 @@ export function apply(ctx: ClientContext): void {
     setPluginNote: async (name, note, tags) => mutation(await callMarketplace('setPluginNote', { name, note, tags })),
     catalogUrls: catalogScope.getSnapshot().value?.catalogUrls ?? [],
     setCatalogUrls: async (value) => { await catalogScope.set('catalogUrls', value) },
+    cardKeys: () => ctx.slots.entries('settings.plugin.item').flatMap(entry =>
+      entry.options.key === undefined ? [] : [entry.options.key]),
   })
 
   const commandCard = (props: {
@@ -235,6 +237,6 @@ export function apply(ctx: ClientContext): void {
     label: () => t('nav'),
     locale: NS,
     inject: injected,
-    children: { 'settings.plugin.item': { kind: 'list', scope: 'root' } },
+    children: { 'settings.plugin.item': { kind: 'keyed', scope: 'root' } },
   }, MarketplaceSettingsSection))
 }

@@ -1,6 +1,6 @@
 /** Plugins marketplace section: discover + installed pages plus Host cards. */
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   IconCloseOutline16,
@@ -84,6 +84,8 @@ export interface MarketplaceSettingsSectionInjected {
   setPluginNote: (name: string, note: string, tags: readonly string[]) => Promise<MarketplaceMutationResult>
   catalogUrls: readonly string[]
   setCatalogUrls: (value: readonly string[]) => Promise<void>
+  /** Settings namespaces whose cards are currently registered. */
+  cardKeys: () => readonly string[]
 }
 
 /** Full component props assembled by the Settings slot renderer. */
@@ -148,7 +150,7 @@ function resolveTagFilter(
 
 /** Render the marketplace Plugins section. */
 export function MarketplaceSettingsSection({
-  t, renderSlot, listInstalled, listCatalog, refreshCatalog, install, uninstall, setEnabled, setPluginNote, catalogUrls, setCatalogUrls,
+  t, renderSlot, listInstalled, listCatalog, refreshCatalog, install, uninstall, setEnabled, setPluginNote, catalogUrls, setCatalogUrls, cardKeys,
 }: MarketplaceSettingsSectionProps): ReactNode {
   const tabsId = useId()
   const [tab, setTab] = useState<TabId>('discover')
@@ -349,7 +351,9 @@ export function MarketplaceSettingsSection({
           />
         ) : null}
         {tab === 'configure' ? (
-          <ConfigurePage t={t} renderCards={() => renderSlot('settings.plugin.item', {})} />
+          <ConfigurePage t={t} renderCards={() => cardKeys().map(ns => (
+            <Fragment key={ns}>{renderSlot('settings.plugin.item', {}, { entryKey: ns })}</Fragment>
+          ))} />
         ) : null}
       </div>
     </div>
