@@ -19,8 +19,14 @@ import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
+import { RetryPolicySchema } from '@deepseek-ai/dsh-llm'
 import type { ResolvedRetryPolicy, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
+import {
+  LLM_DEFAULT_POLICY_ENTRY,
+  resolveProviderRetryPolicy,
+  resolveStreamIdleTimeoutMs,
+} from '@deepseek-ai/dsh-llm-default-policy'
+import type { LlmDefaultPolicySettings } from '@deepseek-ai/dsh-llm-default-policy'
 import {
   FAC_DISPLAY_NAME,
   FAC_PROVIDER,
@@ -273,7 +279,7 @@ const profile = z.object({
   transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto']),
   timeoutMs: z.natural(),
   websocketConnectTimeoutMs: z.natural(),
-  streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
+  streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS),
   retryPolicy: RetryPolicySchema,
 })
 
@@ -295,7 +301,7 @@ export const Config: z<Config> = z.object({
  * @throws Error naming the route and model that cannot be served.
  */
 export function assertServiceable(config: Config): void {
-  resolveProfiles(config.providers)
+  resolveProfiles(config.providers, LLM_DEFAULT_POLICY_ENTRY)
 }
 
 /** Reject removed pre-release profile fields and name their replacements. */
@@ -322,10 +328,13 @@ function rejectRemovedFields(provider: string, source: PiAiProviderProfile): voi
  * resolves to the empty (dormant) route set here rather than through a hidden
  * fallback, and each route's models and pi-ai provider are materialized once.
  * @param providers - configured provider profiles keyed by route.
+ * @param defaults - product-wide retry and idle defaults used when a
+ * profile omitted those fields.
  * @returns validated profiles in configuration order.
  */
 export function resolveProfiles(
   providers: Readonly<Record<string, PiAiProviderProfile>> | undefined,
+  defaults: LlmDefaultPolicySettings = LLM_DEFAULT_POLICY_ENTRY,
 ): Map<string, ResolvedPiAiProviderProfile> {
   if (Array.isArray(providers)) {
     throw new Error('llm-pi-ai: providers is now a dict keyed by provider route, not an array of profiles')
@@ -341,7 +350,7 @@ export function resolveProfiles(
     if (source.displayName !== undefined && source.displayName.length === 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" has an empty displayName`)
     }
-    const streamIdleTimeoutMs = source.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS
+    const streamIdleTimeoutMs = resolveStreamIdleTimeoutMs(source.streamIdleTimeoutMs, defaults)
     if (!Number.isFinite(streamIdleTimeoutMs)
       || streamIdleTimeoutMs <= 0
       || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) {
@@ -382,7 +391,11 @@ export function resolveProfiles(
       displayName,
       ...apiKeyEnv === undefined ? {} : { apiKeyEnv: credentialRef(apiKeyEnv) },
       streamIdleTimeoutMs,
-      retryPolicy: resolveRetryPolicy(retryPolicy, `llm-pi-ai: provider "${provider}" retryPolicy`),
+      retryPolicy: resolveProviderRetryPolicy(
+        retryPolicy,
+        defaults,
+        `llm-pi-ai: provider "${provider}" retryPolicy`,
+      ),
       ...rest.headers === undefined ? {} : { headers: { ...rest.headers } },
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },
       configuredMaxTokens: catalog.configuredMaxTokens,

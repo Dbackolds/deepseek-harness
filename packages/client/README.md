@@ -44,6 +44,7 @@ The browser side of the dsh web GUI: shell boot, browser-host communication, sha
 | [`ui-settings-system-prompts/`](ui-settings-system-prompts/README.md) | Owns the System prompts settings section: the user library and per-model assembly. |
 | [`ui-settings/`](ui-settings/README.md) | Hosts the settings interface and its extension areas. |
 | [`ui-settings-general/`](ui-settings-general/README.md) | Provides the general settings section. |
+| [`ui-settings-llm-policy/`](ui-settings-llm-policy/README.md) | Edits the product-wide model-request retry budget and stream-idle timeout. |
 | [`ui-settings-models/`](ui-settings-models/README.md) | Provides model-provider configuration and DeepSeek onboarding. |
 | [`ui-settings-subagents/`](ui-settings-subagents/README.md) | Owns the Subagents settings section: the user definition library. |
 | [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.md) | Contributes the read-only Host Loader inventory tab to Plugins settings. |

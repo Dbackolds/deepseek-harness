@@ -9,6 +9,7 @@ import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { FileSettingsProvider } from '@deepseek-ai/dsh-settings-file'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
+import LlmDefaultPolicyConfig, { LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-llm-default-policy'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
@@ -45,6 +46,7 @@ async function boot(dir: string, config: LlmPiAi.Config): Promise<Context> {
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(FileSettingsProvider, { path: join(dir, 'settings.yaml'), watch: false })
   await ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials.yaml'), watch: false })
+  await ctx.plugin(LlmDefaultPolicyConfig)
   await ctx.plugin(LlmPiAi, config)
   return ctx
 }
@@ -162,6 +164,21 @@ describe('request-level dynamic profiles', () => {
       jitterRatio: 0.2,
     })
     expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai'])
+  })
+
+  it('re-registers an omitted policy when the product-wide default changes', async () => {
+    const dir = await home()
+    const ctx = await boot(dir, { providers: { openai: {} } })
+    expect(ctx.llm.providerRetryPolicy('openai')).toMatchObject({
+      mode: 'normal',
+      maxRetries: 5,
+    })
+    await ctx.settings.update(settingsNamespace(LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE), {
+      unlimited: true,
+    })
+    expect(ctx.llm.providerRetryPolicy('openai')).toMatchObject({
+      mode: 'always',
+    })
   })
 
   it('refuses a settings write this adapter could not serve, leaving its routes alone', async () => {

@@ -24,6 +24,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../llm/llm-default-policy"
+    },
+    {
       "path": "../../attachment/attachment"
     },
     {

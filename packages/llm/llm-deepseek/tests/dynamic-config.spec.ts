@@ -9,6 +9,7 @@ import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { FileSettingsProvider } from '@deepseek-ai/dsh-settings-file'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
+import LlmDefaultPolicyConfig, { LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-llm-default-policy'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
@@ -50,6 +51,7 @@ async function boot(dir: string, config: object): Promise<Harness> {
   const settingsFiber = ctx.plugin(FileSettingsProvider, { path: join(dir, 'settings.yaml'), watch: false })
   await settingsFiber
   await ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials.yaml'), watch: false })
+  await ctx.plugin(LlmDefaultPolicyConfig)
   await ctx.plugin(LlmDeepSeek, config)
   return { ctx, settingsFiber }
 }
@@ -147,6 +149,21 @@ describe('request-level dynamic configuration', () => {
     })
     expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
     expect(observed).toEqual([['deepseek-official']])
+  })
+
+  it('re-registers the omitted policy when the product-wide default changes', async () => {
+    const dir = await home()
+    const { ctx } = await boot(dir, { baseURL: 'http://127.0.0.1:1' })
+    expect(ctx.llm.providerRetryPolicy('deepseek-official')).toMatchObject({
+      mode: 'normal',
+      maxRetries: 5,
+    })
+    await ctx.settings.update(settingsNamespace(LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE), {
+      unlimited: true,
+    })
+    expect(ctx.llm.providerRetryPolicy('deepseek-official')).toMatchObject({
+      mode: 'always',
+    })
   })
 
   it('keeps the last good options when a settings snapshot fails beyond-schema validation', async () => {

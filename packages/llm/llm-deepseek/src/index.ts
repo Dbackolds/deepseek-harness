@@ -13,17 +13,23 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { assertUsableApiKey, LlmError, resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
+import { assertUsableApiKey, LlmError, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
 import type { RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
+import {
+  LLM_DEFAULT_POLICY_ENTRY,
+  LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE,
+  resolveProviderRetryPolicy,
+  resolveStreamIdleTimeoutMs,
+} from '@deepseek-ai/dsh-llm-default-policy'
+import type { LlmDefaultPolicySettings } from '@deepseek-ai/dsh-llm-default-policy'
 import { deepEqualJson, installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { getOrCreateAnonymousUserId, type AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_TOKENS,
-  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
   DeepSeekAdapter,
 } from './adapter.ts'
 import type { DeepSeekCatalogModel, DeepSeekConnectionOptions } from './adapter.ts'
@@ -97,7 +103,7 @@ export const Config: z<Config> = z.object({
   maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MAX_TOKENS),
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
   models: z.array(catalogModel).default(DEFAULT_MODELS),
-  streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
+  streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS),
   retryPolicy: RetryPolicySchema,
 })
 
@@ -162,9 +168,15 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
  * the product CLI. Every layer may supply an endpoint: the product trusts the
  * project it is launched in, so a checkout can point its own agent at the
  * gateway that checkout is meant to use.
+ * @param defaults - product-wide retry and idle defaults used when this
+ * provider omitted those fields.
  * @returns validated connection facts plus the credential reference.
  */
-export function resolveAdapterOptions(config: Config, environment?: LaunchEnvironmentSnapshot): ResolvedDeepSeekOptions {
+export function resolveAdapterOptions(
+  config: Config,
+  environment?: LaunchEnvironmentSnapshot,
+  defaults: LlmDefaultPolicySettings = LLM_DEFAULT_POLICY_ENTRY,
+): ResolvedDeepSeekOptions {
   if (config.thinking === 'disabled'
     && config.reasoningEffort !== undefined
     && config.reasoningEffort !== 'off') {
@@ -178,7 +190,7 @@ export function resolveAdapterOptions(config: Config, environment?: LaunchEnviro
     && (!Number.isSafeInteger(config.maxTokens) || config.maxTokens <= 0)) {
     throw new Error('llm-deepseek: maxTokens must be a positive safe integer')
   }
-  const streamIdleTimeoutMs = config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS
+  const streamIdleTimeoutMs = resolveStreamIdleTimeoutMs(config.streamIdleTimeoutMs, defaults)
   if (!Number.isFinite(streamIdleTimeoutMs)
     || streamIdleTimeoutMs <= 0
     || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) {
@@ -199,20 +211,25 @@ export function resolveAdapterOptions(config: Config, environment?: LaunchEnviro
     defaultContextWindow: config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
     models: resolveModels(config.models),
     streamIdleTimeoutMs,
-    retryPolicy: resolveRetryPolicy(config.retryPolicy, 'llm-deepseek: retryPolicy'),
+    retryPolicy: resolveProviderRetryPolicy(config.retryPolicy, defaults, 'llm-deepseek: retryPolicy'),
   }
 }
 
 export function apply(ctx: Context, config: Config): void {
   let current: () => Config = () => config
   let lastRaw: Config | undefined
+  let lastDefaults: LlmDefaultPolicySettings | undefined
   let lastGood: ResolvedDeepSeekOptions | undefined
+  const defaults = (): LlmDefaultPolicySettings =>
+    ctx.get('llmDefaultPolicy')?.current() ?? LLM_DEFAULT_POLICY_ENTRY
   const options = (): ResolvedDeepSeekOptions => {
     const raw = current()
-    if (raw === lastRaw && lastGood !== undefined) return lastGood
+    const nextDefaults = defaults()
+    if (raw === lastRaw && lastDefaults === nextDefaults && lastGood !== undefined) return lastGood
     try {
-      const next = resolveAdapterOptions(raw, launchEnvironmentOf(ctx))
+      const next = resolveAdapterOptions(raw, launchEnvironmentOf(ctx), nextDefaults)
       lastRaw = raw
+      lastDefaults = nextDefaults
       lastGood = next
       return next
     } catch (error) {
@@ -278,5 +295,13 @@ export function apply(ctx: Context, config: Config): void {
       current = source
     },
     onChange: ensureRegistrationFacts,
+  })
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.on('settings/updated', (ns) => {
+      if (ns === settingsNamespace(LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE)) ensureRegistrationFacts()
+    })
+  })
+  ctx.inject(['llmDefaultPolicy'], () => {
+    ensureRegistrationFacts()
   })
 }

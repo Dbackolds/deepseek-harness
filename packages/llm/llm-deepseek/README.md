@@ -19,8 +19,8 @@ The package root exposes the Cordis plugin contract and `DeepSeekAdapter`; wire 
     thinking: enabled        # optional; provider default is enabled
     reasoningEffort: high    # optional; off | low | high | max — omitted ⇒ high
     maxTokens: 256000        # optional positive per-request output cap; this is the default
-    streamIdleTimeoutMs: 300000 # optional; positive finite Node timer delay; five-minute default
-    retryPolicy:             # optional; omission uses bounded normal defaults
+    streamIdleTimeoutMs: 300000 # optional; omission uses the product-wide default
+    retryPolicy:             # optional; omission uses the product-wide default
       mode: always           # normal | always
       backoff:
         initialDelayMs: 500

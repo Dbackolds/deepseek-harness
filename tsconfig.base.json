@@ -75,6 +75,8 @@
       "@deepseek-ai/dsh-llm/types": ["./packages/llm/llm/src/types.ts"],
       "@deepseek-ai/dsh-llm/brand": ["./packages/llm/llm/src/brand.ts"],
       "@deepseek-ai/dsh-llm-retry/types": ["./packages/llm/llm-retry/src/types.ts"],
+      "@deepseek-ai/dsh-llm-default-policy/defaults": ["./packages/llm/llm-default-policy/src/defaults.ts"],
+      "@deepseek-ai/dsh-llm-default-policy/settings": ["./packages/llm/llm-default-policy/src/settings.ts"],
       "@deepseek-ai/dsh-workflow/types": ["./packages/workflow/workflow/src/types.ts"],
       "@deepseek-ai/dsh-tool-workflow/types": ["./packages/workflow/tool-workflow/src/types.ts"],
       "@deepseek-ai/dsh-llm/message": ["./packages/llm/llm/src/message.ts"],

@@ -19,7 +19,7 @@
  *         apiKeyEnv: OPENAI_API_KEY
  *         retryPolicy:
  *           mode: normal
- *           maxRetries: 2
+ *           maxRetries: 5
  *       # Catalog route with the catalog narrowed and one capacity corrected.
  *       anthropic:
  *         apiKeyEnv: ANTHROPIC_API_KEY
@@ -68,6 +68,11 @@ import {
   FAC_PROVIDER,
   isShippedProvider,
 } from './catalog.ts'
+import {
+  LLM_DEFAULT_POLICY_ENTRY,
+  LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE,
+} from '@deepseek-ai/dsh-llm-default-policy'
+import type { LlmDefaultPolicySettings } from '@deepseek-ai/dsh-llm-default-policy'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
@@ -166,7 +171,10 @@ function directoryEntries(
 export function apply(ctx: Context, config: Config): void {
   let current: () => Config = () => config
   let lastRaw: Config | undefined
+  let lastDefaults: LlmDefaultPolicySettings | undefined
   let memoized: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
+  const defaults = (): LlmDefaultPolicySettings =>
+    ctx.get('llmDefaultPolicy')?.current() ?? LLM_DEFAULT_POLICY_ENTRY
   /**
    * The resolved profiles for the current configuration, memoized by the raw
    * snapshot's identity — which is also what makes the adapter's own snapshot
@@ -180,9 +188,11 @@ export function apply(ctx: Context, config: Config): void {
    */
   const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
     const raw = current()
-    if (raw === lastRaw && memoized !== undefined) return memoized
-    const next = resolveProfiles(raw.providers)
+    const nextDefaults = defaults()
+    if (raw === lastRaw && lastDefaults === nextDefaults && memoized !== undefined) return memoized
+    const next = resolveProfiles(raw.providers, nextDefaults)
     lastRaw = raw
+    lastDefaults = nextDefaults
     memoized = next
     return next
   }
@@ -335,5 +345,13 @@ export function apply(ctx: Context, config: Config): void {
         ctx.logger.error(error)
       }
     },
+  })
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.on('settings/updated', (ns) => {
+      if (ns === settingsNamespace(LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE)) ensureRegistrationFacts()
+    })
+  })
+  ctx.inject(['llmDefaultPolicy'], () => {
+    ensureRegistrationFacts()
   })
 }

@@ -69,6 +69,9 @@
     - id: jobs
       name: '@deepseek-ai/dsh-jobs-local'
 
+    - id: llm-default-policy
+      name: '@deepseek-ai/dsh-llm-default-policy'
+
     - id: llm-retry
       name: '@deepseek-ai/dsh-llm-retry'
 
