@@ -1,8 +1,8 @@
-/* Model-request retry preference row: title, finite count, unlimited switch, timeout. */
+/* Model-request retry and timeout preference rows. */
 
 .row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   padding: 16px 0;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
@@ -34,27 +34,12 @@
 .controls {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: flex-end;
+  align-items: center;
   gap: 12px;
-  max-width: 360px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.label {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
 }
 
 .input {
-  width: 88px;
+  width: 72px;
   height: 36px;
   padding: 0 12px;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -75,15 +60,18 @@
   border-color: var(--dsw-alias-state-error-primary);
 }
 
-.hint {
-  font-size: 11px;
-  line-height: 16px;
+.unit {
+  font-size: 12px;
+  line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
 }
 
 .invalid {
-  composes: hint;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--dsw-alias-state-error-primary);
+  white-space: nowrap;
 }
 
 .switch {

@@ -47,19 +47,20 @@ function mount() {
 describe('LlmPolicyRow', () => {
   it('shows the default finite retry count, unlimited off, and timeout in seconds', () => {
     mount()
-    expect(screen.getByText('Model request retries')).toBeDefined()
-    expect((screen.getByDisplayValue('5') as HTMLInputElement).value).toBe('5')
+    expect(screen.getByText('Retry count')).toBeDefined()
+    expect(screen.getByText('Request timeout')).toBeDefined()
+    expect((screen.getByLabelText('Retry count') as HTMLInputElement).value).toBe('5')
     expect(screen.getByRole('switch', { name: 'Unlimited' }).getAttribute('aria-checked')).toBe('false')
-    expect((screen.getByDisplayValue('300') as HTMLInputElement).value).toBe('300')
+    expect((screen.getByLabelText('Request timeout') as HTMLInputElement).value).toBe('300')
   })
 
   it('commits a finite retry count and timeout on blur', () => {
     const b = mount()
-    const retries = screen.getByDisplayValue('5')
+    const retries = screen.getByLabelText('Retry count')
     fireEvent.change(retries, { target: { value: '8' } })
     fireEvent.blur(retries)
     expect(b.setMaxRetries).toHaveBeenCalledWith(8)
-    const timeout = screen.getByDisplayValue('300')
+    const timeout = screen.getByLabelText('Request timeout')
     fireEvent.change(timeout, { target: { value: '60' } })
     fireEvent.blur(timeout)
     expect(b.setStreamIdleTimeoutMs).toHaveBeenCalledWith(60_000)
@@ -70,21 +71,21 @@ describe('LlmPolicyRow', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Unlimited' }))
     expect(b.setUnlimited).toHaveBeenCalledWith(true)
     expect(screen.getByRole('switch', { name: 'Unlimited' }).getAttribute('aria-checked')).toBe('true')
-    expect((screen.getByDisplayValue('5') as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Retry count') as HTMLInputElement).disabled).toBe(true)
   })
 
   it('reverts an invalid retry draft on blur', () => {
     mount()
-    const retries = screen.getByDisplayValue('5')
+    const retries = screen.getByLabelText('Retry count')
     fireEvent.change(retries, { target: { value: 'nope' } })
     expect(screen.getByText('Enter an integer of 0 or greater.')).toBeDefined()
     fireEvent.blur(retries)
-    expect((screen.getByDisplayValue('5') as HTMLInputElement).value).toBe('5')
+    expect((screen.getByLabelText('Retry count') as HTMLInputElement).value).toBe('5')
   })
 
   it('follows a later preference change', () => {
     const b = mount()
     act(() => { b.preference.setMaxRetries(9) })
-    expect((screen.getByDisplayValue('9') as HTMLInputElement).value).toBe('9')
+    expect((screen.getByLabelText('Retry count') as HTMLInputElement).value).toBe('9')
   })
 })

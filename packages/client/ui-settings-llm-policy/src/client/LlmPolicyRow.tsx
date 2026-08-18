@@ -1,4 +1,4 @@
-/** General Settings row for the product-wide retry budget and stream-idle timeout. */
+/** General Settings rows for the product-wide retry budget and stream-idle timeout. */
 
 import { useEffect, useState } from 'react'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
@@ -44,9 +44,9 @@ function parseTimeoutSeconds(text: string): number | undefined {
 }
 
 /**
- * Render the product-wide retry and timeout preference row.
+ * Render the product-wide retry and timeout preference rows.
  * @param props - composed Settings slot props.
- * @returns the preference row.
+ * @returns the preference rows.
  */
 export function LlmPolicyRow({
   useMaxRetries,
@@ -74,17 +74,18 @@ export function LlmPolicyRow({
   const parsedTimeout = parseTimeoutSeconds(timeoutText)
 
   return (
-    <div className={css.row}>
-      <div className={css.rowText}>
-        <div className={css.title}>{t('title')}</div>
-        <div className={css.desc}>{t('description')}</div>
-      </div>
-      <div className={css.controls}>
-        <label className={css.field}>
-          <span className={css.label}>{t('retries')}</span>
+    <>
+      <div className={css.row}>
+        <div className={css.rowText}>
+          <div className={css.title}>{t('retries.title')}</div>
+          <div className={css.desc}>{t('retries.description')}</div>
+        </div>
+        <div className={css.controls}>
+          {parsedRetries === undefined && <span className={css.invalid}>{t('invalidRetries')}</span>}
           <input
             className={parsedRetries === undefined ? css.inputInvalid : css.input}
             inputMode="numeric"
+            aria-label={t('retries.title')}
             disabled={unlimited}
             value={retriesText}
             aria-invalid={parsedRetries === undefined || undefined}
@@ -97,27 +98,31 @@ export function LlmPolicyRow({
               setMaxRetries(parsedRetries)
             }}
           />
-          <span className={parsedRetries === undefined ? css.invalid : css.hint}>
-            {parsedRetries === undefined ? t('invalidRetries') : t('retriesHint')}
-          </span>
-        </label>
-        <button
-          type="button"
-          className={css.switch}
-          role="switch"
-          aria-checked={unlimited}
-          onClick={() => { setUnlimited(!unlimited) }}
-        >
-          <span>{t('unlimited')}</span>
-          <span className={css.track} data-on={unlimited || undefined} aria-hidden="true">
-            <span className={css.thumb} />
-          </span>
-        </button>
-        <label className={css.field}>
-          <span className={css.label}>{t('timeout')}</span>
+          <button
+            type="button"
+            className={css.switch}
+            role="switch"
+            aria-checked={unlimited}
+            onClick={() => { setUnlimited(!unlimited) }}
+          >
+            <span>{t('unlimited')}</span>
+            <span className={css.track} data-on={unlimited || undefined} aria-hidden="true">
+              <span className={css.thumb} />
+            </span>
+          </button>
+        </div>
+      </div>
+      <div className={css.row}>
+        <div className={css.rowText}>
+          <div className={css.title}>{t('timeout.title')}</div>
+          <div className={css.desc}>{t('timeout.description')}</div>
+        </div>
+        <div className={css.controls}>
+          {parsedTimeout === undefined && <span className={css.invalid}>{t('invalidTimeout')}</span>}
           <input
             className={parsedTimeout === undefined ? css.inputInvalid : css.input}
             inputMode="decimal"
+            aria-label={t('timeout.title')}
             value={timeoutText}
             aria-invalid={parsedTimeout === undefined || undefined}
             onChange={(event) => { setTimeoutText(event.target.value) }}
@@ -129,12 +134,10 @@ export function LlmPolicyRow({
               setStreamIdleTimeoutMs(parsedTimeout)
             }}
           />
-          <span className={parsedTimeout === undefined ? css.invalid : css.hint}>
-            {parsedTimeout === undefined ? t('invalidTimeout') : t('timeoutHint')}
-          </span>
-        </label>
+          <span className={css.unit}>{t('timeout.unit')}</span>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
