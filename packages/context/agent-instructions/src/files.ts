@@ -53,6 +53,8 @@ interface DiscoverOptions {
   instructionFileCandidates?: string[]
   localInstructionFileCandidates?: string[]
   projectRoot?: string
+  /** Extra workspace folders whose own project instruction chains also load. */
+  extraRoots?: readonly string[]
   signal?: AbortSignal
 }
 
@@ -298,12 +300,21 @@ async function discoverInstructionFiles(
   const cwd = resolve(options.cwd)
   const projectRoot = options.projectRoot
     ?? await findProjectRoot(cwd, config.projectRootMarkers, fileSystem, options.signal)
-  for (const dir of ancestorChain(projectRoot, cwd)) {
-    for (const candidates of [config.instructionFileCandidates, config.localInstructionFileCandidates]) {
-      for (const file of await allExistingInstructionFiles(dir, projectRoot, candidates, fileSystem, options.signal)) {
-        addFile(file)
+  const addChain = async (root: string, leaf: string, displayRoot?: string): Promise<void> => {
+    for (const dir of ancestorChain(root, leaf)) {
+      for (const candidates of [config.instructionFileCandidates, config.localInstructionFileCandidates]) {
+        for (const file of await allExistingInstructionFiles(dir, displayRoot ?? root, candidates, fileSystem, options.signal)) {
+          addFile(displayRoot === undefined ? { ...file, displayPath: file.absolutePath } : file)
+        }
       }
     }
+  }
+  await addChain(projectRoot, cwd, projectRoot)
+  for (const extra of options.extraRoots ?? []) {
+    const extraRoot = resolve(extra)
+    if (extraRoot === cwd || extraRoot === projectRoot) continue
+    const extraProjectRoot = await findProjectRoot(extraRoot, config.projectRootMarkers, fileSystem, options.signal)
+    await addChain(extraProjectRoot, extraRoot)
   }
   return files
 }

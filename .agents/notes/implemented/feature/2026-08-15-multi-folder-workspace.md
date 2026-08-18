@@ -16,7 +16,7 @@ Keep one primary `path` as the Session cwd and membership key. Persist additiona
 
 Host RPC exposes `workspace.addFolder` and `workspace.removeFolder`. The Client object layer upserts the returned `WorkspaceView.folders`. The sidebar Workspace menu offers **Add folder…** and reuses the composed directory-flow hole; the hover card lists the primary path and every additional folder.
 
-Collaboration uses the same folder list: `ctx.sandboxPolicy.resolve` copies additional folders onto `SandboxExecutionPolicy.additionalRoots`. `writableRoots` and the Seatbelt, bwrap, Landlock, and Windows-ACL dialects grant those roots under `workspace-write`. Session cwd, attach, and instruction discovery stay on the primary path so one Session still has one working directory.
+Collaboration uses the same folder list: `ctx.sandboxPolicy.resolve` copies additional folders onto `SandboxExecutionPolicy.additionalRoots`. `writableRoots` and the Seatbelt, bwrap, Landlock, and Windows-ACL dialects grant those roots under `workspace-write`. `foldersOf(session)` also feeds the `workspace:folders` runtime-context map, default grep/glob roots, extra AGENTS.md chains, and extra project skill roots. Session cwd and attach stay on the primary path so one Session still has one working directory.
 
 ## Alternatives considered
 
@@ -28,12 +28,12 @@ Collaboration uses the same folder list: `ctx.sandboxPolicy.resolve` copies addi
 
 - A path can belong to only one Workspace, as primary or additional folder. Sharing one tree across two Workspaces remains impossible.
 - Adding a folder after a Session is already running updates later sandbox resolves; already-spawned confined processes keep the policy they started with.
-- Instruction discovery and Session cwd remain the primary folder. Additional folders are writable and visible in the current-policy prompt, but they do not become extra instruction roots in this change.
+- Session cwd remains the primary folder. Additional folders are writable, listed in `workspace:folders` under every sandbox mode, searched by default grep/glob, and each extra folder loads its own AGENTS.md chain and project skills.
 - Existing media without `folders` continue to open because the durable schema defaults the field.
 
 ## Required verification
 
 - `packages/workspace/workspace/tests/workspace.spec.ts` covers add/remove, primary-path protection, and cross-Workspace claim rejection.
 - `packages/host/apiproxy/tests/api-proxy-workspace.spec.ts` covers Host add/remove and `workspace-folder-conflict`.
-- `packages/sandbox/sandbox/tests/roots.spec.ts` and `packages/sandbox/sandbox-policy/tests/policy.spec.ts` cover additional writable roots.
+- `packages/sandbox/sandbox/tests/roots.spec.ts` and `packages/sandbox/sandbox-policy/tests/policy.spec.ts` cover additional writable roots and the `workspace:folders` map.
 - `packages/client/runtime/tests/workspaces-service.client.spec.ts` and `packages/client/ui-workspace/tests/rows.client.spec.tsx` cover Client mutation and the add-folder menu/hover list.

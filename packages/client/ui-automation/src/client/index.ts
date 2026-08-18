@@ -2,15 +2,18 @@
  * Host Automation sidebar plugin, browser half: occupies `sidebar.automation`
  * with the trigger under New Session and a modal over the Host Automation
  * wire. The Host remains the fact source; this plugin holds no store beyond
- * the page snapshot and create-form draft.
+ * the page snapshot, the create-form draft, and the keep-awake preference.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import { AUTOMATION_SETTINGS_NAMESPACE, type AutomationSettings } from '../automation-settings.ts'
 import { AutomationPage, AutomationPanel } from './AutomationPanel.tsx'
 import type { AutomationPanelInjected } from './AutomationPanel.tsx'
+import { AutomationKeepAwakePolicy } from './keep-awake-policy.ts'
 import { AutomationStore, refreshIfLoaded } from './store.ts'
 import { en, NS, zh, type AutomationKey } from './locales.ts'
 
@@ -26,8 +29,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services for locale, the sidebar seat, and the Host wire. */
-export const inject = ['slots', 'locale', 'connection']
+/** Required services for locale, the sidebar seat, the Host wire, and settings. */
+export const inject = ['slots', 'locale', 'connection', 'remote', 'settingsScope']
 
 /**
  * Register the dictionaries and the sidebar Automation occupant.
@@ -38,14 +41,18 @@ export function apply(ctx: ClientContext): void {
 
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new AutomationStore(connection.api)
+  const keepAwake = new AutomationKeepAwakePolicy(
+    ctx.settingsScope.bind<AutomationSettings>({ namespace: AUTOMATION_SETTINGS_NAMESPACE }),
+  )
   const injected = (): AutomationPanelInjected => ({
-    hooks: { automation: controller.store },
+    hooks: { automation: controller.store, keepAwake: keepAwake.keepAwake },
     load: () => controller.load(),
     create: input => controller.create(input),
     setEnabled: (id, enabled) => controller.setEnabled(id, enabled),
     runNow: id => controller.runNow(id),
     remove: id => controller.remove(id),
     setPageOpen: (open) => { controller.setPageOpen(open) },
+    setKeepAwake: (enabled) => { keepAwake.setKeepAwake(enabled) },
   })
 
   ctx.effect(() => ctx.on('connection/reset', () => {

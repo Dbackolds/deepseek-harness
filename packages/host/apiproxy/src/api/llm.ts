@@ -86,4 +86,11 @@ export interface DiscoveredModelView {
   contextWindow?: number
   /** Maximum output tokens, when disclosed. */
   maxTokens?: number
+  /**
+   * Selectable reasoning efforts the listing disclosed. Keys are selector
+   * level ids; a value is the wire spelling, and `off` may be `null`.
+   */
+  reasoningEfforts?: Record<string, string | null>
+  /** Whether the endpoint accepts a reasoning-effort parameter for this model. */
+  supportsReasoningEffort?: boolean
 }

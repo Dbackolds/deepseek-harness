@@ -29,19 +29,28 @@ export interface GenericCommandCardProps extends CommandRowOwnerProps {
   runningSummary?: string | undefined
 }
 
+function commandOutcomeCopy(text: string | undefined): { summary: string | undefined; body: string | null } {
+  if (text === undefined) return { summary: undefined, body: null }
+  const newline = text.indexOf('\n')
+  if (newline === -1) return { summary: text, body: null }
+  const summary = text.slice(0, newline).trimEnd()
+  const body = text.slice(newline + 1).replace(/^\n+/, '')
+  return { summary, body: body.length > 0 ? body : null }
+}
+
 export function GenericCommandCard({ node, t, runningSummary }: GenericCommandCardProps) {
   const [expanded, setExpanded] = useState(false)
   const text = node.outcome?.text
+  const { summary: outcomeSummary, body } = commandOutcomeCopy(text)
   const summary = node.outcome === null
     ? runningSummary ?? t('command.running')
-    : text ?? (node.outcome.kind === 'error' ? t('command.failed') : t('command.done'))
+    : outcomeSummary ?? (node.outcome.kind === 'error' ? t('command.failed') : t('command.done'))
   // Title is the bare command name: the row already reads `name · outcome`,
   // and the dispatched line's own `/` and arguments only restate what the
   // settlement text says (`permission · preset workspace-write`). A
   // cross-window node whose run page fell out of the window has no name.
   const title = node.name ?? t('command.title')
   const state = stateOf(node.outcome)
-  const body = text !== undefined && text.includes('\n') ? text : null
   const open = expanded && body !== null
   return (
     <div className={css.root} data-variant="others" data-state={state}>

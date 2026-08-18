@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "title": "StarPivot",
+  "plugins": [
+    {
+      "name": "@starpivot/dsh-plugin-marketplace",
+      "version": "0.1.15",
+      "title": "Plugin marketplace",
+      "description": "Replace the shipped Plugins settings page with Discover, installed plugins, and configuration.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/plugin-marketplace",
+      "kind": "bundle",
+      "updatedAt": "2026-08-17T01:32:08.595Z"
+    },
+    {
+      "name": "@dsh-plugin/dsh-auxiliary",
+      "version": "0.4.2",
+      "title": "Auxiliary models",
+      "description": "Dedicated model routes for image analysis and context compaction.",
+      "homepage": "https://github.com/dsh-plugins/dsh-auxiliary",
+      "kind": "bundle",
+      "updatedAt": "2026-08-16T04:10:50.168Z"
+    },
+    {
+      "name": "@dsh-plugin/dsh-thought-buddy",
+      "version": "0.1.1",
+      "title": "Thought buddy",
+      "description": "A GrokBot-style animated avatar in front of the Deep diving status line.",
+      "homepage": "https://github.com/dsh-plugins/dsh-thought-buddy",
+      "kind": "bundle",
+      "updatedAt": "2026-08-15T20:15:33.346Z"
+    },
+    {
+      "name": "dsh-find-plugin",
+      "version": "0.3.6",
+      "title": "Find plugins",
+      "description": "Search the GitHub dsh-plugin topic from inside the agent.",
+      "homepage": "https://github.com/awesome-dsh-plugin/dsh-find-plugin",
+      "kind": "bundle",
+      "updatedAt": "2026-08-14T13:18:06.053Z"
+    },
+    {
+      "name": "dsh-mnemon",
+      "version": "0.2.8",
+      "title": "Mnemon memory",
+      "description": "Local three-tier memory with a sidebar workbench. Requires the Mnemon CLI on the machine.",
+      "homepage": "https://github.com/omdsh-dev/dsh-mnemon",
+      "kind": "bundle",
+      "updatedAt": "2026-08-17T13:39:24.086Z"
+    },
+    {
+      "name": "@starpivot/dsh-session-import",
+      "version": "0.1.1",
+      "title": "Session import",
+      "description": "Import Cursor, Codex, and Claude Code conversations and skills from a Settings page.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/session-import",
+      "kind": "bundle",
+      "updatedAt": "2026-08-17T00:52:40.158Z"
+    },
+    {
+      "name": "@starpivot/dsh-better-sidebar",
+      "version": "0.13.2",
+      "title": "Better sidebar",
+      "description": "A VS Code-like right sidebar with explorer, editor, terminal, Git, and browser. Refresh sits in the top-right cluster only while the sidebar is open.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/better-sidebar",
+      "kind": "bundle",
+      "updatedAt": "2026-08-17T16:10:00.000Z"
+    }
+  ]
+}

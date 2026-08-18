@@ -59,18 +59,47 @@ export function GitBranchSeat({
   }, [load, recentWorkspaceId, workspaceCount])
 
   if (state.unavailable || state.view === null) return null
+  const view = state.view
 
-  const local = state.view.branches.filter(branch => !branch.remote)
-  const remote = state.view.branches.filter(branch => branch.remote)
+  const local = view.branches.filter(branch => !branch.remote)
+  const remote = view.branches.filter(branch => branch.remote)
+  const currentName = view.detached ? t('menu.detached') : view.currentBranch
+  const statusLines: string[] = []
+  if (view.dirtyCount === 1) statusLines.push(t('status.dirtyOne'))
+  else if (view.dirtyCount > 1) statusLines.push(t('status.dirtyMany', { count: String(view.dirtyCount) }))
+  if (view.unpushedCount === 1) statusLines.push(t('status.unpushedOne'))
+  else if (view.unpushedCount > 1) {
+    statusLines.push(t('status.unpushedMany', { count: String(view.unpushedCount) }))
+  }
+  const currentLabel = statusLines.length === 0
+    ? currentName
+    : (
+      <span className={css.branchLabel}>
+        <span>{currentName}</span>
+        {statusLines.map(line => <span key={line} className={css.branchStatus}>{line}</span>)}
+      </span>
+    )
   const items: MenuEntry[] = []
+  const listed = !view.detached && view.branches.some(branch => branch.name === view.currentBranch)
+  if (!listed) items.push({ id: view.currentBranch, label: currentLabel })
   if (local.length > 0) {
     items.push({ type: 'label', id: 'local', text: t('menu.local') })
-    for (const branch of local) items.push({ id: branch.name, label: branch.name })
+    for (const branch of local) {
+      items.push({
+        id: branch.name,
+        label: branch.name === view.currentBranch ? currentLabel : branch.name,
+      })
+    }
   }
   if (remote.length > 0) {
     items.push({ type: 'separator', id: 'remote-sep' })
     items.push({ type: 'label', id: 'remote', text: t('menu.remote') })
-    for (const branch of remote) items.push({ id: `remote:${branch.name}`, label: branch.name })
+    for (const branch of remote) {
+      items.push({
+        id: branch.name,
+        label: branch.name === view.currentBranch ? currentLabel : branch.name,
+      })
+    }
   }
   items.push({ type: 'separator', id: 'create-sep' })
   items.push({ id: '__create__', label: t('menu.create') })
@@ -89,8 +118,7 @@ export function GitBranchSeat({
             setCreating(true)
             return
           }
-          const branch = id.startsWith('remote:') ? id.slice('remote:'.length) : id
-          void checkout(branch)
+          void checkout(id)
         }}
         align="start"
         portal
@@ -100,12 +128,12 @@ export function GitBranchSeat({
             className={css.seat}
             aria-haspopup="menu"
             aria-expanded={open}
-            title={state.error ?? t('seat.hint')}
+            title={state.error ?? (view.detached ? t('seat.detached') : t('seat.hint'))}
             disabled={state.busy}
             onClick={() => { setOpen(value => !value) }}
           >
             <IconBranchOutline16 className={css.seatIcon} />
-            {state.view.currentBranch}
+            {view.detached ? t('seat.detached') : view.currentBranch}
             <IconChevronDownOutline14 className={css.chevron} />
           </button>
         )}

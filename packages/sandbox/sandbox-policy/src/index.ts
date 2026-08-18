@@ -3,10 +3,11 @@
  * deployment's sandbox fallbacks plus per-session resolution: the file-effect
  * {@link SandboxMode}, the `workspace-write` root, and the override kit (the
  * `sandbox/mode` event, its fold, and its write path, from `./session-mode.ts`).
- * Before each agent request, the owner also contributes the resolved policy to
- * the cache-safe runtime-context snapshot. The agent loop logs that snapshot as
- * model history, so replay reconstructs the same mode and root the enforcing
- * consumers resolve without rewriting the stable system prompt.
+ * Before each agent request, the owner also contributes the resolved policy and
+ * the session's multi-folder workspace map to the cache-safe runtime-context
+ * snapshot. The agent loop logs that snapshot as model history, so replay
+ * reconstructs the same mode, root, and folder list the enforcing consumers
+ * resolve without rewriting the stable system prompt.
  *
  * Enforcing filesystem, one-shot bash, and terminal backends read the SAME
  * resolved policy here. The context describes that policy without inventorying
@@ -18,6 +19,7 @@
  * @module @deepseek-ai/dsh-sandbox-policy
  */
 
+import { statSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -43,6 +45,66 @@ export {
 /** Resolve filesystem identity before lexical normalization can erase symlink-sensitive components. */
 function resolveWorkspaceRoot(path: string): string {
   return resolvePath(canonicalPath(path))
+}
+
+/** One additional workspace folder as the model and search tools should see it. */
+export interface WorkspaceFolderEntry {
+  /** Canonical absolute path of the additional folder. */
+  path: string
+  /** Whether the stored path currently exists as a directory. */
+  missing: boolean
+}
+
+/**
+ * The session working directory plus additional folders from the owning
+ * workspace. Search, instruction, and skill consumers reuse this list so they
+ * do not re-implement membership lookup.
+ */
+export interface SessionWorkspaceFolders {
+  /** Absolute process cwd / relative-path root for this session. */
+  cwd: string
+  /** Additional canonical folders, excluding {@link cwd}. */
+  additional: readonly WorkspaceFolderEntry[]
+}
+
+/** True when the stored folder is missing or is not a directory. */
+function isMissingDirectory(path: string): boolean {
+  try {
+    return !statSync(path).isDirectory()
+  } catch {
+    // stat failed: the path (or a prefix) is missing or unreadable.
+    return true
+  }
+}
+
+/**
+ * Render the multi-folder map only when the session has extra folders.
+ * @param folders - resolved cwd plus additional workspace folders.
+ * @returns empty string for a single-folder workspace.
+ */
+/**
+ * Absolute roots a default grep/glob should search: the session cwd plus
+ * additional folders that still exist as directories.
+ * @param folders - result of {@link SandboxPolicyService.foldersOf}.
+ * @returns cwd first, then existing extra folders in durable order.
+ */
+export function sessionSearchRoots(folders: SessionWorkspaceFolders): string[] {
+  return [folders.cwd, ...folders.additional.filter(folder => !folder.missing).map(folder => folder.path)]
+}
+
+export function renderWorkspaceFoldersContext(folders: SessionWorkspaceFolders): string {
+  if (folders.additional.length === 0) return ''
+  const extra = folders.additional.map((folder) => {
+    const label = folder.missing ? `${JSON.stringify(folder.path)} (missing)` : JSON.stringify(folder.path)
+    return `- ${label}`
+  })
+  return [
+    "This session's workspace has multiple folders.",
+    `Current working directory (relative tool paths resolve here): ${JSON.stringify(folders.cwd)}.`,
+    'Additional folders in this workspace:',
+    ...extra,
+    'These additional folders are part of the same workspace. Use their absolute paths with bash workdir, read/write/edit, grep, and glob. Do not assume the checkout at the current working directory is the only tree.',
+  ].join('\n')
 }
 
 /** Render the policy without claiming which capabilities are mounted. */
@@ -127,6 +189,14 @@ export class SandboxPolicyService extends Service {
 
     ctx.inject(['systemPrompt'], (scope: Context) => {
       scope.systemPrompt.context({
+        name: 'workspace:folders',
+        order: 105,
+        text: (context) => {
+          const session = context.agent?.session
+          return session === undefined ? '' : renderWorkspaceFoldersContext(this.foldersOf(session))
+        },
+      })
+      scope.systemPrompt.context({
         name: 'sandbox:policy',
         order: 110,
         text: (context) => {
@@ -154,7 +224,9 @@ export class SandboxPolicyService extends Service {
     const workspaceRoot = resolveWorkspaceRoot(
       (session === undefined ? undefined : sessionWorkingDirectory(session)) ?? this.workspaceRoot,
     )
-    const additionalRoots = session === undefined ? [] : this.additionalRootsOf(session, workspaceRoot)
+    const additionalRoots = session === undefined
+      ? []
+      : this.foldersOf(session, workspaceRoot).additional.map(folder => folder.path)
     return {
       mode: request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,
       workspaceRoot,
@@ -164,23 +236,28 @@ export class SandboxPolicyService extends Service {
   }
 
   /**
-   * Additional writable folders for one session: the owning workspace's
-   * additional folders, excluding the already-resolved primary root.
+   * The session working directory plus additional folders from the owning
+   * workspace. Agentless callers and sessions without a cwd receive the
+   * configured fallback as `cwd` and an empty additional list.
+   * @param session - session whose workspace folders are requested.
+   * @param workspaceRoot - already-resolved primary root; omitted recomputes it.
+   * @returns the cwd and extra folders; extra is empty without a registry match.
    */
-  private additionalRootsOf(session: Session, workspaceRoot: string): string[] {
+  foldersOf(session: Session, workspaceRoot?: string): SessionWorkspaceFolders {
+    const cwd = resolveWorkspaceRoot(workspaceRoot ?? sessionWorkingDirectory(session) ?? this.workspaceRoot)
     const registry = this.ctx.get('workspaceRegistry')
-    if (registry === undefined) return []
-    const workspace = this.owningWorkspace(registry.list(), session, workspaceRoot)
-    if (workspace === undefined) return []
-    const extra: string[] = []
-    const seen = new Set([workspaceRoot])
+    if (registry === undefined) return { cwd, additional: [] }
+    const workspace = this.owningWorkspace(registry.list(), session, cwd)
+    if (workspace === undefined) return { cwd, additional: [] }
+    const extra: WorkspaceFolderEntry[] = []
+    const seen = new Set([cwd])
     for (const folder of workspace.folders) {
       const root = resolveWorkspaceRoot(folder)
       if (seen.has(root)) continue
       seen.add(root)
-      extra.push(root)
+      extra.push({ path: root, missing: isMissingDirectory(root) })
     }
-    return extra
+    return { cwd, additional: extra }
   }
 
   /**

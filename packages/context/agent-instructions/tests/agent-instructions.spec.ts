@@ -259,7 +259,7 @@ async function appendAdditionalContexts(ctx: Context, agent: Agent): Promise<num
 const composedPrefixes = new WeakMap<object, Message[]>()
 
 async function composeBaselinePrefix(ctx: Context, agent: Agent): Promise<Message[]> {
-  const signal = AbortSignal.timeout(1000)
+  const signal = new AbortController().signal
   await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
     { messages: [], turn: 1, step: 1, signal },
@@ -329,6 +329,31 @@ describe('workspace context instruction discovery', () => {
       expect(files.map(file => file.absolutePath)).toContain(join(root, 'CLAUDE.md'))
     } finally {
       await rm(root, { recursive: true, force: true })
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('loads each extra workspace folder as its own instruction chain', async () => {
+    const root = await tempRepo()
+    const extra = await tempRepo()
+    const home = await tempRepo()
+    try {
+      await mkdir(join(root, '.git'), { recursive: true })
+      await mkdir(join(extra, '.git'), { recursive: true })
+      await write(join(root, 'AGENTS.md'), 'primary rules')
+      await write(join(extra, 'AGENTS.md'), 'extra rules')
+      const files = await discoverBaselineInstructionFiles({ cwd: root, dshHome: home, extraRoots: [extra] })
+      expect(files.map(file => file.displayPath)).toEqual([
+        'AGENTS.md',
+        join(extra, 'AGENTS.md'),
+      ])
+      const loaded = await loadBaselineInstructions({ cwd: root, dshHome: home, extraRoots: [extra], maxBytes: 65536 })
+      expect(loaded?.text).toContain('primary rules')
+      expect(loaded?.text).toContain('extra rules')
+      expect(loaded?.text).toContain(join(extra, 'AGENTS.md'))
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(extra, { recursive: true, force: true })
       await rm(home, { recursive: true, force: true })
     }
   })

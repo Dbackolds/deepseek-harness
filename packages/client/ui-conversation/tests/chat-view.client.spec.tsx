@@ -1267,6 +1267,22 @@ describe('ChatView', () => {
     expect(view.queryByText('/plan now')).toBeNull()
     expect(view.getByText('已进入 plan mode')).toBeTruthy()
 
+    const expandable = makeHarness({
+      nodes: [command({
+        name: 'reload',
+        outcome: {
+          kind: 'success',
+          text: '正在重载 2 个插件\n\ninclude:agent-presets:persona\ninclude:agent-presets:agent-instructions',
+        },
+      })],
+    })
+    const ev = render(<expandable.ChatView {...expandable.props} />)
+    expect(ev.getByText('正在重载 2 个插件')).toBeTruthy()
+    expect(ev.queryByText('include:agent-presets:persona')).toBeNull()
+    fireEvent.click(ev.getByRole('button', { name: /reload/ }))
+    expect(ev.getByText(/include:agent-presets:persona/)).toBeTruthy()
+    expect(ev.getByText(/include:agent-presets:agent-instructions/)).toBeTruthy()
+
     // Error outcome flips the row state; a text-less error gets the default copy.
     const failed = makeHarness({
       nodes: [command({ seq: 6, commandId: 'cmd-2' as CommandNode['commandId'], outcome: { kind: 'error' } })],

@@ -530,7 +530,16 @@ describe('endpoint interrogation', () => {
 
   it('adopts only the picked candidates, keeping a row the user already tuned', async () => {
     const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{ id: 'kept', contextWindow: 999 }, { id: 'fresh', contextWindow: 4096, name: 'Fresh' }],
+      models: [
+        { id: 'kept', contextWindow: 999 },
+        {
+          id: 'fresh',
+          contextWindow: 4096,
+          name: 'Fresh',
+          reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+          supportsReasoningEffort: true,
+        },
+      ],
     })))
     const { mutate } = await mountSection({
       discover,
@@ -550,8 +559,141 @@ describe('endpoint interrogation', () => {
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
     expect(firstMutate(mutate).ops[0]?.value).toEqual([
       { id: 'kept', contextWindow: 111 },
-      { id: 'fresh', contextWindow: 4096, name: 'Fresh' },
+      {
+        id: 'fresh',
+        contextWindow: 4096,
+        name: 'Fresh',
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+        compat: { supportsReasoningEffort: true },
+      },
     ])
+  })
+
+  it('fills missing thinking levels on an already-configured row without rewriting its capacities', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [{
+        id: 'kept',
+        contextWindow: 999,
+        reasoningEfforts: { low: 'low', high: 'high' },
+        supportsReasoningEffort: true,
+      }],
+    })))
+    const { mutate } = await mountSection({
+      discover,
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'kept', contextWindow: 111 }] } },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+    const dialog = await screen.findByRole('dialog')
+    const box = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    if (box === null) throw new Error('expected a candidate checkbox')
+    fireEvent.click(box)
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{
+      id: 'kept',
+      contextWindow: 111,
+      reasoningEfforts: { low: 'low', high: 'high' },
+      compat: { supportsReasoningEffort: true },
+    }])
+  })
+
+  it('does not overwrite a hand-tuned reasoning declaration on a later fetch', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [{
+        id: 'kept',
+        reasoningEfforts: { high: 'high' },
+        supportsReasoningEffort: false,
+      }],
+    })))
+    const { mutate } = await mountSection({
+      discover,
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'kept', reasoningEfforts: { off: null, max: 'ultra' } }],
+        },
+      },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+    const dialog = await screen.findByRole('dialog')
+    const box = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    if (box === null) throw new Error('expected a candidate checkbox')
+    fireEvent.click(box)
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+
+    expect(screen.queryByRole('dialog', { name: en.fetchTitle })).toBeNull()
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('keeps an existing compat object when it only fills missing thinking levels', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [{
+        id: 'kept',
+        reasoningEfforts: { high: 'high' },
+        supportsReasoningEffort: true,
+      }],
+    })))
+    const { mutate } = await mountSection({
+      discover,
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'kept', contextWindow: 111, compat: { thinkingFormat: 'openai' } }],
+        },
+      },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+    const dialog = await screen.findByRole('dialog')
+    const box = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    if (box === null) throw new Error('expected a candidate checkbox')
+    fireEvent.click(box)
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{
+      id: 'kept',
+      contextWindow: 111,
+      reasoningEfforts: { high: 'high' },
+      compat: { thinkingFormat: 'openai', supportsReasoningEffort: true },
+    }])
+  })
+
+  it('does not fill efforts when the row already named a reasoning-dispatch switch', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [{ id: 'kept', reasoningEfforts: { high: 'high' }, supportsReasoningEffort: true }],
+    })))
+    const { mutate } = await mountSection({
+      discover,
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'kept', compat: { supportsReasoningEffort: false } }],
+        },
+      },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+    const dialog = await screen.findByRole('dialog')
+    const box = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    if (box === null) throw new Error('expected a candidate checkbox')
+    fireEvent.click(box)
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+
+    expect(mutate).not.toHaveBeenCalled()
   })
 
   it('keeps the rows editable when the provider cannot be interrogated', async () => {

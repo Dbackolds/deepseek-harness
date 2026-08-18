@@ -312,6 +312,7 @@ describe('workspace browser rows', () => {
       // Card body: full title + cwd + absolute creation time.
       expect(screen.getAllByText('Project')).toHaveLength(2)
       expect(screen.getByText('/projects/project')).toBeTruthy()
+      expect(screen.getByText('+1')).toBeTruthy()
       expect(screen.getByText('/libs/shared')).toBeTruthy()
       expect(screen.getByText(/^创建于 \d+年\d+月\d+日 /)).toBeTruthy()
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: '复制: /projects/project' })) })
@@ -330,6 +331,8 @@ describe('workspace browser rows', () => {
     }
     render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
     expect(screen.queryByRole('button', { name: /工作区/ })).toBeNull()
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(false)
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 
   it('blank New Session rows carry no menu, no time label, and no hover-card time', () => {
@@ -343,6 +346,8 @@ describe('workspace browser rows', () => {
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
       // The placeholder has no content yet: no row verbs, no "now" stamp.
       expect(screen.queryByRole('button', { name: /会话.*的操作/ })).toBeNull()
+      expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(false)
+      expect(screen.queryByRole('menu')).toBeNull()
       expect(screen.queryByText('刚刚')).toBeNull()
       // The hover card keeps title + status but drops the timestamp line.
       const wrapper = screen.getByRole('treeitem').parentElement as HTMLElement
@@ -392,6 +397,69 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('workspace and session context menus are independent of the ellipsis menus', () => {
+    const onToggle = vi.fn()
+    const onRenameWorkspace = vi.fn()
+    const onOpen = vi.fn()
+    const onRenameSession = vi.fn()
+    const group: GroupNode = {
+      key: 'project', workspaceId: wid('project'), cwd: '/projects/project', folders: [], createdAt: 0, label: 'Project',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    const node: SessionNode = {
+      id: sid('s1'), title: 'One', blank: false, running: false,
+      interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
+    }
+    const { rerender } = render(<ProjectRowItem
+      group={group} onToggle={onToggle} onCreate={vi.fn()}
+      actions={{ rename: onRenameWorkspace, addFolder: vi.fn(), removeFolder: vi.fn(), delete: vi.fn() }} t={t}
+    />)
+    const workspaceRow = screen.getByRole('treeitem')
+    expect(fireEvent.contextMenu(workspaceRow, { clientX: 48, clientY: 96 })).toBe(false)
+    expect(onToggle).not.toHaveBeenCalled()
+    const workspaceContext = screen.getByRole('menu')
+    expect(workspaceContext.style.left).toBe('48px')
+    expect(workspaceContext.style.top).toBe('100px')
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Project”的操作' }))
+    const workspaceEllipsis = screen.getByRole('menu')
+    expect(workspaceEllipsis).not.toBe(workspaceContext)
+    expect(workspaceEllipsis.style.left).not.toBe('48px')
+    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    expect(onRenameWorkspace).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    const onPin = vi.fn()
+    const onReveal = vi.fn()
+    const onSplit = vi.fn()
+    rerender(<SessionNodeItem node={{ ...node, cwd: '/projects/project' }} currentId={undefined} now={0} onOpen={onOpen}
+      onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} onPin={onPin} onSplit={onSplit} onReveal={onReveal} t={t} />)
+    const sessionRow = screen.getByRole('treeitem')
+    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+    expect(onOpen).not.toHaveBeenCalled()
+    const sessionContext = screen.getByRole('menu')
+    expect(sessionContext.style.left).toBe('72px')
+    expect(sessionContext.style.top).toBe('144px')
+    expect(screen.getByRole('menuitem', { name: '置顶任务' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: '取消置顶' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: '取消置顶' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: '在分屏打开' })).toHaveProperty('disabled', false)
+    expect(screen.getByRole('menuitem', { name: '复制日志路径' })).toHaveProperty('disabled', false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '在分屏打开' }))
+    expect(onSplit).toHaveBeenCalledWith(node.id)
+    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '置顶任务' }))
+    expect(onPin).toHaveBeenCalledWith(node.id)
+    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '在 Finder 中打开' }))
+    expect(onReveal).toHaveBeenCalledWith('/projects/project')
+    fireEvent.click(screen.getByRole('button', { name: '会话“One”的操作' }))
+    const sessionEllipsis = screen.getByRole('menu')
+    expect(sessionEllipsis).not.toBe(sessionContext)
+    expect(screen.getByRole('menuitem', { name: '分叉会话' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    expect(onRenameSession).toHaveBeenCalledWith(node.id, 'One')
+    expect(onOpen).not.toHaveBeenCalled()
+  })
 
   it('shows the hover card after the dwell and suppresses it while the row menu is open', () => {
     vi.useFakeTimers()

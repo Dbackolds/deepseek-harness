@@ -58,6 +58,7 @@ export {
   previewLine,
   resolveRgPath,
   runRipgrep,
+  searchRootsFor,
   toWorkdirRelative,
   trySaveFormattedResult,
 } from './search-core.ts'

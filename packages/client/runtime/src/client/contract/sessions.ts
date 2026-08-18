@@ -74,6 +74,12 @@ export interface ISessions {
   /** Clear the current selection into the no-session view state. */
   clear(): void
   /**
+   * Restore the Completed reminder for a listed Session so it returns to the
+   * sidebar Completed section until focus leaves it again.
+   * @param id - listed session id.
+   */
+  markUnread(id: SessionId): void
+  /**
    * Search the Host's visible message-content index. Results stay
    * request-local; the list snapshot remains the metadata authority.
    * @param query - non-blank literal phrase.

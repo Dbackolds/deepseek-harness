@@ -15,12 +15,15 @@ const READY: GitBranchSeatState = {
   sessionId: 's1',
   view: {
     currentBranch: 'main',
+    detached: false,
     worktreePath: '/repo',
     isolated: false,
+    dirtyCount: 0,
+    unpushedCount: 0,
     branches: [
       { name: 'main', current: true, remote: false },
       { name: 'feature', current: false, remote: false },
-      { name: 'origin-dev', current: false, remote: true },
+      { name: 'origin/dev', current: false, remote: true },
     ],
   },
   unavailable: false,
@@ -40,7 +43,11 @@ function renderSeat(state: Partial<GitBranchSeatState> = {}) {
     useWorkspaces: (select: (s: { recentWorkspaceId?: string; items: unknown[] }) => unknown) =>
       select({ recentWorkspaceId: 'ws-1', items: [{ workspaceId: 'ws-1' }] }),
     useGitBranchSeat: bindSnapshotSelector(store),
-    t: (key: keyof typeof en) => en[key],
+    t: (key: keyof typeof en, params?: Record<string, unknown>) => {
+      const raw = en[key]
+      if (params === undefined) return raw
+      return raw.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? ''))
+    },
   } as unknown as GitBranchSeatProps)} />)
   return actions
 }
@@ -48,9 +55,9 @@ function renderSeat(state: Partial<GitBranchSeatState> = {}) {
 describe('GitBranchSeat', () => {
   it('still offers create when the repository has no listed branches', () => {
     const actions = renderSeat({
-      view: { currentBranch: 'HEAD', worktreePath: '/repo', isolated: false, branches: [] },
+      view: { currentBranch: 'HEAD', detached: true, worktreePath: '/repo', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] },
     })
-    fireEvent.click(screen.getByRole('button', { name: /HEAD/ }))
+    fireEvent.click(screen.getByRole('button', { name: en['seat.detached'] }))
     fireEvent.click(screen.getByText(en['menu.create']))
     fireEvent.change(screen.getByPlaceholderText(en['create.placeholder']), { target: { value: '   ' } })
     fireEvent.click(screen.getByRole('button', { name: en['create.confirm'] }))
@@ -106,10 +113,48 @@ describe('GitBranchSeat', () => {
     expect((screen.getByRole('button', { name: /main/ }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('checks out a remote-tracking name without the remote: prefix', () => {
+  it('shows dirty and unpushed counts under a detached current checkout', () => {
+    renderSeat({
+      view: {
+        currentBranch: 'cf9fb80',
+        detached: true,
+        worktreePath: '/repo',
+        isolated: false,
+        dirtyCount: 2,
+        unpushedCount: 1,
+        branches: [{ name: 'main', current: false, remote: false }],
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: en['seat.detached'] }))
+    expect(screen.getAllByText(en['menu.detached']).length).toBeGreaterThan(0)
+    expect(screen.getByText('Uncommitted changes: 2 files')).toBeTruthy()
+    expect(screen.getByText(en['status.unpushedOne'])).toBeTruthy()
+  })
+
+  it('shows dirty and unpushed counts under the current branch', () => {
+    renderSeat({
+      view: {
+        currentBranch: 'main',
+        detached: false,
+        worktreePath: '/repo',
+        isolated: false,
+        dirtyCount: 1,
+        unpushedCount: 3,
+        branches: [
+          { name: 'main', current: true, remote: false },
+          { name: 'feature', current: false, remote: false },
+        ],
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /main/ }))
+    expect(screen.getByText(en['status.dirtyOne'])).toBeTruthy()
+    expect(screen.getByText('Unpushed commits: 3')).toBeTruthy()
+  })
+
+  it('checks out a remote-tracking name including the remote', () => {
     const actions = renderSeat()
     fireEvent.click(screen.getByRole('button', { name: /main/ }))
-    fireEvent.click(screen.getByText('origin-dev'))
-    expect(actions.checkout).toHaveBeenCalledWith('origin-dev')
+    fireEvent.click(screen.getByText('origin/dev'))
+    expect(actions.checkout).toHaveBeenCalledWith('origin/dev')
   })
 })

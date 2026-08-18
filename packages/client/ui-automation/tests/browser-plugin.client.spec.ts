@@ -43,7 +43,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
 
 describe('ui-automation browser half', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'settingsScope'])
   })
 
   it('registers the sidebar occupant, and fiber teardown removes it (HMR safety)', async () => {
@@ -57,6 +57,7 @@ describe('ui-automation browser half', () => {
       runNow: (id: never) => Promise<string | undefined>
       remove: (id: never) => Promise<string | undefined>
       setPageOpen: (open: boolean) => void
+      setKeepAwake: (enabled: boolean) => void
     })()
     await injected.load()
     await injected.create({ task: 'ping', workspaceId: 'ws-1' as never, afterSeconds: 60 })
@@ -64,6 +65,7 @@ describe('ui-automation browser half', () => {
     await injected.runNow('rule-1' as never)
     await injected.remove('rule-1' as never)
     injected.setPageOpen(true)
+    injected.setKeepAwake(true)
     ctx.emit('connection/reset')
     await fiber.dispose()
     expect(ctx.slots.entries('sidebar.automation')).toHaveLength(0)
@@ -87,8 +89,9 @@ describe('ui-automation browser half', () => {
 })
 
 describe('ui-automation node half', () => {
-  it('contributes no host behavior', () => {
-    expect(applyNode).not.toThrow()
+  it('registers without a settings provider', () => {
+    const ctx = new Context()
+    expect(() => { applyNode(ctx) }).not.toThrow()
   })
 })
 

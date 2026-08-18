@@ -126,6 +126,45 @@ export class Inbox {
   }
 
   /**
+   * Move one pending message inside its current list. A no-op request
+   * (already at the destination, or an unknown identity) leaves the
+   * projection and durable log unchanged.
+   * @param messageId - identity of the pending message to move.
+   * @param beforeMessageId - identity that should follow the moved
+   *   message; omit to append at the end of the same list.
+   * @returns whether the projection changed.
+   * @throws if `beforeMessageId` is pending in the other list.
+   */
+  move(messageId: MessageId, beforeMessageId?: MessageId): boolean {
+    const location = this.locate(messageId)
+    if (location === undefined) return false
+    const inbox = this.state[location.target]
+    let destination = inbox.length
+    if (beforeMessageId !== undefined) {
+      if (beforeMessageId === messageId) return false
+      const before = this.locate(beforeMessageId)
+      if (before === undefined) return false
+      if (before.target !== location.target) {
+        throw new Error('cannot move message "' + messageId + '" across inbox lists')
+      }
+      destination = before.index
+    }
+    const from = location.index
+    const insertAt = destination > from ? destination - 1 : destination
+    if (insertAt === from) return false
+    const message = inbox[from]
+    if (message === undefined) return false
+    const start = Math.min(from, insertAt)
+    const end = Math.max(from, insertAt) + 1
+    const window = inbox.slice(start, end)
+    const relocated = from < insertAt
+      ? [...window.slice(1), message]
+      : [message, ...window.slice(0, -1)]
+    this.mutate(location.target, start, window.length, relocated, false)
+    return true
+  }
+
+  /**
    * Apply standard splice semantics and durably record the normalized result.
    * The durable event commits before the live projection mutates, so synchronous
    * `session/event` observers see the pre-splice lists and can reconstruct the
@@ -188,7 +227,9 @@ export class Inbox {
     if (discardRemoved) {
       for (const message of removed) this.notifications.discarded(message)
     }
-    for (const message of event.data.inserted) this.notifications.inserted(message)
+    if (discardRemoved || actualDeleteCount === 0) {
+      for (const message of event.data.inserted) this.notifications.inserted(message)
+    }
     return removed
   }
 

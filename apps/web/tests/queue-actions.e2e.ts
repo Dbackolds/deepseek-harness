@@ -1,7 +1,7 @@
 // Keyless browser coverage for pending queue actions through the shipped Web
 // composition and real HTTP/SSE wire. Replay overrides park consecutive turns
-// so the page can edit and remove exact occurrences, then stop the active turn
-// while proving the preserved Queue advances in FIFO order.
+// so the page can edit, remove, and reorder exact occurrences, then stop the
+// active turn while proving the preserved Queue advances in the new order.
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -164,6 +164,22 @@ describe('web e2e: queue row actions', () => {
     await expect.poll(() => page.getByRole('button', { name: 'Remove queued message' }).count())
       .toBe(2)
 
+    const sessions = scaffold.ctx.sessions.list()
+    expect(sessions).toHaveLength(1)
+    const agent = scaffold.ctx.agents.get(sessions[0]!.id)
+    expect(agent).toBeDefined()
+    const queued = agent!.inbox.nextTurn
+    expect(queued.map(message => message.content.flatMap(block => block.type === 'text' ? [block.text] : [])))
+      .toEqual([[EDITED], [TAIL]])
+    expect(agent!.inbox.move(queued[1]!.id, queued[0]!.id)).toBe(true)
+    await expect.poll(async () => {
+      const texts = await page.locator('[data-queue-dock] li').evaluateAll(rows =>
+        rows.map(row => row.querySelector('[class*="preview"]')?.textContent ?? ''))
+      return texts
+    }, { timeout: 10_000 }).toEqual([TAIL, EDITED])
+    await expect.poll(() => page.locator('[data-queue-dock] li').first().getAttribute('draggable'))
+      .toBe('true')
+
     const preservedSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(PRESERVED_EXPECTED, preservedSnapshot, MODE)
 
@@ -175,7 +191,7 @@ describe('web e2e: queue row actions', () => {
       .toEqual(['aborted', 'completed', 'completed', 'completed'])
     expect(sessionEvents.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user'
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
-      : [])).toEqual([ACTIVE_PROMPT, EDITED, TAIL, WAKE])
+      : [])).toEqual([ACTIVE_PROMPT, TAIL, EDITED, WAKE])
     await expect.poll(() => page.locator('[data-queue-dock]').count()).toBe(0)
   }, 120_000)
 

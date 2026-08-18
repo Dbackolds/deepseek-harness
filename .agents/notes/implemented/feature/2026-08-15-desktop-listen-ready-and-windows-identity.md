@@ -28,7 +28,7 @@ The window icon is the packaged DeepSeek whale mark (`apps/desktop/assets/icon.{
 
 **Set only `BrowserWindow.icon`.** Rejected because Windows taskbar identity follows the process image and AppUserModelID. A Start-menu shortcut that names the whale ICO and the same ID is what a pin keeps.
 
-**Package a custom Electron helper with a rewritten PE icon.** Rejected as an installer-scale change. v1 delivery remains `pnpm desktop` / `dsh desktop` from the checkout.
+**Package a custom Electron helper with a rewritten PE icon.** Rejected for checkout launches. A rewritten PE icon is still not how Windows identity is claimed; the [desktop GitHub Release](../process/2026-08-17-desktop-github-release.md) ships electron-builder installers instead.
 
 ## Consequences
 

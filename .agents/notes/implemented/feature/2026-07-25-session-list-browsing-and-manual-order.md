@@ -19,7 +19,7 @@ The group-by menu offers two modes, WorkSpace / In one list. WorkSpace mode rend
 ### Row interactions
 
 - Session rows show a detail card after a 500ms hover dwell (full title / relative time / status line; the status line has only running/idle until the wire grows a status field). The card and the row menu are mutually exclusive: no card while a menu is open or a drag is in flight.
-- Session-row … menu: Rename / Fork session / Delete session; Rename and Fork are wired, while Delete remains visual-only. The workspace-header … menu's Rename / Delete workspace actions are both wired. Menus close when the pointer leaves them.
+- Session-row ellipsis menu: Rename / Fork session / Archive session. A separate right-click context menu on a non-blank Session row offers the same verbs at the pointer. The workspace-header ellipsis and its separate context menu offer Rename / Add folder / Delete workspace on a real Workspace row. The ungrouped bucket and a blank New Session row have no verbs and only suppress the browser menu. The ellipsis menu closes when the pointer leaves it; the context menu stays until selection, outside click, or Escape.
 - Supporting primitives: `Menu` gains label entries, danger rows, and `closeOnPointerLeave`; a new `HoverCard` (portaled placement, open delay, disabled guard).
 
 ### workspace.rename

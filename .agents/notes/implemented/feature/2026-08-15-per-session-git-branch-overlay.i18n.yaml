@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-per-session-git-branch-overlay.md
-2026-08-15-per-session-git-branch-overlay.md: 3a27b3703188e1b65c39ef9e87f2912d2d2fd727
-2026-08-15-per-session-git-branch-overlay.zh.md: a57eb706b3441ad335e501853a77ca94ac938919
+2026-08-15-per-session-git-branch-overlay.md: 053a591e98d69f642e4d4e0c661cf8805a39eabc
+2026-08-15-per-session-git-branch-overlay.zh.md: 23bcb13f6d04bde2942fa1b3bacf862a687be448

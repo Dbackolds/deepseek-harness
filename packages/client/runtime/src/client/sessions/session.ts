@@ -784,9 +784,16 @@ function conversationInput(entry: HistoryEntry): ConversationEventInput {
   return { event: entry.event, view: entry.view }
 }
 
-/** A generic command row alone remains control-plane content; every other visible Chat Node activates the conversation. */
+/**
+ * Any visible Chat Node activates the conversation view. Generic command
+ * rows stay Host-blank (list-hidden, reusable) but must leave the welcome
+ * hero so a new session can show `/reload` without a later prompt.
+ */
 function hasVisibleConversationContent(chat: ChatSnapshot): boolean {
-  return chat.order.some(key => chat.nodes.get(key)?.kind !== 'command')
+  return chat.order.some((key) => {
+    const node = chat.nodes.get(key)
+    return node !== undefined && node.visibility !== 'hidden'
+  })
 }
 
 /**
@@ -795,7 +802,8 @@ function hasVisibleConversationContent(chat: ChatSnapshot): boolean {
  * stays engaging until an authoritative accepted-turn, running, or pending
  * signal arrives (retry semantics — see ComposerPhase).
  * @param hasContent - authoritative non-blank activity beyond a pending first
- *   prompt, visible non-command Chat content, a running turn, or a pending interaction.
+ *   prompt, any visible Chat content including generic command rows, a
+ *   running turn, or a pending interaction.
  * @param promptAttempted - a prompt was initiated on this session object.
  * @returns the derived phase.
  */

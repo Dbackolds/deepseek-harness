@@ -545,6 +545,7 @@ describe('headless stream-json snapshots', () => {
         { role: 'system', content: 'Model-owned system prompt for deepseek-v4-flash.' },
         { role: 'user', content: 'return the deterministic response' },
       ])
+      expect(server.requests[0]?.reasoning_effort).toBe('low')
       const header = (parseJsonl(result.stdout)
         .map(record => record.event)
         .find((event): event is JsonObject => (
@@ -559,7 +560,7 @@ describe('headless stream-json snapshots', () => {
           "maxTokens": 256000,
           "model": "deepseek-v4-flash",
           "provider": "deepseek-official",
-          "reasoningEffort": "off",
+          "reasoningEffort": "low",
         }
       `)
       expect(header?.adapterDefaults).toEqual({

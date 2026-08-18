@@ -11,7 +11,13 @@ import UserQuestionService, {
 } from '@deepseek-ai/dsh-user-questions'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import { CodeRuntime, type CodeRunRequest, type CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
-import PlanModeController, { EXIT_PLAN_MODE, foldPlanMode, resolveConfig } from '../src/index.ts'
+import PlanModeController, {
+  EXIT_PLAN_MODE,
+  PLAN_APPROVED_KICKOFF,
+  PLAN_APPROVED_RESULT,
+  foldPlanMode,
+  resolveConfig,
+} from '../src/index.ts'
 import type { PlanModeConfig } from '../src/index.ts'
 
 const TEST_PLAN_SECTION = 'Test plan mode instructions.'
@@ -768,7 +774,11 @@ describe('exit_plan_mode', () => {
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected approved plan result')
     expect(result.value).toEqual({ approved: true })
-    expect(result.content).toEqual([{ type: 'text', text: 'Plan approved — plan mode exited; carry out the plan starting with your next step.' }])
+    expect(result.content).toEqual([{ type: 'text', text: PLAN_APPROVED_RESULT }])
+    expect(result.additionalContexts).toMatchObject([{
+      content: [{ type: 'text', text: PLAN_APPROVED_KICKOFF }],
+      source: { kind: 'plugin', plugin: 'plan-mode', form: 'notice', summary: 'Approved plan — implement now' },
+    }])
     // Boundary-applied, not a direct append: the fold stays plan until the
     // step's end, so the plan policy covers any remaining call of the SAME batch.
     expect(foldPlanMode(agent.session.events)).toBe(true)
@@ -828,6 +838,10 @@ describe('exit_plan_mode', () => {
       arguments: { plan },
       isError: false,
     })
+    expect(result.additionalContexts).toMatchObject([{
+      content: [{ type: 'text', text: PLAN_APPROVED_KICKOFF }],
+      source: { kind: 'plugin', plugin: 'plan-mode' },
+    }])
     expect(ctx.planMode.get(agent)).toEqual({ active: true, pending: false })
   })
 
@@ -849,10 +863,15 @@ describe('exit_plan_mode', () => {
     expect(afterExit.sections.find(section => section.name === 'plan:policy')?.text).toBe('')
   })
 
-  it('the exit flush narrates nothing — the tool result is the narration', async () => {
+  it('the exit flush narrates nothing — kickoff rides the tool result, not a user-switch notice', async () => {
     const { ctx, agent } = await setupWithReview({ selected: ['Approve'] })
     header(agent.session)
-    await callExit(ctx, agent)
+    const result = await callExit(ctx, agent)
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('expected approved plan result')
+    expect(result.additionalContexts?.map(context => context.content)).toEqual([
+      [{ type: 'text', text: PLAN_APPROVED_KICKOFF }],
+    ])
     await boundary(ctx, agent, 'step-start')
     expect(foldPlanMode(agent.session.events)).toBe(false)
     expect(noticeTexts(agent.session)).toEqual([])
@@ -863,6 +882,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: consider the resume path' }])
+    expect(result.additionalContexts).toBeUndefined()
     expect(foldPlanMode(agent.session.events)).toBe(true)
   })
 

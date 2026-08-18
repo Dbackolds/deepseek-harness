@@ -19,18 +19,33 @@
  * flat fallback directory `$DSH_HOME/profiles/node_modules` (one symlink per
  * package the installation's app and bundles depend on) makes every in-box
  * plugin Node-resolvable from any profile through the ordinary parent-walk.
+ * Out-of-tree Host plugins mutate the same files through
+ * {@link packageExportsBundle}, {@link reconcileProfilePlugins},
+ * {@link runProfilePnpm}, {@link readProfilePatches}, and
+ * {@link writeProfilePatches}; a profile boot publishes that identity as
+ * `ctx.profile` ({@link provideProfile}).
  * @module @deepseek-ai/dsh-app-boot/profile
  */
 
+import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import {
   existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync,
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import type { Context } from '@deepseek-ai/cordis'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import { applyEntryPatches, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
-import { loadOverlayPatches } from './index.ts'
+import * as yaml from 'js-yaml'
+import { loadOptionalPatches, loadOverlayPatches } from './index.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** The booted profile's name, directory, and installation resolution anchor. */
+    profile?: ProfileHandle
+  }
+}
 
 /** Directory under the Harness home holding every profile. */
 export const PROFILES_DIR = 'profiles'
@@ -417,4 +432,191 @@ export function composeEntries(
     let index = 0
     warn(message.replace(/%C/g, () => JSON.stringify(args[index++])))
   })
+}
+
+/**
+ * The booted profile's identity: enough for an out-of-tree plugin to resolve
+ * bundles and mutate the same profile directory `dsh plugin` manages.
+ */
+export interface ProfileHandle {
+  /** The profile name (its directory basename). */
+  readonly name: string
+  /** Absolute profile directory. */
+  readonly dir: string
+  /** Absolute path of the dsh app's package.json (first bundle-resolution anchor). */
+  readonly installAnchor: string
+}
+
+/**
+ * Provide the booted profile on a host context before any tree entry mounts.
+ * @param ctx - the host context the tree will mount under.
+ * @param handle - the profile's name, directory, and installation anchor.
+ */
+export function provideProfile(ctx: Context, handle: ProfileHandle): void {
+  ctx.provide('profile', Object.freeze({
+    name: handle.name,
+    dir: handle.dir,
+    installAnchor: handle.installAnchor,
+  }))
+}
+
+/**
+ * Whether a package resolved from the two profile anchors declares `dsh.bundle`.
+ * An unresolvable name is not a bundle — the same as a package whose manifest
+ * omits the declaration.
+ * @param binName - the diagnostic prefix on a resolution error (unused when unresolved).
+ * @param packageName - the package name to inspect.
+ * @param installAnchor - absolute path of the dsh app's package.json.
+ * @param profileDir - the profile directory (second resolution anchor).
+ * @returns true when the resolved package declares `dsh.bundle.patch`.
+ */
+export function packageExportsBundle(
+  binName: string, packageName: string, installAnchor: string, profileDir: string,
+): boolean {
+  let dir: string
+  try {
+    dir = resolveBundleDir(binName, packageName, installAnchor, profileDir)
+  } catch {
+    return false
+  }
+  return readProfileManifest(binName, dir).dsh?.bundle?.patch !== undefined
+}
+
+/** Arguments for {@link reconcileProfilePlugins}. */
+export interface ReconcileProfilePluginsOptions {
+  /** Diagnostic prefix on warnings and manifest errors. */
+  binName: string
+  /** Absolute path of the dsh app's package.json. */
+  installAnchor: string
+  /** Absolute profile directory. */
+  profileDir: string
+  /** Manifest captured before the pnpm mutation. */
+  before: ProfileManifest
+  /** Sink for the one-line bundle-less-dependency warning; defaults to stderr. */
+  warn?: (line: string) => void
+}
+
+/**
+ * Reconcile `dsh.profile.bundles` against the installed state: a dependency that
+ * resolves to a `dsh.bundle`-declaring package joins the layer stack (appended
+ * in dependency order); a dependency-listed name that no longer does — removed,
+ * or the installed version dropped the declaration — leaves it. In-box bundles
+ * from the profile template are not dependencies and are never touched. Warns
+ * once per newly-added bundle-less dependency.
+ * @param options - the profile, the pre-mutation manifest, and the installation anchor.
+ */
+export function reconcileProfilePlugins(options: ReconcileProfilePluginsOptions): void {
+  const { binName, installAnchor, profileDir, before } = options
+  const warn = options.warn ?? ((line: string) => { process.stderr.write(`${line}\n`) })
+  const after = readProfileManifest(binName, profileDir)
+  const beforeDeps = new Set(Object.keys(before.dependencies ?? {}))
+  const dependencies = Object.keys(after.dependencies ?? {})
+  const plugins = after.dsh?.profile?.bundles ?? []
+  let changed = false
+  for (const packageName of dependencies) {
+    const isBundle = packageExportsBundle(binName, packageName, installAnchor, profileDir)
+    if (isBundle && !plugins.includes(packageName)) {
+      plugins.push(packageName)
+      changed = true
+    } else if (!isBundle && !beforeDeps.has(packageName)) {
+      warn(
+        `${binName}: warning: ${packageName} declares no dsh.bundle — installed as a plain dependency, not a profile layer `
+        + '(a later update that gains one activates it automatically)',
+      )
+    }
+  }
+  const dependencySet = new Set(dependencies)
+  for (const packageName of [...plugins]) {
+    const wasDependency = beforeDeps.has(packageName) || dependencySet.has(packageName)
+    const stillBundle = dependencySet.has(packageName)
+      && packageExportsBundle(binName, packageName, installAnchor, profileDir)
+    if (wasDependency && !stillBundle) {
+      plugins.splice(plugins.indexOf(packageName), 1)
+      changed = true
+    }
+  }
+  if (!changed) return
+  after.dsh = { ...after.dsh, profile: { ...after.dsh?.profile, bundles: plugins } }
+  writeProfileManifest(profileDir, after)
+}
+
+/** Arguments for {@link runProfilePnpm}. */
+export interface RunProfilePnpmOptions {
+  /** Absolute profile directory; becomes pnpm's cwd. */
+  profileDir: string
+  /** pnpm arguments, already path-anchored by the caller if needed. */
+  args: readonly string[]
+  /**
+   * `inherit` streams pnpm onto the caller's stdio (the CLI forwarder).
+   * `pipe` captures stdout and stderr (a Host plugin that must not write them).
+   */
+  stdio?: 'inherit' | 'pipe'
+}
+
+/** Outcome of one {@link runProfilePnpm} invocation. */
+export interface ProfilePnpmResult {
+  /** True when `pnpm` was not on PATH; `exitCode` is then 127. */
+  missingPnpm: boolean
+  /** pnpm's exit status, or 1 when the process was killed. */
+  exitCode: number
+  /** Captured stdout when `stdio` is `pipe`; otherwise empty. */
+  stdout: string
+  /** Captured stderr when `stdio` is `pipe`; otherwise empty. */
+  stderr: string
+}
+
+/**
+ * Run `pnpm <args>` in a profile directory. Windows resolves pnpm through its
+ * `.cmd` shim, which `spawn` refuses without a shell since the CVE-2024-27980
+ * hardening. A missing `pnpm` is a structured result, not a throw; every other
+ * spawn failure throws.
+ * @param options - the profile directory, pnpm arguments, and stdio mode.
+ * @returns the process outcome, with `missingPnpm` set when pnpm is absent.
+ */
+export function runProfilePnpm(options: RunProfilePnpmOptions): ProfilePnpmResult {
+  const stdio = options.stdio ?? 'inherit'
+  const result = spawnSync('pnpm', [...options.args], {
+    cwd: options.profileDir,
+    stdio,
+    ...stdio === 'pipe' ? { encoding: 'utf8' as const } : {},
+    shell: process.platform === 'win32',
+  })
+  if (result.error !== undefined) {
+    if ((result.error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { missingPnpm: true, exitCode: 127, stdout: '', stderr: '' }
+    }
+    throw result.error
+  }
+  return {
+    missingPnpm: false,
+    exitCode: result.status ?? 1,
+    stdout: typeof result.stdout === 'string' ? result.stdout : '',
+    stderr: typeof result.stderr === 'string' ? result.stderr : '',
+  }
+}
+
+/**
+ * Read a profile's user patch layer. A missing file is an empty list so a
+ * first enablement write can create it; a present unreadable or invalid file
+ * throws — the same fail-loud rule as {@link loadOptionalPatches}.
+ * @param binName - the diagnostic prefix on the thrown error.
+ * @param dir - the profile directory.
+ * @returns the parsed patches, or `[]` when the file does not exist.
+ */
+export function readProfilePatches(binName: string, dir: string): PatchOptions[] {
+  return loadOptionalPatches(binName, join(dir, PROFILE_PATCH_FILENAME)) ?? []
+}
+
+/**
+ * Write a profile's user patch layer (include YAML dialect, trailing newline).
+ * Replaces the whole file; comments and ordering outside the dumped list are
+ * not preserved.
+ * @param dir - the profile directory.
+ * @param patches - the patch list to persist.
+ */
+export function writeProfilePatches(dir: string, patches: readonly PatchOptions[]): void {
+  writeFileSync(
+    join(dir, PROFILE_PATCH_FILENAME),
+    yaml.dump([...patches], { schema: entryListSchema, noRefs: true }).trimEnd() + '\n',
+  )
 }

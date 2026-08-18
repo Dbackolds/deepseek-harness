@@ -220,7 +220,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(PlanModeController, { section: 'Tool catalog schema harvest.' })
     },
     note:
-      'exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary.',
+      'exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), approval logs plan mode inactive at the step boundary, and an approved review defers an implement-now kickoff onto the next request of the same turn.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash',

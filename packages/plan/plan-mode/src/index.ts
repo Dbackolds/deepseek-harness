@@ -27,7 +27,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -84,8 +84,22 @@ const KEEP_PLANNING_LABEL = 'Keep planning'
 const EXIT_DESCRIPTION
   = 'Use only in plan mode. Present your plan for the user\'s review and, on approval, leave plan mode. '
   + 'Send the COMPLETE plan as markdown, starting with a # heading that names it. '
-  + 'The user may approve (carry out the plan from your next step) or keep '
+  + 'The user may approve (carry out the plan in the next step of this turn) or keep '
   + 'planning — their feedback comes back in the tool result; revise and present again.'
+
+/** Model-facing confirmation on an approved review. */
+export const PLAN_APPROVED_RESULT
+  = 'Plan approved — plan mode exited; carry out the approved plan now in this same turn.'
+
+/**
+ * Instruction deferred onto an approved review so the next request, which no
+ * longer carries `plan:policy`, still has an explicit implement-now obligation.
+ */
+export const PLAN_APPROVED_KICKOFF
+  = 'The user approved the plan and plan mode has ended. Continue this turn by '
+  + 'carrying out the approved plan now. Follow any after-approval instructions '
+  + 'the user already gave. Do not wait for another user message and do not ask '
+  + 'whether to proceed.'
 
 /** The plan's first markdown heading (any level), or `undefined` when it has none. */
 function firstHeading(plan: string): string | undefined {
@@ -316,7 +330,7 @@ export class PlanModeController extends Service {
             approved: { type: 'boolean', const: true, required: true },
           },
         },
-        render: () => [{ type: 'text', text: 'Plan approved — plan mode exited; carry out the plan starting with your next step.' }],
+        render: () => [{ type: 'text', text: PLAN_APPROVED_RESULT }],
       },
       execute: async (args, exec) => {
         const agent = exec.agent
@@ -338,7 +352,7 @@ export class PlanModeController extends Service {
             question: 'Approve this plan and leave plan mode?',
             detail: args.plan,
             options: [
-              { label: APPROVE_LABEL, description: 'Leave plan mode; the plan is carried out from the next step.' },
+              { label: APPROVE_LABEL, description: 'Leave plan mode; the plan is carried out in the next step of this turn.' },
               { label: KEEP_PLANNING_LABEL, description: 'Stay in plan mode; feedback goes back to the model.' },
             ],
             // Presentation only: a capable UI renders the plan as a review
@@ -375,8 +389,18 @@ export class PlanModeController extends Service {
         }
         // Keep plan guidance for the rest of this assistant tool batch. The
         // silent selection is appended at the next accepted in-turn pre-step,
-        // before its request assembly.
+        // before its request assembly. The kickoff context is the implement-now
+        // obligation for that next request, which no longer carries plan:policy.
         this.pendingIntents.set(agent.session, { active: false, narrate: false })
+        exec.deferContext(createUserMessage({
+          content: [{ type: 'text', text: PLAN_APPROVED_KICKOFF }],
+          source: {
+            kind: 'plugin',
+            plugin: 'plan-mode',
+            form: 'notice',
+            summary: boundContextSummary('Approved plan — implement now'),
+          },
+        }))
         return { approved: true }
       },
       presentCall: args => ({

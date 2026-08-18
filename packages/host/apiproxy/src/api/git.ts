@@ -9,7 +9,7 @@ import type { RpcRequest, RpcResponse } from './rpc.ts'
 
 /** One local or remote-tracking branch a workspace repository advertises. */
 export interface GitBranchView {
-  /** Branch name without the refs/heads/ prefix. */
+  /** Local short name, or remote-tracking name including the remote. */
   name: string
   /** True when this name is the repository current HEAD. */
   current: boolean
@@ -19,12 +19,18 @@ export interface GitBranchView {
 
 /** Snapshot a session branch picker needs. */
 export interface SessionGitView {
-  /** Branch this session operates on. */
+  /** Branch or detached label this session operates on. */
   currentBranch: string
+  /** True when this session checkout is not on a branch. */
+  detached: boolean
   /** Absolute directory this session operates in. */
   worktreePath: string
   /** True when the session uses an isolated worktree rather than the workspace checkout. */
   isolated: boolean
+  /** Uncommitted paths in this session worktree, including untracked files. */
+  dirtyCount: number
+  /** Commits on the current branch that the upstream does not have; 0 when there is no upstream. */
+  unpushedCount: number
   /** Local and remote-tracking branches, workspace HEAD first. */
   branches: readonly GitBranchView[]
 }

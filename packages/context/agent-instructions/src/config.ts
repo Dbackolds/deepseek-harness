@@ -64,15 +64,18 @@ export interface ResolvedConfig extends ResolvedDiscoveryConfig {
  * @param config - normalized plugin configuration.
  * @param cwd - absolute session working directory.
  * @param projectRoot - project root selected for the current baseline.
+ * @param extraRoots - additional workspace folders included in this baseline.
  * @returns stable serialized identity for compatibility checks on resume.
  */
 export function workspaceBaselineIdentity(
   config: ResolvedConfig,
   cwd: string,
   projectRoot: string,
+  extraRoots: readonly string[] = [],
 ): string {
   return JSON.stringify({
     projectRoot: relative(cwd, projectRoot),
+    extraRoots: extraRoots.map(root => relative(cwd, root)),
     projectRootMarkers: config.projectRootMarkers,
     maxBytes: config.maxBytes,
     maxSourceBytes: config.maxSourceBytes,

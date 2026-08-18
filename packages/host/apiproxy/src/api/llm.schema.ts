@@ -42,6 +42,8 @@ export const discoveredModelViewSchema = z.object({
   name: z.string().min(1).optional(),
   contextWindow: z.number().int().positive().optional(),
   maxTokens: z.number().int().positive().optional(),
+  reasoningEfforts: z.record(z.string().min(1), z.union([z.string().min(1), z.null()])).optional(),
+  supportsReasoningEffort: z.boolean().optional(),
 }) satisfies z.ZodType<Wire<DiscoveredModelView>>
 
 /** llm.discoverModels request payload. */

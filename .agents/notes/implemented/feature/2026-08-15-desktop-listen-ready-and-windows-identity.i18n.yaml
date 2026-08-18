@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-desktop-listen-ready-and-windows-identity.md
-2026-08-15-desktop-listen-ready-and-windows-identity.md: 0f581c8e8fe93c9e54f817f1e2b41a0171e5fc5f
-2026-08-15-desktop-listen-ready-and-windows-identity.zh.md: 9cc1d41819ad97d82de5b42187ac8d10a6522214
+2026-08-15-desktop-listen-ready-and-windows-identity.md: ec24866da775163f1ada7c0d4406342d07f7a597
+2026-08-15-desktop-listen-ready-and-windows-identity.zh.md: 8122c6c57cf9d357b810b426a4aed1617bb7f414

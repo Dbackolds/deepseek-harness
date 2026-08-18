@@ -2,8 +2,8 @@
  * client-hmr, browser half: hot-reload driver for client plugin entries.
  *
  * Listens on the host's system SSE channel (`GET /plugins/events`); on a
- * `rebuilt` frame it reloads the entry's bundle and swaps the cordis
- * fiber in place. Every graph entry is a plugin bundle
+ * `rebuilt` frame while auto-reload is on, or on a `reload` frame, it
+ * reloads the entry's bundle and swaps the cordis fiber in place. Every graph entry is a plugin bundle
  * — `immediately` rows differ only in stage-one prefetch (a boot
  * optimization), so all rostered plugin packages share these reload semantics;
  * normal packages (react family, cordis, shell, pure libs) are not entries
@@ -61,19 +61,46 @@
  * fiberless (the next rebuilt frame retries from scratch); an apply failure
  * leaves a FAILED fiber for the shell's status projection. Both log loudly.
  */
-import type { Context } from '@deepseek-ai/cordis'
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
+import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { PluginsEventFrame } from '../events.ts'
-import { EVENTS_ENDPOINT } from '../events.ts'
+import { EVENTS_ENDPOINT, RELOAD_ENDPOINT } from '../events.ts'
+import { CLIENT_HMR_SETTINGS_NAMESPACE, type ClientHmrSettings } from '../hmr-settings.ts'
+import { ClientHmrReloadPolicy } from './reload-policy.ts'
+import type { ReloadRowInjected } from './ReloadRow.tsx'
+import { ReloadRow } from './ReloadRow.tsx'
+import { en, zh, type HmrSettingsKey } from './locales.ts'
 
 export type { PluginsEventFrame } from '../events.ts'
-export { EVENTS_ENDPOINT } from '../events.ts'
+export { EVENTS_ENDPOINT, RELOAD_ENDPOINT } from '../events.ts'
+export type { ReloadRowInjected, ReloadRowProps } from './ReloadRow.tsx'
+export type { HmrSettingsKey } from './locales.ts'
+export {
+  AUTO_RELOAD_FIELD, CLIENT_HMR_SETTINGS_NAMESPACE, DEFAULT_AUTO_RELOAD,
+  type ClientHmrSettings,
+} from '../hmr-settings.ts'
+
+/** Namespace owning this feature's settings-row copy. */
+export const SETTINGS_NS = 'settings.hmr'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** The plugin-reload settings row's copy. */
+    'settings.hmr': HmrSettingsKey
+  }
+}
 
 /** Cordis plugin name. */
 export const name = 'client-hmr'
 
-/** Required services: the vendored Loader (entry governance) and the client module system (boot provide, service name `modules`). */
-export const inject = ['loader', 'modules']
+/**
+ * Required services: the vendored Loader, the client module system, and the
+ * settings/locale/slots seats for the General-section row. `remote` carries
+ * the forwarded settings invalidation that `bindSettingsScope` subscribes to.
+ */
+export const inject = ['loader', 'modules', 'slots', 'locale', 'connection', 'remote', 'settingsScope']
 
 /** Find the loader entry whose module specifier is `id` (entry tree ids are random; the package name lives in `options.name`). */
 function findEntry(loader: Loader, id: string): Entry | undefined {
@@ -91,15 +118,31 @@ function removeOwnedStyles(id: string): void {
 }
 
 /**
- * Mount the HMR driver: subscribe to the system SSE channel and hot-swap
- * rebuilt entries.
- * @param ctx - plugin context with `loader` and `modules` available.
+ * Mount the HMR driver: subscribe to the system SSE channel, hot-swap
+ * rebuilt or manually requested entries, and register the General settings row.
+ * @param ctx - plugin context with `loader`, `modules`, and settings seats.
+ * @returns nothing; registrations live on the plugin fiber.
  */
-export function apply(ctx: Context): void {
-  // Both are declared injections (typed Context merges: `modules` from the
-  // client module loader package, `loader` from the vendored Loader).
+export function apply(ctx: ClientContext): void {
+  // Declared injections: `modules` from the client module loader, `loader`
+  // from the vendored Loader, and the settings/locale/slots seats.
   const modLoader = ctx.modules
   const loader: Loader = ctx.loader
+  const policy = new ClientHmrReloadPolicy(
+    ctx.settingsScope.bind<ClientHmrSettings>({ namespace: CLIENT_HMR_SETTINGS_NAMESPACE }),
+  )
+  ctx.effect(() => ctx.locale.register(SETTINGS_NS, { zh, en }), 'client-hmr: settings row dictionaries')
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'plugin-reload',
+    order: 30,
+    locale: SETTINGS_NS,
+    inject: (): ReloadRowInjected => ({
+      hooks: { autoReload: policy.autoReload },
+      setAutoReload: (enabled) => { policy.setAutoReload(enabled) },
+      reloadPlugins: () => requestManualReload(),
+    }),
+  }, ReloadRow))
 
   async function reload(id: string): Promise<void> {
     const entry = findEntry(loader, id)
@@ -145,6 +188,13 @@ export function apply(ctx: Context): void {
   const handle = (frame: PluginsEventFrame): void => {
     switch (frame.type) {
       case 'rebuilt':
+        if (!policy.autoReload.getSnapshot()) break
+        queue = queue.then(() => reload(frame.id)).catch((error: unknown) => {
+          ctx.logger.error(`client-hmr: reload of "${frame.id}" failed`)
+          ctx.logger.error(error)
+        })
+        break
+      case 'reload':
         queue = queue.then(() => reload(frame.id)).catch((error: unknown) => {
           ctx.logger.error(`client-hmr: reload of "${frame.id}" failed`)
           ctx.logger.error(error)
@@ -178,4 +228,14 @@ export function apply(ctx: Context): void {
     })
     return () => { source.close() }
   }, 'client-hmr: event source')
+
+  async function requestManualReload(): Promise<number> {
+    const response = await fetch(RELOAD_ENDPOINT, { method: 'POST' })
+    if (!response.ok) throw new Error(`client-hmr: manual reload failed with HTTP ${String(response.status)}`)
+    const body = await response.json() as { ok?: boolean; reloaded?: number }
+    if (body.ok !== true || typeof body.reloaded !== 'number') {
+      throw new Error('client-hmr: manual reload returned an invalid body')
+    }
+    return body.reloaded
+  }
 }

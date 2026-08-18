@@ -27,6 +27,8 @@ type WorkspaceViewState = {
   sessionUpdatedAtByAccount: Record<string, Record<string, number>>
   /** Folded activity sections, keyed as `${accountKey}:${bucket}`. Absent = expanded. */
   activityExpansion: Record<string, boolean>
+  /** Browser-local pinned Session ids, newest pin last, shown under the Workspace header. */
+  pinnedSessionIds: string[]
 }
 
 /**
@@ -46,6 +48,8 @@ type WorkspaceViewActions = {
   ) => void
   setSessionOrder: (draft: WorkspaceViewState, accountKey: string, order: string[]) => void
   setActivityExpanded: (draft: WorkspaceViewState, key: string, expanded: boolean) => void
+  pinSession: (draft: WorkspaceViewState, sessionId: string) => void
+  unpinSession: (draft: WorkspaceViewState, sessionId: string) => void
 }
 
 /**
@@ -61,8 +65,9 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       sessionOrderByAccount: {},
       sessionUpdatedAtByAccount: {},
       activityExpansion: {},
+      pinnedSessionIds: [],
     }),
-    persist: 'dsh.workspace.view.v6',
+    persist: 'dsh.workspace.view.v7',
     actions: {
       setGroupBy: (d, mode: SessionGroupBy) => { d.groupBy = mode },
       setOrderBy: (d, mode: SessionOrderBy) => { d.orderBy = mode },
@@ -94,6 +99,12 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       },
       setActivityExpanded: (d, key: string, expanded: boolean) => {
         d.activityExpansion[key] = expanded
+      },
+      pinSession: (d, sessionId: string) => {
+        d.pinnedSessionIds = [...d.pinnedSessionIds.filter(id => id !== sessionId), sessionId]
+      },
+      unpinSession: (d, sessionId: string) => {
+        d.pinnedSessionIds = d.pinnedSessionIds.filter(id => id !== sessionId)
       },
     },
   })

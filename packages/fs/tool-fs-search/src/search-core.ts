@@ -26,7 +26,7 @@ import { ItemRetainer, TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import type { RetainedItems } from '@deepseek-ai/dsh-output-retention'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
-import { sessionWorkingDirectory } from '@deepseek-ai/dsh-sandbox-policy'
+import { sessionSearchRoots, sessionWorkingDirectory } from '@deepseek-ai/dsh-sandbox-policy'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 
 /**
@@ -287,6 +287,21 @@ export async function runRipgrep(
  * @param workdir - the resolved workdir the command ran in.
  * @returns the workdir-relative display path when possible, else `path` unchanged.
  */
+
+/**
+ * Absolute folders a default grep/glob should search: the session cwd plus
+ * existing additional workspace folders. Absent without a session or policy.
+ * @param ctx - plugin context; reads optional `sandboxPolicy`.
+ * @param exec - tool execution supplying the session.
+ * @returns search roots, or `undefined` when the call has no session policy.
+ */
+export function searchRootsFor(ctx: Context, exec: ToolExecution): string[] | undefined {
+  const session = exec.agent?.session
+  const policy = ctx.get('sandboxPolicy')
+  if (session === undefined || policy === undefined || typeof policy.foldersOf !== 'function') return undefined
+  return sessionSearchRoots(policy.foldersOf(session))
+}
+
 export function toWorkdirRelative(path: string, workdir: string): string {
   if (!isAbsolute(path)) return path
   const rel = relative(workdir, path)

@@ -14,7 +14,8 @@ function err(code: string, message: string) {
 describe('GitBranchSeatController', () => {
   it('loads the current session overlay', async () => {
     const view = {
-      currentBranch: 'main', worktreePath: '/repo', isolated: false,
+      currentBranch: 'main', detached: false, worktreePath: '/repo', isolated: false,
+      dirtyCount: 0, unpushedCount: 0,
       branches: [{ name: 'main', current: true, remote: false }],
     }
     const seat = new GitBranchSeatController({
@@ -42,12 +43,13 @@ describe('GitBranchSeatController', () => {
 
   it('records a checkout overlay for this session', async () => {
     const next = {
-      currentBranch: 'feature', worktreePath: '/wt', isolated: true,
+      currentBranch: 'feature', detached: false, worktreePath: '/wt', isolated: true,
+      dirtyCount: 0, unpushedCount: 0,
       branches: [{ name: 'feature', current: false, remote: false }],
     }
     const seat = new GitBranchSeatController({
       git: {
-        describe: () => Promise.resolve(ok({ currentBranch: 'main', worktreePath: '/repo', isolated: false, branches: [] })),
+        describe: () => Promise.resolve(ok({ currentBranch: 'main', detached: false, worktreePath: '/repo', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] })),
         checkout: () => Promise.resolve(ok(next)),
         createBranch: () => Promise.resolve(ok(next)),
       },
@@ -59,7 +61,7 @@ describe('GitBranchSeatController', () => {
   it('resets when no session is current', async () => {
     const seat = new GitBranchSeatController({
       git: {
-        describe: () => Promise.resolve(ok({ currentBranch: 'main', worktreePath: '/repo', isolated: false, branches: [] })),
+        describe: () => Promise.resolve(ok({ currentBranch: 'main', detached: false, worktreePath: '/repo', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] })),
         checkout: () => Promise.resolve(ok({} as never)),
         createBranch: () => Promise.resolve(ok({} as never)),
       },
@@ -72,7 +74,8 @@ describe('GitBranchSeatController', () => {
 
   it('loads the workspace checkout when no session is current', async () => {
     const view = {
-      currentBranch: 'main', worktreePath: '/repo', isolated: false,
+      currentBranch: 'main', detached: false, worktreePath: '/repo', isolated: false,
+      dirtyCount: 0, unpushedCount: 0,
       branches: [{ name: 'main', current: true, remote: false }],
     }
     let described: unknown
@@ -126,12 +129,12 @@ describe('GitBranchSeatController', () => {
   it('ignores a second mutate while one is busy', async () => {
     let release!: () => void
     const blocked = new Promise<{ rpcId: string; result: { ok: true; value: never } }>((resolve) => {
-      release = () => resolve(ok({ currentBranch: 'a', worktreePath: '/a', isolated: true, branches: [] } as never))
+      release = () => resolve(ok({ currentBranch: 'a', detached: false, worktreePath: '/a', isolated: true, dirtyCount: 0, unpushedCount: 0, branches: [] } as never))
     })
     let calls = 0
     const seat = new GitBranchSeatController({
       git: {
-        describe: () => Promise.resolve(ok({ currentBranch: 'main', worktreePath: '/repo', isolated: false, branches: [] })),
+        describe: () => Promise.resolve(ok({ currentBranch: 'main', detached: false, worktreePath: '/repo', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] })),
         checkout: () => { calls += 1; return blocked },
         createBranch: () => Promise.resolve(ok({} as never)),
       },

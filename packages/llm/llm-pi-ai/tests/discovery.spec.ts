@@ -84,12 +84,23 @@ describe('catalog-route model discovery', () => {
     expect(models.map(model => model.id).sort())
       .toEqual(getBuiltinModels('deepseek').map(model => model.id).sort())
     expect(models.every(model => (model.contextWindow ?? 0) > 0 && (model.maxTokens ?? 0) > 0)).toBe(true)
+    const flash = models.find(model => model.id === 'deepseek-v4-flash')
+    expect(flash?.reasoningEfforts).toEqual({ off: null, high: 'high', max: 'max' })
+    expect(flash?.supportsReasoningEffort).toBeUndefined()
     expect(server.paths).toEqual([])
   })
 
   it('needs no endpoint for a route the catalog describes', async () => {
     const ctx = await harness()
     await expect(ctx.llm.discoverModels('llm-pi-ai', { provider: 'deepseek' })).resolves.not.toHaveLength(0)
+  })
+
+  it('reports a catalog model\'s implicit levels and its listed reasoning-effort switch', async () => {
+    const ctx = await harness()
+    const models = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'xai' })
+    const grok = models.find(model => model.id === 'grok-4.3')
+    expect(grok?.reasoningEfforts).toMatchObject({ off: null, high: 'high' })
+    expect(grok?.supportsReasoningEffort).toBe(false)
   })
 
   it('says where a route the catalog does not describe must get its models', async () => {
@@ -127,6 +138,16 @@ describe('draft-provider model discovery', () => {
         data: [
           { id: 'acme-large', display_name: 'Acme Large', context_length: 65_536, max_output_tokens: 4096 },
           { id: 'acme-small' },
+          {
+            id: 'acme-think',
+            supportsReasoningEffort: true,
+            reasoningEfforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High', default: true },
+              { value: 'mystery' },
+            ],
+          },
         ],
       }),
     })
@@ -137,10 +158,55 @@ describe('draft-provider model discovery', () => {
     expect(models).toEqual([
       { id: 'acme-large', name: 'Acme Large', contextWindow: 65_536, maxTokens: 4096 },
       { id: 'acme-small' },
+      {
+        id: 'acme-think',
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+        supportsReasoningEffort: true,
+      },
     ])
     expect(server.paths).toEqual(['/v1/models'])
     expect(server.headers[0]?.authorization).toBe('Bearer probe-key')
     expect(server.headers[0]?.['user-agent']).toBe(userAgent())
+  })
+
+  it('drops unknown string tokens and an empty effort list', async () => {
+    const server = await listingServer({
+      body: JSON.stringify({
+        data: [
+          { id: 'mystery-only', reasoningEfforts: ['mystery', { label: 'Also mystery' }] },
+          { id: 'empty-list', reasoningEfforts: [] },
+          { id: 'off-only', reasoningEfforts: [{ label: 'Off' }] },
+          { id: 'high-label', reasoningEfforts: [{ label: 'High' }] },
+        ],
+      }),
+    })
+    const ctx = await harness()
+
+    await expect(ctx.llm.discoverModels('llm-pi-ai', { baseURL: server.url })).resolves.toEqual([
+      { id: 'mystery-only' },
+      { id: 'empty-list' },
+      { id: 'off-only', reasoningEfforts: { off: null } },
+      { id: 'high-label', reasoningEfforts: { high: 'high' } },
+    ])
+  })
+
+  it('reads snake_case effort fields and a named off level', async () => {
+    const server = await listingServer({
+      body: JSON.stringify({
+        data: [{
+          id: 'acme-off',
+          supports_reasoning_effort: true,
+          reasoning_efforts: [{ id: 'off', label: 'Off' }, 'HIGH', { value: 'ultra', label: 'max' }],
+        }],
+      }),
+    })
+    const ctx = await harness()
+
+    await expect(ctx.llm.discoverModels('llm-pi-ai', { baseURL: server.url })).resolves.toEqual([{
+      id: 'acme-off',
+      reasoningEfforts: { off: 'off', high: 'high', max: 'ultra' },
+      supportsReasoningEffort: true,
+    }])
   })
 
   it('keeps a deployment path instead of resolving it away', async () => {

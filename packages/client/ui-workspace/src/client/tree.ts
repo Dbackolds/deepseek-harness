@@ -22,6 +22,8 @@ export interface SessionNode {
   title: string
   /** The provisional blank session (renderer shows the localized New Session title). */
   blank: boolean
+  /** Workspace directory of this session, when the Host projected one. */
+  cwd?: string
   /** The runtime Session list reports an interaction awaiting this user. */
   pendingInteraction?: PendingInteractionStatus
   running: boolean
@@ -31,6 +33,8 @@ export interface SessionNode {
   runningSubagentCount: number
   /** Finished and not left since that completion (the green "done" reminder / Completed section). */
   completed: boolean
+  /** Browser-local pin: the row sits under the Workspace header, above activity sections. */
+  pinned?: boolean
   updatedAt: number
 }
 
@@ -231,6 +235,7 @@ function sessionNode(
     id: s.id,
     title: sessionTitle(s),
     blank: s.blank,
+    ...(s.cwd === undefined ? {} : { cwd: s.cwd }),
     running: s.running,
     interrupted: s.interrupted === true,
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
@@ -241,7 +246,7 @@ function sessionNode(
 }
 
 /** Sidebar activity bucket used by the session list's status sections. */
-export type SessionActivityBucket = 'unread' | 'running' | 'abnormal' | 'history'
+export type SessionActivityBucket = 'pinned' | 'unread' | 'running' | 'abnormal' | 'history'
 
 /** Status sections that show a count badge. Every activity section can fold. */
 export const BADGED_ACTIVITY_BUCKETS = ['unread', 'running', 'abnormal'] as const satisfies readonly SessionActivityBucket[]
@@ -254,8 +259,9 @@ export const BADGED_ACTIVITY_BUCKETS = ['unread', 'running', 'abnormal'] as cons
  * @returns the section that owns this row.
  */
 export function sessionActivityBucket(
-  node: Pick<SessionNode, 'pendingInteraction' | 'running' | 'interrupted' | 'runningSubagentCount' | 'completed'>,
+  node: Pick<SessionNode, 'pendingInteraction' | 'running' | 'interrupted' | 'runningSubagentCount' | 'completed' | 'pinned'>,
 ): SessionActivityBucket {
+  if (node.pinned === true) return 'pinned'
   if (node.pendingInteraction !== undefined || node.running || node.runningSubagentCount > 0) {
     return 'running'
   }
@@ -277,18 +283,21 @@ export interface SessionActivitySection {
  * @returns the four sections in render order.
  */
 export function partitionSessionActivity(sessions: readonly SessionNode[]): readonly SessionActivitySection[] {
+  const pinned: SessionNode[] = []
   const unread: SessionNode[] = []
   const running: SessionNode[] = []
   const abnormal: SessionNode[] = []
   const history: SessionNode[] = []
   for (const session of sessions) {
     const bucket = sessionActivityBucket(session)
-    if (bucket === 'unread') unread.push(session)
+    if (bucket === 'pinned') pinned.push(session)
+    else if (bucket === 'unread') unread.push(session)
     else if (bucket === 'running') running.push(session)
     else if (bucket === 'abnormal') abnormal.push(session)
     else history.push(session)
   }
   return [
+    { bucket: 'pinned', sessions: pinned },
     { bucket: 'unread', sessions: unread },
     { bucket: 'running', sessions: running },
     { bucket: 'abnormal', sessions: abnormal },

@@ -79,15 +79,15 @@ You are in plan mode. Explore and design before presenting the complete plan thr
 
 #### 模型所见内容
 
-[`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) 在两种状态下均可用；在 plan mode 外执行会失败，而 plan mode 内经批准的评审会返回规范的 `{ approved: true }` 值，并渲染既有的确认文本。拒绝仍是携带评审反馈的失败调用，放弃审阅则是一次指明用户接手的失败调用。
+[`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) 在两种状态下均可用；在 plan mode 外执行会失败，而 plan mode 内经批准的评审会返回规范的 `{ approved: true }` 值，渲染立即执行的确认文本，并把一条插件来源的开工上下文推迟到同一轮次的下一次请求。拒绝仍是携带评审反馈的失败调用，放弃审阅则是一次指明用户接手的失败调用。
 
 #### Token 影响
 
-稳定 schema 的成本取决于 ToolRuntime mode，每次传入的 plan 参数和评审结果都会保留在对话历史中。
+稳定 schema 的成本取决于 ToolRuntime mode，每次传入的 plan 参数、评审结果以及批准后的开工上下文都会保留在对话历史中。
 
 #### KV Cache 影响
 
-mode 转换不改变工具目录；plan 参数与评审结果按常规方式扩展对话。
+mode 转换不改变工具目录；plan 参数、评审结果以及批准后的开工上下文按常规方式扩展对话。
 
 ## 已知限制与暂缓事项
 

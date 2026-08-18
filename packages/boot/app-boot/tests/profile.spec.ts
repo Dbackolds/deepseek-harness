@@ -1,24 +1,32 @@
 /**
  * Profile machinery of `dsh-app-boot`: directory resolution and init,
  * manifest round-trips, two-anchor bundle resolution, patch-layer loading,
- * empty-root composition, and the installation module-fallback healing.
+ * empty-root composition, the installation module-fallback healing, and the
+ * out-of-tree mutation helpers a Host plugin shares with `dsh plugin`.
  */
 
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
 import {
   composeEntries,
   healProfilesModuleFallback,
   initProfile,
   loadProfile,
+  packageExportsBundle,
   PROFILE_PATCH_FILENAME,
   PROFILE_TEMPLATES,
+  provideProfile,
   readProfileManifest,
+  readProfilePatches,
+  reconcileProfilePlugins,
   resolveBundleDir,
   resolveProfileDir,
+  runProfilePnpm,
   writeProfileManifest,
+  writeProfilePatches,
 } from '../src/index.ts'
 
 const tmp = (): string => mkdtempSync(join(tmpdir(), 'dsh-profile-'))
@@ -268,5 +276,99 @@ describe('healProfilesModuleFallback', () => {
     healProfilesModuleFallback(anchor, home) // second healer sees the correct link
     const fallback = join(home, 'profiles', 'node_modules')
     expect(lstatSync(join(fallback, 'dsh-app')).isSymbolicLink()).toBe(true)
+  })
+})
+
+describe('packageExportsBundle', () => {
+  it('is true only for a resolvable package that declares dsh.bundle', () => {
+    const anchor = stageInstallation({
+      'in-box': { patch: '[]\n' },
+      'plain-lib': {},
+    })
+    const profileDir = tmp()
+    writeFileSync(join(profileDir, 'package.json'), '{}')
+    expect(packageExportsBundle('t', 'in-box', anchor, profileDir)).toBe(true)
+    expect(packageExportsBundle('t', 'plain-lib', anchor, profileDir)).toBe(false)
+    expect(packageExportsBundle('t', 'absent', anchor, profileDir)).toBe(false)
+  })
+})
+
+describe('reconcileProfilePlugins', () => {
+  it('appends a new bundle, drops a removed one, and warns once for a plain dependency', () => {
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    initProfile(dir, ['@deepseek-ai/dsh-base'])
+    const installed = join(dir, 'node_modules', 'late-bundle')
+    mkdirSync(installed, { recursive: true })
+    writeFileSync(join(installed, 'package.json'), JSON.stringify({
+      name: 'late-bundle',
+      version: '1.0.0',
+      dsh: { bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(installed, 'cordis.patch.yml'), '[]\n')
+    const plain = join(dir, 'node_modules', 'plain-lib')
+    mkdirSync(plain, { recursive: true })
+    writeFileSync(join(plain, 'package.json'), JSON.stringify({ name: 'plain-lib', version: '1.0.0' }))
+    const before = {
+      name: 'dsh-profile-demo',
+      dependencies: { gone: '1.0.0' },
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'gone'] } },
+    }
+    writeProfileManifest(dir, {
+      ...before,
+      dependencies: { 'late-bundle': '1.0.0', 'plain-lib': '1.0.0' },
+    })
+    const warnings: string[] = []
+    reconcileProfilePlugins({
+      binName: 't',
+      installAnchor: stageInstallation({}),
+      profileDir: dir,
+      before,
+      warn: line => warnings.push(line),
+    })
+    expect(readProfileManifest('t', dir).dsh?.profile?.bundles)
+      .toEqual(['@deepseek-ai/dsh-base', 'late-bundle'])
+    expect(warnings.join('\n')).toContain('plain-lib declares no dsh.bundle')
+  })
+})
+
+describe('profile patch layer', () => {
+  it('treats a missing file as empty and round-trips !!js through the include dialect', () => {
+    const dir = tmp()
+    expect(readProfilePatches('t', dir)).toEqual([])
+    writeProfilePatches(dir, [
+      { id: 'agent-loop', config: { model: { __jsExpr: 'process.env.DSH_SPEC_MODEL' } } },
+      { id: 'ui-settings-plugin-inventory', disabled: true },
+    ])
+    expect(readFileSync(join(dir, PROFILE_PATCH_FILENAME), 'utf8')).toContain('!!js process.env.DSH_SPEC_MODEL')
+    expect(readProfilePatches('t', dir)).toEqual([
+      { id: 'agent-loop', config: { model: { __jsExpr: 'process.env.DSH_SPEC_MODEL' } } },
+      { id: 'ui-settings-plugin-inventory', disabled: true },
+    ])
+  })
+})
+
+describe('provideProfile', () => {
+  it('publishes a frozen handle under ctx.profile', () => {
+    const ctx = new Context()
+    provideProfile(ctx, { name: 'web', dir: '/tmp/web', installAnchor: '/tmp/app/package.json' })
+    const handle = ctx.get('profile')
+    expect(handle).toEqual({ name: 'web', dir: '/tmp/web', installAnchor: '/tmp/app/package.json' })
+    expect(Object.isFrozen(handle)).toBe(true)
+  })
+})
+
+describe('runProfilePnpm', () => {
+  it('reports a missing pnpm as a structured result rather than a throw', () => {
+    if (process.platform === 'win32') return
+    const previous = process.env.PATH
+    process.env.PATH = ''
+    try {
+      const result = runProfilePnpm({ profileDir: tmp(), args: ['--version'], stdio: 'pipe' })
+      expect(result.missingPnpm).toBe(true)
+      expect(result.exitCode).toBe(127)
+    } finally {
+      process.env.PATH = previous
+    }
   })
 })

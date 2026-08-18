@@ -6,7 +6,7 @@ Hero Git branch chip on the new-session screen. It fills `conversation.hero.bran
 
 The workspace checkout stays the Session membership key. Checking out any other branch creates or reuses a linked worktree under `$DSH_HOME/worktrees/<workspace-id>/<session-id>` and records one `git/worktree` event. Two sessions can therefore sit on different branches without moving each other. A workspace that is not a Git checkout hides the chip.
 
-The chip reloads when the current session changes, so each conversation keeps the branch it last selected. Creating a branch opens a small modal, then checks the new name out for this session only.
+The chip reloads when the current session changes, so each conversation keeps the branch it last selected. Creating a branch opens a small modal, then checks the new name out for this session only. Remote-tracking rows keep the remote prefix. A detached workspace checkout labels the chip and current row Detached HEAD. The current-branch row lists this session worktree's uncommitted path count and, when an upstream exists, the unpushed commit count.
 
 ## Model Experience
 

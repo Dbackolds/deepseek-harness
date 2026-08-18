@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { AutomationPage, AutomationPanel } from '../src/client/AutomationPanel.tsx'
 import type { AutomationPanelProps } from '../src/client/AutomationPanel.tsx'
 import { AutomationStore } from '../src/client/store.ts'
@@ -104,6 +105,7 @@ function mount(options: {
     },
   }
   const controller = new AutomationStore(face as never)
+  const keepAwake = createSnapshotStore(false)
   const unused = (() => { throw new Error('unused') }) as never
   const props: AutomationPanelProps = {
     wide: options.wide ?? true,
@@ -118,12 +120,14 @@ function mount(options: {
       recentWorkspaceId: workspace.workspaceId,
     }),
     useAutomation: bindSnapshotSelector(controller.store),
+    useKeepAwake: bindSnapshotSelector(keepAwake),
     load: () => controller.load(),
     create: input => controller.create(input),
     setEnabled: (id, enabled) => controller.setEnabled(id, enabled),
     runNow: id => controller.runNow(id),
     remove: id => controller.remove(id),
     setPageOpen: (open) => { controller.setPageOpen(open) },
+    setKeepAwake: (enabled) => { keepAwake.set(enabled) },
     t,
   }
   render(
@@ -131,6 +135,7 @@ function mount(options: {
       <AutomationPanel {...props} />
       <AutomationPage
         useAutomation={props.useAutomation}
+        useKeepAwake={props.useKeepAwake}
         useWorkspaces={props.useWorkspaces}
         load={props.load}
         create={props.create}
@@ -138,6 +143,7 @@ function mount(options: {
         runNow={props.runNow}
         remove={props.remove}
         setPageOpen={props.setPageOpen}
+        setKeepAwake={props.setKeepAwake}
         t={props.t}
       />
     </>,
@@ -155,6 +161,8 @@ describe('AutomationPanel', () => {
       expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy()
     })
     expect(screen.getByText('No rules yet.')).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Keep the computer awake while sessions run.' })).toBeTruthy()
+    expect(screen.getByText('Scheduled-task templates')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy()
   })
 
@@ -273,8 +281,10 @@ describe('AutomationPanel', () => {
       baselinesReady: true,
       recentWorkspaceId: workspace.workspaceId,
     })
+    const keepAwake = createSnapshotStore(false)
     const shared = {
       useAutomation: bindSnapshotSelector(controller.store),
+      useKeepAwake: bindSnapshotSelector(keepAwake),
       useWorkspaces,
       load: () => controller.load(),
       create: (input: Parameters<AutomationStore['create']>[0]) => controller.create(input),
@@ -282,6 +292,7 @@ describe('AutomationPanel', () => {
       runNow: (id: AutomationRuleView['id']) => controller.runNow(id),
       remove: (id: AutomationRuleView['id']) => controller.remove(id),
       setPageOpen: (open: boolean) => { controller.setPageOpen(open) },
+      setKeepAwake: (enabled: boolean) => { keepAwake.set(enabled) },
       t,
     }
     render(
@@ -387,6 +398,22 @@ describe('AutomationPanel', () => {
         onOverlap: 'skip',
       })
     })
+  })
+
+  it('toggles keep-awake and prefills the form from a template', async () => {
+    mount({ items: [] })
+    fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
+    await waitFor(() => { expect(screen.getByRole('switch', { name: 'Keep the computer awake while sessions run.' })).toBeTruthy() })
+    const toggle = screen.getByRole('switch', { name: 'Keep the computer awake while sessions run.' })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Use template' })[0]!)
+    expect((screen.getByPlaceholderText('Optional; defaults to the start of the task') as HTMLInputElement).value).toBe('Morning digest')
+    expect((screen.getByPlaceholderText('The task the new session should run') as HTMLTextAreaElement).value)
+      .toBe('Summarize commits, module changes, and follow-ups since the last working day.')
+    expect(screen.getByRole('button', { name: 'Daily or weekly' }).getAttribute('aria-pressed')).toBe('true')
+    expect((screen.getByLabelText('Local time') as HTMLInputElement).value).toBe('09:00')
   })
 
   it('shows draft validation when the task is blank', async () => {

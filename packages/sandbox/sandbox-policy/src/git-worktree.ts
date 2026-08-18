@@ -18,7 +18,7 @@ import { effectiveWorktree, setSessionWorktree } from './session-worktree.ts'
 
 /** One local or remote-tracking branch a workspace repository advertises. */
 export interface GitBranchEntry {
-  /** Branch name without the refs/heads/ prefix. */
+  /** Local short name, or remote-tracking name including the remote. */
   readonly name: string
   /** True when this name is the repository current HEAD. */
   readonly current: boolean
@@ -32,12 +32,18 @@ export interface SessionGitState {
   readonly repoRoot: string
   /** Branch currently checked out in the workspace, when HEAD is a branch. */
   readonly workspaceBranch: string | null
-  /** Branch this session operates on. */
+  /** Branch or detached label this session operates on. */
   readonly currentBranch: string
+  /** True when this session checkout is not on a branch. */
+  readonly detached: boolean
   /** Absolute directory this session operates in. */
   readonly worktreePath: string
   /** True when the session uses an isolated worktree rather than the workspace checkout. */
   readonly isolated: boolean
+  /** Uncommitted paths in this session worktree, including untracked files. */
+  readonly dirtyCount: number
+  /** Commits on the current branch that the upstream does not have; 0 when there is no upstream. */
+  readonly unpushedCount: number
   /** Local and remote-tracking branches, workspace HEAD first. */
   readonly branches: readonly GitBranchEntry[]
 }
@@ -135,7 +141,7 @@ export async function discoverRepoRoot(workspacePath: string): Promise<string> {
 export async function listBranches(repoRoot: string): Promise<GitBranchEntry[]> {
   const raw = await git(repoRoot, [
     'for-each-ref',
-    '--format=%(refname:short)%00%(HEAD)',
+    '--format=%(refname)%00%(refname:short)%00%(HEAD)',
     'refs/heads',
     'refs/remotes',
   ])
@@ -143,14 +149,13 @@ export async function listBranches(repoRoot: string): Promise<GitBranchEntry[]> 
   const branches: GitBranchEntry[] = []
   for (const line of raw.split('\n')) {
     if (line.length === 0) continue
-    const [name, head] = line.split('\0')
-    if (name === undefined || name.length === 0) continue
-    if (name.endsWith('/HEAD')) continue
-    const remote = name.includes('/')
-    const short = remote ? name.replace(/^[^/]+\//, '') : name
-    if (seen.has(short)) continue
-    seen.add(short)
-    branches.push({ name: short, current: head === '*', remote })
+    const [refname, name, head] = line.split('\0')
+    if (refname === undefined || name === undefined || name.length === 0) continue
+    if (refname === 'refs/heads/HEAD' || refname.endsWith('/HEAD')) continue
+    const remote = refname.startsWith('refs/remotes/')
+    if (seen.has(name)) continue
+    seen.add(name)
+    branches.push({ name, current: head === '*', remote })
   }
   branches.sort((left, right) => {
     if (left.current !== right.current) return left.current ? -1 : 1
@@ -171,6 +176,83 @@ export async function currentBranchOf(path: string): Promise<string | null> {
     return name === 'HEAD' ? null : name
   } catch {
     return null
+  }
+}
+
+/**
+ * Label for a detached checkout: a unique local or remote-tracking name at
+ * the same commit, otherwise a shortened object id.
+ * @param path - checkout or worktree directory.
+ * @returns display name, or null when Git cannot name the commit.
+ */
+async function detachedCheckoutLabel(path: string): Promise<string | null> {
+  let commit: string
+  try {
+    commit = await git(path, ['rev-parse', 'HEAD'])
+  } catch {
+    /* v8 ignore next -- describeSessionGit already proved this path is a Git checkout */
+    return null
+  }
+  let raw = ''
+  try {
+    raw = await git(path, [
+      'for-each-ref',
+      `--points-at=${commit}`,
+      '--format=%(refname)%00%(refname:short)',
+      'refs/heads',
+      'refs/remotes',
+    ])
+  } catch {
+    /* v8 ignore next -- for-each-ref fails only when the checkout disappears mid-call */
+    raw = ''
+  }
+  const names = raw.split('\n').flatMap((line) => {
+    if (line.length === 0) return []
+    const [refname, name] = line.split('\0')
+    if (refname === undefined || name === undefined || name.length === 0) return []
+    if (refname === 'refs/heads/HEAD' || refname.endsWith('/HEAD')) return []
+    return [name]
+  })
+  const unique: string[] = []
+  for (const name of names) {
+    if (!unique.includes(name)) unique.push(name)
+  }
+  if (unique.length === 1) return unique[0] ?? null
+  try {
+    return await git(path, ['rev-parse', '--short', 'HEAD'])
+  } catch {
+    /* v8 ignore next -- HEAD was readable above; a later failure is a vanished checkout */
+    return null
+  }
+}
+
+/**
+ * Count uncommitted paths, including untracked files, in one checkout.
+ * @param path - checkout or worktree directory.
+ * @returns path count, or 0 when status cannot be read.
+ */
+async function dirtyPathCount(path: string): Promise<number> {
+  try {
+    const raw = await git(path, ['status', '--porcelain', '-uall'])
+    if (raw.length === 0) return 0
+    return raw.split('\n').filter(line => line.length > 0).length
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Count commits on the current branch that the upstream does not have.
+ * @param path - checkout or worktree directory.
+ * @returns commit count, or 0 when there is no upstream.
+ */
+async function unpushedCommitCount(path: string): Promise<number> {
+  try {
+    const raw = await git(path, ['rev-list', '--count', '@{upstream}..HEAD'])
+    const count = Number.parseInt(raw, 10)
+    return Number.isFinite(count) ? count : 0
+  } catch {
+    return 0
   }
 }
 
@@ -201,16 +283,20 @@ export async function describeSessionGit(
   const workspaceBranch = await currentBranchOf(workspacePath)
   const overlay = session === undefined ? undefined : effectiveWorktree(session.events)
   const worktreePath = overlay?.path ?? workspacePath
+  const checkoutBranch = workspaceBranch ?? await currentBranchOf(worktreePath)
   const currentBranch = overlay?.branch
-    ?? workspaceBranch
-    ?? (await currentBranchOf(worktreePath))
+    ?? checkoutBranch
+    ?? (await detachedCheckoutLabel(worktreePath))
     ?? 'HEAD'
   return {
     repoRoot,
     workspaceBranch,
     currentBranch,
+    detached: checkoutBranch === null && overlay?.branch === undefined,
     worktreePath,
     isolated: overlay !== undefined && resolve(overlay.path) !== resolve(workspacePath),
+    dirtyCount: await dirtyPathCount(worktreePath),
+    unpushedCount: await unpushedCommitCount(worktreePath),
     branches: await listBranches(repoRoot),
   }
 }
@@ -220,13 +306,18 @@ export async function describeSessionGit(
  * @param repoRoot - absolute repository root.
  * @param branch - local branch name to ensure.
  */
-async function ensureLocalBranch(repoRoot: string, branch: string): Promise<void> {
+async function refExists(repoRoot: string, ref: string): Promise<boolean> {
   try {
-    await git(repoRoot, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`])
-    return
+    await git(repoRoot, ['show-ref', '--verify', '--quiet', ref])
+    return true
   } catch {
-    // Missing local branch — fall through to create or track.
+    return false
   }
+}
+
+async function ensureLocalBranch(repoRoot: string, branch: string): Promise<void> {
+  if (await refExists(repoRoot, `refs/heads/${branch}`)) return
+  if (await refExists(repoRoot, `refs/remotes/${branch}`)) return
   try {
     await git(repoRoot, ['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`])
     /* v8 ignore next -- origin tracking is covered only when a remote exists */
@@ -285,6 +376,7 @@ export async function checkoutSessionBranch(
   }
   const repoRoot = await discoverRepoRoot(workspacePath)
   const workspaceBranch = await currentBranchOf(workspacePath)
+    ?? await detachedCheckoutLabel(workspacePath)
   if (workspaceBranch === branch) {
     const overlay = effectiveWorktree(session.events)
     if (overlay !== undefined && resolve(overlay.path) !== resolve(workspacePath)) {

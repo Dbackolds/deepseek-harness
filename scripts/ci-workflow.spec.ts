@@ -72,6 +72,9 @@ describe('CI workflow', () => {
     expect(windowsNative['runs-on']).toContain('dsh-windows-2025-16core')
     expect(windowsNative.name).toBe('windows node 24 / native complete')
     expect(windowsNative.if).toBe("github.event_name == 'pull_request'")
+    expect(windowsNative.env).toMatchObject({
+      DSH_COVERAGE_TEST_TIMEOUT_MS: '30000',
+    })
     const nativeCommandSteps = (windowsNative.steps as unknown[]).filter((step): step is Record<string, unknown> & { run: string } => (
       isRecord(step) && typeof step.run === 'string'
     ))
@@ -342,6 +345,7 @@ describe('Python release workflows', () => {
     expect(manylinuxAddon).toMatchObject({ if: "runner.os == 'Linux'" })
     expect(JSON.stringify(manylinuxAddon)).toContain('manylinux_2_28_x86_64')
     expect(JSON.stringify(manylinuxAddon)).toContain('manylinux_2_28_aarch64')
+    expect(JSON.stringify(manylinuxAddon)).toContain('npm_config_build_from_source=true pnpm run install')
     expect(JSON.stringify(manylinuxAddon)).toContain('$HOME/setup-pnpm:$HOME/setup-pnpm:ro')
     expect(JSON.stringify(manylinuxAddon)).toContain('node-pty-glibc-versions.txt')
     expect(JSON.stringify(manylinuxAddon)).toContain('le 2.28')
@@ -387,6 +391,42 @@ describe('Issue lifecycle workflow', () => {
       "${{ github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested') }}",
     )
     expect(policyPullRequest.types).toContain('ready_for_review')
+  })
+})
+
+describe('Desktop release workflow', () => {
+  it('packs one installer per native runner and publishes only from a desktop-v tag', () => {
+    const workflow = loadWorkflow('.github/workflows/release-desktop.yml')
+    const push = workflowEvent(workflow, 'push')
+    const dispatch = workflowEvent(workflow, 'workflow_dispatch')
+    const pack = workflowJob(workflow, 'pack')
+    const publish = workflowJob(workflow, 'publish')
+    if (!isRecord(dispatch.inputs)
+      || !isRecord(dispatch.inputs.publish)
+      || !isRecord(pack.strategy)
+      || !isRecord(pack.strategy.matrix)
+      || !Array.isArray(pack.strategy.matrix.include)
+      || !Array.isArray(pack.steps)
+      || !Array.isArray(publish.steps)) {
+      throw new TypeError('Desktop release workflow must define publish input, pack matrix, and steps')
+    }
+
+    expect(push.tags).toEqual(['desktop-v*'])
+    expect(dispatch.inputs.publish).toMatchObject({ type: 'boolean', default: false })
+    expect(pack.strategy.matrix.include).toEqual([
+      { platform: 'darwin', runner: 'macos-latest', name: 'macOS arm64 zip' },
+      { platform: 'linux', runner: 'ubuntu-24.04', name: 'Linux x64 AppImage' },
+      { platform: 'win32', runner: 'windows-latest', name: 'Windows x64 zip' },
+    ])
+    expect(JSON.stringify(pack.steps)).toContain('scripts/desktop/pack.ts --platform')
+    expect(publish.if).toBe("github.event_name == 'push' || inputs.publish")
+    expect(publish.permissions).toEqual({ contents: 'write' })
+    const publishScript = JSON.stringify(publish.steps)
+    expect(publishScript).toContain('gh release create')
+    expect(publishScript).toContain('verifyDesktopTag')
+    expect(publishScript).toContain('dist-desktop/release/*.zip')
+    expect(publishScript).toContain('dist-desktop/release/*.AppImage')
+    expect(publishScript).toContain('dist-desktop/release/SHA256SUMS')
   })
 })
 

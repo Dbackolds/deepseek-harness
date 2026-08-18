@@ -174,6 +174,7 @@ export type QueueAction =
   | { kind: 'edit'; content: ContentBlock[] }
   | { kind: 'remove' }
   | { kind: 'steer' }
+  | { kind: 'move'; beforeItemId?: MessageId }
 
 /** One Session list entry. */
 export interface SessionSummary {
@@ -361,7 +362,7 @@ export interface SessionsApi {
   Promise<RpcResponse<{ attachment: ImageAttachmentRef; data: string }>>
 
   /**
-   * Edits, removes, or strictly steers one pending queued occurrence on an ordinary session.
+   * Edits, removes, reorders, or strictly steers one pending queued occurrence on an ordinary session.
    * Session-backed subagents reject with `agent-busy`.
    */
   updateQueue(request: RpcRequest<{ sessionId: SessionId; itemId: MessageId; action: QueueAction }>):
@@ -369,7 +370,7 @@ export interface SessionsApi {
 
   /**
    * Stops an ordinary session's active turn, preserving pending inbox work
-   * that resumes in FIFO order after cancellation settles. Session-backed
+   * that resumes in the current `next-turn` order after cancellation settles. Session-backed
    * subagents reject with `agent-busy`.
    */
   cancel(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ accepted: true }>>

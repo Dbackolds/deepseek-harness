@@ -11,6 +11,7 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import {
   escapeText,
   isModelInvocable,
@@ -23,6 +24,21 @@ import {
 
 export const name = 'tool-skill'
 export const inject = ['agents', 'tools', 'skills']
+
+/** Session cwd plus existing additional workspace folders for skill discovery. */
+function skillLookup(ctx: Context, agent: Agent | undefined, signal: AbortSignal) {
+  const extraRoots = agent === undefined
+    ? undefined
+    : ctx.get('sandboxPolicy')?.foldersOf(agent.session).additional
+      .filter(folder => !folder.missing)
+      .map(folder => folder.path)
+  return {
+    cwd: agent?.session.header.cwd,
+    ...extraRoots === undefined || extraRoots.length === 0 ? {} : { extraRoots },
+    signal,
+    scope: agent,
+  }
+}
 
 const DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH = 500
 /**
@@ -130,7 +146,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       }
       // The agent is its own scope key, so the lookup resolves the layered
       // registry exactly as this agent's composition sees it.
-      const lookup = { cwd: exec.agent?.session.header.cwd, signal: exec.signal, scope: exec.agent }
+      const lookup = skillLookup(ctx, exec.agent, exec.signal)
       const summary = (await ctx.skills.list(lookup)).find(skill => skill.name === args.name)
       if (!summary) {
         throw new Error(`skill "${args.name}" is unknown or no longer available`)
@@ -183,7 +199,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     const names = invokedSkillNames(messages)
     if (names.length === 0) return decision
     signal.throwIfAborted()
-    const lookup = { cwd: agent.session.header.cwd, signal, scope: agent }
+    const lookup = skillLookup(ctx, agent, signal)
     const injections: UserMessage[] = []
     for (const name of names) {
       const skill = await ctx.skills.get(name, lookup)
@@ -219,7 +235,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     signal.throwIfAborted()
     const toolVisible = ctx.tools.get(skillTool.name, agent) === skillTool
     const snapshot = toolVisible
-      ? await ctx.skills.snapshot({ cwd: agent.session.header.cwd, signal, scope: agent })
+      ? await ctx.skills.snapshot(skillLookup(ctx, agent, signal))
       : { skills: [], complete: true }
     signal.throwIfAborted()
     if (!snapshot.complete) return decision

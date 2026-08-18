@@ -244,6 +244,10 @@ export default defineConfig({
         'packages/test-support/client-runtime/src/translate.ts',
         'packages/client/ui-primitives/src/JsonTree.tsx',
         'packages/client/ui-settings-models/src/client/welcome-store.ts',
+        // In-boxed marketplace: Host RPC/reload and Discover UI still need a
+        // real web-profile composition harness. TODO(gui): cover and remove.
+        'packages/client/ui-settings-plugin-marketplace/src/host/*',
+        'packages/client/ui-settings-plugin-marketplace/src/client/*',
         'packages/extensions/*/src/**/*.ts',
         'packages/extensions/*/src/**/*.tsx',
         // Typert generator: correctness is pinned by its fixture suites and

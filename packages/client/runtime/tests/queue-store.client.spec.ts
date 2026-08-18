@@ -206,6 +206,8 @@ describe('queue operation transport', () => {
       .resolves.toEqual({ ok: true, value: { accepted: true } })
     await expect(session.updateQueue(iid('q-op'), { kind: 'steer' }))
       .resolves.toEqual({ ok: true, value: { accepted: true } })
+    await expect(session.updateQueue(iid('q-op'), { kind: 'move', beforeItemId: iid('q-next') }))
+      .resolves.toEqual({ ok: true, value: { accepted: true } })
     expect(api.callsOf('session.updateQueue')).toEqual([
       {
         sessionId: SID,
@@ -216,6 +218,11 @@ describe('queue operation transport', () => {
         sessionId: SID,
         itemId: 'q-op',
         action: { kind: 'steer' },
+      },
+      {
+        sessionId: SID,
+        itemId: 'q-op',
+        action: { kind: 'move', beforeItemId: 'q-next' },
       },
     ])
     expect(session.getSnapshot().queue).toBe(before)

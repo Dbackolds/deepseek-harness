@@ -185,7 +185,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'search' | 'fork'
+      | 'clear' | 'markUnread' | 'search' | 'fork'
     args: unknown[]
   }[] = []
 
@@ -454,6 +454,16 @@ export class TestSessions implements ISessions {
     this.list.update((draft) => {
       draft.current = undefined
       draft.currentAddress = undefined
+    })
+  }
+
+  /** Restore the Completed reminder on a listed fixture session. */
+  markUnread(id: SessionId): void {
+    this.calls.push({ method: 'markUnread', args: [id] })
+    this.require(id)
+    this.list.update((draft) => {
+      const summary = draft.byId[id]
+      if (summary !== undefined) draft.byId[id] = { ...summary, completed: true }
     })
   }
 

@@ -16,7 +16,7 @@ Status: implemented
 
 Host RPC 暴露 `workspace.addFolder` 与 `workspace.removeFolder`。Client 对象层会用返回的 `WorkspaceView.folders` 做 upsert。侧边栏 Workspace 菜单提供 **添加文件夹…**，并复用已组合的目录流子 slot；悬停卡片列出主路径和全部附加文件夹。
 
-协同使用同一份文件夹列表：`ctx.sandboxPolicy.resolve` 把附加文件夹复制到 `SandboxExecutionPolicy.additionalRoots`。`writableRoots` 以及 Seatbelt、bwrap、Landlock、Windows ACL 方言在 `workspace-write` 下授予这些根。Session cwd、attach 和指令发现仍走主路径，因此一个 Session 仍然只有一个工作目录。
+协同使用同一份文件夹列表：`ctx.sandboxPolicy.resolve` 把附加文件夹复制到 `SandboxExecutionPolicy.additionalRoots`。`writableRoots` 以及 Seatbelt、bwrap、Landlock、Windows ACL 方言在 `workspace-write` 下授予这些根。`foldersOf(session)` 还会供给 `workspace:folders` 运行时上下文地图、默认 grep／glob 根、额外的 AGENTS.md 链以及额外的项目 skill 根。Session cwd 和 attach 仍走主路径，因此一个 Session 仍然只有一个工作目录。
 
 ## 考虑过的替代方案
 
@@ -28,12 +28,12 @@ Host RPC 暴露 `workspace.addFolder` 与 `workspace.removeFolder`。Client 对�
 
 - 一条路径只能属于一个 Workspace，无论作为主路径还是附加文件夹。两套 Workspace 共享同一棵树仍然不可能。
 - 在 Session 已经运行后再加文件夹，只影响之后的沙箱解析；已经拉起的受限进程继续使用启动时的策略。
-- 指令发现和 Session cwd 仍是主文件夹。附加文件夹可写，并出现在当前策略提示里，但本次变更不会把它们变成额外的指令根。
+- Session cwd 仍是主文件夹。附加文件夹可写，在任何沙箱模式下都会出现在 `workspace:folders` 中，会被默认 grep／glob 搜索，并且每个附加文件夹会加载自己的 AGENTS.md 链和项目 skill。
 - 没有 `folders` 的既有介质仍能打开，因为持久 schema 会默认该字段。
 
 ## 必要验证
 
 - `packages/workspace/workspace/tests/workspace.spec.ts` 覆盖添加／移除、主路径保护和跨 Workspace 声明拒绝。
 - `packages/host/apiproxy/tests/api-proxy-workspace.spec.ts` 覆盖 Host 添加／移除和 `workspace-folder-conflict`。
-- `packages/sandbox/sandbox/tests/roots.spec.ts` 与 `packages/sandbox/sandbox-policy/tests/policy.spec.ts` 覆盖附加可写根。
+- `packages/sandbox/sandbox/tests/roots.spec.ts` 与 `packages/sandbox/sandbox-policy/tests/policy.spec.ts` 覆盖附加可写根和 `workspace:folders` 地图。
 - `packages/client/runtime/tests/workspaces-service.client.spec.ts` 与 `packages/client/ui-workspace/tests/rows.client.spec.tsx` 覆盖 Client 变更以及添加文件夹菜单／悬停列表。

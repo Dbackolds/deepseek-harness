@@ -67,6 +67,16 @@ export const zh = {
   'needAt': '请填写一个时刻。',
   'needEvery': '间隔必须至少 300 秒。',
   'needClock': '请填写本地时间和时区。',
+  'keepAwake': '运行会话时保持电脑唤醒。',
+  'keepAwake.hint': '打开后，存活的宿主会向操作系统申请不休眠，直到关掉开关或宿主退出。',
+  'templates': '定时任务模板',
+  'template.use': '使用模板',
+  'template.morning.title': '晨会动态',
+  'template.morning.description': '汇总上一个工作日以来的提交、模块变化与待跟进事项。',
+  'template.morning.task': '汇总上一个工作日以来的提交、模块变化与待跟进事项。',
+  'template.risk.title': '风险扫描',
+  'template.risk.description': '检查最近 24 小时的代码变更，报告有直接证据的高置信风险。',
+  'template.risk.task': '检查最近 24 小时的代码变更，报告有直接证据的高置信风险。',
 } satisfies Record<string, string>
 
 /** The automation namespace key union. */
@@ -136,4 +146,14 @@ export const en = {
   'needAt': 'Enter a time.',
   'needEvery': 'Interval must be at least 300 seconds.',
   'needClock': 'Enter a local time and time zone.',
+  'keepAwake': 'Keep the computer awake while sessions run.',
+  'keepAwake.hint': 'While on, a live Host asks the OS not to sleep until the switch is turned off or the Host exits.',
+  'templates': 'Scheduled-task templates',
+  'template.use': 'Use template',
+  'template.morning.title': 'Morning digest',
+  'template.morning.description': 'Summarize commits, module changes, and follow-ups since the last working day.',
+  'template.morning.task': 'Summarize commits, module changes, and follow-ups since the last working day.',
+  'template.risk.title': 'Risk scan',
+  'template.risk.description': 'Inspect the last 24 hours of code changes and report high-confidence, evidenced risks.',
+  'template.risk.task': 'Inspect the last 24 hours of code changes and report high-confidence, evidenced risks.',
 } satisfies Record<AutomationKey, string>
