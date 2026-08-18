@@ -16,6 +16,8 @@ export class AutomationKeepAwakePolicy {
   /** Reactive preference source for the page switch. */
   readonly keepAwake: SnapshotStore<boolean> = createSnapshotStore(DEFAULT_KEEP_AWAKE)
   private readonly host: SettingsScope<AutomationSettings> | undefined
+  /** In-flight user choice; Host snapshots must not overwrite it until that write settles. */
+  private pending: boolean | undefined
 
   /**
    * @param host - durable preference scope owned by the providing plugin;
@@ -31,13 +33,26 @@ export class AutomationKeepAwakePolicy {
 
   /**
    * Change whether a live Host holds an OS sleep assertion; the live value
-   * publishes before the durable write starts.
+   * publishes before the durable write starts. A later Host snapshot that
+   * still carries the previous value is ignored until this write settles.
    * @param enabled - whether the Host should keep the machine awake.
    */
   setKeepAwake(enabled: boolean): void {
-    if (this.keepAwake.getSnapshot() === enabled) return
+    if (this.keepAwake.getSnapshot() === enabled && this.pending === undefined) return
     this.keepAwake.set(enabled)
-    void this.host?.set(KEEP_AWAKE_FIELD, enabled)
+    const host = this.host
+    if (host === undefined) return
+    this.pending = enabled
+    void host.set(KEEP_AWAKE_FIELD, enabled).then(
+      () => {
+        if (this.pending === enabled) this.pending = undefined
+      },
+      () => {
+        if (this.pending !== enabled) return
+        this.pending = undefined
+        this.adopt(host)
+      },
+    )
   }
 
   /**
@@ -45,8 +60,10 @@ export class AutomationKeepAwakePolicy {
    * @param host - the constructor-narrowed scope driving this adoption.
    */
   private adopt(host: SettingsScope<AutomationSettings>): void {
-    const section = host.getSnapshot().value
-    if (section === undefined || this.keepAwake.getSnapshot() === section.keepAwake) return
-    this.keepAwake.set(section.keepAwake)
+    const snapshot = host.getSnapshot()
+    if (snapshot.status !== 'ready' || snapshot.value === undefined) return
+    if (this.pending !== undefined) return
+    if (this.keepAwake.getSnapshot() === snapshot.value.keepAwake) return
+    this.keepAwake.set(snapshot.value.keepAwake)
   }
 }

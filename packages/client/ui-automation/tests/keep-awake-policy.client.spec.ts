@@ -54,4 +54,29 @@ describe('AutomationKeepAwakePolicy', () => {
     policy.setKeepAwake(false)
     expect(host.setMock).toHaveBeenCalledWith('keepAwake', false)
   })
+
+  it('keeps a user choice while a stale Host snapshot still carries the previous value', async () => {
+    const host = fakeScope({ keepAwake: false })
+    const policy = new AutomationKeepAwakePolicy(host)
+    let settle!: () => void
+    host.setMock.mockImplementation(() => new Promise<void>((resolve) => { settle = resolve }))
+    policy.setKeepAwake(true)
+    expect(policy.keepAwake.getSnapshot()).toBe(true)
+    host.publish({ keepAwake: false })
+    expect(policy.keepAwake.getSnapshot()).toBe(true)
+    settle()
+    await Promise.resolve()
+    expect(policy.keepAwake.getSnapshot()).toBe(true)
+  })
+
+  it('adopts the Host value after a failed write settles', async () => {
+    const host = fakeScope({ keepAwake: false })
+    const policy = new AutomationKeepAwakePolicy(host)
+    host.setMock.mockImplementation(() => Promise.reject(new Error('offline')))
+    policy.setKeepAwake(true)
+    expect(policy.keepAwake.getSnapshot()).toBe(true)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(policy.keepAwake.getSnapshot()).toBe(false)
+  })
 })
