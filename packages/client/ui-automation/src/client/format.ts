@@ -4,7 +4,7 @@
  */
 
 import type { AutomationKey } from './locales.ts'
-import type { AutomationCreateInput, AutomationRuleView } from './store.ts'
+import type { AutomationCreateInput, AutomationRuleView, AutomationUpdateInput } from './store.ts'
 
 /** Translate function over this package's dictionary. */
 export type AutomationTranslate = (key: AutomationKey, vars?: Record<string, string | number>) => string
@@ -209,6 +209,69 @@ export function draftToCreate(draft: AutomationDraft, t: AutomationTranslate):
  * @param day - ISO weekday, 1 = Monday.
  * @returns the next selection.
  */
+/**
+ * Fill a create/edit draft from a stored rule.
+ * @param rule - listed Host rule.
+ * @param fallbackZone - IANA zone used when the stored selector has none.
+ * @returns a draft the settings form can edit.
+ */
+export function ruleToDraft(rule: AutomationRuleView, fallbackZone: string): AutomationDraft {
+  const selector = rule.selector !== null && typeof rule.selector === 'object'
+    ? rule.selector as {
+      kind?: unknown
+      afterSeconds?: unknown
+      everySeconds?: unknown
+      time?: unknown
+      timeZone?: unknown
+      weekdays?: unknown
+    }
+    : {}
+  const weekdays = Array.isArray(selector.weekdays)
+    ? selector.weekdays.filter((day): day is number => typeof day === 'number' && day >= 1 && day <= 7)
+    : []
+  const base: AutomationDraft = {
+    ...EMPTY_DRAFT,
+    name: rule.name,
+    task: rule.task,
+    workspaceId: rule.workspaceId,
+    onOverlap: rule.onOverlap,
+    clockZone: fallbackZone,
+  }
+  if (selector.kind === 'after' && typeof selector.afterSeconds === 'number') {
+    return { ...base, schedule: 'after', afterSeconds: String(selector.afterSeconds) }
+  }
+  if (selector.kind === 'every' && typeof selector.everySeconds === 'number') {
+    return { ...base, schedule: 'every', everySeconds: String(selector.everySeconds) }
+  }
+  if (selector.kind === 'local-clock') {
+    return {
+      ...base,
+      schedule: 'clock',
+      clockTime: typeof selector.time === 'string' ? selector.time : base.clockTime,
+      clockZone: typeof selector.timeZone === 'string' && selector.timeZone.length > 0
+        ? selector.timeZone
+        : fallbackZone,
+      weekdays,
+    }
+  }
+  return { ...base, schedule: 'at', at: rule.scheduledAt }
+}
+
+/**
+ * Build the sparse update payload from an edited draft.
+ * @param draft - settings-form fields.
+ * @param t - package translator.
+ * @returns the update payload, or a localized validation message.
+ */
+export function draftToUpdate(draft: AutomationDraft, t: AutomationTranslate):
+  | { ok: true; input: AutomationUpdateInput }
+  | { ok: false; error: string } {
+  const created = draftToCreate(draft, t)
+  if (!created.ok) return created
+  const { workspaceId: _workspaceId, ...input } = created.input
+  return { ok: true, input }
+}
+
 export function toggleWeekday(weekdays: readonly number[], day: number): number[] {
   const next = weekdays.includes(day)
     ? weekdays.filter(value => value !== day)

@@ -38,6 +38,7 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
   runNow?: (payload: unknown) => Promise<RpcResponse<{
     run: { id: string; outcome?: string; sessionId?: string; errorCode?: string }
   }>>
+  update?: (payload: unknown) => Promise<RpcResponse<{ rule: AutomationRuleView }>>
   listRuns?: (payload: unknown) => Promise<RpcResponse<{ items: unknown[] }>>
   delete?: (payload: unknown) => Promise<RpcResponse<{ id: string; deleted: boolean }>>
 } = {}) {
@@ -55,6 +56,10 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
       setEnabled: (payload: unknown) => {
         calls.push('setEnabled')
         return (handlers.setEnabled ?? (() => Promise.resolve(ok({ rule: rule({ enabled: false, state: 'disabled' }) }))))(payload)
+      },
+      update: (payload: unknown) => {
+        calls.push('update')
+        return (handlers.update ?? (() => Promise.resolve(ok({ rule: rule({ name: 'renamed' }) }))))(payload)
       },
       runNow: (payload: unknown) => {
         calls.push('runNow')
@@ -107,6 +112,8 @@ describe('AutomationStore', () => {
     expect(state.items[0]?.rule.name).toBe('morning')
     expect(state.items[0]?.runCount).toBe(1)
     expect(state.items[0]?.lastSessionId).toBe('session-1')
+    expect(state.items[0]?.runs).toHaveLength(1)
+    expect(state.selectedId).toBeNull()
     expect(state.pageOpen).toBe(false)
     expect(calls).toEqual(['list', 'listRuns'])
   })
@@ -145,6 +152,19 @@ describe('AutomationStore', () => {
     const store = new AutomationStore(face, sessionsFace().face)
     await store.load()
     expect(store.store.getSnapshot()).toMatchObject({ status: 'error', error: 'boom', items: [] })
+  })
+
+  it('selects a rule and saves a sparse update', async () => {
+    const { face, calls } = api()
+    const store = new AutomationStore(face, sessionsFace().face)
+    await store.load()
+    store.select(rule().id)
+    store.setDetailTab('history')
+    expect(store.store.getSnapshot()).toMatchObject({ selectedId: 'rule-1', detailTab: 'history' })
+    expect(await store.update(rule().id, { name: 'renamed' })).toBeUndefined()
+    expect(calls).toContain('update')
+    store.select(null)
+    expect(store.store.getSnapshot().selectedId).toBeNull()
   })
 
   it('create, setEnabled, and remove refresh the list; a started runNow opens the Session', async () => {

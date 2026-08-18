@@ -1,7 +1,8 @@
 /** Selector summaries and create-draft validation. */
 import { describe, expect, it } from 'vitest'
 import {
-  draftToCreate, EMPTY_DRAFT, formatNextAt, formatNextIn, formatSelector, formatState, toggleWeekday,
+  draftToCreate, draftToUpdate, EMPTY_DRAFT, formatNextAt, formatNextIn, formatSelector, formatState,
+  ruleToDraft, toggleWeekday,
 } from '../src/client/format.ts'
 import { en } from '../src/client/locales.ts'
 
@@ -104,6 +105,36 @@ describe('draftToCreate', () => {
     expect(draftToCreate({ ...base, schedule: 'at', at: '' }, t).ok).toBe(false)
     expect(draftToCreate({ ...base, schedule: 'every', everySeconds: '299' }, t).ok).toBe(false)
     expect(draftToCreate({ ...base, schedule: 'clock', clockTime: '', clockZone: 'UTC' }, t).ok).toBe(false)
+  })
+})
+
+describe('ruleToDraft and draftToUpdate', () => {
+  it('round-trips a daily clock rule', () => {
+    const draft = ruleToDraft({
+      id: 'rule-1' as never,
+      name: 'morning',
+      enabled: true,
+      task: 'ping',
+      workspaceId: 'ws-1' as never,
+      onOverlap: 'skip',
+      selector: { kind: 'local-clock', time: '02:00', timeZone: 'Asia/Shanghai' },
+      scheduledAt: '2026-08-19T18:00:00.000Z',
+      createdAt: '2026-08-15T12:00:00.000Z',
+      updatedAt: '2026-08-15T12:00:00.000Z',
+      state: 'scheduled',
+      nextAt: '2026-08-19T18:00:00.000Z',
+    }, 'UTC')
+    expect(draft.schedule).toBe('clock')
+    expect(draft.clockTime).toBe('02:00')
+    expect(draftToUpdate(draft, t)).toEqual({
+      ok: true,
+      input: {
+        name: 'morning',
+        task: 'ping',
+        onOverlap: 'skip',
+        localClock: { time: '02:00', time_zone: 'Asia/Shanghai' },
+      },
+    })
   })
 })
 

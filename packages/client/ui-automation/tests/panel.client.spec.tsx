@@ -144,10 +144,14 @@ function mount(options: {
     useKeepAwake: bindSnapshotSelector(keepAwake),
     load: () => controller.load(),
     create: input => controller.create(input),
+    update: (id, input) => controller.update(id, input),
     setEnabled: (id, enabled) => controller.setEnabled(id, enabled),
     runNow: id => controller.runNow(id),
     openLastSession: id => controller.openLastSession(id),
+    openRun: sessionId => controller.openRun(sessionId),
     remove: id => controller.remove(id),
+    select: (id) => { controller.select(id) },
+    setDetailTab: (tab) => { controller.setDetailTab(tab) },
     setPageOpen: (open) => { controller.setPageOpen(open) },
     setKeepAwake: (enabled) => { keepAwake.set(enabled) },
     t,
@@ -161,10 +165,14 @@ function mount(options: {
         useWorkspaces={props.useWorkspaces}
         load={props.load}
         create={props.create}
+        update={props.update}
         setEnabled={props.setEnabled}
         runNow={props.runNow}
         openLastSession={props.openLastSession}
+        openRun={props.openRun}
         remove={props.remove}
+        select={props.select}
+        setDetailTab={props.setDetailTab}
         setPageOpen={props.setPageOpen}
         setKeepAwake={props.setKeepAwake}
         t={props.t}
@@ -248,12 +256,19 @@ describe('AutomationPanel', () => {
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
   })
 
-  it('opens the last Session from the card title', async () => {
+  it('opens the rule detail from the card title', async () => {
     mount()
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
     await waitFor(() => { expect(screen.getByRole('button', { name: 'morning' })).toBeTruthy() })
     fireEvent.click(screen.getByRole('button', { name: 'morning' }))
-    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
+    await waitFor(() => { expect(screen.getByRole('tab', { name: 'Settings' })).toBeTruthy() })
+    expect(screen.getByRole('tab', { name: 'History' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }))
+    await waitFor(() => { expect(screen.getByText('Succeeded')).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.getByRole('menuitem', { name: 'Jump to session' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /morning/ }))
+    await waitFor(() => { expect(screen.getByText('Created tasks')).toBeTruthy() })
   })
 
   it.each([
@@ -360,10 +375,14 @@ describe('AutomationPanel', () => {
       useWorkspaces,
       load: () => controller.load(),
       create: (input: Parameters<AutomationStore['create']>[0]) => controller.create(input),
+      update: (id: AutomationRuleView['id'], input: Parameters<AutomationStore['update']>[1]) => controller.update(id, input),
       setEnabled: (id: AutomationRuleView['id'], enabled: boolean) => controller.setEnabled(id, enabled),
       runNow: (id: AutomationRuleView['id']) => controller.runNow(id),
       openLastSession: (id: AutomationRuleView['id']) => controller.openLastSession(id),
+      openRun: (sessionId: Parameters<AutomationStore['openRun']>[0]) => controller.openRun(sessionId),
       remove: (id: AutomationRuleView['id']) => controller.remove(id),
+      select: (id: AutomationRuleView['id'] | null) => { controller.select(id) },
+      setDetailTab: (tab: 'settings' | 'history') => { controller.setDetailTab(tab) },
       setPageOpen: (open: boolean) => { controller.setPageOpen(open) },
       setKeepAwake: (enabled: boolean) => { keepAwake.set(enabled) },
       t,

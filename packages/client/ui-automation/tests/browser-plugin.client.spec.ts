@@ -28,6 +28,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   const automation = {
     list: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { items: [] } } }),
     create: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { rule: {} } } }),
+    update: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { rule: {} } } }),
     setEnabled: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { rule: {} } } }),
     runNow: () => Promise.resolve({
       rpcId: 'r',
@@ -64,18 +65,26 @@ describe('ui-automation browser half', () => {
     const injected = (ctx.slots.entries('sidebar.automation')[0]!.inject as () => {
       load: () => Promise<void>
       create: (input: { task: string; workspaceId: never; afterSeconds: number }) => Promise<string | undefined>
+      update: (id: never, input: { name?: string }) => Promise<string | undefined>
       setEnabled: (id: never, enabled: boolean) => Promise<string | undefined>
       runNow: (id: never) => Promise<string | undefined>
       openLastSession: (id: never) => Promise<string | undefined>
+      openRun: (id: never) => Promise<string | undefined>
       remove: (id: never) => Promise<string | undefined>
+      select: (id: never | null) => void
+      setDetailTab: (tab: 'settings' | 'history') => void
       setPageOpen: (open: boolean) => void
       setKeepAwake: (enabled: boolean) => void
     })()
     await injected.load()
     await injected.create({ task: 'ping', workspaceId: 'ws-1' as never, afterSeconds: 60 })
+    await injected.update('rule-1' as never, { name: 'renamed' })
     await injected.setEnabled('rule-1' as never, false)
     await injected.runNow('rule-1' as never)
     await injected.openLastSession('rule-1' as never)
+    await injected.openRun('session-1' as never)
+    injected.select('rule-1' as never)
+    injected.setDetailTab('history')
     await injected.remove('rule-1' as never)
     injected.setPageOpen(true)
     injected.setKeepAwake(true)

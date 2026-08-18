@@ -16,8 +16,11 @@ import {
   type AutomationDraft, type ScheduleKind,
 } from './format.ts'
 import { NS, type AutomationKey } from './locales.ts'
-import type { AutomationListedRule, AutomationRuleView, AutomationState, AutomationStore } from './store.ts'
+import type {
+  AutomationListedRule, AutomationRuleView, AutomationState, AutomationStore,
+} from './store.ts'
 import { AUTOMATION_TEMPLATES, applyTemplate, type AutomationTemplate } from './templates.ts'
+import { RuleDetail } from './RuleDetail.tsx'
 import css from './AutomationPanel.module.css'
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
@@ -58,14 +61,22 @@ export interface AutomationPanelInjected {
   load: () => Promise<void>
   /** Persist one new rule. */
   create: AutomationStore['create']
+  /** Persist a sparse patch on one rule. */
+  update: AutomationStore['update']
   /** Enable or disable one rule. */
   setEnabled: AutomationStore['setEnabled']
   /** Fire one rule immediately and open the started Session. */
   runNow: AutomationStore['runNow']
   /** Open the latest started Session for a rule. */
   openLastSession: AutomationStore['openLastSession']
+  /** Open one fire's Session. */
+  openRun: AutomationStore['openRun']
   /** Delete one rule. */
   remove: AutomationStore['remove']
+  /** Open one rule's detail pane, or return to the card list. */
+  select: AutomationStore['select']
+  /** Show the settings or history pane. */
+  setDetailTab: AutomationStore['setDetailTab']
   /** Show or hide the center-column page. */
   setPageOpen: (open: boolean) => void
   /** Persist whether a live Host holds an OS sleep assertion. */
@@ -115,8 +126,8 @@ export function AutomationPanel(props: AutomationPanelProps): ReactNode {
  */
 export function AutomationPage(props: AutomationPageProps): ReactNode {
   const {
-    useAutomation, useKeepAwake, useWorkspaces, load, create, setEnabled, runNow, openLastSession, remove,
-    setPageOpen, setKeepAwake, t,
+    useAutomation, useKeepAwake, useWorkspaces, load, create, update, setEnabled, runNow, openRun,
+    remove, select, setDetailTab, setPageOpen, setKeepAwake, t,
   } = props
   const state = useAutomation(snapshot => snapshot)
   const keepAwake = useKeepAwake(value => value)
@@ -144,10 +155,13 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
       workspaces={workspaces}
       load={load}
       create={create}
+      update={update}
       setEnabled={setEnabled}
       runNow={runNow}
-      openLastSession={openLastSession}
+      openRun={openRun}
       remove={remove}
+      select={select}
+      setDetailTab={setDetailTab}
       setPageOpen={setPageOpen}
       setKeepAwake={setKeepAwake}
       t={t}
@@ -156,17 +170,21 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
 }
 
 function AutomationPageChrome({
-  state, keepAwake, workspaces, load, create, setEnabled, runNow, openLastSession, remove, setPageOpen, setKeepAwake, t,
+  state, keepAwake, workspaces, load, create, update, setEnabled, runNow, openRun,
+  remove, select, setDetailTab, setPageOpen, setKeepAwake, t,
 }: {
   state: AutomationState
   keepAwake: boolean
   workspaces: readonly WorkspaceView[]
   load: () => Promise<void>
   create: AutomationStore['create']
+  update: AutomationStore['update']
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
-  openLastSession: AutomationStore['openLastSession']
+  openRun: AutomationStore['openRun']
   remove: AutomationStore['remove']
+  select: AutomationStore['select']
+  setDetailTab: AutomationStore['setDetailTab']
   setPageOpen: (open: boolean) => void
   setKeepAwake: (enabled: boolean) => void
   t: AutomationPanelProps['t']
@@ -235,10 +253,13 @@ function AutomationPageChrome({
           }}
           load={load}
           create={create}
+          update={update}
           setEnabled={setEnabled}
           runNow={runNow}
-          openLastSession={openLastSession}
+          openRun={openRun}
           remove={remove}
+          select={select}
+          setDetailTab={setDetailTab}
           setKeepAwake={setKeepAwake}
           t={t}
         />
@@ -257,17 +278,41 @@ interface BodyProps {
   onAdded: () => void
   load: () => Promise<void>
   create: AutomationStore['create']
+  update: AutomationStore['update']
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
-  openLastSession: AutomationStore['openLastSession']
+  openRun: AutomationStore['openRun']
   remove: AutomationStore['remove']
+  select: AutomationStore['select']
+  setDetailTab: AutomationStore['setDetailTab']
   setKeepAwake: (enabled: boolean) => void
   t: AutomationPanelProps['t']
 }
 
 function AutomationBody({
-  state, keepAwake, workspaces, adding, seed, onAdd, onAdded, load, create, setEnabled, runNow, openLastSession, remove, setKeepAwake, t,
+  state, keepAwake, workspaces, adding, seed, onAdd, onAdded, load, create, update,
+  setEnabled, runNow, openRun, remove, select, setDetailTab, setKeepAwake, t,
 }: BodyProps): ReactNode {
+  const selected = state.selectedId === null
+    ? undefined
+    : state.items.find(item => item.rule.id === state.selectedId)
+  if (selected !== undefined) {
+    return (
+      <RuleDetail
+        item={selected}
+        workspaces={workspaces}
+        tab={state.detailTab}
+        update={update}
+        setEnabled={setEnabled}
+        runNow={runNow}
+        openRun={openRun}
+        remove={remove}
+        select={select}
+        setDetailTab={setDetailTab}
+        t={t}
+      />
+    )
+  }
   if (state.status === 'error' && state.items.length === 0) {
     return (
       <div className={css.body}>
@@ -316,9 +361,9 @@ function AutomationBody({
                   key={item.rule.id}
                   item={item}
                   workspaceTitle={workspaces.find(workspace => workspace.workspaceId === item.rule.workspaceId)?.title}
+                  onOpen={() => { select(item.rule.id) }}
                   setEnabled={setEnabled}
                   runNow={runNow}
-                  openLastSession={openLastSession}
                   remove={remove}
                   t={t}
                 />
@@ -344,13 +389,13 @@ function AutomationBody({
 }
 
 function RuleCard({
-  item, workspaceTitle, setEnabled, runNow, openLastSession, remove, t,
+  item, workspaceTitle, onOpen, setEnabled, runNow, remove, t,
 }: {
   item: AutomationListedRule
   workspaceTitle: string | undefined
+  onOpen: () => void
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
-  openLastSession: AutomationStore['openLastSession']
   remove: AutomationStore['remove']
   t: AutomationPanelProps['t']
 }): ReactNode {
@@ -369,21 +414,12 @@ function RuleCard({
   }
   const stateClass = stateClassOf(rule.state)
   const nextWhen = formatNextIn(rule.nextAt, t)
-  const canOpen = item.lastSessionId !== undefined
   return (
     <li className={css.card}>
       <div className={css.cardHead}>
-        {canOpen
-          ? (
-            <button
-              type="button"
-              className={css.cardOpen}
-              onClick={() => { run(() => openLastSession(rule.id)) }}
-            >
-              {rule.name}
-            </button>
-          )
-          : <div className={css.cardName}>{rule.name}</div>}
+        <button type="button" className={css.cardOpen} onClick={onOpen}>
+          {rule.name}
+        </button>
         <div className={css.cardTask}>{rule.task}</div>
         {workspaceTitle === undefined ? null : <div className={css.cardWorkspace}>{workspaceTitle}</div>}
       </div>
@@ -484,16 +520,22 @@ function TemplateGrid({
   )
 }
 
-function CreateForm({
-  workspaces, seed, create, onClose, t,
+export function CreateForm({
+  workspaces, seed, initial, submitLabel, hideCancel, create, onPatch, onSave, onClose, t,
 }: {
   workspaces: readonly WorkspaceView[]
   seed: AutomationTemplate | undefined
+  initial?: AutomationDraft
+  submitLabel?: string
+  hideCancel?: boolean
   create: AutomationStore['create']
+  onPatch?: (next: Partial<AutomationDraft>) => void
+  onSave?: () => void
   onClose: () => void
   t: AutomationPanelProps['t']
 }): ReactNode {
   const [draft, setDraft] = useState<AutomationDraft>(() => {
+    if (initial !== undefined) return initial
     const empty: AutomationDraft = {
       ...EMPTY_DRAFT,
       workspaceId: workspaces[0]?.workspaceId ?? '',
@@ -506,8 +548,13 @@ function CreateForm({
   const [error, setError] = useState<string | undefined>(undefined)
   const patch = (next: Partial<AutomationDraft>): void => {
     setDraft(current => ({ ...current, ...next }))
+    onPatch?.(next)
   }
   const submit = (): void => {
+    if (onSave !== undefined) {
+      onSave()
+      return
+    }
     const parsed = draftToCreate(draft, t)
     if (!parsed.ok) {
       setError(parsed.error)
@@ -675,9 +722,9 @@ function CreateForm({
       </label>
       {error !== undefined && <p className={css.error} role="alert">{error}</p>}
       <div className={css.formActions}>
-        <Button variant="ghost" disabled={busy} onClick={onClose}>{t('cancel')}</Button>
+        {hideCancel === true ? null : <Button variant="ghost" disabled={busy} onClick={onClose}>{t('cancel')}</Button>}
         <Button variant="primary" disabled={busy || workspaces.length === 0} onClick={submit}>
-          {busy ? t('creating') : t('create')}
+          {submitLabel ?? (busy ? t('creating') : t('create'))}
         </Button>
       </div>
     </form>

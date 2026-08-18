@@ -19,7 +19,10 @@ import { en, NS, zh, type AutomationKey } from './locales.ts'
 
 export type { AutomationPageProps, AutomationPanelInjected, AutomationPanelProps } from './AutomationPanel.tsx'
 export type { AutomationKey } from './locales.ts'
-export type { AutomationCreateInput, AutomationListedRule, AutomationRuleView, AutomationState } from './store.ts'
+export type {
+  AutomationCreateInput, AutomationDetailTab, AutomationListedRule, AutomationRuleView,
+  AutomationRunView, AutomationState, AutomationUpdateInput,
+} from './store.ts'
 export { AutomationStore, refreshIfLoaded } from './store.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -48,10 +51,14 @@ export function apply(ctx: ClientContext): void {
     hooks: { automation: controller.store, keepAwake: keepAwake.keepAwake },
     load: () => controller.load(),
     create: input => controller.create(input),
+    update: (id, input) => controller.update(id, input),
     setEnabled: (id, enabled) => controller.setEnabled(id, enabled),
     runNow: id => controller.runNow(id),
     openLastSession: id => controller.openLastSession(id),
+    openRun: sessionId => controller.openRun(sessionId),
     remove: id => controller.remove(id),
+    select: (id) => { controller.select(id) },
+    setDetailTab: (tab) => { controller.setDetailTab(tab) },
     setPageOpen: (open) => { controller.setPageOpen(open) },
     setKeepAwake: (enabled) => { keepAwake.setKeepAwake(enabled) },
   })

@@ -18,6 +18,16 @@ export type AutomationRuleView = Awaited<
 /** Create payload accepted by the Host Automation wire. */
 export type AutomationCreateInput = Parameters<IApiClient['automation']['create']>[0]
 
+/** Sparse update payload accepted by the Host Automation wire. */
+export type AutomationUpdateInput = Omit<Parameters<IApiClient['automation']['update']>[0], 'id'>
+
+/** One fire attempt as the listRuns RPC returns it. */
+export type AutomationRunView = Awaited<
+  ReturnType<IApiClient['automation']['listRuns']>
+> extends RpcResponse<infer Value>
+  ? Value extends { items: readonly (infer Item)[] } ? Item : never
+  : never
+
 /** One listed rule plus the run count the page paints on the card. */
 export interface AutomationListedRule {
   rule: AutomationRuleView
@@ -25,7 +35,12 @@ export interface AutomationListedRule {
   runCount?: number
   /** Latest started Session for this rule, when listRuns returned one. */
   lastSessionId?: SessionId
+  /** Newest-first fire history for the selected rule. */
+  runs?: readonly AutomationRunView[]
 }
+
+/** Which pane the selected rule shows. */
+export type AutomationDetailTab = 'settings' | 'history'
 
 /** Page snapshot. */
 export interface AutomationState {
@@ -35,6 +50,10 @@ export interface AutomationState {
   items: readonly AutomationListedRule[]
   /** Whether the center-column Automation page is showing. */
   pageOpen: boolean
+  /** Selected rule, when the detail pane is open. */
+  selectedId: AutomationRuleView['id'] | null
+  /** Settings or history pane of the selected rule. */
+  detailTab: AutomationDetailTab
 }
 
 /**
@@ -76,6 +95,8 @@ export class AutomationStore {
     error: null,
     items: [],
     pageOpen: false,
+    selectedId: null,
+    detailTab: 'settings',
   })
 
   /**
@@ -116,6 +137,7 @@ export class AutomationStore {
             rule,
             ...known.runCount === undefined ? {} : { runCount: known.runCount },
             ...known.lastSessionId === undefined ? {} : { lastSessionId: known.lastSessionId },
+            ...known.runs === undefined ? {} : { runs: known.runs },
           }
       })
       this.store.update((draft) => {
@@ -130,6 +152,7 @@ export class AutomationStore {
           return {
             rule,
             runCount: runs.length,
+            runs,
             ...lastStarted?.sessionId === undefined ? {} : { lastSessionId: lastStarted.sessionId },
           }
         } catch {
@@ -163,6 +186,22 @@ export class AutomationStore {
    * @param input - create payload; exactly one selector field.
    * @returns the failure message, or undefined once the write and reload landed.
    */
+  /**
+   * Apply a sparse patch to one rule and refresh the list.
+   * @param id - existing rule.
+   * @param input - fields to change; changing the schedule still requires one selector.
+   * @returns the failure message, or undefined once the write and reload landed.
+   */
+  async update(id: AutomationRuleView['id'], input: AutomationUpdateInput): Promise<string | undefined> {
+    try {
+      valueOf(await this.api.automation.update({ id, ...input }))
+    } catch (error) {
+      return messageOf(error)
+    }
+    await this.load()
+    return this.store.getSnapshot().error ?? undefined
+  }
+
   async create(input: AutomationCreateInput): Promise<string | undefined> {
     try {
       valueOf(await this.api.automation.create(input))
@@ -229,7 +268,43 @@ export class AutomationStore {
       return messageOf(error)
     }
     await this.load()
+    this.store.update((draft) => {
+      if (draft.selectedId === id) {
+        draft.selectedId = null
+        draft.detailTab = 'settings'
+      }
+    })
     return this.store.getSnapshot().error ?? undefined
+  }
+
+  /**
+   * Open one rule's detail pane, or return to the card list.
+   * @param id - existing rule, or null to close the detail pane.
+   */
+  select(id: AutomationRuleView['id'] | null): void {
+    this.store.update((draft) => {
+      draft.selectedId = id
+      if (id === null) draft.detailTab = 'settings'
+    })
+  }
+
+  /**
+   * Show the settings or history pane of the selected rule.
+   * @param tab - next pane.
+   */
+  setDetailTab(tab: AutomationDetailTab): void {
+    this.store.update((draft) => {
+      draft.detailTab = tab
+    })
+  }
+
+  /**
+   * Open a started run's Session when the Host list carries it.
+   * @param sessionId - Session the run opened.
+   * @returns the failure message, or undefined once the Session is current.
+   */
+  async openRun(sessionId: SessionId): Promise<string | undefined> {
+    return this.openRunSession(sessionId)
   }
 
   /**
@@ -266,6 +341,10 @@ export class AutomationStore {
   setPageOpen(open: boolean): void {
     this.store.update((draft) => {
       draft.pageOpen = open
+      if (!open) {
+        draft.selectedId = null
+        draft.detailTab = 'settings'
+      }
     })
   }
 }
