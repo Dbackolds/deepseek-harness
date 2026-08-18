@@ -5,7 +5,7 @@
  */
 
 import type { IApiClient, RpcResponse, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ISessions, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** Wire view of one Automation rule, as the list RPC returns it. */
@@ -50,6 +50,15 @@ function valueOf<T>(response: RpcResponse<T>): T {
 /** How long run-now waits for the started Session to appear in the list. */
 const LISTED_SESSION_WAIT_MS = 10_000
 
+/** List-and-open face used after a started fire. */
+interface AutomationSessions {
+  list: {
+    getSnapshot(): { byId: Record<string, unknown> }
+    subscribe(fn: () => void): () => void
+  }
+  open(id: SessionId): void
+}
+
 /** Host Automation list and mutation owner. */
 export class AutomationStore {
   /** UI-facing immutable projection. */
@@ -67,7 +76,7 @@ export class AutomationStore {
    */
   constructor(
     private readonly api: Pick<IApiClient, 'automation'>,
-    private readonly sessions: Pick<ISessions, 'list' | 'open'>,
+    private readonly sessions: AutomationSessions,
     private readonly listedSessionWaitMs: number = LISTED_SESSION_WAIT_MS,
   ) {}
 
@@ -202,7 +211,7 @@ export function refreshIfLoaded(controller: AutomationStore): void {
  * @param timeoutMs - give up after this many milliseconds.
  */
 function waitForListedSession(
-  sessions: Pick<ISessions, 'list'>,
+  sessions: Pick<AutomationSessions, 'list'>,
   id: SessionId,
   timeoutMs: number = LISTED_SESSION_WAIT_MS,
 ): Promise<void> {
