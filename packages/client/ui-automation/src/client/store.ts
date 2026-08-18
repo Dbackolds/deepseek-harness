@@ -4,8 +4,8 @@
  * next list, pushed or refetched.
  */
 
-import type { IApiClient, RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { IApiClient, RpcResponse, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ISessions, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** Wire view of one Automation rule, as the list RPC returns it. */
@@ -47,6 +47,9 @@ function valueOf<T>(response: RpcResponse<T>): T {
   return response.result.value
 }
 
+/** How long run-now waits for the started Session to appear in the list. */
+const LISTED_SESSION_WAIT_MS = 10_000
+
 /** Host Automation list and mutation owner. */
 export class AutomationStore {
   /** UI-facing immutable projection. */
@@ -59,8 +62,14 @@ export class AutomationStore {
 
   /**
    * @param api - automation wire face.
+   * @param sessions - list store used to wait for and open a started fire.
+   * @param listedSessionWaitMs - how long a started fire waits for the list.
    */
-  constructor(private readonly api: Pick<IApiClient, 'automation'>) {}
+  constructor(
+    private readonly api: Pick<IApiClient, 'automation'>,
+    private readonly sessions: Pick<ISessions, 'list' | 'open'>,
+    private readonly listedSessionWaitMs: number = LISTED_SESSION_WAIT_MS,
+  ) {}
 
   /**
    * Fetch every rule. A failed reload keeps the last good list when one exists.
@@ -119,13 +128,30 @@ export class AutomationStore {
   }
 
   /**
-   * Fire one rule immediately without moving its next target.
+   * Fire one rule immediately without moving its next target. A started run
+   * closes the Automation page and opens the new Session; skipped or failed
+   * outcomes stay on the page with the Host error.
    * @param id - existing rule.
    * @returns the failure message, or undefined once the write landed.
    */
   async runNow(id: AutomationRuleView['id']): Promise<string | undefined> {
     try {
-      valueOf(await this.api.automation.runNow({ id }))
+      const run = valueOf(await this.api.automation.runNow({ id })).run
+      if (run.outcome === 'started' && run.sessionId !== undefined) {
+        try {
+          await waitForListedSession(this.sessions, run.sessionId, this.listedSessionWaitMs)
+        } catch {
+          // waitForListedSession rejects only when the list never carries the Session.
+          return 'missing_session'
+        }
+        this.setPageOpen(false)
+        this.sessions.open(run.sessionId)
+        return undefined
+      }
+      if (run.outcome === 'skipped_busy') {
+        return run.errorCode === 'max_concurrent_runs' ? 'max_concurrent_runs' : 'skipped_busy'
+      }
+      if (run.outcome === 'failed') return 'failed'
     } catch (error) {
       return messageOf(error)
     }
@@ -165,4 +191,38 @@ export class AutomationStore {
 export function refreshIfLoaded(controller: AutomationStore): void {
   if (controller.store.getSnapshot().status === 'idle') return
   void controller.load()
+}
+
+/**
+ * Wait until the Host list (or a later session-added frame) carries `id`.
+ * `sessions.open` rejects unknown ids; fire publishes the Session before
+ * this RPC returns, but the list frame can arrive after the unary echo.
+ * @param sessions - list store that receives host/session-added.
+ * @param id - Session the started run opened.
+ * @param timeoutMs - give up after this many milliseconds.
+ */
+function waitForListedSession(
+  sessions: Pick<ISessions, 'list'>,
+  id: SessionId,
+  timeoutMs: number = LISTED_SESSION_WAIT_MS,
+): Promise<void> {
+  if (sessions.list.getSnapshot().byId[id] !== undefined) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (error?: Error): void => {
+      if (settled) return
+      settled = true
+      stop()
+      clearTimeout(timer)
+      if (error === undefined) resolve()
+      else reject(error)
+    }
+    const stop = sessions.list.subscribe(() => {
+      if (sessions.list.getSnapshot().byId[id] !== undefined) finish()
+    })
+    const timer = setTimeout(() => {
+      finish(new Error('started session did not appear in the list'))
+    }, timeoutMs)
+    if (sessions.list.getSnapshot().byId[id] !== undefined) finish()
+  })
 }

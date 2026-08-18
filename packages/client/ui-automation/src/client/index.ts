@@ -29,8 +29,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services for locale, the sidebar seat, the Host wire, and settings. */
-export const inject = ['slots', 'locale', 'connection', 'remote', 'settingsScope']
+/** Required services for locale, the sidebar seat, the Host wire, sessions, and settings. */
+export const inject = ['slots', 'locale', 'connection', 'remote', 'sessions', 'settingsScope']
 
 /**
  * Register the dictionaries and the sidebar Automation occupant.
@@ -40,7 +40,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-automation: dictionaries')
 
   const connection = ctx.get('connection') as ConnectionHandle
-  const controller = new AutomationStore(connection.api)
+  const controller = new AutomationStore(connection.api, ctx.sessions)
   const keepAwake = new AutomationKeepAwakePolicy(
     ctx.settingsScope.bind<AutomationSettings>({ namespace: AUTOMATION_SETTINGS_NAMESPACE }),
   )

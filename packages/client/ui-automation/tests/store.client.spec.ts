@@ -1,6 +1,7 @@
 /** AutomationStore: list, create, enable, run-now, delete, and last-good rows. */
 import { describe, expect, it } from 'vitest'
-import type { RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RpcResponse, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { AutomationStore, messageOf, refreshIfLoaded } from '../src/client/store.ts'
 import type { AutomationRuleView } from '../src/client/store.ts'
 
@@ -34,7 +35,9 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
   list?: () => Promise<RpcResponse<{ items: AutomationRuleView[] }>>
   create?: (payload: unknown) => Promise<RpcResponse<{ rule: AutomationRuleView }>>
   setEnabled?: (payload: unknown) => Promise<RpcResponse<{ rule: AutomationRuleView }>>
-  runNow?: (payload: unknown) => Promise<RpcResponse<{ run: { id: string } }>>
+  runNow?: (payload: unknown) => Promise<RpcResponse<{
+    run: { id: string; outcome?: string; sessionId?: string; errorCode?: string }
+  }>>
   delete?: (payload: unknown) => Promise<RpcResponse<{ id: string; deleted: boolean }>>
 } = {}) {
   const calls: string[] = []
@@ -54,7 +57,9 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
       },
       runNow: (payload: unknown) => {
         calls.push('runNow')
-        return (handlers.runNow ?? (() => Promise.resolve(ok({ run: { id: 'run-1' } }))))(payload)
+        return (handlers.runNow ?? (() => Promise.resolve(ok({
+          run: { id: 'run-1', outcome: 'started', sessionId: 'session-1' },
+        }))))(payload)
       },
       delete: (payload: unknown) => {
         calls.push('delete')
@@ -65,10 +70,29 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
   return { face: face as never, calls }
 }
 
+function sessionsFace(listed: readonly string[] = ['session-1']) {
+  const opened: SessionId[] = []
+  const byId = Object.fromEntries(listed.map(id => [id, { id }]))
+  const list = createSnapshotStore({
+    ids: listed as SessionId[],
+    byId,
+    current: undefined,
+    phase: 'ready',
+  })
+  return {
+    face: {
+      list,
+      open: (id: SessionId) => { opened.push(id) },
+    },
+    opened,
+    list,
+  }
+}
+
 describe('AutomationStore', () => {
   it('loads the Host list into a ready snapshot', async () => {
     const { face, calls } = api()
-    const store = new AutomationStore(face)
+    const store = new AutomationStore(face, sessionsFace().face)
     await store.load()
     const state = store.store.getSnapshot()
     expect(state.status).toBe('ready')
@@ -80,7 +104,7 @@ describe('AutomationStore', () => {
 
   it('toggles the center-column page without refetching', () => {
     const { face, calls } = api()
-    const store = new AutomationStore(face)
+    const store = new AutomationStore(face, sessionsFace().face)
     store.setPageOpen(true)
     expect(store.store.getSnapshot().pageOpen).toBe(true)
     store.setPageOpen(false)
@@ -98,7 +122,7 @@ describe('AutomationStore', () => {
           : Promise.resolve(fail('down'))
       },
     })
-    const store = new AutomationStore(face)
+    const store = new AutomationStore(face, sessionsFace().face)
     await store.load()
     await store.load()
     const state = store.store.getSnapshot()
@@ -109,15 +133,17 @@ describe('AutomationStore', () => {
 
   it('surfaces a first-load failure as error with no rows', async () => {
     const { face } = api({ list: () => Promise.resolve(fail('boom')) })
-    const store = new AutomationStore(face)
+    const store = new AutomationStore(face, sessionsFace().face)
     await store.load()
     expect(store.store.getSnapshot()).toMatchObject({ status: 'error', error: 'boom', items: [] })
   })
 
-  it('create, setEnabled, and remove refresh the list; runNow does not', async () => {
+  it('create, setEnabled, and remove refresh the list; a started runNow opens the Session', async () => {
     const { face, calls } = api()
-    const store = new AutomationStore(face)
+    const sessions = sessionsFace()
+    const store = new AutomationStore(face, sessions.face)
     await store.load()
+    store.setPageOpen(true)
     expect(await store.create({
       task: 'ping',
       workspaceId: 'ws-1' as never,
@@ -125,9 +151,67 @@ describe('AutomationStore', () => {
     })).toBeUndefined()
     expect(await store.setEnabled(rule().id, false)).toBeUndefined()
     expect(await store.runNow(rule().id)).toBeUndefined()
+    expect(store.store.getSnapshot().pageOpen).toBe(false)
+    expect(sessions.opened).toEqual(['session-1'])
     expect(await store.remove(rule().id)).toBeUndefined()
-    expect(calls.filter(name => name === 'list')).toHaveLength(4)
+    expect(calls.filter(name => name === 'list')).toHaveLength(5)
     expect(calls).toContain('runNow')
+  })
+
+  it('waits for the started Session to land in the list before opening it', async () => {
+    const { face } = api()
+    const sessions = sessionsFace([])
+    const store = new AutomationStore(face, sessions.face)
+    const pending = store.runNow(rule().id)
+    await Promise.resolve()
+    expect(sessions.opened).toEqual([])
+    expect(store.store.getSnapshot().pageOpen).toBe(false)
+    sessions.list.update((draft) => {
+      draft.ids = ['session-1' as SessionId]
+      draft.byId = { ['session-1' as SessionId]: { id: 'session-1' as SessionId } }
+    })
+    expect(await pending).toBeUndefined()
+    expect(sessions.opened).toEqual(['session-1'])
+  })
+
+  it('keeps the page open when the previous Session is still running', async () => {
+    const { face } = api({
+      runNow: () => Promise.resolve(ok({ run: { id: 'run-1', outcome: 'skipped_busy' } })),
+    })
+    const sessions = sessionsFace()
+    const store = new AutomationStore(face, sessions.face)
+    store.setPageOpen(true)
+    expect(await store.runNow(rule().id)).toBe('skipped_busy')
+    expect(store.store.getSnapshot().pageOpen).toBe(true)
+    expect(sessions.opened).toEqual([])
+  })
+
+  it('maps a max-concurrent skip and a failed fire without opening a Session', async () => {
+    const maxed = api({
+      runNow: () => Promise.resolve(ok({
+        run: { id: 'run-1', outcome: 'skipped_busy', errorCode: 'max_concurrent_runs' },
+      })),
+    })
+    expect(await new AutomationStore(maxed.face, sessionsFace().face).runNow(rule().id))
+      .toBe('max_concurrent_runs')
+    const failed = api({
+      runNow: () => Promise.resolve(ok({ run: { id: 'run-1', outcome: 'failed' } })),
+    })
+    expect(await new AutomationStore(failed.face, sessionsFace().face).runNow(rule().id)).toBe('failed')
+    const replaced = api({
+      runNow: () => Promise.resolve(ok({
+        run: { id: 'run-1', outcome: 'replaced', sessionId: 'session-1' },
+      })),
+    })
+    const sessions = sessionsFace()
+    expect(await new AutomationStore(replaced.face, sessions.face).runNow(rule().id)).toBeUndefined()
+    expect(sessions.opened).toEqual([])
+  })
+
+  it('returns missing_session when the started Session never lands', async () => {
+    const { face } = api()
+    const store = new AutomationStore(face, sessionsFace([]).face, 5)
+    expect(await store.runNow(rule().id)).toBe('missing_session')
   })
 
   it('returns the Host error message when a mutation is rejected', async () => {
@@ -137,7 +221,7 @@ describe('AutomationStore', () => {
       runNow: () => Promise.resolve(fail('busy')),
       delete: () => Promise.resolve(fail('missing')),
     })
-    const store = new AutomationStore(face)
+    const store = new AutomationStore(face, sessionsFace().face)
     expect(await store.create({
       task: 'ping',
       workspaceId: 'ws-1' as never,
@@ -150,7 +234,7 @@ describe('AutomationStore', () => {
 
   it('refreshIfLoaded skips an unopened page', async () => {
     const { face, calls } = api()
-    const store = new AutomationStore(face)
+    const store = new AutomationStore(face, sessionsFace().face)
     refreshIfLoaded(store)
     expect(calls).toEqual([])
     await store.load()

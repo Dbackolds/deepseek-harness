@@ -64,6 +64,10 @@ function mount(options: {
   listError?: string
   deleteError?: string
   createError?: string
+  run?: { outcome: string; sessionId?: string; errorCode?: string }
+  runNowError?: string
+  listed?: boolean
+  listedWaitMs?: number
 } = {}) {
   const items = options.items ?? [rule()]
   const calls: Array<{ name: string; payload: unknown }> = []
@@ -90,7 +94,9 @@ function mount(options: {
       },
       runNow: (payload: unknown) => {
         calls.push({ name: 'runNow', payload })
-        return Promise.resolve(ok({ run: { id: 'run-1' } }))
+        if (options.runNowError !== undefined) return Promise.resolve(fail(options.runNowError))
+        const run = options.run ?? { outcome: 'started', sessionId: 'session-1' }
+        return Promise.resolve(ok({ run: { id: 'run-1', ...run } }))
       },
       delete: (payload: unknown) => {
         calls.push({ name: 'delete', payload })
@@ -104,7 +110,16 @@ function mount(options: {
       },
     },
   }
-  const controller = new AutomationStore(face as never)
+  const listed = options.listed !== false
+  const controller = new AutomationStore(face as never, {
+    list: createSnapshotStore({
+      ids: listed ? ['session-1'] : [],
+      byId: listed ? { 'session-1': { id: 'session-1' } } : {},
+      current: undefined,
+      phase: 'ready',
+    }),
+    open: () => undefined,
+  }, options.listedWaitMs)
   const keepAwake = createSnapshotStore(false)
   const unused = (() => { throw new Error('unused') }) as never
   const props: AutomationPanelProps = {
@@ -215,11 +230,41 @@ describe('AutomationPanel', () => {
     expect(screen.getByText('summarize inbox')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Disable' }))
     await waitFor(() => { expect(calls.some(call => call.name === 'setEnabled')).toBe(true) })
-    fireEvent.click(screen.getByRole('button', { name: 'Run now' }))
-    await waitFor(() => { expect(calls.some(call => call.name === 'runNow')).toBe(true) })
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete rule' }))
     await waitFor(() => { expect(calls.some(call => call.name === 'delete')).toBe(true) })
+    fireEvent.click(screen.getByRole('button', { name: 'Run now' }))
+    await waitFor(() => { expect(calls.some(call => call.name === 'runNow')).toBe(true) })
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
+  })
+
+  it.each([
+    [{ outcome: 'skipped_busy' }, 'The previous session is still running, so this run was skipped.'],
+    [{ outcome: 'skipped_busy', errorCode: 'max_concurrent_runs' }, 'Too many automation sessions are already running.'],
+    [{ outcome: 'failed' }, 'This fire failed.'],
+  ] as const)('localizes run-now outcome %j', async (run, message) => {
+    mount({ run })
+    fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
+    await waitFor(() => { expect(screen.getByText('morning')).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Run now' }))
+    await waitFor(() => { expect(screen.getByText(message)).toBeTruthy() })
+    expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy()
+  })
+
+  it('shows a Host rejection and a missing-session wait on the row', async () => {
+    mount({ runNowError: 'busy' })
+    fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
+    await waitFor(() => { expect(screen.getByText('morning')).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Run now' }))
+    await waitFor(() => { expect(screen.getByText('busy')).toBeTruthy() })
+    cleanup()
+    mount({ listed: false, listedWaitMs: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
+    await waitFor(() => { expect(screen.getByText('morning')).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Run now' }))
+    await waitFor(() => {
+      expect(screen.getByText('The new session has not appeared in the list yet.')).toBeTruthy()
+    })
   })
 
   it('creates an after rule from the form', async () => {
@@ -265,11 +310,19 @@ describe('AutomationPanel', () => {
         },
         create: () => Promise.resolve(ok({ rule: rule() })),
         setEnabled: () => Promise.resolve(ok({ rule: rule() })),
-        runNow: () => Promise.resolve(ok({ run: { id: 'run-1' } })),
+        runNow: () => Promise.resolve(ok({ run: { id: 'run-1', outcome: 'started', sessionId: 'session-1' } })),
         delete: () => Promise.resolve(ok({ id: 'rule-1', deleted: true })),
       },
     }
-    const controller = new AutomationStore(face as never)
+    const controller = new AutomationStore(face as never, {
+      list: createSnapshotStore({
+        ids: ['session-1'],
+        byId: { 'session-1': { id: 'session-1' } },
+        current: undefined,
+        phase: 'ready',
+      }),
+      open: () => undefined,
+    })
     controllerHolder.current = controller
     const unused = (() => { throw new Error('unused') }) as never
     const useWorkspaces: AutomationPanelProps['useWorkspaces'] = select => select({

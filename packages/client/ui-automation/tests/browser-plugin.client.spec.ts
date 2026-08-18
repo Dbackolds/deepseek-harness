@@ -29,11 +29,21 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
     list: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { items: [] } } }),
     create: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { rule: {} } } }),
     setEnabled: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { rule: {} } } }),
-    runNow: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { run: {} } } }),
+    runNow: () => Promise.resolve({
+      rpcId: 'r',
+      result: { ok: true, value: { run: { outcome: 'started', sessionId: 'session-1' } } },
+    }),
     delete: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { id: 'rule-1', deleted: true } } }),
   }
   ctx.provide('connection', { api: { automation, settings: {} }, isLoopback: false } as never)
   ctx.provide('remote', { $on: () => () => {} } as never)
+  ctx.provide('sessions', {
+    list: {
+      getSnapshot: () => ({ byId: { 'session-1': { id: 'session-1' } } }),
+      subscribe: () => () => {},
+    },
+    open: () => undefined,
+  } as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
   const fiber = ctx.plugin({ inject: [...inject], apply })
@@ -43,7 +53,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
 
 describe('ui-automation browser half', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'sessions', 'settingsScope'])
   })
 
   it('registers the sidebar occupant, and fiber teardown removes it (HMR safety)', async () => {

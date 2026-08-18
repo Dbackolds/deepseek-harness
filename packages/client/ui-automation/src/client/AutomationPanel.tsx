@@ -23,6 +23,16 @@ import css from './AutomationPanel.module.css'
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
 const SCHEDULES: readonly ScheduleKind[] = ['after', 'at', 'every', 'clock']
 
+function localizeRunFailure(failure: string, t: AutomationPanelProps['t']): string {
+  switch (failure) {
+    case 'skipped_busy': return t('runNow.skipped')
+    case 'max_concurrent_runs': return t('runNow.maxConcurrent')
+    case 'failed': return t('runNow.failed')
+    case 'missing_session': return t('runNow.missingSession')
+    default: return failure
+  }
+}
+
 /** Registration-side business face. */
 export interface AutomationPanelInjected {
   hooks: {
@@ -37,7 +47,7 @@ export interface AutomationPanelInjected {
   create: AutomationStore['create']
   /** Enable or disable one rule. */
   setEnabled: AutomationStore['setEnabled']
-  /** Fire one rule immediately. */
+  /** Fire one rule immediately and open the started Session. */
   runNow: AutomationStore['runNow']
   /** Delete one rule. */
   remove: AutomationStore['remove']
@@ -303,7 +313,7 @@ function RuleRow({
     setBusy(true)
     setRowError(undefined)
     void work()
-      .then((failure) => { if (failure !== undefined) setRowError(failure) })
+      .then((failure) => { if (failure !== undefined) setRowError(localizeRunFailure(failure, t)) })
       .finally(() => { setBusy(false) })
   }
   const meta = [
