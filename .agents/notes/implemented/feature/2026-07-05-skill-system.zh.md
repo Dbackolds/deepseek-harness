@@ -18,7 +18,7 @@ DeepSeek Harness 使用同一原语，使项目特定的评审、插件编写和
 
 提供方插件在 `apply()` 期间同步注册。提供方成员资格是由直接 effect 持有的状态：注册与 dispose（资源释放）同步地使已完成的目录失效，发现操作按需读取当前提供方映射而非监听注册表变更事件。提供方目录从等待的 `list()` 调用返回排序后的候选项，远程提供方在此过程中执行初始化、认证和发现，同时遵守查找的 abort 信号。注册表校验每个候选项，按排名、提供方注册顺序和提供方内部顺序以先到先得方式解决同名 skill 冲突，然后按 skill 名称排序摘要以保证消费方获得确定性结果。它仅缓存已完成的目录快照，并在发现过程中提供方／运行时修订版本发生变化时重试，因此卸载操作不会将一个陈旧且不可解析的 skill 冻结到会话目录中。运行时 `ctx.skills.register(...)` 仍作为嵌入式进程内 skill 的便捷方式保留，使用 project 优先于 user 的优先级；`runtime` 保留为注册表拥有的提供方名称。
 
-本地提供方按先到先得的排名顺序扫描 cwd 敏感的项目根目录、自定义根目录和用户根目录：项目 `.dsh`、项目 `.agents`、`customSkillDirs`、用户 `.dsh`，然后是用户 `.agents`。用户 `.dsh/skills` 扫描跳过 `.system`，以免系统拥有的目录被当作普通用户内容处理。本地提供方不会合成内置系统 skill；已配置的 bundled 根目录和专用提供方会提供额外 skill。
+本地提供方按先到先得的排名顺序扫描 cwd 敏感的项目根目录、自定义根目录和用户根目录：项目 `.dsh`、项目 `.agents`、项目 `.codex`、项目 `.claude`、`customSkillDirs`、用户 `.dsh`，然后是用户 `.agents`。用户 `.dsh/skills` 扫描跳过 `.system`，以免系统拥有的目录被当作普通用户内容处理。本地提供方不会合成内置系统 skill；已配置的 bundled 根目录和专用提供方会提供额外 skill。
 
 每个 skill 是带 YAML frontmatter 的 `<name>/SKILL.md` 或 `<name>.md`。`name` 和 `description` 为必填；`whenToUse`、`metadata`、`disable-model-invocation` 和 `user-invocable` 为可选。名称采用 kebab-case。调用字段会投影到类型化的嵌套策略中，具体由[模型与用户独立调用决策](2026-07-28-skill-invocation-policy.md)定义；解析器会拒绝旧的驼峰拼写。YAML frontmatter 使用 `yaml` 包解析，而非 `js-yaml` 或手写解析器：`yaml` 是本包已声明的现代解析器，足以满足有限的 frontmatter 需求，窄解析器要么拒绝用户预期可用的合法 YAML，要么膨胀为一个未经评审的 YAML 子集。
 
@@ -43,6 +43,14 @@ DeepSeek Harness 使用同一原语，使项目特定的评审、插件编写和
 **在 `~/.dsh/skills/.system` 下物化内置 DSH 编写 skill。** 否决，因为打包的 skill 不会在启动时写入用户主目录，嵌入式或远程提供方在配置后提供 skill。
 
 **递归发现嵌套的 `**/SKILL.md`。** 否决。扁平文件和一级目录包覆盖了配置的根目录，同时使重复处理和目录顺序易于推理。
+
+**把每个产品专用的 `.<product>/skills` 目录都当作默认项目根。** 否决。每多一个项目根就会多一条监视路径和一组同名冲突来源。项目 `.codex/skills` 与 `.claude/skills` 是目前已经与 DSH 工作区并存的两种布局；其他产品主目录在没有当前消费方需要前不进入默认集合。
+
+**同时扫描用户级 `~/.codex/skills` 与 `~/.claude/skills`。** 否决。这些主目录属于其他产品，其中的 skill 可能假定对方的工具。个人 DSH skill 已经位于用户 `.dsh` 与 `.agents`。
+
+**把 Codex 与 Claude 的发现留给 `customSkillDirs`。** 否决。放在已文档化的 Codex 或 Claude 路径上的项目 skill 会保持不可见，除非每次部署都列出该路径。
+
+**把 Codex 或 Claude 排在 DSH 与 `.agents` 之上。** 否决。`.dsh/skills` 或 `.agents/skills` 下的同名 skill 是 DSH 拥有的显式覆盖。
 
 **手写 frontmatter 解析器。** 否决，因为已接受的 schema 包含一个开放的 `metadata` 对象。窄解析器要么拒绝用户预期可用的合法 YAML，要么膨胀为一个未经评审的 YAML 子集。
 

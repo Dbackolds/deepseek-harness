@@ -177,8 +177,12 @@ describe('FileSystemSkillProvider', () => {
     await writeSkill(join(home, '.agents/skills'), 'same', 'user agents skill')
     await writeSkill(join(home, '.dsh/skills'), 'same', 'user dsh skill')
     await writeSkill(custom, 'same', 'custom skill')
+    await writeSkill(join(project, '.claude/skills'), 'same', 'project claude skill')
+    await writeSkill(join(project, '.codex/skills'), 'same', 'project codex skill')
     await writeSkill(join(project, '.agents/skills'), 'same', 'project agents skill')
     await writeSkill(join(project, '.dsh/skills'), 'same', 'project dsh skill')
+    await writeSkill(join(project, '.codex/skills'), 'codex-only', 'codex only')
+    await writeSkill(join(project, '.claude/skills'), 'claude-only', 'claude only')
     await writeSkill(custom, 'custom-only', 'custom only')
     await writeSkill(join(home, '.dsh/skills/.system'), 'hidden-system', 'hidden system')
 
@@ -190,10 +194,14 @@ describe('FileSystemSkillProvider', () => {
     const skills = await ctx.skills.list({ cwd: join(project, 'src') })
     expect(skills.map(skill => skill.name)).toEqual([
       'bundled-only',
+      'claude-only',
+      'codex-only',
       'custom-only',
       'same',
     ])
     expect(skills.find(skill => skill.name === 'custom-only')?.description).toBe('custom only')
+    expect(skills.find(skill => skill.name === 'codex-only')).toMatchObject({ description: 'codex only', source: 'project-codex' })
+    expect(skills.find(skill => skill.name === 'claude-only')).toMatchObject({ description: 'claude only', source: 'project-claude' })
     expect(skills.find(skill => skill.name === 'same')?.description).toBe('project dsh skill')
     expect(skills.find(skill => skill.name === 'same')?.source).toBe('project-dsh')
     expect(skills.find(skill => skill.name === 'hidden-system')).toBeUndefined()
@@ -213,10 +221,14 @@ describe('FileSystemSkillProvider', () => {
     await mkdir(join(extra, '.git'), { recursive: true })
     await writeSkill(join(project, '.dsh/skills'), 'same', 'primary skill')
     await writeSkill(join(extra, '.dsh/skills'), 'extra-only', 'extra skill')
+    await writeSkill(join(extra, '.codex/skills'), 'extra-codex', 'extra codex skill')
+    await writeSkill(join(extra, '.claude/skills'), 'extra-claude', 'extra claude skill')
     await writeSkill(join(extra, '.dsh/skills'), 'same', 'extra same skill')
     const ctx = await setupLocal(home)
     const skills = await ctx.skills.list({ cwd: project, extraRoots: [extra] })
     expect(skills.find(skill => skill.name === 'extra-only')?.description).toBe('extra skill')
+    expect(skills.find(skill => skill.name === 'extra-codex')).toMatchObject({ description: 'extra codex skill', source: 'project-codex' })
+    expect(skills.find(skill => skill.name === 'extra-claude')).toMatchObject({ description: 'extra claude skill', source: 'project-claude' })
     expect(skills.find(skill => skill.name === 'same')?.description).toBe('primary skill')
   })
 

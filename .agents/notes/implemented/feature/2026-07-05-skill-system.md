@@ -18,7 +18,7 @@ Dedicated packaged providers can contribute immutable skills without filesystem 
 
 Provider plugins register synchronously during `apply()`. Provider membership is direct effect-owned state: registration and disposal invalidate completed catalogs synchronously, and discovery reads the current provider map on demand rather than observing registry-change events. Provider catalogs return ranked candidates from awaited `list()` calls, where remote providers perform initialization, authentication, and discovery while honoring the lookup abort signal. The registry validates each candidate, resolves same-name skills first-wins by rank, provider registration order, and provider-local order, then sorts summaries by skill name for deterministic consumers. It caches only completed catalog snapshots and retries when a provider/runtime revision changes during discovery, so an unload cannot freeze a stale, unresolvable skill into a session catalog. Runtime `ctx.skills.register(...)` remains a convenience for embedded in-process skills and uses project-over-user priority; `runtime` is reserved as the registry-owned provider name.
 
-The local provider scans cwd-sensitive project roots, custom roots, and user roots in first-wins rank order: project `.dsh`, project `.agents`, `customSkillDirs`, user `.dsh`, then user `.agents`. The user `.dsh/skills` scan skips `.system` so a system-owned directory is not treated as normal user content. The local provider does not synthesize built-in system skills; configured bundled roots and dedicated providers supply additional skills.
+The local provider scans cwd-sensitive project roots, custom roots, and user roots in first-wins rank order: project `.dsh`, project `.agents`, project `.codex`, project `.claude`, `customSkillDirs`, user `.dsh`, then user `.agents`. The user `.dsh/skills` scan skips `.system` so a system-owned directory is not treated as normal user content. The local provider does not synthesize built-in system skills; configured bundled roots and dedicated providers supply additional skills.
 
 Each skill is either `<name>/SKILL.md` or `<name>.md` with YAML frontmatter. `name` and `description` are required; `whenToUse`, `metadata`, `disable-model-invocation`, and `user-invocable` are optional. Names are kebab-case. The invocation fields project into a typed nested policy as defined by the [independent model and user invocation decision](2026-07-28-skill-invocation-policy.md); the parser rejects the old camel-case spellings. YAML frontmatter is parsed with the `yaml` package instead of `js-yaml` or a hand-written parser: `yaml` is the already-declared modern parser for this package's limited frontmatter needs, and a narrow parser would either reject valid YAML users expect to work or grow into an unreviewed YAML subset.
 
@@ -43,6 +43,14 @@ The data structures and catalog/tool contract are documented in [skills.md](../.
 **Materialize built-in DSH authoring skills under `~/.dsh/skills/.system`.** Rejected because bundled skills do not write user home on startup, and embedded or remote providers supply configured skills.
 
 **Recursively discover nested `**/SKILL.md`.** Rejected. Flat files and one-level directory bundles cover the configured roots while keeping duplicate handling and catalog order easy to reason about.
+
+**Treat every product-specific `.<product>/skills` directory as a default project root.** Rejected. Each extra project root is a watched path and a same-name conflict source. Project `.codex/skills` and `.claude/skills` are the two layouts already kept next to DSH workspaces; other product homes stay out of the default set until a current consumer needs them.
+
+**Also scan user-level `~/.codex/skills` and `~/.claude/skills`.** Rejected. Those homes belong to the other products and can contain skills that assume their tools. Personal DSH skills already live under user `.dsh` and `.agents`.
+
+**Leave Codex and Claude discovery to `customSkillDirs`.** Rejected. A project skill at the documented Codex or Claude path would stay invisible unless every deployment listed that path.
+
+**Rank Codex or Claude above DSH and `.agents`.** Rejected. A same-named skill under `.dsh/skills` or `.agents/skills` is the explicit DSH-owned override.
 
 **Hand-parse frontmatter.** Rejected because the accepted schema includes an open `metadata` object. A narrow parser would either reject valid YAML users expect to work or grow into an unreviewed YAML subset.
 

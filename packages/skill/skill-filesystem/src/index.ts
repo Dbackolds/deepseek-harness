@@ -35,6 +35,8 @@ import {
 
 const PROJECT_DSH_RANK = 100
 const PROJECT_AGENTS_RANK = 200
+const PROJECT_CODEX_RANK = 210
+const PROJECT_CLAUDE_RANK = 220
 const CUSTOM_RANK = 300
 const USER_DSH_RANK = 400
 const USER_AGENTS_RANK = 500
@@ -250,6 +252,8 @@ export class FileSystemSkillProvider implements SkillProvider {
         roots.push(
           { path: join(projectRoot, '.dsh/skills'), source: 'project-dsh', rank: PROJECT_DSH_RANK, projectRoot },
           { path: join(projectRoot, '.agents/skills'), source: 'project-agents', rank: PROJECT_AGENTS_RANK, projectRoot },
+          { path: join(projectRoot, '.codex/skills'), source: 'project-codex', rank: PROJECT_CODEX_RANK, projectRoot },
+          { path: join(projectRoot, '.claude/skills'), source: 'project-claude', rank: PROJECT_CLAUDE_RANK, projectRoot },
         )
       }
       await addProject(cwd)
