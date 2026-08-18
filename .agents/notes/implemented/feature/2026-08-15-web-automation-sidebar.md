@@ -24,7 +24,7 @@ Create stays on the four selectors the service already accepts. Built-in templat
 
 ## Verification
 
-Package tests cover slot registration and HMR disposal, store list/create/enable/run-now/delete and page visibility, a started run-now waiting for the Session list then opening it, selector summaries, draft validation, keep-awake preference and OS hold, template overlay, and the trigger plus center-column page. The Web e2e scenario creates an `after` rule through the real Host and asserts it on the page. Sidebar shell snapshots include the empty `sidebar.automation` hole.
+Package tests cover slot registration and HMR disposal, store list/create/enable/run-now/delete and page visibility, run-count loading, a started run-now waiting for the Session list then opening it, selector summaries, remaining-time chips, draft validation, keep-awake preference and OS hold, template overlay, and the trigger plus center-column page. The Web e2e scenario creates an `after` rule through the real Host and asserts it on the page. Sidebar shell snapshots include the empty `sidebar.automation` hole.
 
 ## Consequences
 

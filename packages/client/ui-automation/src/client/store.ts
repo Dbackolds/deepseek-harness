@@ -18,12 +18,19 @@ export type AutomationRuleView = Awaited<
 /** Create payload accepted by the Host Automation wire. */
 export type AutomationCreateInput = Parameters<IApiClient['automation']['create']>[0]
 
+/** One listed rule plus the run count the page paints on the card. */
+export interface AutomationListedRule {
+  rule: AutomationRuleView
+  /** Absent while listRuns has not landed or that call failed. */
+  runCount?: number
+}
+
 /** Page snapshot. */
 export interface AutomationState {
   status: 'idle' | 'loading' | 'ready' | 'error'
   /** Whole-load failure text; row-level write failures stay on the row. */
   error: string | null
-  items: readonly AutomationRuleView[]
+  items: readonly AutomationListedRule[]
   /** Whether the center-column Automation page is showing. */
   pageOpen: boolean
 }
@@ -80,11 +87,16 @@ export class AutomationStore {
     private readonly listedSessionWaitMs: number = LISTED_SESSION_WAIT_MS,
   ) {}
 
+  /** Increments on every load so a slower earlier list cannot overwrite a newer one. */
+  private loadGeneration = 0
+
   /**
-   * Fetch every rule. A failed reload keeps the last good list when one exists.
+   * Fetch every rule and the run count for each. A failed reload keeps the last
+   * good list when one exists. A failed listRuns leaves that card without a count.
    * @returns once the snapshot has the new status.
    */
   async load(): Promise<void> {
+    const generation = ++this.loadGeneration
     const previous = this.store.getSnapshot()
     this.store.update((draft) => {
       draft.status = previous.items.length === 0 ? 'loading' : previous.status
@@ -92,14 +104,44 @@ export class AutomationStore {
     })
     try {
       const value = valueOf(await this.api.automation.list({}))
+      if (generation !== this.loadGeneration) return
+      const previousById = new Map(previous.items.map(item => [item.rule.id, item]))
+      const items = value.items.map((rule) => {
+        const known = previousById.get(rule.id)
+        return known?.runCount === undefined ? { rule } : { rule, runCount: known.runCount }
+      })
       this.store.update((draft) => {
         draft.status = 'ready'
         draft.error = null
-        draft.items = value.items
+        draft.items = items
+      })
+      const counted = await Promise.all(value.items.map(async (rule) => {
+        try {
+          return {
+            rule,
+            runCount: valueOf(await this.api.automation.listRuns({ id: rule.id, limit: 10_000 })).items.length,
+          }
+        } catch {
+          // A missing count is a card-local gap; the rule list itself already landed.
+          return { rule }
+        }
+      }))
+      if (generation !== this.loadGeneration) return
+      this.store.update((draft) => {
+        draft.items = counted
       })
     } catch (error) {
+      const latest = this.store.getSnapshot()
+      const keepRows = latest.items.length > 0 || previous.items.length > 0
+      if (generation !== this.loadGeneration && keepRows) {
+        this.store.update((draft) => {
+          draft.error = messageOf(error)
+        })
+        return
+      }
+      if (generation !== this.loadGeneration) return
       this.store.update((draft) => {
-        draft.status = previous.items.length === 0 ? 'error' : 'ready'
+        draft.status = keepRows ? 'ready' : 'error'
         draft.error = messageOf(error)
       })
     }

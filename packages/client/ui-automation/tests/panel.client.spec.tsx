@@ -98,6 +98,7 @@ function mount(options: {
         const run = options.run ?? { outcome: 'started', sessionId: 'session-1' }
         return Promise.resolve(ok({ run: { id: 'run-1', ...run } }))
       },
+      listRuns: () => Promise.resolve(ok({ items: [{ id: 'run-1' }] })),
       delete: (payload: unknown) => {
         calls.push({ name: 'delete', payload })
         if (options.deleteError !== undefined) {
@@ -175,10 +176,10 @@ describe('AutomationPanel', () => {
     await waitFor(() => {
       expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy()
     })
-    expect(screen.getByText('No rules yet.')).toBeTruthy()
+    expect(screen.getByText('No rules yet')).toBeTruthy()
     expect(screen.getByRole('switch', { name: 'Keep the computer awake while sessions run.' })).toBeTruthy()
     expect(screen.getByText('Scheduled-task templates')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create scheduled task' })).toBeTruthy()
   })
 
   it('closes the page from the header close control', async () => {
@@ -228,6 +229,8 @@ describe('AutomationPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
     await waitFor(() => { expect(screen.getByText('morning')).toBeTruthy() })
     expect(screen.getByText('summarize inbox')).toBeTruthy()
+    expect(screen.getByText('Created tasks')).toBeTruthy()
+    expect(screen.getByText('Ran 1 times')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Disable' }))
     await waitFor(() => { expect(calls.some(call => call.name === 'setEnabled')).toBe(true) })
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
@@ -270,8 +273,8 @@ describe('AutomationPanel', () => {
   it('creates an after rule from the form', async () => {
     const { calls } = mount({ items: [] })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: 'New rule' }))
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Create scheduled task' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Create scheduled task' }))
     fireEvent.change(screen.getByPlaceholderText('The task the new session should run'), {
       target: { value: 'ping host' },
     })
@@ -311,6 +314,7 @@ describe('AutomationPanel', () => {
         create: () => Promise.resolve(ok({ rule: rule() })),
         setEnabled: () => Promise.resolve(ok({ rule: rule() })),
         runNow: () => Promise.resolve(ok({ run: { id: 'run-1', outcome: 'started', sessionId: 'session-1' } })),
+        listRuns: () => Promise.resolve(ok({ items: [{ id: 'run-1' }] })),
         delete: () => Promise.resolve(ok({ id: 'rule-1', deleted: true })),
       },
     }
@@ -372,8 +376,8 @@ describe('AutomationPanel', () => {
   it('creates a local-clock rule after visiting the other schedule fields', async () => {
     const { calls } = mount({ items: [] })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: 'New rule' }))
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Create scheduled task' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Create scheduled task' }))
     fireEvent.change(screen.getByPlaceholderText('Optional; defaults to the start of the task'), {
       target: { value: 'morning ping' },
     })
@@ -408,8 +412,8 @@ describe('AutomationPanel', () => {
   it('blocks create without a workspace and shows draft validation', async () => {
     mount({ items: [], workspaces: [] })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: 'New rule' }))
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Create scheduled task' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Create scheduled task' }))
     expect(screen.getByText('Add a workspace before creating a rule.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', true)
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -419,8 +423,8 @@ describe('AutomationPanel', () => {
   it('keeps the create form open when the Host rejects the write', async () => {
     mount({ items: [], createError: 'selector conflict' })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: 'New rule' }))
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Create scheduled task' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Create scheduled task' }))
     fireEvent.change(screen.getByPlaceholderText('The task the new session should run'), {
       target: { value: 'ping host' },
     })
@@ -436,8 +440,8 @@ describe('AutomationPanel', () => {
     }
     const { calls } = mount({ items: [], workspaces: [workspace, extra] })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: 'New rule' }))
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Create scheduled task' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Create scheduled task' }))
     fireEvent.change(screen.getByPlaceholderText('The task the new session should run'), {
       target: { value: 'switch workspace' },
     })
@@ -472,8 +476,8 @@ describe('AutomationPanel', () => {
   it('shows draft validation when the task is blank', async () => {
     mount({ items: [] })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'New rule' })).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: 'New rule' }))
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Create scheduled task' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Create scheduled task' }))
     fireEvent.change(screen.getByPlaceholderText('The task the new session should run'), {
       target: { value: '   ' },
     })

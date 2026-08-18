@@ -33,6 +33,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
       rpcId: 'r',
       result: { ok: true, value: { run: { outcome: 'started', sessionId: 'session-1' } } },
     }),
+    listRuns: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { items: [] } } }),
     delete: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { id: 'rule-1', deleted: true } } }),
   }
   ctx.provide('connection', { api: { automation, settings: {} }, isLoopback: false } as never)

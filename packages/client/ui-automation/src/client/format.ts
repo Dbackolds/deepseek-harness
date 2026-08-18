@@ -106,6 +106,26 @@ export function formatNextAt(iso: string): string {
 }
 
 /**
+ * Remaining time until a UTC instant, using the UI language.
+ * @param iso - UTC instant from the wire.
+ * @param t - package translator.
+ * @param now - comparison instant; tests pass a fixed value.
+ * @returns a short remaining-time phrase, or the calendar fallback.
+ */
+export function formatNextIn(iso: string, t: AutomationTranslate, now: Date = new Date()): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  const deltaMs = date.getTime() - now.getTime()
+  if (deltaMs <= 0) return t('next.overdue')
+  const minutes = Math.round(deltaMs / 60_000)
+  if (minutes < 1) return t('next.soon')
+  if (minutes < 60) return t('next.minutes', { n: minutes })
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return t('next.hours', { n: hours })
+  return t('next.days', { n: Math.round(hours / 24) })
+}
+
+/**
  * State word for a rule row.
  * @param state - derived delivery state.
  * @param t - package translator.

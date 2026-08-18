@@ -24,7 +24,7 @@ Host Automation 已经拥有持久规则、Host RPC 和模型 tool，但 Web GUI
 
 ## 验证
 
-包测试覆盖 slot 注册与 HMR 拆除、store 的 list/create/enable/run-now/delete 与页面开合、成功立即运行等待 Session 列表再打开、选择器摘要、草稿校验、保持唤醒偏好与操作系统持有、模板叠加，以及触发器加中间栏整页。Web e2e 场景通过真实 Host 创建一条 `after` 规则，并在整页里断言它。侧栏外壳快照包含空的 `sidebar.automation` hole。
+包测试覆盖 slot 注册与 HMR 拆除、store 的 list/create/enable/run-now/delete 与页面开合、运行次数加载、成功立即运行等待 Session 列表再打开、选择器摘要、剩余时间芯片、草稿校验、保持唤醒偏好与操作系统持有、模板叠加，以及触发器加中间栏整页。Web e2e 场景通过真实 Host 创建一条 `after` 规则，并在整页里断言它。侧栏外壳快照包含空的 `sidebar.automation` hole。
 
 ## 后果
 

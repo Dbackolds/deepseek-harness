@@ -1,7 +1,7 @@
 /** Selector summaries and create-draft validation. */
 import { describe, expect, it } from 'vitest'
 import {
-  draftToCreate, EMPTY_DRAFT, formatNextAt, formatSelector, formatState, toggleWeekday,
+  draftToCreate, EMPTY_DRAFT, formatNextAt, formatNextIn, formatSelector, formatState, toggleWeekday,
 } from '../src/client/format.ts'
 import { en } from '../src/client/locales.ts'
 
@@ -38,6 +38,19 @@ describe('formatNextAt and formatState', () => {
     expect(formatState('scheduled', t)).toBe('Scheduled')
     expect(formatState('overdue', t)).toBe('Overdue')
     expect(formatState('disabled', t)).toBe('Disabled')
+  })
+})
+
+describe('formatNextIn', () => {
+  const now = new Date('2026-08-15T12:00:00.000Z')
+
+  it('names remaining time buckets', () => {
+    expect(formatNextIn('not-a-date', t, now)).toBe('not-a-date')
+    expect(formatNextIn('2026-08-15T11:00:00.000Z', t, now)).toBe('Overdue')
+    expect(formatNextIn('2026-08-15T12:00:20.000Z', t, now)).toBe('Starting soon')
+    expect(formatNextIn('2026-08-15T12:10:00.000Z', t, now)).toBe('in 10 minutes')
+    expect(formatNextIn('2026-08-15T15:00:00.000Z', t, now)).toBe('in 3 hours')
+    expect(formatNextIn('2026-08-17T12:00:00.000Z', t, now)).toBe('in 2 days')
   })
 })
 

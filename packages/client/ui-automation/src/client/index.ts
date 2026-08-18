@@ -19,7 +19,7 @@ import { en, NS, zh, type AutomationKey } from './locales.ts'
 
 export type { AutomationPageProps, AutomationPanelInjected, AutomationPanelProps } from './AutomationPanel.tsx'
 export type { AutomationKey } from './locales.ts'
-export type { AutomationCreateInput, AutomationRuleView, AutomationState } from './store.ts'
+export type { AutomationCreateInput, AutomationListedRule, AutomationRuleView, AutomationState } from './store.ts'
 export { AutomationStore, refreshIfLoaded } from './store.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

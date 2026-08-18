@@ -38,6 +38,7 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
   runNow?: (payload: unknown) => Promise<RpcResponse<{
     run: { id: string; outcome?: string; sessionId?: string; errorCode?: string }
   }>>
+  listRuns?: (payload: unknown) => Promise<RpcResponse<{ items: unknown[] }>>
   delete?: (payload: unknown) => Promise<RpcResponse<{ id: string; deleted: boolean }>>
 } = {}) {
   const calls: string[] = []
@@ -60,6 +61,10 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
         return (handlers.runNow ?? (() => Promise.resolve(ok({
           run: { id: 'run-1', outcome: 'started', sessionId: 'session-1' },
         }))))(payload)
+      },
+      listRuns: (payload: unknown) => {
+        calls.push('listRuns')
+        return (handlers.listRuns ?? (() => Promise.resolve(ok({ items: [{ id: 'run-1' }] }))))(payload)
       },
       delete: (payload: unknown) => {
         calls.push('delete')
@@ -97,9 +102,10 @@ describe('AutomationStore', () => {
     const state = store.store.getSnapshot()
     expect(state.status).toBe('ready')
     expect(state.items).toHaveLength(1)
-    expect(state.items[0]?.name).toBe('morning')
+    expect(state.items[0]?.rule.name).toBe('morning')
+    expect(state.items[0]?.runCount).toBe(1)
     expect(state.pageOpen).toBe(false)
-    expect(calls).toEqual(['list'])
+    expect(calls).toEqual(['list', 'listRuns'])
   })
 
   it('toggles the center-column page without refetching', () => {
@@ -241,6 +247,15 @@ describe('AutomationStore', () => {
     refreshIfLoaded(store)
     await Promise.resolve()
     expect(calls.filter(name => name === 'list').length).toBeGreaterThan(1)
+  })
+
+  it('keeps a card without a count when listRuns fails', async () => {
+    const { face } = api({
+      listRuns: () => Promise.resolve(fail('no history')),
+    })
+    const store = new AutomationStore(face, sessionsFace().face)
+    await store.load()
+    expect(store.store.getSnapshot().items[0]).toEqual({ rule: rule() })
   })
 
   it('messageOf stringifies unknown rejections', () => {

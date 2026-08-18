@@ -6,22 +6,35 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   Button, IconClockOutline16, IconCloseOutline16, IconPlayOutline16, IconPlusOutline16,
-  IconTrashOutline16, IconWarningOutline16, Input, Modal, Tooltip,
+  IconRefreshOutline16, IconTrashOutline16, IconWarningOutline16, Input, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore, WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import {
-  draftToCreate, EMPTY_DRAFT, formatNextAt, formatSelector, formatState, toggleWeekday,
+  draftToCreate, EMPTY_DRAFT, formatNextIn, formatSelector, formatState, toggleWeekday,
   type AutomationDraft, type ScheduleKind,
 } from './format.ts'
 import { NS, type AutomationKey } from './locales.ts'
-import type { AutomationRuleView, AutomationState, AutomationStore } from './store.ts'
+import type { AutomationListedRule, AutomationRuleView, AutomationState, AutomationStore } from './store.ts'
 import { AUTOMATION_TEMPLATES, applyTemplate, type AutomationTemplate } from './templates.ts'
 import css from './AutomationPanel.module.css'
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
 const SCHEDULES: readonly ScheduleKind[] = ['after', 'at', 'every', 'clock']
+
+function stateClassOf(state: AutomationRuleView['state']): string {
+  switch (state) {
+    case 'scheduled': return css.stateScheduled ?? ''
+    case 'overdue': return css.stateOverdue ?? ''
+    case 'disabled': return css.stateDisabled ?? ''
+    /* v8 ignore next 4 -- closed delivery-state union */
+    default: {
+      const exhaustive: never = state
+      return exhaustive
+    }
+  }
+}
 
 function localizeRunFailure(failure: string, t: AutomationPanelProps['t']): string {
   switch (failure) {
@@ -108,8 +121,8 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
   const workspaces = useWorkspaces(snapshot => snapshot.items)
 
   useEffect(() => {
-    if (!state.pageOpen) return
-    if (state.status === 'idle') void load()
+    if (!state.pageOpen || state.status !== 'idle') return
+    void load()
   }, [state.pageOpen, state.status, load])
 
   useEffect(() => {
@@ -156,30 +169,49 @@ function AutomationPageChrome({
 }): ReactNode {
   const [adding, setAdding] = useState(false)
   const [seed, setSeed] = useState<AutomationTemplate | undefined>(undefined)
+  const [refreshing, setRefreshing] = useState(false)
   const openCreate = (template?: AutomationTemplate): void => {
     setSeed(template)
     setAdding(true)
+  }
+  const refresh = (): void => {
+    setRefreshing(true)
+    void load().finally(() => { setRefreshing(false) })
   }
   return (
     <section className={css.page} aria-label={t('title')}>
       <header className={css.pageHeader}>
         <div className={css.pageHeading}>
           <h1 className={css.pageTitle}>{t('title')}</h1>
-          <p className={css.intro}>{t('intro')}</p>
+          <p className={css.pageIntro}>{t('intro')}</p>
         </div>
         <div className={css.pageTools}>
-          {state.status !== 'error' || state.items.length > 0
-            ? (
-              <Button
-                variant="primary"
-                icon={<IconPlusOutline16 size={16} />}
-                disabled={adding}
-                onClick={() => { openCreate() }}
-              >
-                {t('add')}
-              </Button>
-            )
-            : null}
+          {adding
+            ? null
+            : (
+              <>
+                <button
+                  type="button"
+                  className={css.iconButton}
+                  aria-label={t('refresh')}
+                  disabled={refreshing}
+                  onClick={refresh}
+                >
+                  <IconRefreshOutline16 size={16} />
+                </button>
+                {state.status !== 'error' || state.items.length > 0
+                  ? (
+                    <Button
+                      variant="primary"
+                      icon={<IconPlusOutline16 size={16} />}
+                      onClick={() => { openCreate() }}
+                    >
+                      {t('add')}
+                    </Button>
+                  )
+                  : null}
+              </>
+            )}
           <button type="button" className={css.pageClose} aria-label={t('close')} onClick={() => { setPageOpen(false) }}>
             <IconCloseOutline16 size={16} />
           </button>
@@ -233,8 +265,10 @@ function AutomationBody({
   if (state.status === 'error' && state.items.length === 0) {
     return (
       <div className={css.body}>
-        <p className={css.error}>{t('loadFailed') + ': ' + String(state.error)}</p>
-        <Button variant="outline" onClick={() => { void load() }}>{t('retry')}</Button>
+        <div className={css.emptyCard}>
+          <p className={css.error}>{t('loadFailed') + ': ' + String(state.error)}</p>
+          <Button variant="outline" onClick={() => { void load() }}>{t('retry')}</Button>
+        </div>
       </div>
     )
   }
@@ -261,21 +295,29 @@ function AutomationBody({
         </button>
       </div>
       {state.items.length === 0 && !adding
-        ? <p className={css.empty}>{t('empty')}</p>
+        ? (
+          <div className={css.emptyCard}>
+            <p className={css.empty}>{t('empty')}</p>
+            <p className={css.emptyHint}>{t('empty.hint')}</p>
+          </div>
+        )
         : (
-          <ul className={css.rows}>
-            {state.items.map(rule => (
-              <RuleRow
-                key={rule.id}
-                rule={rule}
-                workspaceTitle={workspaces.find(item => item.workspaceId === rule.workspaceId)?.title}
-                setEnabled={setEnabled}
-                runNow={runNow}
-                remove={remove}
-                t={t}
-              />
-            ))}
-          </ul>
+          <section className={css.created} aria-labelledby="automation-created">
+            <h2 id="automation-created" className={css.sectionTitle}>{t('created')}</h2>
+            <ul className={css.cards}>
+              {state.items.map(item => (
+                <RuleCard
+                  key={item.rule.id}
+                  item={item}
+                  workspaceTitle={workspaces.find(workspace => workspace.workspaceId === item.rule.workspaceId)?.title}
+                  setEnabled={setEnabled}
+                  runNow={runNow}
+                  remove={remove}
+                  t={t}
+                />
+              ))}
+            </ul>
+          </section>
         )}
       {adding
         ? (
@@ -294,16 +336,17 @@ function AutomationBody({
   )
 }
 
-function RuleRow({
-  rule, workspaceTitle, setEnabled, runNow, remove, t,
+function RuleCard({
+  item, workspaceTitle, setEnabled, runNow, remove, t,
 }: {
-  rule: AutomationRuleView
+  item: AutomationListedRule
   workspaceTitle: string | undefined
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
   remove: AutomationStore['remove']
   t: AutomationPanelProps['t']
 }): ReactNode {
+  const { rule } = item
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [rowError, setRowError] = useState<string | undefined>(undefined)
@@ -316,49 +359,57 @@ function RuleRow({
       .then((failure) => { if (failure !== undefined) setRowError(localizeRunFailure(failure, t)) })
       .finally(() => { setBusy(false) })
   }
-  const meta = [
-    formatState(rule.state, t),
-    formatSelector(rule.selector, t),
-    t('next', { when: formatNextAt(rule.nextAt) }),
-    ...workspaceTitle === undefined ? [] : [workspaceTitle],
-  ].join(' · ')
+  const stateClass = stateClassOf(rule.state)
+  const nextWhen = formatNextIn(rule.nextAt, t)
   return (
     <li className={css.card}>
       <div className={css.cardHead}>
-        <div className={css.cardIdentity}>
-          <div className={css.cardName}>{rule.name}</div>
-          <div className={css.cardMeta}>{meta}</div>
-          <div className={css.cardTask}>{rule.task}</div>
-        </div>
-        <div className={css.cardActions}>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => { run(() => setEnabled(rule.id, !rule.enabled)) }}
-          >
-            {rule.enabled ? t('disabled') : t('enabled')}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            icon={<IconPlayOutline16 size={14} />}
-            disabled={busy}
-            onClick={() => { run(() => runNow(rule.id)) }}
-          >
-            {t('runNow')}
-          </Button>
-          <Button
-            size="sm"
-            icon={<IconTrashOutline16 size={14} />}
-            disabled={busy}
-            onClick={() => { setConfirming(true) }}
-          >
-            {t('delete')}
-          </Button>
-        </div>
+        <div className={css.cardName}>{rule.name}</div>
+        <div className={css.cardTask}>{rule.task}</div>
+        {workspaceTitle === undefined ? null : <div className={css.cardWorkspace}>{workspaceTitle}</div>}
+      </div>
+      <div className={css.cardMeta}>
+        <span className={[css.scheduleChip, stateClass].join(' ')}>
+          <IconClockOutline16 size={12} />
+          <span className={css.visuallyHidden}>{formatState(rule.state, t)}</span>
+          {t('scheduleChip', { schedule: formatSelector(rule.selector, t), when: nextWhen })}
+        </span>
+        <span className={css.runCount}>
+          {item.runCount === undefined
+            ? null
+            : item.runCount === 0
+              ? t('runCount.zero')
+              : t('runCount', { n: item.runCount })}
+        </span>
       </div>
       {rowError !== undefined && <p className={css.error} role="alert">{rowError}</p>}
+      <div className={css.cardActions}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => { run(() => setEnabled(rule.id, !rule.enabled)) }}
+        >
+          {rule.enabled ? t('disabled') : t('enabled')}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          icon={<IconPlayOutline16 size={14} />}
+          disabled={busy}
+          onClick={() => { run(() => runNow(rule.id)) }}
+        >
+          {t('runNow')}
+        </Button>
+        <Button
+          size="sm"
+          icon={<IconTrashOutline16 size={14} />}
+          disabled={busy}
+          onClick={() => { setConfirming(true) }}
+        >
+          {t('delete')}
+        </Button>
+      </div>
       <Modal
         open={confirming}
         onClose={() => { setConfirming(false) }}

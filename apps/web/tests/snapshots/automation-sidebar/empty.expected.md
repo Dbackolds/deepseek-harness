@@ -1,0 +1,12 @@
+- region "自动化":
+  - heading "自动化" [level=1]
+  - paragraph: 按计划运行任务，或在需要时随时执行。
+  - button "刷新":
+    - img
+  - button "创建定时任务":
+    - img
+    - text: 创建定时任务
+  - button "关闭":
+    - img
+  - paragraph: 还没有规则
+  - paragraph: 到点后会打开新会话并提交任务。
