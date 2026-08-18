@@ -167,13 +167,40 @@ function capacitySpelling(value: number | undefined): string {
   return value === undefined ? '' : formatCapacity(value)
 }
 
-/** Adopt a candidate, keeping whatever capacities the provider disclosed. */
+/** Adopt a candidate, keeping whatever capacities and efforts the provider disclosed. */
 function adopt(candidate: DiscoveredModelView): ModelDraft {
   return {
     id: candidate.id,
     ...candidate.name === undefined ? {} : { name: candidate.name },
     ...candidate.contextWindow === undefined ? {} : { contextWindow: candidate.contextWindow },
     ...candidate.maxTokens === undefined ? {} : { maxTokens: candidate.maxTokens },
+    ...fillDisclosedReasoning({}, candidate),
+  }
+}
+
+/**
+ * Copy disclosed thinking levels onto a row that has none. A row that already
+ * declares `reasoningEfforts` or a reasoning-dispatch switch is left alone so
+ * a later fetch cannot overwrite a hand-tuned declaration.
+ * @param row - the stored or newly adopted draft.
+ * @param candidate - the listing's disclosed efforts, when any.
+ * @returns the reasoning fields to merge, or nothing.
+ */
+function fillDisclosedReasoning(
+  row: ModelDraft,
+  candidate: DiscoveredModelView,
+): ModelDraft {
+  if (row['reasoningEfforts'] !== undefined) return {}
+  const compat = row['compat']
+  const compatRecord = compat !== null && typeof compat === 'object' && !Array.isArray(compat)
+    ? compat as Record<string, unknown>
+    : undefined
+  if (compatRecord !== undefined && 'supportsReasoningEffort' in compatRecord) return {}
+  return {
+    ...candidate.reasoningEfforts === undefined ? {} : { reasoningEfforts: candidate.reasoningEfforts },
+    ...candidate.supportsReasoningEffort === undefined
+      ? {}
+      : { compat: { ...compatRecord ?? {}, supportsReasoningEffort: candidate.supportsReasoningEffort } },
   }
 }
 
@@ -307,7 +334,15 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       // Keyed by id, so a half-typed row whose id is still empty is not a
       // match and the candidate joins as its own row — correct, since a row
       // without an id is not yet a model and the create/apply gates refuse it.
-      byId.set(candidate.id, byId.get(candidate.id) ?? adopt(candidate))
+      // Missing thinking levels are the one exception: a later fetch can fill
+      // them without touching capacities the user already set.
+      const existing = byId.get(candidate.id)
+      byId.set(
+        candidate.id,
+        existing === undefined
+          ? adopt(candidate)
+          : { ...existing, ...fillDisclosedReasoning(existing, candidate) },
+      )
     }
     onChange([...byId.values()])
     closePicker()

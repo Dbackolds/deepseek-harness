@@ -755,6 +755,11 @@ describe('llm.discoverModels', () => {
       seen.push({ baseURL: probe.baseURL, api: probe.api, apiKey: probe.apiKey })
       return Promise.resolve([
         { id: 'acme-large', name: 'Acme Large', contextWindow: 65_536, maxTokens: 4096 },
+        {
+          id: 'acme-think',
+          reasoningEfforts: { low: 'low', high: 'high' },
+          supportsReasoningEffort: true,
+        },
         { id: 'acme-small' },
       ])
     })
@@ -769,6 +774,11 @@ describe('llm.discoverModels', () => {
 
     expect(value.models).toEqual([
       { id: 'acme-large', name: 'Acme Large', contextWindow: 65_536, maxTokens: 4096 },
+      {
+        id: 'acme-think',
+        reasoningEfforts: { low: 'low', high: 'high' },
+        supportsReasoningEffort: true,
+      },
       { id: 'acme-small' },
     ])
     expect(seen).toEqual([{

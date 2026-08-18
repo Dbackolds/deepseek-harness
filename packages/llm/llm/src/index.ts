@@ -278,6 +278,34 @@ export interface DirectoryRegistrationHandle {
 }
 
 /**
+ * Keep only a usable reasoning declaration from one discovered model.
+ * Unknown keys, empty level ids, and empty wire spellings are dropped rather
+ * than invented: a listing that does not describe reasoning stays silent, and
+ * a surface adopting the result still owes any field the adapter requires.
+ * @param model - one adapter-returned discovery row.
+ * @returns the reasoning fields to copy, or nothing.
+ */
+function normalizeDiscoveredReasoning(
+  model: LlmDiscoveredModel,
+): Pick<LlmDiscoveredModel, 'reasoningEfforts' | 'supportsReasoningEffort'> {
+  const efforts = model.reasoningEfforts
+  const cleaned: Record<string, string | null> = {}
+  if (efforts !== undefined) {
+    for (const [level, wire] of Object.entries(efforts)) {
+      if (level.length === 0) continue
+      if (wire === null) cleaned[level] = null
+      else if (typeof wire === 'string' && wire.length > 0) cleaned[level] = wire
+    }
+  }
+  return {
+    ...Object.keys(cleaned).length === 0 ? {} : { reasoningEfforts: cleaned },
+    ...model.supportsReasoningEffort === undefined
+      ? {}
+      : { supportsReasoningEffort: model.supportsReasoningEffort === true },
+  }
+}
+
+/**
  * The abstract `llm` service: an adapter registry plus a streaming model-call
  * API, interceptable via the `llm/stream` waterfall.
  */
@@ -553,6 +581,7 @@ export class LlmRuntime extends Service {
         ...model.name === undefined ? {} : { name: model.name },
         ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
         ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
+        ...normalizeDiscoveredReasoning(model),
       })
     }
     return models
