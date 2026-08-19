@@ -205,7 +205,11 @@ export class FakeApiClient implements IApiClient {
 
   // The archive-set field defaults at the binding below so list stubs keep
   // the pre-archive `{ items }` shape; a stub carrying the field wins.
-  onWorkspaceList: (payload: unknown) => Promise<RpcResponse<{ items: never[]; archivedSessionIds?: never[] }>> =
+  onWorkspaceList: (payload: unknown) => Promise<RpcResponse<{
+    items: never[]
+    archivedSessionIds?: never[]
+    hiddenWorkspaceIds?: never[]
+  }>> =
     () => Promise.resolve(ok({ items: [] }))
   onWorkspaceCreate: (payload: unknown) => Promise<RpcResponse<{ workspace: WorkspaceView; created: boolean }>> =
     () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws'), created: true }))
@@ -225,6 +229,12 @@ export class FakeApiClient implements IApiClient {
   onWorkspaceArchiveSession: (payload: unknown) => Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>> =
     payload => Promise.resolve(ok({ archivedSessionIds: [(payload as { sessionId: SessionId }).sessionId] }))
 
+  onWorkspaceHide: (payload: unknown) => Promise<RpcResponse<{ hiddenWorkspaceIds: WorkspaceId[] }>> =
+    payload => Promise.resolve(ok({ hiddenWorkspaceIds: [(payload as { workspaceId: WorkspaceId }).workspaceId] }))
+
+  onWorkspaceShow: (payload: unknown) => Promise<RpcResponse<{ hiddenWorkspaceIds: WorkspaceId[] }>> =
+    () => Promise.resolve(ok({ hiddenWorkspaceIds: [] }))
+
   onWorkspaceAddFolder: (payload: unknown) => Promise<RpcResponse<{ workspace: WorkspaceView }>> =
     () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws') }))
 
@@ -232,11 +242,20 @@ export class FakeApiClient implements IApiClient {
     () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws') }))
 
   readonly workspace: IApiClient['workspace'] = {
-    list: (payload: unknown) => this.record('workspace.list', payload, this.onWorkspaceList(payload).then(response => (
-      response.result.ok
-        ? { ...response, result: { ok: true as const, value: { archivedSessionIds: [] as never[], ...response.result.value } } }
-        : response
-    )) as ReturnType<IApiClient['workspace']['list']>),
+    list: (payload: unknown) => this.record('workspace.list', payload, this.onWorkspaceList(payload).then((response) => {
+      if (!response.result.ok) return response
+      return {
+        ...response,
+        result: {
+          ok: true as const,
+          value: {
+            archivedSessionIds: [] as never[],
+            hiddenWorkspaceIds: [] as never[],
+            ...response.result.value,
+          },
+        },
+      }
+    }) as ReturnType<IApiClient['workspace']['list']>),
     create: (payload: unknown) => this.record('workspace.create', payload, this.onWorkspaceCreate(payload)),
     rename: (payload: unknown) => this.record('workspace.rename', payload, this.onWorkspaceRename(payload)),
     delete: (payload: unknown) => this.record('workspace.delete', payload, this.onWorkspaceDelete(payload)),
@@ -246,6 +265,10 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.insertSessionBefore', payload, this.onWorkspaceInsertSessionBefore(payload)),
     archiveSession: (payload: unknown) =>
       this.record('workspace.archiveSession', payload, this.onWorkspaceArchiveSession(payload)),
+    hide: (payload: unknown) =>
+      this.record('workspace.hide', payload, this.onWorkspaceHide(payload)),
+    show: (payload: unknown) =>
+      this.record('workspace.show', payload, this.onWorkspaceShow(payload)),
     addFolder: (payload: unknown) =>
       this.record('workspace.addFolder', payload, this.onWorkspaceAddFolder(payload)),
     removeFolder: (payload: unknown) =>
