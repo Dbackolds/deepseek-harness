@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-li
 import { afterEach, describe, expect, it } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import { AutomationPage, AutomationPanel } from '../src/client/AutomationPanel.tsx'
 import type { AutomationPanelProps } from '../src/client/AutomationPanel.tsx'
 import { AutomationStore } from '../src/client/store.ts'
@@ -124,11 +125,22 @@ function mount(options: {
     },
   }
   const listed = options.listed !== false
+  const sessionId = 'session-1' as SessionId
+  const sessionRow = {
+    id: sessionId,
+    displayTitle: 'session-1',
+    running: options.sessionRunning === true,
+    blank: false,
+    updatedAt: 1,
+  }
   const sessions = createSnapshotStore({
-    ids: listed ? ['session-1'] : [],
-    byId: listed ? { 'session-1': { id: 'session-1', running: options.sessionRunning === true } } : {},
+    ids: listed ? [sessionId] : [],
+    byId: listed ? { [sessionId]: sessionRow } : {},
     current: undefined,
-    phase: 'ready',
+    phase: 'ready' as const,
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
   })
   const controller = new AutomationStore(face as never, {
     list: sessions,
@@ -362,15 +374,25 @@ describe('AutomationPanel', () => {
     }
     const controller = new AutomationStore(face as never, {
       list: createSnapshotStore({
-        ids: ['session-1'],
-        byId: { 'session-1': { id: 'session-1' } },
+        ids: ['session-1' as SessionId],
+        byId: { ['session-1' as SessionId]: {
+          id: 'session-1' as SessionId,
+          displayTitle: 'session-1',
+          running: false,
+          blank: false,
+          updatedAt: 1,
+        } },
         current: undefined,
-        phase: 'ready',
+        phase: 'ready' as const,
+        subagentsByParent: {},
+        jobsBySession: {},
+        currentAddress: undefined,
       }),
       open: () => undefined,
     })
     controllerHolder.current = controller
     const unused = (() => { throw new Error('unused') }) as never
+    const useSessions = unused as AutomationPanelProps['useSessions']
     const useWorkspaces: AutomationPanelProps['useWorkspaces'] = select => select({
       items: [workspace],
       archivedSessionIds: [],
@@ -382,6 +404,7 @@ describe('AutomationPanel', () => {
     })
     const keepAwake = createSnapshotStore(false)
     const shared = {
+      useSessions,
       useAutomation: bindSnapshotSelector(controller.store),
       useKeepAwake: bindSnapshotSelector(keepAwake),
       useWorkspaces,
@@ -402,7 +425,7 @@ describe('AutomationPanel', () => {
     }
     render(
       <>
-        <AutomationPanel wide useSessions={unused} {...shared} />
+        <AutomationPanel wide {...shared} />
         <AutomationPage {...shared} />
       </>,
     )
