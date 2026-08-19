@@ -25,7 +25,7 @@ type WorkspaceViewState = {
   sessionOrderByAccount: Record<string, string[]>
   /** Last observed update timestamps per order account for one-time promotion events. */
   sessionUpdatedAtByAccount: Record<string, Record<string, number>>
-  /** Folded activity sections, keyed as `${accountKey}:${bucket}`. Absent = expanded. */
+  /** Folded Pinned heading, keyed as `__pinned__:pinned`. Absent = expanded. */
   activityExpansion: Record<string, boolean>
   /** Browser-local pinned Session ids, newest pin last, shown under the Workspace header. */
   pinnedSessionIds: string[]

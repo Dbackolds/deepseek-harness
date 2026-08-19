@@ -33,7 +33,7 @@ export interface SessionNode {
   runningSubagentCount: number
   /** Finished and not left since that completion (the green "done" reminder / Completed section). */
   completed: boolean
-  /** Browser-local pin: the row sits under the Workspace header, above activity sections. */
+  /** Browser-local pin: the row sits under the Workspace header, above live and idle rows. */
   pinned?: boolean
   updatedAt: number
 }
@@ -141,7 +141,7 @@ function sessionVisible(session: SessionSummary, archived: ReadonlySet<SessionId
  * and the renderer localizes its display label if a row is ever shown.
  */
 function sessionTitle(session: SessionSummary): string {
-  return session.blank ? 'New Session' : session.displayTitle
+  return session.displayTitle
 }
 
 /** Build one group without projecting session lineage into presentation. */
@@ -245,18 +245,19 @@ function sessionNode(
   }
 }
 
-/** Sidebar activity bucket used by the session list's status sections. */
+/** Sidebar activity bucket used to float live work and paint row status. */
 export type SessionActivityBucket = 'pinned' | 'unread' | 'running' | 'abnormal' | 'history'
 
-/** Status sections that show a count badge. Every activity section can fold. */
-export const BADGED_ACTIVITY_BUCKETS = ['unread', 'running', 'abnormal'] as const satisfies readonly SessionActivityBucket[]
+/** Drag and overflow cluster: live work stays above idle rows. */
+export type SessionListCluster = 'live' | 'idle'
 
 /**
  * Classify one visible Session into Completed / Running / Abnormal / History.
  * Live work outranks an unviewed completion; a crash/reload interruption is
- * Abnormal unless the Session is running again.
+ * Abnormal unless the Session is running again. The browser paints these as
+ * row status, not as foldable headings.
  * @param node - derived session row.
- * @returns the section that owns this row.
+ * @returns the status bucket for this row.
  */
 export function sessionActivityBucket(
   node: Pick<SessionNode, 'pendingInteraction' | 'running' | 'interrupted' | 'runningSubagentCount' | 'completed' | 'pinned'>,
@@ -270,7 +271,27 @@ export function sessionActivityBucket(
   return 'history'
 }
 
-/** One flat-list status section and the rows that currently belong in it. */
+/**
+ * Split live work from idle rows while preserving each side's incoming order.
+ * Pending interaction, own running, and running descendants are live; every
+ * other unpinned row is idle.
+ * @param sessions - visible rows in the current view order.
+ * @returns live rows first, then idle rows.
+ */
+export function partitionLiveIdle(sessions: readonly SessionNode[]): {
+  live: readonly SessionNode[]
+  idle: readonly SessionNode[]
+} {
+  const live: SessionNode[] = []
+  const idle: SessionNode[] = []
+  for (const session of sessions) {
+    if (sessionActivityBucket(session) === 'running') live.push(session)
+    else idle.push(session)
+  }
+  return { live, idle }
+}
+
+/** One classified status section; tests keep empty buckets present. */
 export interface SessionActivitySection {
   bucket: SessionActivityBucket
   sessions: readonly SessionNode[]
@@ -278,9 +299,9 @@ export interface SessionActivitySection {
 
 /**
  * Split a Session list into Completed / Running / Abnormal / History.
- * Empty sections stay present so the renderer can skip a heading with no rows.
+ * Empty sections stay present so classification tests can assert the order.
  * @param sessions - visible rows in the current view order.
- * @returns the four sections in render order.
+ * @returns the four sections in classification order.
  */
 export function partitionSessionActivity(sessions: readonly SessionNode[]): readonly SessionActivitySection[] {
   const pinned: SessionNode[] = []

@@ -10,9 +10,7 @@ Status: implemented
 
 ## Decision
 
-`ui-workspace` 把所有可见 Session 列表——Workspace 分组和单列表——按此顺序拆成四个状态分区：**已完成**（`completed` 提醒且没有正在进行的工作）、**运行中**（待处理交互或自身／后代活动）、**异常**（崩溃／重载中断且尚未再次运行）和**历史记录**（其余空闲 Session）。分类是现有行状态位的纯函数。焦点离开已完成 Session 后，`SessionManager` 清除提醒，该行进入历史记录。
-
-每个分区标题都有下拉箭头，折叠状态保存在工作区视图 store。已完成、运行中和异常另有彩色数量徽章。历史记录在展开时沿用 [Workspace 侧边栏顺序与折叠](2026-08-11-workspace-sidebar-order-and-folding.md) 中的五行溢出控件。Session 拖拽只发生在起始分区内。
+分类仍是现有行状态位的纯函数：**已完成**（`completed` 提醒且没有正在进行的工作）、**运行中**（待处理交互或自身／后代活动）、**异常**（崩溃／重载中断且尚未再次运行）和**历史记录**（其余空闲 Session）。焦点离开已完成 Session 后，`SessionManager` 清除提醒。浏览器不再把这些桶画成可折叠标题；列表呈现由[侧边栏进行中会话不再套状态文件夹](2026-08-19-sidebar-live-idle-without-status-folders.md)负责。
 
 ## Alternatives considered
 
@@ -24,8 +22,8 @@ Status: implemented
 
 ## Consequences
 
-四个分区标题只属于呈现层。搜索仍是一份扁平匹配列表。Workspace 组头、Host 顺序和提醒生命周期保持不变。Session 开始运行会立刻离开已完成；焦点离开已完成 Session 后进入历史记录。被崩溃／重载中断的 Session 进入异常，再次运行后离开；`session.list` 随后恢复它，并用一条插件通知续上一轮。
+搜索仍是一份扁平匹配列表。Workspace 组头、Host 顺序和提醒生命周期保持不变。Session 开始运行会立刻离开已完成；焦点离开已完成 Session 后只清除提醒。被崩溃／重载中断的 Session 保持异常，再次运行后离开；`session.list` 随后恢复它，并用一条插件通知续上一轮。
 
 ## Testing
 
-树测试覆盖四向分类、空分区占位和持久化的活动折叠。浏览器测试覆盖单列表分区标题、数量徽章、已完成折叠、空闲历史记录超过五行后的溢出，以及现有 Workspace 历史记录折叠文案。
+树测试覆盖四向分类和空分区占位。列表呈现、进行中先于空闲，以及空闲溢出见[侧边栏进行中会话不再套状态文件夹](2026-08-19-sidebar-live-idle-without-status-folders.md)。

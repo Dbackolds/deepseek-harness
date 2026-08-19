@@ -3,7 +3,7 @@ import type {
   SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, partitionSessionActivity, sessionActivityBucket,
+  deriveFlat, deriveGroups, deriveSearchResults, partitionLiveIdle, partitionSessionActivity, sessionActivityBucket,
   workspaceLabel, relativeTime,
   UNGROUPED_KEY, UNGROUPED_LABEL,
 } from '../src/client/tree.ts'
@@ -417,6 +417,23 @@ describe('sessionActivityBucket', () => {
   })
 })
 
+describe('partitionLiveIdle', () => {
+  it('keeps live work above idle rows and preserves incoming order on each side', () => {
+    const sessions = [
+      { id: sid('done'), title: 'done', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: true, updatedAt: 4 },
+      { id: sid('live'), title: 'live', blank: false, running: true, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 3 },
+      { id: sid('crash'), title: 'crash', blank: false, running: false, interrupted: true, runningSubagentCount: 0, completed: false, updatedAt: 2 },
+      { id: sid('wait'), title: 'wait', blank: false, running: false, interrupted: false, runningSubagentCount: 1, completed: false, updatedAt: 1.5 },
+      { id: sid('read'), title: 'read', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 1 },
+    ]
+    expect(partitionLiveIdle(sessions)).toEqual({
+      live: [sessions[1], sessions[3]],
+      idle: [sessions[0], sessions[2], sessions[4]],
+    })
+    expect(partitionLiveIdle([])).toEqual({ live: [], idle: [] })
+  })
+})
+
 describe('partitionSessionActivity', () => {
   it('keeps Completed, Running, Abnormal, and History in that order and preserves empty sections', () => {
     const sessions = [
@@ -425,8 +442,11 @@ describe('partitionSessionActivity', () => {
       { id: sid('crash'), title: 'crash', blank: false, running: false, interrupted: true, runningSubagentCount: 0, completed: false, updatedAt: 2 },
       { id: sid('read'), title: 'read', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 1 },
     ]
-    expect(partitionSessionActivity(sessions).map(section => [section.bucket, section.sessions.map(row => row.id)])).toEqual([
-      ['pinned', []],
+    expect(partitionSessionActivity([
+      ...sessions,
+      { id: sid('pin'), title: 'pin', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: true },
+    ]).map(section => [section.bucket, section.sessions.map(row => row.id)])).toEqual([
+      ['pinned', [sid('pin')]],
       ['unread', [sid('done')]],
       ['running', [sid('live')]],
       ['abnormal', [sid('crash')]],

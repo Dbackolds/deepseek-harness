@@ -10,9 +10,7 @@ The sidebar already marks finished-unviewed, running, and idle Sessions with dot
 
 ## Decision
 
-`ui-workspace` splits every visible Session list — Workspace groups and the flat list — into four status sections in this order: **Completed** (`completed` reminder, no live work), **Running** (pending interaction or own or descendant activity), **Abnormal** (crash/reload interruption, not running again), and **History** (every remaining idle Session). Classification is a pure function of the existing row bits. Leaving a finished Session consumes the reminder through `SessionManager`, so the row then moves to History.
-
-Every activity heading has a disclosure chevron and persists its fold in the workspace view store. Completed, Running, and Abnormal also show a colored count badge. History keeps the existing five-row overflow control from [Workspace Sidebar Order and Folding](2026-08-11-workspace-sidebar-order-and-folding.md) while the section is open. Session drag stays inside the section it started in.
+Classification remains a pure function of the existing row bits: **Completed** (`completed` reminder, no live work), **Running** (pending interaction or own or descendant activity), **Abnormal** (crash/reload interruption, not running again), and **History** (every remaining idle Session). Leaving a finished Session consumes the reminder through `SessionManager`. The browser no longer renders those buckets as foldable headings; [Sidebar live work without status folders](2026-08-19-sidebar-live-idle-without-status-folders.md) owns the list presentation.
 
 ## Alternatives considered
 
@@ -24,8 +22,8 @@ Every activity heading has a disclosure chevron and persists its fold in the wor
 
 ## Consequences
 
-The four headings are presentation-only. Search stays one flat match list. Workspace headers, Host order, and the reminder lifetime stay as they are. A Session that starts running leaves Completed immediately; leaving a finished Session moves it to History. A crash/reload-interrupted Session sits in Abnormal until it is running again; `session.list` then resumes it and wakes one plugin-notice continuation turn.
+Search stays one flat match list. Workspace headers, Host order, and the reminder lifetime stay as they are. A Session that starts running leaves Completed immediately; leaving a finished Session drops the reminder. A crash/reload-interrupted Session stays Abnormal until it is running again; `session.list` then resumes it and wakes one plugin-notice continuation turn.
 
 ## Testing
 
-Tree tests cover the four-way classification, empty-section placeholders, and persisted activity folds. Browser tests cover the flat-list headings, count badges, Completed fold, History overflow after five idle rows, and the existing Workspace History fold copy.
+Tree tests cover the four-way classification and empty-section placeholders. List presentation, live-before-idle order, and idle overflow live in [Sidebar live work without status folders](2026-08-19-sidebar-live-idle-without-status-folders.md).
