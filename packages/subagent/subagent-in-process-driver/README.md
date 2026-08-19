@@ -16,7 +16,7 @@ The driver follows this sequence:
 4. Publish the child, retain the returned `AgentHandle`, and drive one task with `child.followup(prompt)` followed by `child.whenIdle()`.
 5. Read the child's own output — its last non-empty assistant message (an empty-content message that records usage is skipped), or its accumulated assistant text when no such message exists — and the final durable turn reason from the complete owned child run, excluding any fork seed.
 
-The child gets the parent's working-directory/session lineage and inherits the parent provider, model, and output-token cap unless `request.agentOptions` overrides them. It gets a fresh flat registration scope: parent ownership does not import parent tool restrictions or establish an authority subset.
+The child inherits the parent working directory unless `options.cwd` supplies a resolved override, and inherits the parent provider, model, and output-token cap unless `request.agentOptions` overrides them. It gets a fresh flat registration scope: parent ownership does not import parent tool restrictions or establish an authority subset.
 
 This result boundary is valid because the provider owns an isolated child lifecycle from publication through quiescence. Steering submitted during that lifecycle belongs to the child run; the provider does not pretend the initial follow-up alone owns its output.
 
@@ -30,7 +30,7 @@ After fulfillment, the caller owns the run. Provider-plugin unload does not revo
 
 ## Spawn and fork inputs
 
-`InProcessRunOptions` is `{ seed?: SessionEvent[] }`. Spawn omits it. Fork supplies a balanced completed-turn prefix and records its length so the result reader never mistakes a seeded parent message for child output.
+`InProcessRunOptions` is `{ seed?: SessionEvent[]; cwd?: string }`. Spawn omits both. Fork supplies a balanced completed-turn prefix and records its length so the result reader never mistakes a seeded parent message for child output. A provider that prepared an isolated checkout sets `cwd`; omitting it inherits the parent session directory.
 
 Depth enforcement is internal to `startInProcessRun`: it reads the parent depth via `delegationDepthOf` (the persisted `SessionHeader.delegationDepth` is authoritative; runtime `AgentOptions.subagentDepth` may deepen but never lower it, so a resumed child keeps its budget), treats absence as top-level depth zero, rejects malformed stored values, and reports an attempted child depth above `maxDepth`. An unrepresentable depth above the safe-integer domain is a `RangeError`. The child depth is written to the child header, so it survives persistence and resume.
 

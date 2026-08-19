@@ -487,7 +487,7 @@ describe('SubagentRuntime.followup residency routing', () => {
       capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
       inheritsParentContext: false,
       start: async () => { throw new Error('one-shot start is not used') },
-      prepareContinuable: () => Promise.resolve({}),
+      prepareContinuable: () => Promise.resolve({ cwd: '/managed/worktree' }),
     })
     const starts: SubagentRunInfo[] = []
     const ends: SubagentRunEndInfo[] = []
@@ -508,6 +508,31 @@ describe('SubagentRuntime.followup residency routing', () => {
     expect(ends.map(info => info.runId)).toEqual(starts.map(info => info.runId))
     const loaded = await ctx.sessionPersistence.load(started.childId)
     expect(userTexts(loaded.events)).toEqual(['child task', 'continue without provider'])
+    expect(loaded.meta.cwd).toBe('/managed/worktree')
+  })
+
+  it('persists a caller-supplied cwd over the provider-prepared value', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('after resume')])
+    const disposeProvider = ctx.subagents.registerProvider({
+      name: 'prepared',
+      capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      inheritsParentContext: false,
+      start: async () => { throw new Error('one-shot start is not used') },
+      prepareContinuable: () => Promise.resolve({ cwd: '/provider/tree' }),
+    })
+
+    const spec = { ...startSpec(parent, 'prepared'), cwd: '/caller/tree' }
+    const started = await ctx.subagents.startContinuable(spec)
+    await waitNoActivation(ctx, started.childId)
+    const loaded = await ctx.sessionPersistence.load(started.childId)
+    expect(loaded.meta.cwd).toBe('/caller/tree')
+
+    await expect(followup(ctx, parent, started.childId, message('continue please')))
+      .resolves.toBeTypeOf('string')
+    await waitNoActivation(ctx, started.childId)
+    const reloaded = await ctx.sessionPersistence.load(started.childId)
+    expect(reloaded.meta.cwd).toBe('/caller/tree')
+    disposeProvider()
   })
 
   it('wakes a waiting Activation instead of cold-resuming it', async () => {

@@ -34,7 +34,7 @@ persisted Session
 
 ### 物化与公开操作
 
-具名 subagent 提供方只参与准备初始创建规格，此时 `spawn` 与 `fork` 有所区别。其可选的 `prepareContinuable(request): Promise<ContinuableCreateSpec>` 方法就是可继续创建能力。返回的规格只包含与 Agent 实例分离且由提供方决定的创建输入，例如可选的 parent 历史种子；它不包含 Agent、`AgentHandle`、提示词投递、结果、dispose 或恢复操作。管理器会预留 child 身份，解析持久化描述符和通用 Agent 配置，通过私有 activation-owner 作用域调用 `ctx.agents.create()`，将返回的 `AgentHandle` 安装到激活中，建立适用的可继续 parent 所有权，然后调用 `Agent.followup(initialPrompt)`。inbox 接受消息后会产生一个 `MessageId`；`ctx.subagents.startContinuable()` 在此边界返回 `{ childId, messageId }`，不等待轮次开始，也不等待消息写入会话日志。
+具名 subagent 提供方只参与准备初始创建规格，此时 `spawn` 与 `fork` 有所区别。其可选的 `prepareContinuable(request): Promise<ContinuableCreateSpec>` 方法就是可继续创建能力。返回的规格只包含与 Agent 实例分离且由提供方决定的创建输入，例如可选的 parent 历史种子和可选的已解析子 `cwd`；它不包含 Agent、`AgentHandle`、提示词投递、结果、dispose 或恢复操作。`ContinuableStartSpec.cwd` 允许同进程调用方直接提供该目录，并覆盖提供方准备的值。`childSessionMeta()` 把解析后的目录写入子 header，因此冷恢复无需再次调用提供方。管理器会预留 child 身份，解析持久化描述符和通用 Agent 配置，通过私有 activation-owner 作用域调用 `ctx.agents.create()`，将返回的 `AgentHandle` 安装到激活中，建立适用的可继续 parent 所有权，然后调用 `Agent.followup(initialPrompt)`。inbox 接受消息后会产生一个 `MessageId`；`ctx.subagents.startContinuable()` 在此边界返回 `{ childId, messageId }`，不等待轮次开始，也不等待消息写入会话日志。
 
 inbox 接受消息前发生任何失败，操作都会在不返回任何 id 的情况下被拒绝。Agent 创建流程负责 handle 移交前的回滚；移交后，管理器会保留一个对并发投递和 drain 可见的关闭事务，dispose 已创建的 handle、移除激活并回滚 parent `ownedChildren` 中的任何成员关系，再拒绝操作。在驻留 start 事件发布前失败不会发布终止事件，start 发布后失败则通过正常 dispose 闭合生命周期配对。
 

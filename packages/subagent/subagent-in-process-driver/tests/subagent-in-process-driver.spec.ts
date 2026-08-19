@@ -82,6 +82,15 @@ describe('startInProcessRun', () => {
     await run.dispose()
   })
 
+  it('persists an explicit child cwd instead of inheriting the parent directory', async () => {
+    const { ctx } = await setup([textResponse('driver answer')])
+    const parent = ctx.agentLoop.create(SessionId('bare-parent-cwd'), { provider: 'mock', model: 'mock' }, { cwd: '/workspace' })
+    const run = await startInProcessRun(request(parent), { cwd: '/managed/worktree' })
+    expect(ctx.agents.get(run.id)!.session.header.cwd).toBe('/managed/worktree')
+    await expect(run.result).resolves.toMatchObject({ stopReason: 'completed' })
+    await run.dispose()
+  })
+
   it('reports a prompt a pre-step rejection discarded as refusal, not completion', async () => {
     const { ctx, parent } = await setup([])
     // A UserPromptSubmit deny or a policy plugin: the child claims its prompt,

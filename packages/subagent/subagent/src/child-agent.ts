@@ -58,8 +58,13 @@ export function resolveChildDepth(parent: Agent, maxDepth: number | undefined): 
 
 /**
  * Resolve the child's `AgentOptions`: the parent's provider/model/maxTokens
- * route unless the request overrides it, stamped with the child's own
- * delegation depth.
+ * route and same-route reasoning effort unless the request overrides them,
+ * stamped with the child's own delegation depth.
+ *
+ * Reasoning effort comes from the parent's last logged request when that
+ * request used the child's provider/model pair; otherwise from
+ * `parent.options.reasoningEffort` on the same pair. A child that changes
+ * provider or model does not inherit the previous model's opaque effort id.
  * @param parent - the delegating parent whose route the child inherits.
  * @param requested - per-child overrides, if any.
  * @param childDepth - the resolved delegation depth to stamp.
@@ -73,10 +78,23 @@ export function resolveChildAgentOptions(
   const parentProvider = parent.options.provider
   const parentModel = parent.options.model
   const parentMaxTokens = parent.options.maxTokens
+  const childProvider = requested?.provider ?? parentProvider
+  const childModel = requested?.model ?? parentModel
+  const logged = parent.session.requestHeader()?.config
+  const inheritedEffort = logged?.reasoningEffort !== undefined
+    && logged.provider === childProvider
+    && logged.model === childModel
+    ? logged.reasoningEffort
+    : parent.options.reasoningEffort !== undefined
+      && parentProvider === childProvider
+      && parentModel === childModel
+      ? parent.options.reasoningEffort
+      : undefined
   return {
     ...parentProvider !== undefined ? { provider: parentProvider } : {},
     ...parentModel !== undefined ? { model: parentModel } : {},
     ...parentMaxTokens !== undefined ? { maxTokens: parentMaxTokens } : {},
+    ...inheritedEffort !== undefined ? { reasoningEffort: inheritedEffort } : {},
     ...requested,
     subagentDepth: childDepth,
   }
@@ -97,17 +115,20 @@ export function resolveChildAgentOptions(
  * @param parent - the delegating parent agent.
  * @param childDepth - the resolved delegation depth to persist.
  * @param lineageSeedLength - how many leading events came from the parent's log.
+ * @param options - trusted child header overrides resolved before creation.
  * @returns the `meta` for `ctx.agents.create()`.
  */
 export function childSessionMeta(
   parent: Agent,
   childDepth: number,
   lineageSeedLength: number,
+  options: { readonly cwd?: string } = {},
 ): NonNullable<CreateAgentOptions['meta']> {
   const parentHeader = parent.session.header
   const agentPreset = parent.ctx.get('agentPresets')?.composedPreset(parent.ctx)
+  const cwd = options.cwd ?? parentHeader.cwd
   return {
-    ...parentHeader.cwd !== undefined ? { cwd: parentHeader.cwd } : {},
+    ...cwd !== undefined ? { cwd } : {},
     ...agentPreset === undefined ? {} : { agentPreset },
     parentSession: parentHeader.id,
     // Navigation classification only; the descriptor remains the authority

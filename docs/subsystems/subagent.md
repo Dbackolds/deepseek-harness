@@ -277,6 +277,11 @@ interface ContinuableCreateSpec {
    * `CreateAgentOptions.seed`: contiguous from seq 0, lossless JSON, balanced.
    */
   readonly seed?: readonly SessionEvent[]
+  /**
+   * Resolved working directory persisted in the child session header, or
+   * absent to inherit the parent session's working directory.
+   */
+  readonly cwd?: string
 }
 ```
 
