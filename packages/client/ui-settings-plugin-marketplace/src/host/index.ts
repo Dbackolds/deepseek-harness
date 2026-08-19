@@ -76,7 +76,13 @@ function fail(code: PluginMarketplaceErrorCode, message: string): PluginMarketpl
   return { ok: false, code, message }
 }
 
+let hostApplied = false
+
 export function apply(ctx: Context, config: Config = {}): void {
+  // Source/tsx loads the host face for both marketplace entry IDs.
+  // The second apply would re-register /plugin-marketplace and crash boot.
+  if (hostApplied) return
+  hostApplied = true
   const resolved = {
     catalogUrls: normalizeCatalogUrls(config.catalogUrls, config.catalogUrl ?? DEFAULT_CATALOG_URL),
     catalogTimeoutMs: config.catalogTimeoutMs ?? 10_000,
