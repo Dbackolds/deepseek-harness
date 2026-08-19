@@ -62,6 +62,7 @@ import {
   automationCreateValueSchema,
   automationDeleteValueSchema,
   automationListRunsValueSchema,
+  automationDeleteRunValueSchema,
   automationListValueSchema,
   automationRunNowValueSchema,
   automationSetEnabledValueSchema,
@@ -174,6 +175,7 @@ export interface IApiClient {
     setEnabled(payload: RequestPayload<'automation.setEnabled'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.setEnabled'>>>
     runNow(payload: RequestPayload<'automation.runNow'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.runNow'>>>
     listRuns(payload: RequestPayload<'automation.listRuns'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.listRuns'>>>
+    deleteRun(payload: RequestPayload<'automation.deleteRun'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'automation.deleteRun'>>>
   }
   settings: {
     describe(payload: RequestPayload<'settings.describe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.describe'>>>
@@ -257,6 +259,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'automation.setEnabled': automationSetEnabledValueSchema,
   'automation.runNow': automationRunNowValueSchema,
   'automation.listRuns': automationListRunsValueSchema,
+  'automation.deleteRun': automationDeleteRunValueSchema,
   'settings.describe': settingsDescribeValueSchema,
   'settings.openDocument': settingsOpenDocumentValueSchema,
   'settings.update': settingsUpdateValueSchema,
@@ -543,6 +546,7 @@ export abstract class AbstractApiClient implements IApiClient {
     setEnabled: (payload, signal) => this.callUnary('automation.setEnabled', payload, signal),
     runNow: (payload, signal) => this.callUnary('automation.runNow', payload, signal),
     listRuns: (payload, signal) => this.callUnary('automation.listRuns', payload, signal),
+    deleteRun: (payload, signal) => this.callUnary('automation.deleteRun', payload, signal),
   }
 
   readonly settings: IApiClient['settings'] = {

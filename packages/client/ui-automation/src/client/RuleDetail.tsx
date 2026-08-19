@@ -28,12 +28,13 @@ export function RuleDetail(props: {
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
   openRun: AutomationStore['openRun']
+  deleteRun: AutomationStore['deleteRun']
   remove: AutomationStore['remove']
   select: AutomationStore['select']
   setDetailTab: AutomationStore['setDetailTab']
   t: AutomationPanelProps['t']
 }): ReactNode {
-  const { item, workspaces, tab, update, setEnabled, runNow, openRun, remove, select, setDetailTab, t } = props
+  const { item, workspaces, tab, update, setEnabled, runNow, openRun, deleteRun, remove, select, setDetailTab, t } = props
   const { rule } = item
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -85,7 +86,7 @@ export function RuleDetail(props: {
       {notice !== undefined && <p className={css.error} role="alert">{notice}</p>}
       {tab === 'settings'
         ? <SettingsPane item={item} workspaces={workspaces} running={running} update={update} t={t} />
-        : <HistoryPane runs={item.runs ?? []} openRun={openRun} t={t} />}
+        : <HistoryPane runs={item.runs ?? []} openRun={openRun} deleteRun={deleteRun} t={t} />}
       <Modal open={confirming} onClose={() => { setConfirming(false) }} title={t('delete.title')} closeLabel={t('close')} description={t('delete.description')} footer={(
         <>
           <Button variant="ghost" disabled={busy} onClick={() => { setConfirming(false) }}>{t('cancel')}</Button>
@@ -148,9 +149,10 @@ function SettingsPane({ item, workspaces, running, update, t }: {
   )
 }
 
-function HistoryPane({ runs, openRun, t }: {
+function HistoryPane({ runs, openRun, deleteRun, t }: {
   runs: readonly AutomationRunView[]
   openRun: AutomationStore['openRun']
+  deleteRun: AutomationStore['deleteRun']
   t: AutomationPanelProps['t']
 }): ReactNode {
   const [openId, setOpenId] = useState<string | undefined>(undefined)
@@ -175,9 +177,9 @@ function HistoryPane({ runs, openRun, t }: {
             return (
               <tr key={run.id}>
                 <td>{formatNextAt(run.startedAt)}</td>
-                <td>{t('history.source.schedule')}</td>
+                <td>{t(run.source === 'manual' ? 'history.source.manual' : 'history.source.schedule')}</td>
                 <td><span className={outcomeClass(run.outcome)}>{t(outcomeKey)}</span></td>
-                <td>{runDuration(run, runs)}</td>
+                <td>{runDuration(run)}</td>
                 <td className={css.historyMenuCell}>
                   <Button size="sm" variant="ghost" aria-label={t('more')} onClick={() => { setOpenId(openId === run.id ? undefined : run.id) }}>...</Button>
                   {openId === run.id ? (
@@ -192,6 +194,12 @@ function HistoryPane({ runs, openRun, t }: {
                           if (failure !== undefined) setNotice(localizeRunFailure(failure, t))
                         })
                       }}>{t('history.open')}</button>
+                      <button type="button" role="menuitem" className={css.menuDanger} onClick={() => {
+                        setOpenId(undefined)
+                        void deleteRun(run.id).then((failure) => {
+                          if (failure !== undefined) setNotice(failure)
+                        })
+                      }}>{t('history.delete')}</button>
                     </div>
                   ) : null}
                 </td>
@@ -217,15 +225,18 @@ function outcomeClass(outcome: AutomationRunView['outcome']): string {
   }
 }
 
-function runDuration(run: AutomationRunView, runs: readonly AutomationRunView[]): string {
+function runDuration(run: AutomationRunView): string {
   if (run.outcome === 'skipped_busy') return '0s'
-  const index = runs.findIndex(item => item.id === run.id)
-  const newer = index > 0 ? runs[index - 1] : undefined
-  const end = newer === undefined ? Date.now() : Date.parse(newer.startedAt)
+  if (run.endedAt === undefined) return run.outcome === 'started' ? tLive() : '-'
   const start = Date.parse(run.startedAt)
+  const end = Date.parse(run.endedAt)
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return '-'
   const seconds = Math.round((end - start) / 1000)
   const minutes = Math.floor(seconds / 60)
   const rest = seconds % 60
   return minutes === 0 ? rest + 's' : minutes + 'm ' + rest + 's'
+}
+
+function tLive(): string {
+  return '…'
 }

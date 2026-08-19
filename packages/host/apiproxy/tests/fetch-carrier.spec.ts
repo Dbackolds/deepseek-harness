@@ -277,6 +277,9 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async listRuns(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { items: [] } } }
       },
+      async deleteRun(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { id: request.payload.id, deleted: false } } }
+      },
     },
     goals: {
       async create(request) {

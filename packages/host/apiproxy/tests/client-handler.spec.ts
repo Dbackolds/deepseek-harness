@@ -124,6 +124,7 @@ function scriptedApi(overrides: {
       setEnabled: err,
       runNow: err,
       listRuns: r => ok(r, { items: [] }),
+      deleteRun: r => ok(r, { id: r.payload.id, deleted: false }),
     },
     settings: {
       describe: r => ok(r, { writable: true, hasDocument: false, namespaces: [] }),

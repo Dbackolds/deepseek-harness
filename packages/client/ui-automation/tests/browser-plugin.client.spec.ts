@@ -35,6 +35,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
       result: { ok: true, value: { run: { outcome: 'started', sessionId: 'session-1' } } },
     }),
     listRuns: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { items: [] } } }),
+    deleteRun: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { id: 'run-1', deleted: true } } }),
     delete: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: { id: 'rule-1', deleted: true } } }),
   }
   ctx.provide('connection', { api: { automation, settings: {} }, isLoopback: false } as never)
@@ -70,6 +71,7 @@ describe('ui-automation browser half', () => {
       runNow: (id: never) => Promise<string | undefined>
       openLastSession: (id: never) => Promise<string | undefined>
       openRun: (id: never) => Promise<string | undefined>
+      deleteRun: (id: never) => Promise<string | undefined>
       remove: (id: never) => Promise<string | undefined>
       select: (id: never | null) => void
       setDetailTab: (tab: 'settings' | 'history') => void
@@ -83,6 +85,7 @@ describe('ui-automation browser half', () => {
     await injected.runNow('rule-1' as never)
     await injected.openLastSession('rule-1' as never)
     await injected.openRun('session-1' as never)
+    await injected.deleteRun('run-1' as never)
     injected.select('rule-1' as never)
     injected.setDetailTab('history')
     await injected.remove('rule-1' as never)

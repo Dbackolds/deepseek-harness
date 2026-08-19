@@ -314,6 +314,7 @@ export class FakeApiClient implements IApiClient {
       },
     }))),
     listRuns: payload => this.record('automation.listRuns', payload, Promise.resolve(ok({ items: [] }))),
+    deleteRun: payload => this.record('automation.deleteRun', payload, Promise.resolve(ok({ id: payload.id, deleted: true }))),
   }
 
   readonly settings: IApiClient['settings'] = {

@@ -123,13 +123,19 @@ export interface AutomationRuleView extends AutomationRuleRecord {
 /** Closed run outcome. */
 export type AutomationRunOutcome = 'started' | 'skipped_busy' | 'replaced' | 'failed'
 
+/** How this fire was admitted. Absent on records written before the field existed. */
+export type AutomationRunSource = 'schedule' | 'manual'
+
 /** Durable fire attempt. */
 export interface AutomationRunRecord {
   readonly id: AutomationRunId
   readonly ruleId: AutomationRuleId
   readonly sessionId?: SessionId
   readonly startedAt: string
+  /** Instant the started Session left `running`, or the skip/fail instant. */
+  readonly endedAt?: string
   readonly outcome: AutomationRunOutcome
+  readonly source?: AutomationRunSource
   readonly errorCode?: string
 }
 

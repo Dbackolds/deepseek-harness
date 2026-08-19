@@ -7,6 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { AutomationRuleId } from './types.ts'
 import type { StoredAutomationRule } from './spec.ts'
+import { formatUtcInstant } from './time.ts'
 
 /** Timer-facing subset of the Automation service. */
 export interface AutomationTimerHost {
@@ -107,10 +108,30 @@ export class AutomationRuntime {
     })
   }
   /**
-     * Retry a skipped one-shot when its previous session leaves `running`.
-     * @param ruleId - Rule waiting on overlap.
-     * @param agent - Previous started session's live agent.
-     */
+   * Record the instant a started Session leaves `running`.
+   * @param agent - live agent opened by this fire.
+   * @param onEnded - called once with a UTC instant.
+   */
+  watchEnded(agent: Agent, onEnded: (endedAt: string) => void) {
+    let reported = false
+    const report = (): void => {
+      if (reported) return
+      reported = true
+      stop()
+      stopDisposed()
+      onEnded(formatUtcInstant(this.now()))
+    }
+    const stop = agent.ctx.on('agent/status', ({ status }) => {
+      if (status === 'idle') report()
+    })
+    const stopDisposed = agent.ctx.on('agent/disposed', () => { report() })
+  }
+
+  /**
+   * Retry a skipped one-shot when its previous session leaves `running`.
+   * @param ruleId - Rule waiting on overlap.
+   * @param agent - Previous started session's live agent.
+   */
   watchIdle(ruleId: AutomationRuleId, agent: Agent) {
     this.idleWatchers.get(ruleId)?.()
     const stop = agent.ctx.on('agent/status', ({ status }) => {

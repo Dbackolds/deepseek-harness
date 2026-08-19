@@ -18,7 +18,7 @@ English | [中文](README.zh.md)
 
 ## Service contract
 
-`list()` / `get(id)` return detached views with `state: scheduled | overdue | disabled` and `nextAt`. `create(spec)` / `update(id, patch)` / `delete(id)` / `setEnabled(id, enabled)` mutate the rule table. `runNow(id)` fires without moving the next target. `listRuns(id, limit?)` returns newest-first history.
+`list()` / `get(id)` return detached views with `state: scheduled | overdue | disabled` and `nextAt`. `create(spec)` / `update(id, patch)` / `delete(id)` / `setEnabled(id, enabled)` mutate the rule table. `runNow(id)` fires without moving the next target. `listRuns(id, limit?)` returns newest-first history. `deleteRun(id)` removes one past run and never reuses that id. A started run records `endedAt` when its Session leaves `running`.
 
 Create requires a non-empty `task`, an existing `workspaceId`, and exactly one selector. `onOverlap` defaults to `skip`. Omitted `agentPreset` / `permissionPreset` inherit the deployment defaults at fire time. A named `permissionPreset` is pinned with `permissionPresets.set` after the Session is published and before the prompt is queued.
 

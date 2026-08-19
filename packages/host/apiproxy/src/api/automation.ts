@@ -52,7 +52,9 @@ export interface AutomationRunView {
   readonly ruleId: AutomationRuleId
   readonly sessionId?: SessionId
   readonly startedAt: string
+  readonly endedAt?: string
   readonly outcome: 'started' | 'skipped_busy' | 'replaced' | 'failed'
+  readonly source?: 'schedule' | 'manual'
   readonly errorCode?: string
 }
 
@@ -104,4 +106,8 @@ export interface AutomationApi {
   /** Recent runs for one rule, newest first. */
   listRuns(request: RpcRequest<{ id: AutomationRuleId; limit?: number }>):
   Promise<RpcResponse<{ items: AutomationRunView[] }>>
+
+  /** Deletes one past run. The run id is never reused. */
+  deleteRun(request: RpcRequest<{ id: AutomationRunId }>):
+  Promise<RpcResponse<{ id: AutomationRunId; deleted: boolean }>>
 }

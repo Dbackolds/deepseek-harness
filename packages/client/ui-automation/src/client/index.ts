@@ -56,6 +56,7 @@ export function apply(ctx: ClientContext): void {
     runNow: id => controller.runNow(id),
     openLastSession: id => controller.openLastSession(id),
     openRun: sessionId => controller.openRun(sessionId),
+    deleteRun: id => controller.deleteRun(id),
     remove: id => controller.remove(id),
     select: (id) => { controller.select(id) },
     setDetailTab: (tab) => { controller.setDetailTab(tab) },

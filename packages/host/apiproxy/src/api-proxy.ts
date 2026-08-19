@@ -71,7 +71,7 @@ import type { JobSnapshot } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 // GoalError narrows domain rejections to their stable codes at the wire boundary.
 import { GoalError } from '@deepseek-ai/dsh-goal'
-import { AutomationInputError, AutomationRuleId } from '@deepseek-ai/dsh-automation'
+import { AutomationInputError, AutomationRuleId, AutomationRunId } from '@deepseek-ai/dsh-automation'
 import type {} from '@deepseek-ai/dsh-automation'
 import type { GoalRef as CoreGoalRef } from '@deepseek-ai/dsh-goal'
 // Type-only edges: resolve the command-change stream and `ctx.get('skills')`.
@@ -3241,6 +3241,18 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
         try {
           return ok(request, { items: automation.listRuns(AutomationRuleId(request.payload.id), request.payload.limit) })
+        } catch (error: unknown) {
+          return automationError(request, error)
+        }
+      },
+      async deleteRun(request) {
+        const automation = ctx.get('automation')
+        if (automation === undefined) {
+          return err(request, { code: 'automation-rejected', message: 'automation service is absent', details: { automationCode: 'internal_error' } })
+        }
+        try {
+          const id = AutomationRunId(request.payload.id)
+          return ok(request, { id, deleted: await automation.deleteRun(id) })
         } catch (error: unknown) {
           return automationError(request, error)
         }

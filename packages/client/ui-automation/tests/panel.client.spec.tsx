@@ -149,6 +149,7 @@ function mount(options: {
     runNow: id => controller.runNow(id),
     openLastSession: id => controller.openLastSession(id),
     openRun: sessionId => controller.openRun(sessionId),
+    deleteRun: id => controller.deleteRun(id),
     remove: id => controller.remove(id),
     select: (id) => { controller.select(id) },
     setDetailTab: (tab) => { controller.setDetailTab(tab) },
@@ -170,6 +171,7 @@ function mount(options: {
         runNow={props.runNow}
         openLastSession={props.openLastSession}
         openRun={props.openRun}
+        deleteRun={props.deleteRun}
         remove={props.remove}
         select={props.select}
         setDetailTab={props.setDetailTab}
@@ -267,6 +269,7 @@ describe('AutomationPanel', () => {
     await waitFor(() => { expect(screen.getByText('Succeeded')).toBeTruthy() })
     fireEvent.click(screen.getByRole('button', { name: 'More' }))
     expect(screen.getByRole('menuitem', { name: 'Jump to session' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Delete record' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /morning/ }))
     await waitFor(() => { expect(screen.getByText('Created tasks')).toBeTruthy() })
   })
@@ -380,6 +383,7 @@ describe('AutomationPanel', () => {
       runNow: (id: AutomationRuleView['id']) => controller.runNow(id),
       openLastSession: (id: AutomationRuleView['id']) => controller.openLastSession(id),
       openRun: (sessionId: Parameters<AutomationStore['openRun']>[0]) => controller.openRun(sessionId),
+      deleteRun: (id: Parameters<AutomationStore['deleteRun']>[0]) => controller.deleteRun(id),
       remove: (id: AutomationRuleView['id']) => controller.remove(id),
       select: (id: AutomationRuleView['id'] | null) => { controller.select(id) },
       setDetailTab: (tab: 'settings' | 'history') => { controller.setDetailTab(tab) },

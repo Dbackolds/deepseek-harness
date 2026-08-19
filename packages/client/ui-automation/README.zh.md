@@ -18,6 +18,6 @@ Web Host Automation 特性的归属方：占据 New Session 控件下方的 `sid
 
 ## 已知限制与暂缓事项
 
-- **历史表不能删除过去的运行** —— Host Automation 会保留每一次开火记录。菜单只跳到已开火的 Session。
+- **没有 `endedAt` 的已开火记录会显示未结束时长** —— Host 开始记录结束时刻之前写下的旧记录保持原样。
 - **停掉的 Host 不会开火** —— 列表仍显示上一次存活 Host 派生的下次开火时刻；本包不重新计算它们。保持唤醒也随 Host 进程结束。
 - **没有操作系统助手时，保持唤醒不能强迫笔记本不睡** —— 缺少 `caffeinate`、`systemd-inhibit` 或 Windows 电源调用时，开关仍可打开，宿主继续跑。

@@ -308,9 +308,20 @@ export class AutomationStore {
   }
 
   /**
-   * Show or hide the center-column Automation page.
-   * @param open - next page visibility.
+   * Delete one past run and refresh the list.
+   * @param id - existing run.
+   * @returns the failure message, or undefined once the write and reload landed.
    */
+  async deleteRun(id: AutomationRunView['id']): Promise<string | undefined> {
+    try {
+      valueOf(await this.api.automation.deleteRun({ id }))
+    } catch (error) {
+      return messageOf(error)
+    }
+    await this.load()
+    return this.store.getSnapshot().error ?? undefined
+  }
+
   /**
    * Open the latest started Session for a rule without firing again.
    * @param id - existing rule.

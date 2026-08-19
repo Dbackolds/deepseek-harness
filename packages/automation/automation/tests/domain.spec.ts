@@ -246,6 +246,37 @@ describe('automation service', () => {
     expect(await service.delete(rule.id)).toBe(false)
   })
 
+  it('deleteRun removes one fire and keeps the rule', async () => {
+    const { service } = await harness()
+    const rule = await service.create({
+      task: 'temp',
+      workspaceId: WORKSPACE,
+      afterSeconds: 60,
+    })
+    const run = await service.runNow(rule.id)
+    expect(run.source).toBe('manual')
+    expect(await service.deleteRun(run.id)).toBe(true)
+    expect(service.listRuns(rule.id)).toHaveLength(0)
+    expect(service.get(rule.id)?.id).toBe(rule.id)
+    expect(await service.deleteRun(run.id)).toBe(false)
+  })
+
+  it('records endedAt when the started Session leaves running', async () => {
+    const { service, created } = await harness()
+    const rule = await service.create({
+      task: 'timed',
+      workspaceId: WORKSPACE,
+      afterSeconds: 60,
+    })
+    const run = await service.fireDue(rule.id, NOW)
+    expect(run.source).toBe('schedule')
+    expect(run.endedAt).toBeUndefined()
+    created[0]!.ctx.emit('agent/status', { status: 'idle' })
+    await vi.waitFor(() => {
+      expect(service.listRuns(rule.id)[0]?.endedAt).toBe('2026-08-15T12:00:00.000Z')
+    })
+  })
+
   it('runNow does not advance the next target', async () => {
     const { service } = await harness()
     const rule = await service.create({

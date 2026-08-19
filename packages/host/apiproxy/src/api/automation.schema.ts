@@ -47,7 +47,9 @@ const runViewSchema = z.object({
   ruleId: z.string(),
   sessionId: z.string().optional(),
   startedAt: z.string(),
+  endedAt: z.string().optional(),
   outcome: z.enum(['started', 'skipped_busy', 'replaced', 'failed']),
+  source: z.enum(['schedule', 'manual']).optional(),
   errorCode: z.string().optional(),
 }) as unknown as z.ZodType<Wire<AutomationRunView>>
 
@@ -131,3 +133,14 @@ export const automationListRunsRequestSchema = z.object({
 export const automationListRunsValueSchema = z.object({
   items: z.array(runViewSchema),
 }) as unknown as z.ZodType<Wire<ResponseValue<'automation.listRuns'>>>
+
+/** automation.deleteRun request payload. */
+export const automationDeleteRunRequestSchema = z.object({
+  id: z.string().min(1),
+}) as unknown as z.ZodType<Wire<RequestPayload<'automation.deleteRun'>>>
+
+/** automation.deleteRun response value. */
+export const automationDeleteRunValueSchema = z.object({
+  id: z.string(),
+  deleted: z.boolean(),
+}) as unknown as z.ZodType<Wire<ResponseValue<'automation.deleteRun'>>>

@@ -78,6 +78,7 @@ export interface RpcMethodMap {
   'automation.setEnabled': AutomationApi['setEnabled']
   'automation.runNow': AutomationApi['runNow']
   'automation.listRuns': AutomationApi['listRuns']
+  'automation.deleteRun': AutomationApi['deleteRun']
   'settings.describe': SettingsApi['describe']
   'settings.openDocument': SettingsApi['openDocument']
   'settings.update': SettingsApi['update']

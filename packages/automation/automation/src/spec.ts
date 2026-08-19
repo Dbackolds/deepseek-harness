@@ -54,7 +54,9 @@ export const automationRunRecord = z.object({
   ruleId,
   sessionId: z.string().min(1).transform(SessionId).optional(),
   startedAt: utcInstant,
+  endedAt: utcInstant.optional(),
   outcome: z.enum(['started', 'skipped_busy', 'replaced', 'failed']),
+  source: z.enum(['schedule', 'manual']).optional(),
   errorCode: z.string().min(1).optional(),
 })
 /** Unused-id ledger so delete cannot recycle a rule or run id. */

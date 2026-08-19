@@ -230,7 +230,7 @@ export class AutomationService extends Service {
      * @returns the run written for this attempt.
      */
   runNow(id: AutomationRuleId): Promise<AutomationRunRecord> {
-    return this.enqueue(() => this.fire(id, internals.now(), { advance: false }))
+    return this.enqueue(() => this.fire(id, internals.now(), { advance: false, source: 'manual' }))
   }
   /**
      * Recent runs for one rule, newest first.
@@ -278,9 +278,36 @@ export class AutomationService extends Service {
      * @returns the run written for this attempt.
      */
   fireDue(id: AutomationRuleId, now: number): Promise<AutomationRunRecord> {
-    return this.enqueue(() => this.fire(id, now, { advance: true }))
+    return this.enqueue(() => this.fire(id, now, { advance: true, source: 'schedule' }))
   }
-  private async fire(id: AutomationRuleId, now: number, options: { advance: boolean }): Promise<AutomationRunRecord> {
+
+  /**
+   * Delete one past run. Its id is never reused.
+   * @param id - Run to remove.
+   * @returns `true` when a record was deleted.
+   */
+  deleteRun(id: AutomationRunId): Promise<boolean> {
+    return this.enqueue(async () => {
+      return await this.requireRuns().delete(id)
+    })
+  }
+
+  /**
+   * Record that a started Session left `running`.
+   * @param sessionId - Session this run opened.
+   * @param endedAt - Wall-clock instant the agent became idle or disposed.
+   */
+  markRunEnded(sessionId: SessionId, endedAt: string): Promise<void> {
+    return this.enqueue(async () => {
+      const match = [...this.requireRuns().entries()]
+        .map(([, record]) => record)
+        .find(record => record.sessionId === sessionId && record.outcome === 'started' && record.endedAt === undefined)
+      if (match === undefined) return
+      await this.requireRuns().put(match.id, { ...match, endedAt })
+    })
+  }
+
+  private async fire(id: AutomationRuleId, now: number, options: { advance: boolean; source: 'schedule' | 'manual' }): Promise<AutomationRunRecord> {
     const rule = this.requireRule(id)
     if (!rule.enabled) {
       throw new AutomationInputError('rule_not_found', `automation rule '${id}' is disabled`)
@@ -292,7 +319,9 @@ export class AutomationService extends Service {
         const skipped = await this.writeRun({
           ruleId: id,
           startedAt: formatUtcInstant(now),
+          endedAt: formatUtcInstant(now),
           outcome: 'skipped_busy',
+          source: options.source,
         })
         if (options.advance && (rule.selector.kind === 'every' || rule.selector.kind === 'local-clock')) {
           await this.advanceAfterFire(rule, now)
@@ -302,14 +331,20 @@ export class AutomationService extends Service {
       }
       busy.cancel({ kind: 'automation', ruleId: id }, { keepInbox: false })
       if (previous !== undefined) {
-        await this.requireRuns().put(previous.id, { ...previous, outcome: 'replaced' })
+        await this.requireRuns().put(previous.id, {
+          ...previous,
+          outcome: 'replaced',
+          endedAt: previous.endedAt ?? formatUtcInstant(now),
+        })
       }
     }
     if (this.liveRunCount() >= this.config.maxConcurrentRuns) {
       const skipped = await this.writeRun({
         ruleId: id,
         startedAt: formatUtcInstant(now),
+        endedAt: formatUtcInstant(now),
         outcome: 'skipped_busy',
+        source: options.source,
         errorCode: 'max_concurrent_runs',
       })
       if (options.advance && (rule.selector.kind === 'every' || rule.selector.kind === 'local-clock')) {
@@ -325,6 +360,10 @@ export class AutomationService extends Service {
         sessionId: agent.session.id,
         startedAt: formatUtcInstant(now),
         outcome: 'started',
+        source: options.source,
+      })
+      this.runtime?.watchEnded(agent, (endedAt) => {
+        void this.markRunEnded(agent.session.id, endedAt)
       })
       agent.session.append('automation/start', {
         ruleId: id,
@@ -347,7 +386,9 @@ export class AutomationService extends Service {
       await this.writeRun({
         ruleId: id,
         startedAt: formatUtcInstant(now),
+        endedAt: formatUtcInstant(now),
         outcome: 'failed',
+        source: options.source,
         errorCode: error instanceof AutomationInputError ? error.code : 'internal_error',
       })
       if (options.advance) {
@@ -458,6 +499,8 @@ export class AutomationService extends Service {
       startedAt: record.startedAt,
       outcome: record.outcome,
       ...record.sessionId === undefined ? {} : { sessionId: record.sessionId },
+      ...record.endedAt === undefined ? {} : { endedAt: record.endedAt },
+      ...record.source === undefined ? {} : { source: record.source },
       ...record.errorCode === undefined ? {} : { errorCode: record.errorCode },
     }
     await this.requireRuns().put(id, stored)
@@ -671,6 +714,8 @@ function publishedRun(record) {
     startedAt: record.startedAt,
     outcome: record.outcome,
     ...record.sessionId === undefined ? {} : { sessionId: record.sessionId },
+    ...record.endedAt === undefined ? {} : { endedAt: record.endedAt },
+    ...record.source === undefined ? {} : { source: record.source },
     ...record.errorCode === undefined ? {} : { errorCode: record.errorCode },
   }
 }

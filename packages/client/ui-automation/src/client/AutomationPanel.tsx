@@ -71,6 +71,8 @@ export interface AutomationPanelInjected {
   openLastSession: AutomationStore['openLastSession']
   /** Open one fire's Session. */
   openRun: AutomationStore['openRun']
+  /** Delete one past run. */
+  deleteRun: AutomationStore['deleteRun']
   /** Delete one rule. */
   remove: AutomationStore['remove']
   /** Open one rule's detail pane, or return to the card list. */
@@ -127,7 +129,7 @@ export function AutomationPanel(props: AutomationPanelProps): ReactNode {
 export function AutomationPage(props: AutomationPageProps): ReactNode {
   const {
     useAutomation, useKeepAwake, useWorkspaces, load, create, update, setEnabled, runNow, openRun,
-    remove, select, setDetailTab, setPageOpen, setKeepAwake, t,
+    deleteRun, remove, select, setDetailTab, setPageOpen, setKeepAwake, t,
   } = props
   const state = useAutomation(snapshot => snapshot)
   const keepAwake = useKeepAwake(value => value)
@@ -159,6 +161,7 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
       setEnabled={setEnabled}
       runNow={runNow}
       openRun={openRun}
+      deleteRun={deleteRun}
       remove={remove}
       select={select}
       setDetailTab={setDetailTab}
@@ -171,7 +174,7 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
 
 function AutomationPageChrome({
   state, keepAwake, workspaces, load, create, update, setEnabled, runNow, openRun,
-  remove, select, setDetailTab, setPageOpen, setKeepAwake, t,
+  deleteRun, remove, select, setDetailTab, setPageOpen, setKeepAwake, t,
 }: {
   state: AutomationState
   keepAwake: boolean
@@ -182,6 +185,7 @@ function AutomationPageChrome({
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
   openRun: AutomationStore['openRun']
+  deleteRun: AutomationStore['deleteRun']
   remove: AutomationStore['remove']
   select: AutomationStore['select']
   setDetailTab: AutomationStore['setDetailTab']
@@ -257,6 +261,7 @@ function AutomationPageChrome({
           setEnabled={setEnabled}
           runNow={runNow}
           openRun={openRun}
+          deleteRun={deleteRun}
           remove={remove}
           select={select}
           setDetailTab={setDetailTab}
@@ -282,6 +287,7 @@ interface BodyProps {
   setEnabled: AutomationStore['setEnabled']
   runNow: AutomationStore['runNow']
   openRun: AutomationStore['openRun']
+  deleteRun: AutomationStore['deleteRun']
   remove: AutomationStore['remove']
   select: AutomationStore['select']
   setDetailTab: AutomationStore['setDetailTab']
@@ -291,7 +297,7 @@ interface BodyProps {
 
 function AutomationBody({
   state, keepAwake, workspaces, adding, seed, onAdd, onAdded, load, create, update,
-  setEnabled, runNow, openRun, remove, select, setDetailTab, setKeepAwake, t,
+  setEnabled, runNow, openRun, deleteRun, remove, select, setDetailTab, setKeepAwake, t,
 }: BodyProps): ReactNode {
   const selected = state.selectedId === null
     ? undefined
@@ -306,6 +312,7 @@ function AutomationBody({
         setEnabled={setEnabled}
         runNow={runNow}
         openRun={openRun}
+        deleteRun={deleteRun}
         remove={remove}
         select={select}
         setDetailTab={setDetailTab}

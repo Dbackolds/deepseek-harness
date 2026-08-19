@@ -10,9 +10,9 @@ Host Automation 已经拥有持久规则、Host RPC 和模型 tool，但 Web GUI
 
 ## 决策
 
-`ui-sidebar` 在 New Session 下方声明 `sidebar.automation`。`@deepseek-ai/dsh-client-ui-automation` 占据该 seat，用与 New Session 同几何的时钟图标触发器，并在 `shell.overlay` 打开中间栏整页，走现有 `automation.*` 线路：列出、创建（恰好一种 after / at / every / local-clock）、启用、立即运行和删除。Host 仍是事实来源。集合不进 Settings，因为产品请求是 New Session 的兄弟。
+`ui-sidebar` 在 New Session 下方声明 `sidebar.automation`。`@deepseek-ai/dsh-client-ui-automation` 占据该 seat，用与 New Session 同几何的时钟图标触发器，并在 `shell.overlay` 打开中间栏整页，走现有 `automation.*` 线路：列出、创建（恰好一种 after / at / every / local-clock）、启用、立即运行、删除规则和删除运行记录。Host 仍是事实来源。集合不进 Settings，因为产品请求是 New Session 的兄弟。
 
-创建停留在服务已接受的四种选择器上。内置模板只预填该表单，提交前不持久化规则。保持唤醒开关写入 Host 的 `ui-automation.keepAwake`；存活的宿主随后持有操作系统休眠断言，关掉开关或卸载插件时释放。表单不解析自然语言。打开一张卡片进入该规则的设置与历史；设置通过 `automation.update` 保存。成功的立即运行会等到 Host 列表带上新 Session，再关掉自动化页并打开该 Session；跳过或失败的开火留在本页。
+创建停留在服务已接受的四种选择器上。内置模板只预填该表单，提交前不持久化规则。保持唤醒开关写入 Host 的 `ui-automation.keepAwake`；存活的宿主随后持有操作系统休眠断言，关掉开关或卸载插件时释放。表单不解析自然语言。打开一张卡片进入该规则的设置与历史；设置通过 `automation.update` 保存。历史列出 `endedAt`、`source`，并可通过 `automation.deleteRun` 删除一条过去的运行。成功的立即运行会等到 Host 列表带上新 Session，再关掉自动化页并打开该 Session；跳过或失败的开火留在本页。
 
 ## 考虑过的替代方案
 

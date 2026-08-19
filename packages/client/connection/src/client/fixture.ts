@@ -2960,6 +2960,10 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         },
       }),
       listRuns: request => Promise.resolve({ rpcId: request.rpcId, result: { ok: true, value: { items: [] } } }),
+      deleteRun: request => Promise.resolve({
+        rpcId: request.rpcId,
+        result: { ok: true, value: { id: request.payload.id, deleted: true } },
+      }),
     },
     events: {
       async *mux(_request, signal) {
@@ -3272,6 +3276,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'automation.setEnabled': return this.api.automation.setEnabled(request)
       case 'automation.runNow': return this.api.automation.runNow(request)
       case 'automation.listRuns': return this.api.automation.listRuns(request)
+      case 'automation.deleteRun': return this.api.automation.deleteRun(request)
       case 'settings.describe': return this.api.settings.describe(request)
       case 'settings.openDocument': return this.api.settings.openDocument(request, signal)
       case 'settings.update': return this.api.settings.update(request)

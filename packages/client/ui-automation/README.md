@@ -18,6 +18,6 @@ None; the package never assembles or sends provider requests.
 
 ## Known Limitations and Deferred Work
 
-- **The history table cannot delete a past run** — Host Automation keeps every fire record. The menu only jumps to a started Session.
+- **A started run without `endedAt` shows an open duration** — older records written before the Host stored an end instant stay that way.
 - **A stopped Host does not fire** — the list still shows next-fire instants derived by the last live Host; this package does not recompute them. Keep-awake also ends with the Host process.
 - **Keep-awake cannot force a laptop to stay awake without an OS helper** — a missing `caffeinate`, `systemd-inhibit`, or Windows power call leaves the switch on and the Host running.

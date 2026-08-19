@@ -180,6 +180,13 @@ runNow(id: AutomationRuleId): Promise<AutomationRunRecord>
 listRuns(id: AutomationRuleId, limit: number = 20): AutomationRunRecord[]
 
 /**
+   * Delete one past run. Its id is never reused.
+   * @param id - Run to remove.
+   * @returns `true` when a record was deleted.
+   */
+deleteRun(id: AutomationRunId): Promise<boolean>
+
+/**
    * Enabled rules whose target is due at `now`.
    * @param now - Wall-clock decision time.
    * @returns due records in target then create order.

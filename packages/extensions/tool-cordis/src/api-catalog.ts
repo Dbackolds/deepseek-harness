@@ -438,6 +438,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'detached run records.',
       },
       {
+        signature: 'deleteRun(id: AutomationRunId): Promise<boolean>',
+        description: 'Delete one past run. Its id is never reused.',
+        parameters: [{ name: 'id', description: 'Run to remove.' }],
+        returns: '`true` when a record was deleted.',
+      },
+      {
         signature: 'dueRules(now: number): readonly AutomationRuleRecord[]',
         description: 'Enabled rules whose target is due at `now`.',
         parameters: [{ name: 'now', description: 'Wall-clock decision time.' }],

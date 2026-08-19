@@ -40,6 +40,7 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
   }>>
   update?: (payload: unknown) => Promise<RpcResponse<{ rule: AutomationRuleView }>>
   listRuns?: (payload: unknown) => Promise<RpcResponse<{ items: unknown[] }>>
+  deleteRun?: (payload: unknown) => Promise<RpcResponse<{ id: string; deleted: boolean }>>
   delete?: (payload: unknown) => Promise<RpcResponse<{ id: string; deleted: boolean }>>
 } = {}) {
   const calls: string[] = []
@@ -70,8 +71,12 @@ function api(handlers: Partial<Pick<AutomationStore extends { constructor: infer
       listRuns: (payload: unknown) => {
         calls.push('listRuns')
         return (handlers.listRuns ?? (() => Promise.resolve(ok({
-          items: [{ id: 'run-1', sessionId: 'session-1', outcome: 'started' }],
+          items: [{ id: 'run-1', sessionId: 'session-1', outcome: 'started', source: 'manual' }],
         }))))(payload)
+      },
+      deleteRun: (payload: unknown) => {
+        calls.push('deleteRun')
+        return (handlers.deleteRun ?? (() => Promise.resolve(ok({ id: 'run-1', deleted: true }))))(payload)
       },
       delete: (payload: unknown) => {
         calls.push('delete')
@@ -163,6 +168,8 @@ describe('AutomationStore', () => {
     expect(store.store.getSnapshot()).toMatchObject({ selectedId: 'rule-1', detailTab: 'history' })
     expect(await store.update(rule().id, { name: 'renamed' })).toBeUndefined()
     expect(calls).toContain('update')
+    expect(await store.deleteRun('run-1' as never)).toBeUndefined()
+    expect(calls).toContain('deleteRun')
     store.select(null)
     expect(store.store.getSnapshot().selectedId).toBeNull()
   })

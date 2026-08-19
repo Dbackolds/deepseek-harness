@@ -30,7 +30,7 @@ tool、Host RPC 和 Web 侧栏面板是同一服务的 Consumer。本记录交�
 
 ## 验证
 
-包测试覆盖选择器校验、`after` 规则的创建/开火、`skip` 与 `replace` 互斥、idle 不算忙、permission 固定、删除不复用 id、`runNow` 不移动下一目标、live timer owner、domain/table 不变式，以及 tool 权威。Session 测试接受 `origin: 'automation'`，并拒绝其他 origin 字面量。
+包测试覆盖选择器校验、`after` 规则的创建/开火、`skip` 与 `replace` 互斥、idle 不算忙、permission 固定、删除不复用 id、`deleteRun`、`runNow` 不移动下一目标、live timer owner、domain/table 不变式，以及 tool 权威。Session 测试接受 `origin: 'automation'`，并拒绝其他 origin 字面量。
 
 ## 后果
 

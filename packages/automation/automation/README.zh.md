@@ -18,7 +18,7 @@
 
 ## 服务约定
 
-`list()` / `get(id)` 返回带 `state: scheduled | overdue | disabled` 和 `nextAt` 的分离视图。`create(spec)` / `update(id, patch)` / `delete(id)` / `setEnabled(id, enabled)` 变更规则表。`runNow(id)` 开火且不移动下一目标。`listRuns(id, limit?)` 按新到旧返回历史。
+`list()` / `get(id)` 返回带 `state: scheduled | overdue | disabled` 和 `nextAt` 的分离视图。`create(spec)` / `update(id, patch)` / `delete(id)` / `setEnabled(id, enabled)` 变更规则表。`runNow(id)` 开火且不移动下一目标。`listRuns(id, limit?)` 按新到旧返回历史。`deleteRun(id)` 删除一条过去的运行，且不再复用该 id。已开火运行会在其 Session 离开 `running` 时记下 `endedAt`。
 
 创建需要非空 `task`、已存在的 `workspaceId`，以及恰好一个时间选择器。`onOverlap` 默认为 `skip`。省略 `agentPreset` / `permissionPreset` 时，开火使用当时的部署默认值。具名 `permissionPreset` 在 Session 发布之后、入队 prompt 之前通过 `permissionPresets.set` 固定。
 
