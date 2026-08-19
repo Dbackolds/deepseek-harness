@@ -12,7 +12,7 @@ import {
   resolveTargetPolicy,
 } from '@deepseek-ai/dsh-compaction-basic/src/config.ts'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
-import LlmRuntime, { createUserMessage, CallId, CONTEXT_WINDOW_EXCEEDED_CODE, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, CallId, CONTEXT_WINDOW_EXCEEDED_CODE, createToolResultMessage, LlmAdapter , createMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
   GenerateOptions,
@@ -1120,6 +1120,20 @@ class ScriptedAdapter extends LlmAdapter {
     super()
   }
 
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({
+      provider,
+      id: model,
+      name: model,
+      reasoning: {
+        efforts: [
+          { id: ReasoningEffortId('off'), name: 'Off' },
+          { id: ReasoningEffortId('xhigh'), name: 'Xhigh' },
+        ],
+      },
+    })
+  }
+
   override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.lastOptions = options
     for (const [index, block] of this.blocks.entries()) {
@@ -1310,6 +1324,90 @@ describe('default one-shot summarizer', () => {
     expect(output.model).toBe('routed')
     expect(adapter.lastOptions?.provider).toBe('routed')
     expect(adapter.lastOptions?.model).toBe('routed')
+  })
+
+  it('copies the same-route logged reasoning effort onto the summarizer call', async () => {
+    const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }], undefined, 'routed')
+    const session = conversation(1)
+    session.append('request/header', {
+      header: { config: {
+        provider: 'routed',
+        model: 'routed',
+        reasoningEffort: ReasoningEffortId('xhigh'),
+      } },
+      reason: 'initial',
+    })
+
+    await compact.runSummarize(promptInput('history'), agent(session, 'fallback'))
+
+    expect(adapter.lastOptions).toMatchObject({
+      provider: 'routed',
+      model: 'routed',
+      reasoningEffort: ReasoningEffortId('xhigh'),
+      purpose: 'compaction',
+    })
+  })
+
+  it('drops the previous model effort when summarization is routed elsewhere', async () => {
+    const { ctx, compact } = await summarizerHarness(
+      [{ type: 'text', text: 'unused' }],
+      undefined,
+      MODEL,
+      {
+        auto: false,
+        summarizationProvider: 'policy-summary',
+        summarizationModel: 'policy-summary',
+      },
+    )
+    const policyAdapter = new ScriptedAdapter([{ type: 'text', text: 'policy summary' }])
+    ctx.llm.registerAdapter(['policy-summary'], policyAdapter)
+    const session = conversation(1)
+    session.append('request/header', {
+      header: { config: {
+        provider: MODEL,
+        model: MODEL,
+        reasoningEffort: ReasoningEffortId('xhigh'),
+      } },
+      reason: 'initial',
+    })
+
+    await compact.runSummarize(promptInput('history'), {
+      session,
+      options: {
+        provider: MODEL,
+        model: MODEL,
+        reasoningEffort: ReasoningEffortId('xhigh'),
+      },
+    } as Agent)
+
+    expect(policyAdapter.lastOptions).toMatchObject({
+      provider: 'policy-summary',
+      model: 'policy-summary',
+      purpose: 'compaction',
+    })
+    expect(policyAdapter.lastOptions).not.toHaveProperty('reasoningEffort')
+  })
+
+  it('uses AgentOptions.reasoningEffort when no same-route header exists', async () => {
+    const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }], undefined, 'routed')
+    const session = Session.create(SessionId('agent-effort-only'))
+    session.append('turn/start', { turn: 1 })
+
+    await compact.runSummarize(promptInput('history'), {
+      session,
+      options: {
+        provider: 'routed',
+        model: 'routed',
+        reasoningEffort: ReasoningEffortId('xhigh'),
+      },
+    } as Agent)
+
+    expect(adapter.lastOptions).toMatchObject({
+      provider: 'routed',
+      model: 'routed',
+      reasoningEffort: ReasoningEffortId('xhigh'),
+      purpose: 'compaction',
+    })
   })
 
   it('records the model actually dispatched after one-shot stream routing', async () => {

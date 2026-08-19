@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-subagent-inherits-parent-reasoning-effort.md
-2026-08-19-subagent-inherits-parent-reasoning-effort.md: 97495883eee7215b68c2348dc6d6dc1962229aa0
-2026-08-19-subagent-inherits-parent-reasoning-effort.zh.md: d134c14014a043f68d2d983903cfa3086d7a81ab
+2026-08-19-subagent-inherits-parent-reasoning-effort.md: c3e29811bb79bf6c1e883f016af88a67d1f43c82
+2026-08-19-subagent-inherits-parent-reasoning-effort.zh.md: 78ca915d73bcefa5c36fd4a45ce9c13c7e11ba71

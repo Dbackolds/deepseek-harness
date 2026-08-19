@@ -36,4 +36,4 @@ The failing Web child sessions (`dae08b37-b812-44a5-9929-8d796874f3ea` and sibli
 
 ## Consequences
 
-In-process children on the same route now send the parent's selected effort, so a Web parent on `gpt-5.6-sol` / `xhigh` no longer produces a child request that serializes `effort: "none"`. Changing the child route still leaves effort unset so the new model's adapter default applies. Callers that already override `agentOptions.reasoningEffort` keep that override. Out-of-process providers still own their separate runtime configuration.
+In-process children on the same route now send the parent's selected effort, so a Web parent on `gpt-5.6-sol` / `xhigh` no longer produces a child request that serializes `effort: "none"`. Changing the child route still leaves effort unset so the new model's adapter default applies. Callers that already override `agentOptions.reasoningEffort` keep that override. Out-of-process providers still own their separate runtime configuration. The same-route rule for the compaction summarizer is owned by [compaction inheritance](2026-08-19-compaction-inherits-same-route-reasoning-effort.md).

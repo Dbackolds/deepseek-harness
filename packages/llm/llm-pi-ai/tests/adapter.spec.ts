@@ -596,6 +596,44 @@ describe('provider profile lifecycle', () => {
     expect(server.requests[1]).not.toHaveProperty('reasoning_effort')
   })
 
+  it('sends the declared off mapping on openai-responses when no effort is selected', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-responses',
+          baseURL: `${server.url}/v1`,
+          models: [{
+            id: 'acme-think',
+            contextWindow: 65_536,
+            maxTokens: 4096,
+            reasoningEfforts: { off: 'none', high: 'high', xhigh: 'xhigh' },
+          }],
+        },
+      },
+    })
+
+    const omitted = await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-think',
+      messages: [],
+    })
+    expect(omitted.finish.kind).toBe('error')
+    expect(server.requests[0]).toMatchObject({ reasoning: { effort: 'none' } })
+
+    await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-think',
+      reasoningEffort: ReasoningEffortId('xhigh'),
+      messages: [],
+    })
+    expect(server.requests[1]).toMatchObject({ reasoning: { effort: 'xhigh' } })
+  })
+
   it('sends a declared off value as the effort parameter instead of omitting it', async () => {
     vi.stubEnv('PI_TEST_KEY', 'test-key')
     const server = await mockServer([{ events: textEvents }])
