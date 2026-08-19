@@ -416,6 +416,32 @@
   margin-top: 2px;
 }
 
+.activityCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: var(--dsw-alias-label-primary-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.activityCount_unread {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.activityCount_running {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.activityCount_abnormal {
+  background: var(--dsw-alias-state-error-primary);
+}
+
 .activitySection > * + *,
 .searchTree > [role='treeitem'] + [role='treeitem'] {
   margin-top: 2px;

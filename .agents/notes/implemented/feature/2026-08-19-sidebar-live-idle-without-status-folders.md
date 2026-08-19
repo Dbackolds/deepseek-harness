@@ -10,9 +10,7 @@ The sidebar already paints live, waiting, interrupted, and completed Sessions on
 
 ## Decision
 
-Workspace folders and the optional Pinned heading remain the only foldable groups. `partitionLiveIdle` floats pending interaction, own running, and running-descendant rows above idle rows in both the Workspace tree and the flat list. Completed, Abnormal, and idle History stay mixed in the idle cluster; their dots stay on the row. Live rows never enter the five-row overflow. Idle overflow still uses the transient **Show more** control from [Workspace Sidebar Order and Folding](2026-08-11-workspace-sidebar-order-and-folding.md). Session drag stays inside the live or idle cluster it started in.
-
-This supersedes the foldable four-section presentation in [Sidebar session activity sections](2026-08-15-sidebar-session-activity-sections.md). Classification helpers remain for row status and tests.
+View options persist `activityLayout`. **Group by status** (`folders`, the default) restores the foldable Completed / Running / Abnormal / History headings from [Sidebar session activity sections](2026-08-15-sidebar-session-activity-sections.md). **No status groups** (`inline`) keeps Workspace and Pinned as the only foldable groups. `partitionLiveIdle` then floats pending interaction, own running, and running-descendant rows above idle rows. Completed, Abnormal, and idle History stay mixed in the idle cluster; their dots stay on the row. Live rows never enter the five-row overflow. Idle overflow still uses the transient **Show more** control from [Workspace Sidebar Order and Folding](2026-08-11-workspace-sidebar-order-and-folding.md). Session drag stays inside the live/idle cluster or status folder it started in.
 
 ## Alternatives considered
 
@@ -26,9 +24,9 @@ This supersedes the foldable four-section presentation in [Sidebar session activ
 
 - An open Workspace or flat list always shows every live Session.
 - Idle Sessions still default to five visible rows until Show more.
-- Persisted `activityExpansion` keys for unread / running / abnormal / history no longer change the list; only the Pinned heading still folds.
+- Persisted `activityExpansion` keys fold status headings only while **Group by status** is on; the Pinned heading still folds in both layouts.
 - Search remains one flat match list.
 
 ## Testing
 
-Tree tests cover live-before-idle partitioning and the unused four-way classification. Browser tests cover the absence of status headings, live rows above idle rows, and idle overflow after five rows in both presentations.
+Tree tests cover live-before-idle partitioning, the four-way classification, and the persisted layout. Browser tests cover default status headings, switching to no status groups, and idle overflow after five rows.

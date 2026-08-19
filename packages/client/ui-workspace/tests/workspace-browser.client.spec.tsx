@@ -140,9 +140,9 @@ describe('WorkspaceBrowser', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     expect(screen.getByText('分组方式')).toBeTruthy() // the menu heading label
-    expect(screen.getByRole('separator')).toBeTruthy()
+    expect(screen.getAllByRole('separator')).toHaveLength(2)
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      '按工作区', '单列表', '手动排序', '最近更新',
+      '按工作区', '单列表', '手动排序', '最近更新', '按状态分区', '不分区',
     ])
     expect(screen.getByRole('menuitem', { name: '按工作区' }).querySelector('svg')).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: '手动排序' }).querySelector('svg')).toBeTruthy()
@@ -151,7 +151,7 @@ describe('WorkspaceBrowser', () => {
     expect(b.store.getSnapshot().groupBy).toBe('flat')
     expect(screen.getByText('会话')).toBeTruthy()
     expect(screen.queryByText('alpha')).toBeNull()
-    expect(screen.queryByRole('button', { name: '历史记录' })).toBeNull()
+    expect(screen.getByRole('button', { name: '历史记录' })).toBeTruthy()
     expect(screen.getByText('alpha-s')).toBeTruthy()
     expect(screen.getByText('beta-s')).toBeTruthy()
 
@@ -223,7 +223,7 @@ describe('WorkspaceBrowser', () => {
     ])
   })
 
-  it('floats live work above idle rows and folds only idle sessions after five rows', () => {
+  it('splits the flat list into Completed, Running, Abnormal, and History by default and can switch to live-on-top', () => {
     const items = [
       summary('done-a', 9, { completed: true }),
       summary('done-b', 8, { completed: true }),
@@ -238,21 +238,33 @@ describe('WorkspaceBrowser', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    const completed = screen.getByRole('button', { name: '已完成 2 个' })
+    const running = screen.getByRole('button', { name: '运行中 2 个' })
+    const abnormal = screen.getByRole('button', { name: '异常 1 个' })
+    const history = screen.getByRole('button', { name: '历史记录' })
+    expect(completed).toBeTruthy()
+    expect(running).toBeTruthy()
+    expect(abnormal).toBeTruthy()
+    expect(history).toBeTruthy()
+    expect(screen.getByText('done-a')).toBeTruthy()
+    expect(screen.getByText('crash')).toBeTruthy()
+    expect(screen.getByText('old-5')).toBeTruthy()
+    expect(screen.queryByText('old-6')).toBeNull()
+    fireEvent.click(completed)
+    expect(completed.getAttribute('aria-expanded')).toBe('false')
+    expect(completed.parentElement?.nextElementSibling?.getAttribute('aria-hidden')).toBe('true')
+    fireEvent.click(history)
+    expect(history.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(history)
+    fireEvent.click(screen.getByRole('button', { name: '展开其余 1 个会话' }))
+    expect(screen.getByText('old-6')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '不分区' }))
     expect(screen.queryByRole('button', { name: '已完成 2 个' })).toBeNull()
     expect(screen.queryByRole('button', { name: '运行中 2 个' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '异常 1 个' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '历史记录' })).toBeNull()
     const titles = screen.getAllByRole('treeitem').map(row => row.textContent ?? '')
     expect(titles[0]).toContain('live')
     expect(titles[1]).toContain('waiting')
-    expect(screen.getByText('done-a')).toBeTruthy()
-    expect(screen.getByText('crash')).toBeTruthy()
-    expect(screen.getByText('old-2')).toBeTruthy()
-    expect(screen.queryByText('old-3')).toBeNull()
-    expect(screen.queryByText('old-6')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '展开其余 4 个会话' }))
-    expect(screen.getByText('old-3')).toBeTruthy()
-    expect(screen.getByText('old-6')).toBeTruthy()
   })
 
   it('expands a group on click and opens a session row', () => {
@@ -281,7 +293,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('session-6')).toBeNull()
     expect(screen.queryByText('session-7')).toBeNull()
 
-    expect(screen.queryByRole('button', { name: '历史记录' })).toBeNull()
+    expect(screen.getByRole('button', { name: '历史记录' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '展开其余 2 个会话' }))
     expect(screen.getByText('session-6')).toBeTruthy()
     expect(screen.getByText('session-7')).toBeTruthy()

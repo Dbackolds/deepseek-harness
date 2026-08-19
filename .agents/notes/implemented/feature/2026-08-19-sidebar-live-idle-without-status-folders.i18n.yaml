@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-sidebar-live-idle-without-status-folders.md
-2026-08-19-sidebar-live-idle-without-status-folders.md: 5fb80c94b80d1aae23af5e1835c7558edddf1059
-2026-08-19-sidebar-live-idle-without-status-folders.zh.md: daf633ef330283ecb24fa58d044a36920b52a544
+2026-08-19-sidebar-live-idle-without-status-folders.md: f8b0e7bedb0b5b6aa8d10bb1c213285429da59fa
+2026-08-19-sidebar-live-idle-without-status-folders.zh.md: a3c6253f505baaa360be7243bb678c467c46fe37

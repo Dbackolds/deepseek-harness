@@ -245,17 +245,20 @@ function sessionNode(
   }
 }
 
-/** Sidebar activity bucket used to float live work and paint row status. */
+/** Sidebar activity bucket used to float live work or paint status folders. */
 export type SessionActivityBucket = 'pinned' | 'unread' | 'running' | 'abnormal' | 'history'
 
 /** Drag and overflow cluster: live work stays above idle rows. */
 export type SessionListCluster = 'live' | 'idle'
 
+/** Status sections that show a count badge when folders are on. */
+export const BADGED_ACTIVITY_BUCKETS = ['unread', 'running', 'abnormal'] as const satisfies readonly SessionActivityBucket[]
+
 /**
  * Classify one visible Session into Completed / Running / Abnormal / History.
  * Live work outranks an unviewed completion; a crash/reload interruption is
  * Abnormal unless the Session is running again. The browser paints these as
- * row status, not as foldable headings.
+ * row status, or as foldable headings when that view option is on.
  * @param node - derived session row.
  * @returns the status bucket for this row.
  */
@@ -299,7 +302,7 @@ export interface SessionActivitySection {
 
 /**
  * Split a Session list into Completed / Running / Abnormal / History.
- * Empty sections stay present so classification tests can assert the order.
+ * Empty sections stay present so the renderer can skip a heading with no rows.
  * @param sessions - visible rows in the current view order.
  * @returns the four sections in classification order.
  */

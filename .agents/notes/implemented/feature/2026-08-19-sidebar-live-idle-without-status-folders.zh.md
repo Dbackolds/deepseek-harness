@@ -10,9 +10,7 @@ Status: implemented
 
 ## Decision
 
-可折叠的只剩 Workspace 文件夹和可选的置顶标题。`partitionLiveIdle` 在 Workspace 树和单列表里，都把待处理交互、自身运行和有运行中后代的行浮到空闲行之上。已完成、异常和其余空闲行留在空闲簇里，状态只画在行内圆点上。进行中行永不进入五行溢出。空闲溢出仍使用 [Workspace 侧边栏顺序与折叠](2026-08-11-workspace-sidebar-order-and-folding.md) 的临时 **展开其余**。Session 拖拽只发生在起始的进行中或空闲簇内。
-
-这取代 [侧边栏会话活动分区](2026-08-15-sidebar-session-activity-sections.md) 里可折叠的四分区呈现。分类辅助函数仍用于行状态和测试。
+视图选项会持久化 `activityLayout`。**按状态分区**（`folders`，默认）恢复 [侧边栏会话活动分区](2026-08-15-sidebar-session-activity-sections.md) 的可折叠已完成／运行中／异常／历史记录标题。**不分区**（`inline`）时只有 Workspace 和置顶可折叠。`partitionLiveIdle` 再把待处理交互、自身运行和有运行中后代的行浮到空闲行之上。已完成、异常和其余空闲行留在空闲簇里，状态只画在行内圆点上。进行中行永不进入五行溢出。空闲溢出仍使用 [Workspace 侧边栏顺序与折叠](2026-08-11-workspace-sidebar-order-and-folding.md) 的临时 **展开其余**。Session 拖拽只发生在起始的进行中／空闲簇或状态分区内。
 
 ## Alternatives considered
 
@@ -26,9 +24,9 @@ Status: implemented
 
 - 打开的 Workspace 或单列表始终显示全部进行中 Session。
 - 空闲 Session 默认仍只显示五条，直到展开其余。
-- 已持久化的 unread／running／abnormal／history `activityExpansion` 键不再改变列表；只有置顶标题仍可折叠。
+- 已持久化的 `activityExpansion` 键只在**按状态分区**时折叠状态标题；置顶标题在两种布局下都可折叠。
 - 搜索仍是一份扁平匹配列表。
 
 ## Testing
 
-树测试覆盖进行中先于空闲的拆分，以及不再用于呈现的四向分类。浏览器测试覆盖两种呈现下都没有状态标题、进行中行在空闲行之上，以及空闲超过五行后的溢出。
+树测试覆盖进行中先于空闲的拆分、四向分类和持久化布局。浏览器测试覆盖默认状态标题、切换到不分区，以及空闲超过五行后的溢出。
