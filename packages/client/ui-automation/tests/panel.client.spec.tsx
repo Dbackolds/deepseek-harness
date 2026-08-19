@@ -267,7 +267,7 @@ describe('AutomationPanel', () => {
     expect(screen.getByRole('tab', { name: 'History' })).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'History' }))
     await waitFor(() => { expect(screen.getByText('Succeeded')).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'More' }).at(-1)!)
     expect(screen.getByRole('menuitem', { name: 'Jump to session' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Delete record' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /morning/ }))

@@ -1,6 +1,6 @@
 /** Selected-rule settings and history panes. */
 import { useState, type ReactNode } from 'react'
-import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
 import { draftToUpdate, formatNextAt, ruleToDraft, type AutomationDraft } from './format.ts'
 import type { AutomationKey } from './locales.ts'
@@ -64,24 +64,29 @@ export function RuleDetail(props: {
             {t('tab.history')}
           </button>
         </div>
-        {tab === 'settings' ? (
-          <div className={css.detailActions}>
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => { act(() => runNow(rule.id)) }}>{t('runNow')}</Button>
-            <div className={css.moreWrap}>
-              <Button size="sm" variant="outline" aria-label={t('more')} onClick={() => { setMenuOpen(open => !open) }}>...</Button>
-              {menuOpen ? (
-                <div className={css.menu} role="menu">
-                  <button type="button" role="menuitem" className={css.menuItem} disabled={busy} onClick={() => { setMenuOpen(false); act(() => setEnabled(rule.id, !rule.enabled)) }}>
-                    {rule.enabled ? t('pause') : t('enabled')}
-                  </button>
-                  <button type="button" role="menuitem" className={css.menuDanger} disabled={busy} onClick={() => { setMenuOpen(false); setConfirming(true) }}>
-                    {t('delete')}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+        <div className={css.detailActions}>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => { act(() => runNow(rule.id)) }}>{t('runNow')}</Button>
+          <Menu
+            open={menuOpen}
+            portal
+            align="end"
+            onClose={() => { setMenuOpen(false) }}
+            onSelect={(id) => {
+              setMenuOpen(false)
+              if (id === 'pause') act(() => setEnabled(rule.id, !rule.enabled))
+              if (id === 'delete') setConfirming(true)
+            }}
+            items={[
+              { id: 'pause', label: rule.enabled ? t('pause') : t('enabled'), disabled: busy },
+              { id: 'delete', label: t('delete'), danger: true, disabled: busy },
+            ]}
+            anchor={(
+              <Button size="sm" variant="outline" aria-label={t('more')} onClick={() => { setMenuOpen(open => !open) }}>
+                ...
+              </Button>
+            )}
+          />
+        </div>
       </div>
       {notice !== undefined && <p className={css.error} role="alert">{notice}</p>}
       {tab === 'settings'
@@ -127,7 +132,7 @@ function SettingsPane({ item, workspaces, running, update, t }: {
   }
   return (
     <div className={css.settings}>
-      <div className={css.statusRow}>
+      <div className={css.statusChip} data-running={running ? 'true' : 'false'}>
         <span className={css.fieldLabel}>{t('status')}</span>
         <span className={running ? css.statusOn : css.statusOff}>{running ? t('status.running') : t('status.idle')}</span>
       </div>
@@ -179,13 +184,16 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
                 <td>{formatNextAt(run.startedAt)}</td>
                 <td>{t(run.source === 'manual' ? 'history.source.manual' : 'history.source.schedule')}</td>
                 <td><span className={outcomeClass(run.outcome)}>{t(outcomeKey)}</span></td>
-                <td>{runDuration(run)}</td>
+                <td className={css.historyDuration}>{runDuration(run)}</td>
                 <td className={css.historyMenuCell}>
-                  <Button size="sm" variant="ghost" aria-label={t('more')} onClick={() => { setOpenId(openId === run.id ? undefined : run.id) }}>...</Button>
-                  {openId === run.id ? (
-                    <div className={css.menu} role="menu">
-                      <button type="button" role="menuitem" className={css.menuItem} disabled={run.sessionId === undefined} onClick={() => {
-                        setOpenId(undefined)
+                  <Menu
+                    open={openId === run.id}
+                    portal
+                    align="end"
+                    onClose={() => { setOpenId(undefined) }}
+                    onSelect={(id) => {
+                      setOpenId(undefined)
+                      if (id === 'open') {
                         if (run.sessionId === undefined) {
                           setNotice(t('history.missing'))
                           return
@@ -193,15 +201,22 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
                         void openRun(run.sessionId).then((failure) => {
                           if (failure !== undefined) setNotice(localizeRunFailure(failure, t))
                         })
-                      }}>{t('history.open')}</button>
-                      <button type="button" role="menuitem" className={css.menuDanger} onClick={() => {
-                        setOpenId(undefined)
-                        void deleteRun(run.id).then((failure) => {
-                          if (failure !== undefined) setNotice(failure)
-                        })
-                      }}>{t('history.delete')}</button>
-                    </div>
-                  ) : null}
+                        return
+                      }
+                      void deleteRun(run.id).then((failure) => {
+                        if (failure !== undefined) setNotice(failure)
+                      })
+                    }}
+                    items={[
+                      { id: 'open', label: t('history.open'), disabled: run.sessionId === undefined },
+                      { id: 'delete', label: t('history.delete'), danger: true },
+                    ]}
+                    anchor={(
+                      <Button size="sm" variant="ghost" aria-label={t('more')} onClick={() => { setOpenId(openId === run.id ? undefined : run.id) }}>
+                        ...
+                      </Button>
+                    )}
+                  />
                 </td>
               </tr>
             )
