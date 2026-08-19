@@ -90,6 +90,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async rename(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { title: request.payload.title, seq: 0 } } }
       },
+      async rehome(request) {
+        return {
+          rpcId: request.rpcId,
+          result: { ok: true, value: { workspaceId: 'w' as never, path: request.payload.path, cwd: request.payload.path } },
+        }
+      },
       async fork(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { sessionId: 's-fork' as never } } }
       },

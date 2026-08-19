@@ -289,7 +289,9 @@ export function effectiveSessionHome(
   if (events !== undefined) {
     for (let index = events.length - 1; index >= 0; index -= 1) {
       const event = events[index]
-      if (event.type === 'workspace/home' || event.type === 'git/worktree') {
+      if (event === undefined) continue
+      const type = event.type as string
+      if (type === 'workspace/home' || type === 'git/worktree') {
         const path = (event.data as { path?: unknown }).path
         if (typeof path === 'string' && path.length > 0) return path
       }

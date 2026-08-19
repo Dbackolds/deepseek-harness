@@ -54,6 +54,7 @@ function scriptedApi(overrides: {
         selected: { provider: r.payload.provider, model: r.payload.model },
       }),
       rename: r => ok(r, { title: 'renamed', seq: 0 }),
+      rehome: r => ok(r, { workspaceId: 'w' as never, path: '/proj', cwd: '/proj' }),
       fork: r => ok(r, { sessionId: sid('s-fork') }),
       prompt: r => ok(r, { accepted: true as const }),
       attachment: r => ok(r, {
