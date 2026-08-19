@@ -57,6 +57,8 @@ import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
 import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
+import SessionControl from '@deepseek-ai/dsh-session-control'
+import * as ToolSessionControl from '@deepseek-ai/dsh-tool-session-control'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
@@ -453,6 +455,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-session-control',
+    dir: 'tool-session-control',
+    source: 'packages/session-query/tool-session-control/src/index.ts',
+    requires: ['ctx.tools', 'ctx.sessionControl'],
+    writes: ['tool/call', 'tool/result', 'live Agent inbox or cancel through ctx.sessionControl'],
+    async mount(ctx) {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(SqliteSessionQueryEngine, { path: ':memory:' })
+      await ctx.plugin(SessionControl)
+      await ctx.plugin(ToolSessionControl)
+    },
+    note:
+      'Thin adapters over ctx.sessionControl. Search lists every logical session with live status; stop cancels the current turn and keeps the inbox; send delivers one later message to a live Agent and refuses to resume a cold session.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent',

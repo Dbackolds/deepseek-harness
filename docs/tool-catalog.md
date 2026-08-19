@@ -33,6 +33,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`, `ctx.workflowEngine`, `ctx.subagents`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents every fresh round)` | `tool/call`, `tool/result`, `workflow and child session events during execution` | - | A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap. |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.tools`, `ctx.agents`, `ctx.skills` | `tool/call`, `tool/result`, `user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`, `session_event_search`, `session_event_trace`, `session_search`, `session_trace` | `ctx.tools`, `ctx.systemPrompt`, `ctx.sessionQuery`, `a calling Agent for workspace authority` | `tool/call`, `tool/result` | - | The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies. |
+| `@deepseek-ai/dsh-tool-session-control` | `session_control_search`, `session_control_send`, `session_control_stop` | `ctx.tools`, `ctx.sessionControl` | `tool/call`, `tool/result`, `live Agent inbox or cancel through ctx.sessionControl` | - | Thin adapters over ctx.sessionControl. Search lists every logical session with live status; stop cancels the current turn and keeps the inbox; send delivers one later message to a live Agent and refuses to resume a cold session. |
 | `@deepseek-ai/dsh-tool-subagent` | `subagent` | `ctx.tools`, `ctx.subagents`, `ctx.systemPrompt` | `tool/call`, `tool/result`, `child session events through the chosen provider` | `subagent`, `subagent_fork` | The registered tool name is the load-time `toolName` config (default `subagent`); the schema above is that default. The shipped compositions load this package once per subagent backend, so the model additionally sees `subagent_fork` bound to the fork backend. Each instance's description, `run_in_background` parameter, and system-prompt policy follow its own `backgroundMode` and `enableRunInBackground`, so the two shipped schemas are not identical: `subagent` is `continuable` and defaults omitted calls to background with automatic settlement delivery, while `subagent_fork` stays `one-shot` and defaults them to foreground — see `packages/bundle/base/cordis.patch.yml` and `examples/acp-agent/cordis.yml`. |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message` | `ctx.tools`, `ctx.subagents`, `ctx.agents and ctx.sessionProjections (list_agents only)` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The globally named control tools over continuable background subagents: provider-bound `tool-subagent` instances register distinct delegation tools, while this package registers `send_message` and `interrupt_agent` once, plus `list_agents` from its separately loaded `/list-agents` plugin (whose catalog rows use the sessionProjections and live Agent registries). |
 | `@deepseek-ai/dsh-tool-subagent-report` | `report` | `ctx.subagents`, `ctx.systemPrompt`, `a live continuable in-process child Agent` | `tool/call`, `tool/result`, `a user-role message in the direct parent session` | - | Registered per continuable in-process child rather than globally, so this schema is visible only inside such a child and survives its global `toolFilter`. The same contribution installs the child-scoped `tool:report` prompt section, which this catalog does not render. The parent-facing `send_message` tool is installed independently. |
@@ -1734,6 +1735,89 @@ Read the authorized session lineage around one session, including complete visib
 Source: [`packages/session-query/tool-session-query/src/index.ts`](../packages/session-query/tool-session-query/src/index.ts)
 
 The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies.
+
+<a id="deepseek-aidsh-tool-session-control"></a>
+
+## `@deepseek-ai/dsh-tool-session-control`
+
+### `session_control_search`
+
+List every logical session with live driver status. Optional query matches session id, working directory, or title. Use this to find a conversation before stopping it or sending it a later message. Results are newest-first and do not search message bodies.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Optional case-insensitive substring of session id, working directory, or title."
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Optional positive result cap. Defaults to the service configuration."
+    }
+  }
+}
+```
+
+Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_send`
+
+Send a later user-role message to any live session. queue (default) becomes the next turn; steer reaches the nearest step. A storage-only session is not resumed; the call fails instead of taking ownership of that Agent.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    },
+    "message": {
+      "type": "string",
+      "description": "Self-contained text to deliver as one user-role message."
+    },
+    "mode": {
+      "type": "string",
+      "description": "Inbox placement. queue is the next turn; steer is the nearest step.",
+      "enum": [
+        "queue",
+        "steer"
+      ]
+    }
+  },
+  "required": [
+    "session_id",
+    "message"
+  ]
+}
+```
+
+Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_stop`
+
+Stop the current turn of any logical session and keep queued inbox work. A known session with no live driver is an accepted no-op. This does not resume a cold session.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    }
+  },
+  "required": [
+    "session_id"
+  ]
+}
+```
+
+Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+Thin adapters over ctx.sessionControl. Search lists every logical session with live status; stop cancels the current turn and keeps the inbox; send delivers one later message to a live Agent and refuses to resume a cold session.
 
 <a id="deepseek-aidsh-tool-subagent"></a>
 

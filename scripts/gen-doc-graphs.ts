@@ -235,7 +235,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Session reads, traces, filters, and search',
     mode: 'seam',
     implementations: ['session-query-sqlite'],
-    consumers: ['session-reference', 'session-control', 'tool-session-query'],
+    consumers: ['session-reference', 'session-control', 'tool-session-control', 'tool-session-query'],
     note: 'The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering.',
   },
   {
@@ -243,6 +243,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'session-control',
     title: 'Trusted session directory, stop, and delivery',
     mode: 'core',
+    consumers: ['tool-session-control'],
     note: 'Searches every logical session with live driver status, stops an attached turn, and delivers a later message to a live Agent without taking a resume handle.',
   },
   {
@@ -326,7 +327,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'skill',
     title: 'Skill provider registry',
     mode: 'seam',
-    implementations: ['skill-badge', 'skill-filesystem'],
+    implementations: ['skill-badge', 'skill-session-control', 'skill-filesystem'],
     consumers: ['tool-skill'],
     note: 'Merges provider skill catalogs; tool-skill renders the session-prefix catalog and loads complete skill bodies.',
   },
