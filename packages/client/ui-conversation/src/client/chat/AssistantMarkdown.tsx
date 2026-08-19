@@ -4,10 +4,10 @@
 // view groups them into tool rows through its keyed toolview slot (figma
 // step-summary flow). Shared by finalized nodes and the streaming partial;
 // the turn-level loading dots live in the chat view's tail, not here.
-// Finalized content (text) nodes append IconActions once their turn ends
-// (`time` is omitted for mid-turn narration and while the turn still runs);
+// Finalized content (text) nodes append IconActions once their turn ends;
 // their branch action is enabled only when the node is also the completed
 // turn's transcript tail. Think / tool-head-only nodes stay chrome-free.
+// The event clock sits on the narration row itself, always visible.
 
 import { memo, useMemo } from 'react'
 import type { ReactNode } from 'react'
@@ -17,6 +17,7 @@ import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives
 import { ImageGallery, type ImageLoader } from '@deepseek-ai/dsh-client-ui-attachment'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { messageImageLabels } from '../image-labels.ts'
+import { MessageClock } from './MessageClock.tsx'
 import { ReasoningRow } from './ReasoningRow.tsx'
 import css from './AssistantMarkdown.module.css'
 
@@ -25,6 +26,8 @@ export interface AssistantMarkdownProps {
   streaming: boolean
   /** Frozen partial of an aborted turn: rendered with a stopped marker. */
   interrupted?: boolean | undefined
+  /** Unix epoch ms of the first visible or settled assistant event. */
+  time?: number | undefined
   /** Session-authorized durable image loader. */
   loadImage?: ImageLoader
   /** Resolved prose file mentions for this Assistant's closing turn. */
@@ -35,7 +38,7 @@ export interface AssistantMarkdownProps {
 
 /** Reasoning block as the Think variant summary row (figma 39:28304). */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
-  blocks, streaming, interrupted, loadImage, mentions, t,
+  blocks, streaming, interrupted, time, loadImage, mentions, t,
 }: AssistantMarkdownProps) {
   const imageLoader = loadImage ?? (() => Promise.reject(new Error(t('image.serviceUnavailable'))))
   // Stable per locale revision (t identity changes on switch): a fresh object
@@ -105,6 +108,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         {rendered}
         {interrupted && <span className={css.stopped}>{t('message.stopped')}</span>}
       </div>
+      <MessageClock time={time} t={t} />
     </div>
   )
 })

@@ -12,7 +12,7 @@ The Web chat shows when a message arrived but not how long the agent worked on i
 
 Turn wall time uses the existing logged `turn/start` and `turn/end` timestamps, with no new session events. The client Session folds each in-window pair into `turnTimings`; the actions-owning assistant footer renders `endTime - startTime` as a localized `Ran for {duration}` label after the turn ends. The running `TurnStatus` clock uses the latest timing without an end, so reload preserves elapsed time, steering does not reset it, and a retry starts from its own logged boundary. Both readings use the same localized formatter and whole-second floor. The clock appears only after 15 seconds and is hidden from the live region so screen readers announce the activity status without replaying every tick.
 
-Time chrome (clock and run time) is hover-revealed: message containers opt in with a `data-time-hover-root` attribute, and `MessageIconActions.module.css` fades the time label in on container `:hover`/`:focus-within`. The rule is scoped to `@media (hover: hover)`, so touch devices keep the always-visible label; opacity (not display) keeps the layout stable. Copy/branch icons stay always visible.
+The event clock is no longer part of this row. Each durable message paints its own always-visible trailing clock ([decision](2026-08-20-web-always-visible-message-clock.md)). Settled run time, TTFT, and throughput stay on the IconActions row and remain visible when present. Copy/branch icons stay always visible.
 
 ## Alternatives considered
 
@@ -20,8 +20,8 @@ Time chrome (clock and run time) is hover-revealed: message containers opt in wi
 
 **Anchoring the live clock to component mount.** Simpler, but a mid-turn reload would restart the clock at zero and disagree with the eventual footer label. Mount time remains only the fallback when `turn/start` is outside the loaded window.
 
-**Hiding the whole actions row until hover.** Copy and branch are affordances worth discovering, and row-level show/hide risks layout shift. Only the passive time text is hover-gated.
+**Hiding the whole actions row until hover.** Copy and branch are affordances worth discovering, and row-level show/hide risks layout shift. The event clock now lives on the message row; only the passive metrics text shares this footer.
 
 ## Consequences
 
-Turn duration is visible live and after settlement without new session events, and both readings share exact log boundaries and formatting. The settled duration includes activity after the last assistant text up to `turn/end`; the label is absent when `turn/start` is outside the loaded window. Time chrome no longer competes with message content at rest, and the ticking clock remains visual rather than repeatedly announced.
+Turn duration is visible live and after settlement without new session events, and both readings share exact log boundaries and formatting. The settled duration includes activity after the last assistant text up to `turn/end`; the label is absent when `turn/start` is outside the loaded window. The ticking activity clock remains visual rather than repeatedly announced.

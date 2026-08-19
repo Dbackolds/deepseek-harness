@@ -1,9 +1,9 @@
-// Shared time-label helpers for user/assistant IconActions rows.
+// Shared time-label helpers for message clocks and turn metrics.
 
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 
-/** The date-template share of the conversation dictionary the clock consumes. */
-export type ClockTranslate = Translate<'clock.md' | 'clock.ymd'>
+/** The date-and-meridiem share of the conversation dictionary the clock consumes. */
+export type ClockTranslate = Translate<'clock.md' | 'clock.ymd' | 'clock.am' | 'clock.pm'>
 
 /** The elapsed-duration share of the conversation dictionary. */
 export type RunDurationTranslate = Translate<'duration.seconds' | 'duration.minutes'>
@@ -70,19 +70,22 @@ export function formatTokensPerSecond(tps: number): string {
 }
 
 /**
- * Compact local timestamp for message IconActions. Same calendar day →
- * `HH:mm`; earlier this year → the `clock.md` date template + clock; other
- * years → the `clock.ymd` template + clock. Pure: the date templates arrive
- * through the caller's locale seat.
+ * Compact local timestamp for a message row. Same calendar day → `h:mm` plus
+ * the locale meridiem; earlier this year → the `clock.md` date template +
+ * clock; other years → the `clock.ymd` template + clock. Pure: date and
+ * meridiem templates arrive through the caller's locale seat.
  * @param time - Unix epoch ms from the source session event.
- * @param t - translate seat supplying the `clock.md` / `clock.ymd` templates.
+ * @param t - translate seat supplying the date and meridiem templates.
  * @param now - Reference instant for the day/year cut (defaults to wall clock).
- * @returns Date-aware clock string (24-hour, zero-padded time).
+ * @returns Date-aware 12-hour clock string with a locale meridiem.
  */
 export function formatMessageClock(time: number, t: ClockTranslate, now: number = Date.now()): string {
   const d = new Date(time)
   const n = new Date(now)
-  const clock = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+  const hours24 = d.getHours()
+  const hour12 = hours24 % 12 === 0 ? 12 : hours24 % 12
+  const meridiem = hours24 < 12 ? t('clock.am') : t('clock.pm')
+  const clock = `${hour12}:${pad2(d.getMinutes())} ${meridiem}`
   if (
     d.getFullYear() === n.getFullYear()
     && d.getMonth() === n.getMonth()

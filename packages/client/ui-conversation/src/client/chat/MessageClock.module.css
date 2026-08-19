@@ -1,0 +1,11 @@
+/* Trailing clock on a message row: always visible, right-aligned, muted. */
+
+.clock {
+  flex: none;
+  align-self: flex-start;
+  padding-top: 2px;
+  font: var(--dsw-font-xs-13);
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}

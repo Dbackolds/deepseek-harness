@@ -1,6 +1,6 @@
 // MessageItem: simple chat nodes — user and consumed-steering bubbles
-// (right-aligned, with clock + copy IconActions; branch lives only under
-// assistant answers), pending steering (copy only), context injection,
+// (right-aligned, with a trailing clock and copy IconActions; branch lives
+// only under assistant answers), pending steering (copy only), context injection,
 // compaction marker, retry disclosure, and unknown-surface JSON rows.
 
 import { memo, useEffect, useMemo, useState } from 'react'
@@ -14,6 +14,7 @@ import { ImageGallery, type ImageLoader } from '@deepseek-ai/dsh-client-ui-attac
 import { messageImageLabels } from '../image-labels.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
+import { MessageClock } from './MessageClock.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import css from './MessageItem.module.css'
 
@@ -177,7 +178,7 @@ function projectUserText(text: string): ReactNode {
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, imageLoader, actions, pending = false, t,
+  content, imageLoader, actions, pending = false, time, t,
 }: {
   content: readonly unknown[]
   imageLoader: ImageLoader
@@ -185,19 +186,24 @@ function UserStyleBubble({
   actions?: (text: string) => ReactNode
   /** Whether this is the Host-authoritative pre-admission steering projection. */
   pending?: boolean
+  /** Unix epoch ms from the source session event; omitted for pending steering. */
+  time?: number | undefined
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const { text, images, rest } = contentParts(content)
   const truncated = (total: number): string => t('json.truncated', { total })
   const showBubble = text !== '' || rest.length > 0
   return (
-    <div className={css.userRow} data-pending-steering={pending || undefined} data-time-hover-root>
-      <div className={css.userStack}>
-        <ImageGallery images={images} load={imageLoader} align="end" labels={messageImageLabels(t)} />
-        {showBubble && <div className={css.bubble}>
-          {projectUserText(text)}
-          {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
-        </div>}
+    <div className={css.userRow} data-pending-steering={pending || undefined}>
+      <div className={css.userBand}>
+        <div className={css.userStack}>
+          <ImageGallery images={images} load={imageLoader} align="end" labels={messageImageLabels(t)} />
+          {showBubble && <div className={css.bubble}>
+            {projectUserText(text)}
+            {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
+          </div>}
+        </div>
+        <MessageClock time={time} t={t} />
       </div>
       {actions?.(text)}
     </div>
@@ -225,7 +231,6 @@ export function PendingSteeringBubble({ content, loadImage, t }: {
       actions={text => (
         <MessageIconActions
           text={text}
-          clock="start"
           className={css.actions}
           t={t}
         />
@@ -243,12 +248,11 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
     <UserStyleBubble
       content={data.content}
       imageLoader={loadImage}
+      time={data.time}
       t={t}
       actions={text => (
         <MessageIconActions
           text={text}
-          time={data.time}
-          clock="start"
           className={css.actions}
           t={t}
         />

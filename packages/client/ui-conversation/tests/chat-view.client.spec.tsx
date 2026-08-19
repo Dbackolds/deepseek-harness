@@ -474,6 +474,7 @@ describe('ChatView', () => {
     expect(view.queryByText('later')).toBeNull()
     const pendingBubble = view.getByText('interrupt now').closest('[data-pending-steering]')
     expect(pendingBubble).not.toBeNull()
+    expect((pendingBubble as HTMLElement).querySelector('time')).toBeNull()
     fireEvent.click(within(pendingBubble as HTMLElement).getByRole('button', { name: '复制' }))
     expect(writeText).toHaveBeenCalledWith('interrupt now')
     expect(within(pendingBubble as HTMLElement).queryByRole('button', { name: '在新对话中分支' })).toBeNull()
@@ -707,15 +708,15 @@ describe('ChatView', () => {
     expect(view.queryByText(/首 token|tok\/s/)).toBeNull()
   })
 
-  it('user and assistant message containers scope the hover-revealed time chrome', () => {
+  it('user and assistant message rows show their event clocks without hover', () => {
     const h = makeHarness({
       nodes: [user(1, 'hi'), assistant(2, 'answer')],
       turnTimings: new Map([[1, { startTime: 1_000, endTime: 2_000 }]]),
       turnEnds: new Map([[1, 2]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    // The user row and the settled assistant's Turn Tail each own one clock scope.
-    expect(view.container.querySelectorAll('[data-time-hover-root]')).toHaveLength(2)
+    expect(view.container.querySelectorAll('time')).toHaveLength(2)
+    expect(view.container.querySelector('[data-time-hover-root]')).toBeNull()
   })
 
   it('the run-time label is withheld when the turn start is outside the window', () => {

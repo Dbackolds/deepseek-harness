@@ -173,6 +173,8 @@ export const zh = {
   'json.truncated': '… 已截断，共 {total} 字符',
   'clock.md': '{m}月{d}日',
   'clock.ymd': '{y}年{m}月{d}日',
+  'clock.am': '上午',
+  'clock.pm': '下午',
 } satisfies Record<string, string>
 
 /** The conversation namespace key union. */
@@ -343,4 +345,6 @@ export const en = {
   'json.truncated': '… truncated, {total} characters total',
   'clock.md': '{m}/{d}',
   'clock.ymd': '{y}-{m}-{d}',
+  'clock.am': 'AM',
+  'clock.pm': 'PM',
 } satisfies Record<ConversationKey, string>

@@ -33,15 +33,13 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
     ? null
     : renderSlot('conversation.chat.assistant-actions', { messageId })
   return (
-    <div className={css.root} data-turn-tail={data.turn} data-time-hover-root>
+    <div className={css.root} data-turn-tail={data.turn}>
       {tail}
       <MessageIconActions
         text={assistantText(closing.blocks)}
-        time={closing.time}
         runMs={runMs}
         ttftMs={data.ttftMs}
         tokensPerSecond={data.tokensPerSecond}
-        clock="end"
         onBranch={() => { forkAt(closing.finalNode.seq) }}
         branchUnavailable={data.branchUnavailable || hasLaterChatNode}
         className={css.actions}

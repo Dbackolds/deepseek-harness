@@ -87,7 +87,7 @@ describe('MessageItem arms', () => {
       configurable: true,
       value: { writeText },
     })
-    // Same-day clock: construct "today at 14:24" so the label stays `HH:mm`.
+    // Same-day clock: construct "today at 14:24" so the label stays `h:mm` + meridiem.
     const now = new Date()
     const time = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 24).getTime()
     render(
@@ -98,7 +98,7 @@ describe('MessageItem arms', () => {
       }}
       />,
     )
-    expect(screen.getByText('14:24')).toBeTruthy()
+    expect(screen.getByText('2:24 下午')).toBeTruthy()
     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
     expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
@@ -899,16 +899,21 @@ describe('MessageItem arms', () => {
 describe('formatMessageClock', () => {
   const now = new Date(2026, 6, 29, 10, 0).getTime()
 
-  it('keeps HH:mm on the same calendar day', () => {
-    expect(formatMessageClock(new Date(2026, 6, 29, 14, 24).getTime(), t, now)).toBe('14:24')
+  it('keeps h:mm plus meridiem on the same calendar day', () => {
+    expect(formatMessageClock(new Date(2026, 6, 29, 14, 24).getTime(), t, now)).toBe('2:24 下午')
   })
 
   it('prefixes month and day across days in the same year', () => {
-    expect(formatMessageClock(new Date(2026, 0, 1, 14, 24).getTime(), t, now)).toBe('1月1日 14:24')
+    expect(formatMessageClock(new Date(2026, 0, 1, 14, 24).getTime(), t, now)).toBe('1月1日 2:24 下午')
   })
 
   it('prefixes year, month, and day across years', () => {
-    expect(formatMessageClock(new Date(2025, 11, 31, 9, 5).getTime(), t, now)).toBe('2025年12月31日 09:05')
+    expect(formatMessageClock(new Date(2025, 11, 31, 9, 5).getTime(), t, now)).toBe('2025年12月31日 9:05 上午')
+  })
+
+  it('maps midnight and noon onto 12 plus the matching meridiem', () => {
+    expect(formatMessageClock(new Date(2026, 6, 29, 0, 5).getTime(), t, now)).toBe('12:05 上午')
+    expect(formatMessageClock(new Date(2026, 6, 29, 12, 0).getTime(), t, now)).toBe('12:00 下午')
   })
 
   it('arms the next local midnight from an in-day instant', () => {
@@ -938,15 +943,32 @@ describe('useCalendarDay boundary refresh', () => {
       }}
       />,
     )
-    expect(screen.getByText('14:24')).toBeTruthy()
+    expect(screen.getByText('2:24 下午')).toBeTruthy()
     act(() => {
       vi.advanceTimersByTime(msUntilNextLocalMidnight(dayStart) + 1)
     })
-    expect(screen.getByText('7月29日 14:24')).toBeTruthy()
+    expect(screen.getByText('7月29日 2:24 下午')).toBeTruthy()
   })
 })
 
 describe('small branch tails', () => {
+  it('assistant narration paints an always-visible trailing event clock', () => {
+    const now = new Date()
+    const time = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 3, 14).getTime()
+    const view = render(
+      <AssistantMarkdown
+        t={t}
+        time={time}
+        blocks={[{ kind: 'text', text: 'settled answer' }]}
+        streaming={false}
+      />,
+    )
+    expect(view.getByText('settled answer')).toBeTruthy()
+    const clock = view.container.querySelector('time')
+    expect(clock?.textContent).toBe('3:14 上午')
+    expect(clock?.dateTime).toBe(new Date(time).toISOString())
+  })
+
   it('AssistantMarkdown single-line reasoning summary skips the newline cut', () => {
     const view = render(
       <AssistantMarkdown t={t} blocks={[{ kind: 'reasoning', text: 'one-liner' }]} streaming={false} />,

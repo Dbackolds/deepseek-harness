@@ -25,6 +25,7 @@ export const AssistantNodeView = memo(function AssistantNodeView({
       blocks={data.blocks}
       streaming={data.status === 'running'}
       interrupted={data.status === 'interrupted'}
+      time={data.time}
       loadImage={loadImage}
       mentions={mentions}
       t={t}

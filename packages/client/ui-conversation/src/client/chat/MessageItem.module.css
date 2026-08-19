@@ -8,6 +8,23 @@
   gap: 6px;
 }
 
+.userBand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.userBand > :first-child {
+  justify-self: end;
+}
+
+.userBand > time {
+  grid-column: 2;
+}
+
 .userStack {
   display: flex;
   flex-direction: column;
