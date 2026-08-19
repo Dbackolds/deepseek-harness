@@ -298,7 +298,7 @@ describe('automation service', () => {
     const run = await service.fireDue(rule.id, NOW)
     expect(run.source).toBe('schedule')
     expect(run.endedAt).toBeUndefined()
-    created[0]!.ctx.emit('agent/status', { status: 'idle' })
+    created[0]!.ctx.emit('agent/status', { agent: created[0]!, status: 'idle' })
     await vi.waitFor(() => {
       expect(service.listRuns(rule.id)[0]?.endedAt).toBe('2026-08-15T12:00:00.000Z')
     })
