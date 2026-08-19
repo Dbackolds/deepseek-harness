@@ -31,5 +31,22 @@ describe('SubagentDeliveryPolicy', () => {
     expect(policy.settlementBusy.getSnapshot()).toBe('queue')
     expect(policy.jobBusy.getSnapshot()).toBe('queue')
     expect(host.set).not.toHaveBeenCalled()
+    host.publish({
+      writable: true,
+      value: { settlementBusy: 'queue', reportBusy: 'steer', jobBusy: 'queue' },
+    })
+    expect(policy.settlementBusy.getSnapshot()).toBe('queue')
+    host.publish({
+      value: { settlementBusy: 'queue', reportBusy: 'queue', jobBusy: 'queue' },
+    })
+    expect(policy.reportBusy.getSnapshot()).toBe('queue')
+  })
+
+  it('stays process-local without a Host scope and writes every field', () => {
+    const policy = new SubagentDeliveryPolicy()
+    policy.set('settlementBusy', 'queue')
+    policy.set('jobBusy', 'queue')
+    expect(policy.settlementBusy.getSnapshot()).toBe('queue')
+    expect(policy.jobBusy.getSnapshot()).toBe('queue')
   })
 })

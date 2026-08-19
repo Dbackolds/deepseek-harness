@@ -83,6 +83,21 @@ describe('SubagentsSection', () => {
     expect(actions.setDelivery).toHaveBeenCalledWith(SETTLEMENT_BUSY_FIELD, 'queue')
   })
 
+  it('ignores a delivery choice when the Host scope is read-only', () => {
+    const actions = renderSection({}, { writable: false, settlementBusy: 'queue' })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Queue' })[0]!)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Steer' }))
+    expect(actions.setDelivery).not.toHaveBeenCalled()
+  })
+
+  it('closes an open delivery menu without writing', () => {
+    renderSection()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Steer' })[0]!)
+    expect(screen.getByRole('menuitem', { name: 'Queue' })).toBeTruthy()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('menuitem', { name: 'Queue' })).toBeNull()
+  })
+
   it('writes independent delivery fields', () => {
     const actions = renderSection()
     fireEvent.click(screen.getAllByRole('button', { name: 'Steer' })[1]!)

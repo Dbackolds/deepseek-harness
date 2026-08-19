@@ -65,8 +65,8 @@ export function DeliveryRow({
             className={css.selector}
             aria-haspopup="menu"
             aria-expanded={open}
-            disabled={!writable}
-            onClick={() => { if (writable) setOpen(current => !current) }}
+            aria-disabled={!writable}
+            onClick={() => { setOpen(current => !current) }}
           >
             {t(selectedLabel)}
             <IconChevronDownOutline14 className={css.chevron} />

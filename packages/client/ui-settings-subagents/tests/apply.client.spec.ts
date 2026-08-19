@@ -61,6 +61,8 @@ describe('ui-settings-subagents apply', () => {
     expect(typeof face.load).toBe('function')
     expect(typeof face.setDelivery).toBe('function')
     expect(face.hooks.settlementBusy.getSnapshot()).toBe('steer')
+    face.setDelivery('settlementBusy', 'queue')
+    expect(face.hooks.settlementBusy.getSnapshot()).toBe('queue')
     ctx.remote.$dispatch('settings/document-updated', ['user-subagents'])
     ctx.remote.$dispatch('settings/document-updated', ['other'])
     ctx.emit('connection/reset')
