@@ -701,6 +701,46 @@
       "source": "packages/session/session-title/src/index.ts"
     },
     {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlActivity",
+      "source": "packages/session-query/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlEntry",
+      "source": "packages/session-query/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlSearchRequest",
+      "source": "packages/session-query/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlStopReceipt",
+      "source": "packages/session-query/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlDeliveryMode",
+      "source": "packages/session-query/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlSendRequest",
+      "source": "packages/session-query/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlSendReceipt",
+      "source": "packages/session-query/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlErrorCode",
+      "source": "packages/session-query/session-control/src/config.ts"
+    },
+    {
       "doc": "docs/subsystems/session-reference.md",
       "symbol": "SessionReferenceInput",
       "source": "packages/context/session-reference/src/types.ts"

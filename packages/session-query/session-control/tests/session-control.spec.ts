@@ -1,0 +1,242 @@
+import { describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
+import SessionControl, {
+  DEFAULT_SEARCH_LIMIT,
+  SessionControlError,
+  type SessionControlErrorCode,
+} from '@deepseek-ai/dsh-session-control'
+
+class TestSessionQueryEngine extends SessionQueryEngine {
+  override searchSessions(
+    ..._args: Parameters<SessionQueryEngine['searchSessions']>
+  ): ReturnType<SessionQueryEngine['searchSessions']> {
+    return Promise.resolve({ items: [] })
+  }
+
+  override searchEvents(
+    request: Parameters<SessionQueryEngine['searchEvents']>[0],
+  ): ReturnType<SessionQueryEngine['searchEvents']> {
+    return this.readSurface(request.sessionId).then(surface => ({
+      session: surface.session,
+      items: [],
+    }))
+  }
+}
+
+async function harness(config?: { searchLimit?: number }): Promise<Context> {
+  const ctx = new Context()
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(AgentRegistry)
+  await ctx.plugin(TestSessionQueryEngine)
+  await ctx.plugin(SessionControl, config ?? {})
+  return ctx
+}
+
+function createNamed(
+  ctx: Context,
+  id: string,
+  title: string,
+  extra: { cwd?: string; origin?: 'subagent' | 'automation'; parentSession?: SessionId } = {},
+): Session {
+  const session = ctx.sessions.create(SessionId(id), { meta: extra })
+  session.append('session/title', { title, messageSeqs: [], source: { kind: 'user' } })
+  return session
+}
+
+function stubAgent(session: Session, status: 'idle' | 'running' = 'idle'): Agent {
+  return {
+    id: session.id,
+    session,
+    status,
+    cancel: vi.fn(),
+    followup: vi.fn(),
+    steer: vi.fn(),
+  } as unknown as Agent
+}
+
+function expectCode(code: SessionControlErrorCode): Error {
+  return expect.objectContaining({ code, name: 'SessionControlError' }) as Error
+}
+
+describe('SessionControl', () => {
+  it('rejects a non-positive searchLimit at load', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(TestSessionQueryEngine)
+    await expect(ctx.plugin(SessionControl, { searchLimit: 0 })).rejects.toEqual(
+      expectCode('SESSION_CONTROL_INVALID_CONFIG'),
+    )
+  })
+
+  it('lists every logical session with live driver status', async () => {
+    const ctx = await harness()
+    const live = createNamed(ctx, 'live', 'Live work', { cwd: '/proj' })
+    createNamed(ctx, 'cold', 'Cold archive', { cwd: '/other', origin: 'automation' })
+    ctx.agents.register(stubAgent(live, 'running'))
+
+    const rows = await ctx.sessionControl.search()
+    const byId = Object.fromEntries(rows.map(row => [row.sessionId, row]))
+
+    expect(rows).toHaveLength(2)
+    expect(byId['live']).toMatchObject({
+      title: 'Live work',
+      activity: 'running',
+      cwd: '/proj',
+      live: true,
+      persisted: false,
+    })
+    expect(byId['cold']).toMatchObject({
+      title: 'Cold archive',
+      activity: 'ready',
+      origin: 'automation',
+      live: true,
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('filters by id, cwd, and title and honors the result cap', async () => {
+    const ctx = await harness({ searchLimit: 1 })
+    createNamed(ctx, 'alpha', 'Design notes', { cwd: '/design' })
+    createNamed(ctx, 'beta', 'Build log', { cwd: '/build' })
+
+    await expect(ctx.sessionControl.search({ query: 'design' })).resolves.toEqual([
+      expect.objectContaining({ sessionId: SessionId('alpha'), title: 'Design notes' }),
+    ])
+    await expect(ctx.sessionControl.search({ query: 'BETA' })).resolves.toEqual([
+      expect.objectContaining({ sessionId: SessionId('beta') }),
+    ])
+    await expect(ctx.sessionControl.search()).resolves.toHaveLength(1)
+    await expect(ctx.sessionControl.search({ limit: 0 })).rejects.toEqual(
+      expectCode('SESSION_CONTROL_INVALID_REQUEST'),
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it('falls back to the session id when the title observation fails', async () => {
+    const ctx = await harness()
+    const session = ctx.sessions.create(SessionId('untitled'))
+    const spy = vi.spyOn(ctx.sessionQuery, 'readTitleSnapshots').mockResolvedValue([
+      { sessionId: session.id, status: 'rejected', reason: new Error('boom') },
+    ])
+
+    await expect(ctx.sessionControl.get(session.id)).resolves.toMatchObject({
+      sessionId: session.id,
+      title: session.id,
+      activity: 'ready',
+    })
+    spy.mockRestore()
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects an unknown identity on get and stop', async () => {
+    const ctx = await harness()
+    await expect(ctx.sessionControl.get(SessionId('missing'))).rejects.toEqual(
+      expectCode('SESSION_CONTROL_SESSION_NOT_FOUND'),
+    )
+    await expect(ctx.sessionControl.stop(SessionId('missing'))).rejects.toEqual(
+      expectCode('SESSION_CONTROL_SESSION_NOT_FOUND'),
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it('cancels a live Agent and treats a session-only identity as a no-op', async () => {
+    const ctx = await harness()
+    const live = createNamed(ctx, 'live', 'Live')
+    const attached = createNamed(ctx, 'attached', 'Attached')
+    const agent = stubAgent(live, 'running')
+    ctx.agents.register(agent)
+
+    await expect(ctx.sessionControl.stop(live.id)).resolves.toEqual({ accepted: true, attached: true })
+    expect(agent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true })
+    await expect(ctx.sessionControl.stop(attached.id)).resolves.toEqual({ accepted: true, attached: false })
+    await ctx.fiber.dispose()
+  })
+
+  it('delivers queue and steer messages to a live Agent', async () => {
+    const ctx = await harness()
+    const session = createNamed(ctx, 'live', 'Live')
+    const agent = stubAgent(session)
+    ctx.agents.register(agent)
+
+    const queued = await ctx.sessionControl.send({ sessionId: session.id, message: 'hello' })
+    const steered = await ctx.sessionControl.send({ sessionId: session.id, message: 'now', mode: 'steer' })
+
+    expect(queued.messageId).toEqual(expect.any(String))
+    expect(agent.followup).toHaveBeenCalledWith(expect.objectContaining({
+      content: [{ type: 'text', text: 'hello' }],
+      source: { kind: 'plugin', plugin: 'session-control' },
+    }))
+    expect(agent.steer).toHaveBeenCalledWith(expect.objectContaining({
+      content: [{ type: 'text', text: 'now' }],
+    }))
+    expect(steered.messageId).not.toBe(queued.messageId)
+    await ctx.fiber.dispose()
+  })
+
+  it('refuses to send to a storage-only or session-only identity', async () => {
+    const ctx = await harness()
+    const attached = createNamed(ctx, 'attached', 'Attached')
+    await expect(ctx.sessionControl.send({ sessionId: attached.id, message: 'hi' })).rejects.toEqual(
+      expectCode('SESSION_CONTROL_NOT_ATTACHED'),
+    )
+    await expect(ctx.sessionControl.send({ sessionId: SessionId('cold'), message: 'hi' })).rejects.toEqual(
+      expectCode('SESSION_CONTROL_SESSION_NOT_FOUND'),
+    )
+    await expect(ctx.sessionControl.send({ sessionId: attached.id, message: '' })).rejects.toEqual(
+      expectCode('SESSION_CONTROL_INVALID_REQUEST'),
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it('maps a throwing followup to SESSION_CONTROL_DELIVERY_FAILED', async () => {
+    const ctx = await harness()
+    const session = createNamed(ctx, 'live', 'Live')
+    const agent = stubAgent(session)
+    agent.followup = vi.fn(() => {
+      throw new Error('inbox closed')
+    })
+    ctx.agents.register(agent)
+
+    await expect(ctx.sessionControl.send({ sessionId: session.id, message: 'hi' })).rejects.toEqual(
+      expectCode('SESSION_CONTROL_DELIVERY_FAILED'),
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it('reports SESSION_CONTROL_RESUME_REQUIRED for a persisted storage-only identity', async () => {
+    const ctx = await harness()
+    const sessionId = SessionId('persisted-cold')
+    vi.spyOn(ctx.sessionQuery, 'filterSessions').mockResolvedValue([
+      {
+        header: { version: 0, id: sessionId, createdAt: 1 },
+        live: false,
+        persisted: true,
+      },
+    ])
+
+    await expect(ctx.sessionControl.send({ sessionId, message: 'hi' })).rejects.toEqual(
+      expectCode('SESSION_CONTROL_RESUME_REQUIRED'),
+    )
+    await expect(ctx.sessionControl.stop(sessionId)).resolves.toEqual({ accepted: true, attached: false })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a cancelled search before listing', async () => {
+    const ctx = await harness()
+    const signal = AbortSignal.abort('stop')
+    await expect(ctx.sessionControl.search({}, signal)).rejects.toEqual(
+      expectCode('SESSION_CONTROL_CANCELLED'),
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it('exports the default search limit', () => {
+    expect(DEFAULT_SEARCH_LIMIT).toBe(50)
+    expect(new SessionControlError('x', 'SESSION_CONTROL_CANCELLED').name).toBe('SessionControlError')
+  })
+})

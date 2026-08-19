@@ -130,6 +130,12 @@
         path: ':memory:'
         openAt: never
 
+    # Trusted in-process directory over every logical session: search with
+    # live driver status, stop an attached turn, deliver a later message.
+    # It does not resume cold sessions or register a model-facing tool.
+    - id: session-control
+      name: '@deepseek-ai/dsh-session-control'
+
     # Shared projection registry: subagent catalog identity (mode/label) folds
     # through its registered units, so the `list_agents` surface below fails
     # loud without it; web layers reuse this same mount for list rows.

@@ -235,8 +235,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Session reads, traces, filters, and search',
     mode: 'seam',
     implementations: ['session-query-sqlite'],
-    consumers: ['session-reference', 'tool-session-query'],
+    consumers: ['session-reference', 'session-control', 'tool-session-query'],
     note: 'The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering.',
+  },
+  {
+    key: 'sessionControl',
+    pkg: 'session-control',
+    title: 'Trusted session directory, stop, and delivery',
+    mode: 'core',
+    note: 'Searches every logical session with live driver status, stops an attached turn, and delivers a later message to a live Agent without taking a resume handle.',
   },
   {
     key: 'sessionReferenceResolver',

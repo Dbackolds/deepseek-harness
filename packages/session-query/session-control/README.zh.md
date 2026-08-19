@@ -1,0 +1,40 @@
+# `@deepseek-ai/dsh-session-control`
+
+[English](README.md) | 中文
+
+`ctx.sessionControl` 是覆盖全部逻辑会话的可信进程内目录。它按实时驱动状态搜索身份、停止已附着轮次，并向在线 Agent 投递后续用户角色消息。它消费 `ctx.sessionQuery`、`ctx.agents` 和 `ctx.sessions`。宿主与插件可选择挂载该服务；它不注册面向模型的工具。
+
+## 公共 API
+
+- `search(request?, signal?)` 从 `ctx.sessionQuery.listSessions()` 列出在线优先语料，为每行附加最新标题与在线 Agent 状态，并以不区分大小写的子串过滤会话 id、cwd 和标题。空查询按最新优先返回最多 `limit` 条。不搜索消息正文。
+- `get(sessionId, signal?)` 返回一行目录。缺失身份以 `SESSION_CONTROL_SESSION_NOT_FOUND` 失败。
+- `stop(sessionId, signal?)` 以 `keepInbox: true` 取消在线 Agent 的当前轮次。已知身份若没有在线 Agent，则是被接受的空操作。该调用从不恢复冷会话。
+- `send(request, signal?)` 通过 `followup()`（`queue`）或 `steer()` 投递一块非空文本。必须有在线 Agent。已知但仅存于存储的身份以 `SESSION_CONTROL_RESUME_REQUIRED` 失败，而不会调用 `ctx.agents.resume()` 拿走调用方或 subagent continuation manager 必须持有的 `AgentHandle`。未知身份以 `SESSION_CONTROL_SESSION_NOT_FOUND` 失败。
+
+## 活动状态
+
+| 值 | 含义 |
+|---|---|
+| `running` | 在线 Agent 有活动驱动。 |
+| `idle` | 在线 Agent 已附着且处于轮次之间。 |
+| `ready` | 身份存在于逻辑语料中，且没有在线 Agent。 |
+
+## 配置
+
+| 键 | 默认值 | 约定 |
+|---|---:|---|
+| `searchLimit` | `50` | 请求省略 `limit` 时 `search()` 的默认结果上限；必须是正安全整数。 |
+
+## Model Experience
+
+None, as this trusted directory returns cloned session records only to its callers and registers no model-facing prompt, schema, tool, or message.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
+
+## Known Limitations and Deferred Work
+
+- **无调用方授权** — 这是可信的上下文范围基础设施；模型工具或 UI 必须约束调用方可检查或变更的会话。
+- **无冷恢复** — `send()` 拒绝仅存于存储的身份，而不是调用 `ctx.agents.resume()`，因为 resume 返回的 `AgentHandle` 必须由 continuation manager 或 Host resolver 持有。
+- **无正文发现** — 搜索检查 id、cwd 和折叠后的标题。全文正文搜索仍属于 `ctx.sessionQuery` 及其可选模型消费方。
