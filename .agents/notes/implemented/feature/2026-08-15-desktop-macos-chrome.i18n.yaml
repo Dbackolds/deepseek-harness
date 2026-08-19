@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-desktop-macos-chrome.md
-2026-08-15-desktop-macos-chrome.md: 5ad32ffcea4698ad97b61ec3f6cab3104f75f62f
-2026-08-15-desktop-macos-chrome.zh.md: 3a74f90b68802f4f7fc158d51f5a6bcc73b491ee
+2026-08-15-desktop-macos-chrome.md: 6a489effae553be49578809491ab07379ec11c14
+2026-08-15-desktop-macos-chrome.zh.md: 870127480955eede86e0c587928a1beaf706f90b

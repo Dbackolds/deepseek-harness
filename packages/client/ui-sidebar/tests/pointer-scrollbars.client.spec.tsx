@@ -7,6 +7,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SidebarRootComponentProps, SidebarSectionOwnerProps } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
 import { en } from '../src/client/locales.ts'
@@ -16,8 +17,16 @@ const COLUMN_WIDTH = 280
 const COLUMN_HEIGHT = 600
 
 const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
-/** The shell never reads the global hooks; the props share carries them regardless. */
-const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
+const neverWorkspaces = (() => { throw new Error('shell must not read workspaces') }) as never
+const emptySessions: SidebarRootComponentProps['useSessions'] = select => select({
+  ids: [],
+  byId: {} as SessionListState['byId'],
+  current: undefined,
+  phase: 'ready',
+  subagentsByParent: {},
+  jobsBySession: {},
+  currentAddress: undefined,
+})
 
 afterEach(() => {
   cleanup()
@@ -32,7 +41,7 @@ function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
   const view = render(
     <SidebarRoot
       collapsed={false} width={300}
-      useSessions={neverHook} useWorkspaces={neverHook}
+      useSessions={emptySessions} useWorkspaces={neverWorkspaces}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((_key: string, owner: SidebarSectionOwnerProps) =>
         <div data-testid="region" data-wide={owner.wide} />) as SidebarRootComponentProps['renderSlot']}

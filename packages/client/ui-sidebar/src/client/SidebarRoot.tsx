@@ -11,6 +11,10 @@
  * control under New Session is `sidebar.automation`. The shell hands them
  * the wide flag (plus an expand request callback for the browser).
  *
+ * The wordmark whale (expanded) and rail fish (collapsed) carry a green count
+ * of unread Completed reminders from `useSessions`. A rising count asks the
+ * desktop Host, when present, to bounce the macOS dock icon.
+ *
  * The column also owns whether the scroll regions nested in it draw a
  * scrollbar at all: the shell tracks the pointer and rebinds ui-theme's
  * scrollbar indirection away while it is elsewhere, so a list the user is not
@@ -24,6 +28,8 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SidebarRootComponentProps } from './contract/slots.ts'
+import { unreadCompletedBadgeLabel, unreadCompletedCount } from './completed-badge.ts'
+import { notifyDesktopCompletedAttention } from './desktop-attention.ts'
 import css from './SidebarRoot.module.css'
 
 /** Wide-content unmount delay; matches the 150ms wide-content fade-out. */
@@ -45,11 +51,28 @@ const SCROLLBAR_LINGER_MS = 2000
 export function SidebarRoot({
   collapsed,
   width,
+  useSessions,
   startSession,
   toggleSidebar,
   t,
   renderSlot,
 }: SidebarRootComponentProps) {
+  const unreadCompleted = useSessions(state => unreadCompletedCount(state.byId))
+  const previousUnread = useRef(unreadCompleted)
+  useEffect(() => {
+    if (unreadCompleted > previousUnread.current) notifyDesktopCompletedAttention()
+    previousUnread.current = unreadCompleted
+  }, [unreadCompleted])
+  const badge = unreadCompleted > 0
+    ? (
+      <span className={css.completedBadge} aria-hidden="true">
+        {unreadCompletedBadgeLabel(unreadCompleted)}
+      </span>
+    )
+    : null
+  const badgeAria = unreadCompleted > 0
+    ? t('completed.unread.aria', { n: unreadCompleted })
+    : undefined
   // Wide content stays mounted while the collapse animates (fading via
   // .collapsed .wide), unmounts at settle, and remounts right away on expand.
   const [settled, setSettled] = useState(collapsed)
@@ -136,9 +159,13 @@ export function SidebarRoot({
             type="button"
             className={clsx(css.brand, css.wide)}
             aria-label={t('session.new.label')}
+            {...badgeAria === undefined ? {} : { 'aria-describedby': 'dsh-sidebar-completed-unread' }}
             onClick={() => { startSession() }}
           >
-            <BrandWordmark />
+            <span className={css.brandMark}>
+              <BrandWordmark />
+              {badge}
+            </span>
           </button>
         )}
         {/* Rail resting state is the whale mark; hovering swaps in the panel
@@ -148,13 +175,26 @@ export function SidebarRoot({
             type="button"
             className={clsx(css.iconButton, css.toggle)}
             aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
+            {...!wide && badgeAria !== undefined
+              ? { 'aria-describedby': 'dsh-sidebar-completed-unread' }
+              : {}}
             onClick={() => { toggleSidebar() }}
           >
-            {!wide && <FishLogo className={css.railFish} size={24} />}
+            {!wide && (
+              <span className={css.railMark}>
+                <FishLogo className={css.railFish} size={24} />
+                {badge}
+              </span>
+            )}
             {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
             <IconPanelLeftOutline16 className={css.panelIcon} size={wide ? 16 : 18} />
           </button>
         </Tooltip>
+        {badgeAria !== undefined && (
+          <span id="dsh-sidebar-completed-unread" className={css.srOnly} role="status" aria-live="polite">
+            {badgeAria}
+          </span>
+        )}
       </div>
 
       {/* Expanded, the button carries its own label — tooltip only on the rail. */}

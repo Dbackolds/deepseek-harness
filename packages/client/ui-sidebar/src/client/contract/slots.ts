@@ -1,7 +1,8 @@
 /**
  * Sidebar slot contract: the registrant-side props composition for the
  * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
- * owns column geometry (fold state machine, brand row, New Session);
+ * owns column geometry (fold state machine, brand row, New Session) and the
+ * unread Completed count on the brand whale;
  * the seat under New Session is `sidebar.automation`; everything between
  * that seat and the list bottom is the `sidebar.workspaces` registrant's
  * (ui-workspace), and the foot is the `sidebar.settings` registrant's

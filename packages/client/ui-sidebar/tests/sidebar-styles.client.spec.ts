@@ -64,4 +64,15 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .newSession')?.get('align-self')).toBe('flex-start')
     expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
   })
+
+  it('pins the unread Completed badge on the whale with the success fill', () => {
+    expect(declarations('.completedBadge')?.get('position')).toBe('absolute')
+    expect(declarations('.completedBadge')?.get('background')).toBe('var(--dsw-alias-state-success-primary)')
+    expect(declarations('.completedBadge')?.get('border-radius')).toBe('999px')
+    expect(declarations('.completedBadge')?.get('top')).toBe('0')
+    expect(declarations('.brandMark')?.get('position')).toBe('relative')
+    expect(declarations('.railMark')?.get('position')).toBe('relative')
+    expect(declarations('.logoRow')?.get('overflow-x')).toBe('hidden')
+    expect(declarations('.collapsed .toggle:hover .completedBadge')?.get('display')).toBe('none')
+  })
 })

@@ -6,6 +6,7 @@ export const zh = {
   'session.new.label': '新建会话',
   'toggle.open': '打开侧边栏',
   'toggle.collapse': '收起侧边栏',
+  'completed.unread.aria': '{n} 个未读已完成任务',
 } satisfies Record<string, string>
 
 /** The sidebar namespace key union. */
@@ -17,4 +18,5 @@ export const en = {
   'session.new.label': 'New session',
   'toggle.open': 'Open sidebar',
   'toggle.collapse': 'Collapse sidebar',
+  'completed.unread.aria': '{n} unread completed tasks',
 } satisfies Record<SidebarKey, string>

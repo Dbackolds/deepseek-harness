@@ -7,6 +7,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell } from 'electron'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { bounceDockForCompleted } from './dock-attention.ts'
 import { startWebHost, stopWebHost, type StartedHost } from './host.ts'
 import { APP_USER_MODEL_ID, desktopIconPath } from './icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from './shortcut.ts'
@@ -243,6 +244,9 @@ const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
+  ipcMain.on('dsh-desktop:notify-completed', () => {
+    bounceDockForCompleted(IS_MAC ? app.dock : undefined)
+  })
   app.name = WINDOW_TITLE
   installApplicationMenu()
 

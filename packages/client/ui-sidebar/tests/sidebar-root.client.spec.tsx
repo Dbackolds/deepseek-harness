@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
   SidebarAutomationOwnerProps, SidebarFooterActionOwnerProps, SidebarRootComponentProps,
   SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
@@ -10,29 +11,57 @@ import { en } from '../src/client/locales.ts'
 
 // English-dictionary translate stub: the shell renders the same copy the
 // assertions below query by accessible name.
-const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
+const t: SidebarRootComponentProps['t'] = (key, params) => {
+  const template = (en as Record<string, string>)[key] ?? key
+  if (params === undefined) return template
+  let text = template
+  for (const [name, value] of Object.entries(params)) {
+    text = text.replaceAll('{' + name + '}', String(value))
+  }
+  return text
+}
 
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
-// The shell never reads the global hooks itself, but they ride the standard
-// props share; stub them as never-called functions.
-const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
+const neverWorkspaces = (() => { throw new Error('shell must not read workspaces') }) as never
 
-function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
+function sessionsHook(completedIds: readonly string[] = []): SidebarRootComponentProps['useSessions'] {
+  const byId = Object.fromEntries(completedIds.map(id => [id, { completed: true }])) as SessionListState['byId']
+  return select => select({
+    ids: completedIds as SessionListState['ids'],
+    byId,
+    current: undefined,
+    phase: 'ready',
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
+  })
+}
+
+function mountShell({
+  collapsed = false,
+  width = 300,
+  completedIds = [],
+}: {
+  collapsed?: boolean
+  width?: number
+  completedIds?: readonly string[]
+} = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
   let automationOwner: SidebarAutomationOwnerProps | undefined
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
-  let current = { collapsed, width }
+  let current = { collapsed, width, completedIds }
   const root = () => (
     <SidebarRoot
       collapsed={current.collapsed} width={current.width}
-      useSessions={neverHook} useWorkspaces={neverHook}
+      useSessions={sessionsHook(current.completedIds)} useWorkspaces={neverWorkspaces}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
@@ -125,5 +154,59 @@ describe('SidebarRoot shell', () => {
     const b = mountShell({ collapsed: true })
     expect(b.regionOwner().wide).toBe(false)
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
+  })
+
+  it('pins a green unread Completed count on the wordmark whale', () => {
+    mountShell({ completedIds: ['a', 'b'] })
+    expect(screen.getByText('2')).toBeTruthy()
+    expect(screen.getByText('2 unread completed tasks')).toBeTruthy()
+  })
+
+  it('keeps the unread count on the rail fish after collapse settles', () => {
+    vi.useFakeTimers()
+    const b = mountShell({ completedIds: ['a'] })
+    b.rerender({ collapsed: true })
+    vi.advanceTimersByTime(200)
+    b.rerender({})
+    expect(screen.getByText('1')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
+  })
+
+  it('collapses a three-digit unread count to 99+', () => {
+    const ids = Array.from({ length: 100 }, (_, i) => 's' + String(i))
+    mountShell({ completedIds: ids })
+    expect(screen.getByText('99+')).toBeTruthy()
+    expect(screen.getByText('100 unread completed tasks')).toBeTruthy()
+  })
+
+  it('does not ask the desktop Host to bounce for reminders already present at mount', () => {
+    const notifyCompleted = vi.fn()
+    vi.stubGlobal('dshDesktop', { notifyCompleted })
+    mountShell({ completedIds: ['done-1'] })
+    expect(notifyCompleted).not.toHaveBeenCalled()
+  })
+
+  it('asks the desktop Host to bounce when a new Completed reminder arrives', () => {
+    const notifyCompleted = vi.fn()
+    vi.stubGlobal('dshDesktop', { notifyCompleted })
+    const b = mountShell()
+    expect(notifyCompleted).not.toHaveBeenCalled()
+    b.rerender({ completedIds: ['done-1'] })
+    expect(notifyCompleted).toHaveBeenCalledOnce()
+    b.rerender({ completedIds: ['done-1'] })
+    expect(notifyCompleted).toHaveBeenCalledOnce()
+    b.rerender({ completedIds: ['done-1', 'done-2'] })
+    expect(notifyCompleted).toHaveBeenCalledTimes(2)
+    b.rerender({ completedIds: [] })
+    expect(notifyCompleted).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the in-page badge when the desktop Host rejects the bounce', () => {
+    vi.stubGlobal('dshDesktop', {
+      notifyCompleted: () => { throw new Error('dock unavailable') },
+    })
+    const b = mountShell()
+    expect(() => { b.rerender({ completedIds: ['done-1'] }) }).not.toThrow()
+    expect(screen.getByText('1')).toBeTruthy()
   })
 })

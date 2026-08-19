@@ -2,11 +2,13 @@
 
 English | [中文](README.zh.md)
 
-Sidebar shell plugin: the wordmark, New Session action, the `sidebar.automation` seat under it, layout-owned collapse control, scroll-aware region seat, and bottom-pinned Settings seat. [ui-automation](../ui-automation/README.md) occupies the Automation control; [ui-workspace](../ui-workspace/README.md) owns the Workspace and Session browser rendered into `sidebar.workspaces`; this package neither derives its rows nor owns its view preferences. Collapse into the layout-owned 56px rail remains presentation-local. Contract: the [slot system standard](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md).
+Sidebar shell plugin: the wordmark, the unread Completed count on the whale, New Session action, the `sidebar.automation` seat under it, layout-owned collapse control, scroll-aware region seat, and bottom-pinned Settings seat. [ui-automation](../ui-automation/README.md) occupies the Automation control; [ui-workspace](../ui-workspace/README.md) owns the Workspace and Session browser rendered into `sidebar.workspaces`; this package neither derives its rows nor owns its view preferences. Collapse into the layout-owned 56px rail remains presentation-local. Contract: the [slot system standard](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md).
 
 New Session starts the runtime's page-local frontend Session Intent. The runtime targets the explicit Workspace used by a scoped action, otherwise the current Session's Workspace, otherwise the most recently active Workspace; when none exists it clears into the blank New Session page. Workspace-specific controls and the shared picker belong to ui-workspace.
 
-`SidebarRootComponentProps` composes the layout owner share, the global `useSessions` and `useWorkspaces` hooks, the declared `sidebar.automation`, `sidebar.workspaces` and `sidebar.settings` child slots, and injected `startSession` plus sidebar-toggle callbacks. There is no plugin store.
+`SidebarRootComponentProps` composes the layout owner share, the global `useSessions` and `useWorkspaces` hooks, the declared `sidebar.automation`, `sidebar.workspaces` and `sidebar.settings` child slots, and injected `startSession` plus sidebar-toggle callbacks. The shell reads `useSessions` only for the unread Completed count on the brand whale. There is no plugin store.
+
+The green badge sits on the wordmark whale when the sidebar is wide and on the rail fish when it is collapsed. The number is how many listed Sessions still carry the browser-local Completed reminder; 100 or more renders as `99+`. A rising count calls `window.dshDesktop.notifyCompleted` when the desktop Host injected that preload method; a browser tab has no such method and the call is a no-op.
 
 During a live collapse, the shell holds the expanded content at its current width while it fades out for 150ms. The upper controls—the shell toggle, New Session, the Automation seat, plus add and search rendered through `sidebar.workspaces`—then share one 150ms fade and 49px leftward translation into the 56px rail, ending with the layout's 300ms column slide; every 36px control box follows the same path to the rail's 10px left inset. The bottom-pinned `sidebar.settings` control shares the fade timing but has no horizontal translation. A page that starts collapsed renders the rail statically, and reduced-motion mode disables both transitions.
 
@@ -26,6 +28,5 @@ None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
 
-- **Session state-dot rendering is owned by [ui-workspace](../ui-workspace/README.md)** — no done/error notification sources are available.
 - **Workspace browser behavior is composition-owned** — grouping, ordering, search, and row state belong to [ui-workspace](../ui-workspace/README.md), not this shell.
-- **"New task completed" unread marking is local viewing state** — completion-time > last-seen never reaches the host.
+- **The unread Completed count is local viewing state** — `SessionManager` stores the reminder in this browser; completion-time > last-seen never reaches the host. The desktop dock bounce is macOS-only and a no-op in a plain browser tab.

@@ -73,6 +73,17 @@ describe('sidebar shell snapshots', () => {
     await runtime.dispose()
   })
 
+  it('pins the unread Completed count on the wordmark whale', async () => {
+    const { runtime } = await bench()
+    await runtime.sessions.add({ id: 'done-a', summary: { completed: true } }, { current: false })
+    await runtime.sessions.add({ id: 'done-b', summary: { completed: true } }, { current: false })
+    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
+    expect(slot.view.getByText('2')).toBeTruthy()
+    expect(slot.view.getByText('2 个未读已完成任务')).toBeTruthy()
+    expect(slot.container).toMatchSnapshot()
+    await runtime.dispose()
+  })
+
   it('a locale switch refreshes mounted copy without re-registration', async () => {
     const { runtime, locale } = await bench()
     const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
