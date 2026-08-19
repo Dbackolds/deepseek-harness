@@ -2,7 +2,7 @@
  * Model-facing `job_output`, `job_list`, and `job_kill` tools over
  * `ctx.jobs`. Loading the plugin attaches the controller required by
  * producers. It also delivers unreported completions to the owning agent:
- * injected into a busy owner's next step, or opening a turn on an idle one
+ * steered or queued onto a busy owner, or opening a turn on an idle one
  * under the default `wakeup` delivery, bounded per owner.
  * @module @deepseek-ai/dsh-tool-jobs
  */
@@ -15,8 +15,12 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import type { JobSnapshot } from '@deepseek-ai/dsh-jobs'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+
+/** Host namespace whose `jobBusy` field selects busy-owner completion placement. */
+const SUBAGENT_DELIVERY_NS = 'subagent-delivery' as SettingsNamespace
 
 export const name = 'tool-jobs'
 export const inject = ['tools', 'jobs', 'systemPrompt']
@@ -24,9 +28,21 @@ export const inject = ['tools', 'jobs', 'systemPrompt']
 /**
  * How an unreported completion reaches an owner that is already idle: `wakeup`
  * opens a turn for it, `quiet` leaves it pending until something else wakes the
- * owner. A busy owner is injected either way.
+ * owner. A busy owner follows Host `subagent-delivery.jobBusy` either way.
  */
 export type CompletionDelivery = 'quiet' | 'wakeup'
+
+/**
+ * Busy-owner placement from Host settings at send time.
+ * Missing settings, an unregistered section, or any value other than `queue`
+ * is `steer`, including benches that never load a settings provider.
+ * @param ctx - plugin context that may carry `settings`.
+ * @returns `queue` only when that field is stored; `steer` otherwise.
+ */
+function readJobBusy(ctx: Context): 'steer' | 'queue' {
+  const section = ctx.get('settings')?.get(SUBAGENT_DELIVERY_NS) as { jobBusy?: unknown } | undefined
+  return section?.jobBusy === 'queue' ? 'queue' : 'steer'
+}
 
 /** Configures bounded `job_output` waits and completion-notice delivery. */
 export interface Config {
@@ -267,11 +283,12 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   // Use the exact lifecycle owner; reusable ids could resolve to a replacement.
-  // A busy owner is injected: the notice waits in its next-step inbox, which
-  // the turn cannot close over, so jobs settling together cost one step. An
-  // idle owner is woken instead, because an unclaimed notice is a completion
-  // the model never learns about. Either way, disposal before the claim
-  // discards it with the owner, and teardown settlements arrive `reported`.
+  // A busy owner follows Host `subagent-delivery.jobBusy` at send time: `steer`
+  // (default) admits the notice at the nearest later step; `queue` opens a later
+  // turn. An idle owner is woken instead, because an unclaimed notice is a
+  // completion the model never learns about. Quiet delivery only suppresses
+  // that idle wakeup. Either way, disposal before the claim discards it with
+  // the owner, and teardown settlements arrive `reported`.
   //
   // The registry routes each settlement to the listeners its owner's scope
   // chain reaches, so a mount under one preset never sees another preset's
@@ -291,12 +308,20 @@ export function apply(ctx: Context, config: Config): void {
       },
     })
     const spent = spentWakes.get(owner) ?? 0
-    if (delivery === 'wakeup' && owner.status === 'idle' && spent < wakeBudget) {
-      spentWakes.set(owner, spent + 1)
+    if (owner.status === 'idle') {
+      if (delivery === 'wakeup' && spent < wakeBudget) {
+        spentWakes.set(owner, spent + 1)
+        owner.followup(message)
+        return
+      }
+      owner.inject(message)
+      return
+    }
+    if (readJobBusy(ctx) === 'queue') {
       owner.followup(message)
       return
     }
-    owner.inject(message)
+    owner.steer(message)
   })
 
   ctx.tools.register(defineTool({

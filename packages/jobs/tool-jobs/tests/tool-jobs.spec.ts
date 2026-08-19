@@ -33,7 +33,8 @@ async function setup(config: ToolTasks.Config = {}) {
 interface FakeDelivery {
   inject?: (...args: unknown[]) => void
   followup?: (...args: unknown[]) => void
-  /** Defaults to `running`, the lane that never wakes, so notice-content tests pin one lane. */
+  steer?: (...args: unknown[]) => void
+  /** Defaults to `running`, the busy lane that steers by default. */
   status?: 'idle' | 'running'
 }
 
@@ -49,6 +50,7 @@ function fakeAgent(ctx: Context, sessionId: string, delivery: FakeDelivery = {})
     ctx: scopeFiber.ctx,
     inject: delivery.inject ?? (() => {}),
     followup: delivery.followup ?? (() => {}),
+    steer: delivery.steer ?? (() => {}),
     status: delivery.status ?? 'running',
     session: { id, header: { version: 0, id, createdAt: 0 } },
   } as unknown as Agent
@@ -529,11 +531,14 @@ describe('completion notices across scoped mounts', () => {
     const agentScope = createScope(ctx, agentKey)
     bindScopeParent(agentKey, scopeOf(standingA.ctx) as object)
 
-    const inject = vi.fn()
+    const steer = vi.fn()
     const owner = {
       id: SessionId('sess-scoped'),
       ctx: agentScope.ctx,
-      inject,
+      inject: () => {},
+      followup: () => {},
+      steer,
+      status: 'running' as const,
       session: { id: SessionId('sess-scoped'), header: { version: 0, id: SessionId('sess-scoped'), createdAt: 0 } },
     } as unknown as Agent
     const dispose = ctx.agents.register(owner)
@@ -546,7 +551,7 @@ describe('completion notices across scoped mounts', () => {
       p.settle({ status: 'completed', detail: 'exit code: 0' })
       await tick()
 
-      expect(inject).toHaveBeenCalledTimes(1)
+      expect(steer).toHaveBeenCalledTimes(1)
     } finally {
       dispose()
     }
@@ -558,12 +563,65 @@ describe('completion notice delivery', () => {
     const { ctx } = await setup()
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer, status: 'idle' })
     const p = producer({ owner, label: 'pnpm test' })
     ctx.jobs.start(p.spec)
 
     p.settle({ status: 'completed', detail: 'exit code: 0' })
     await tick()
+    expect(followup).toHaveBeenCalledTimes(1)
+    expect(inject).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
+  })
+
+  it('steers a busy owner when jobBusy is absent or steer', async () => {
+    const { ctx } = await setup()
+    const inject = vi.fn()
+    const followup = vi.fn()
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer })
+    const p = producer({ owner })
+    ctx.jobs.start(p.spec)
+
+    p.settle({ status: 'completed' })
+    await tick()
+    expect(steer).toHaveBeenCalledTimes(1)
+    expect(inject).not.toHaveBeenCalled()
+    expect(followup).not.toHaveBeenCalled()
+  })
+
+  it('queues a later turn on a busy owner when jobBusy is queue', async () => {
+    const { ctx } = await setup()
+    ctx.provide('settings', { get: () => ({ jobBusy: 'queue' }) })
+    const inject = vi.fn()
+    const followup = vi.fn()
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer })
+    const p = producer({ owner })
+    ctx.jobs.start(p.spec)
+
+    p.settle({ status: 'completed' })
+    await tick()
+    expect(followup).toHaveBeenCalledTimes(1)
+    expect(steer).not.toHaveBeenCalled()
+    expect(inject).not.toHaveBeenCalled()
+  })
+
+  it('does not spend the idle wake budget on a busy owner', async () => {
+    const { ctx } = await setup({ maxConsecutiveWakes: 1 })
+    const inject = vi.fn()
+    const followup = vi.fn()
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer })
+
+    await settleTasks(ctx, owner, 2)
+    expect(steer).toHaveBeenCalledTimes(2)
+    expect(followup).not.toHaveBeenCalled()
+    expect(inject).not.toHaveBeenCalled()
+
+    ;(owner as { status: 'idle' | 'running' }).status = 'idle'
+    await settleTasks(ctx, owner, 1)
     expect(followup).toHaveBeenCalledTimes(1)
     expect(inject).not.toHaveBeenCalled()
   })
@@ -572,13 +630,31 @@ describe('completion notice delivery', () => {
     const { ctx } = await setup({ completionDelivery: 'quiet' })
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer, status: 'idle' })
     const p = producer({ owner })
     ctx.jobs.start(p.spec)
 
     p.settle({ status: 'completed' })
     await tick()
     expect(inject).toHaveBeenCalledTimes(1)
+    expect(followup).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
+  })
+
+  it('still steers a busy owner under quiet delivery', async () => {
+    const { ctx } = await setup({ completionDelivery: 'quiet' })
+    const inject = vi.fn()
+    const followup = vi.fn()
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer })
+    const p = producer({ owner })
+    ctx.jobs.start(p.spec)
+
+    p.settle({ status: 'completed' })
+    await tick()
+    expect(steer).toHaveBeenCalledTimes(1)
+    expect(inject).not.toHaveBeenCalled()
     expect(followup).not.toHaveBeenCalled()
   })
 
@@ -616,7 +692,8 @@ describe('completion notice delivery', () => {
     const { ctx } = await setup()
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer, status: 'idle' })
     let settle!: (outcome: JobOutcome) => void
     ctx.jobs.start({
       kind: 'bash',
@@ -634,6 +711,7 @@ describe('completion notice delivery', () => {
     await tick()
     expect(followup).not.toHaveBeenCalled()
     expect(inject).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
   })
 
   it('neither wakes nor injects when the teardown cancel itself threw', async () => {
@@ -641,7 +719,8 @@ describe('completion notice delivery', () => {
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer, status: 'idle' })
     ctx.jobs.start({
       kind: 'bash',
       label: 'broken producer',
@@ -661,6 +740,7 @@ describe('completion notice delivery', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('work may be orphaned'))
     expect(followup).not.toHaveBeenCalled()
     expect(inject).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
   })
 
   it('keeps the budget spent when the owner only claims plugin notices', async () => {
@@ -682,17 +762,19 @@ describe('completion notice delivery', () => {
 })
 
 describe('completion notices', () => {
-  it('injects a notice into the owning agent when an unreported job settles', async () => {
+  it('steers a notice into the owning agent when an unreported job settles', async () => {
     const { ctx } = await setup()
+    const steer = vi.fn()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const owner = fakeAgent(ctx, 'sess-1', { steer, inject })
     const p = producer({ owner, label: 'pnpm test' })
     ctx.jobs.start(p.spec)
 
     p.settle({ status: 'completed', detail: 'exit code: 0' })
     await tick()
-    expect(inject).toHaveBeenCalledTimes(1)
-    expect(inject).toHaveBeenCalledWith({
+    expect(steer).toHaveBeenCalledTimes(1)
+    expect(inject).not.toHaveBeenCalled()
+    expect(steer).toHaveBeenCalledWith({
       id: expect.any(String) as unknown,
       role: 'user',
       content: [{ type: 'text', text: 'background job bash-1 (bash: pnpm test) finished [status: completed, exit code: 0]. Read its output with job_output.' }],
@@ -707,8 +789,8 @@ describe('completion notices', () => {
 
   it('preserves job ids and collection guidance in bounded completion notices', async () => {
     const { ctx } = await setup()
-    const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { steer })
     const first = producer({
       owner,
       kind: 'subagent',
@@ -719,7 +801,7 @@ describe('completion notices', () => {
     first.settle({ status: 'completed', detail: 'd'.repeat(1_000) })
     await tick()
 
-    expect(inject).toHaveBeenNthCalledWith(
+    expect(steer).toHaveBeenNthCalledWith(
       1,
       {
         id: expect.any(String) as unknown,
@@ -746,7 +828,7 @@ describe('completion notices', () => {
     second.settle({ status: 'completed', detail: 'd'.repeat(1_000) })
     await tick()
 
-    const content = (inject.mock.calls[1]?.[0] as { content?: Array<{ type: string; text?: string }> } | undefined)?.content
+    const content = (steer.mock.calls[1]?.[0] as { content?: Array<{ type: string; text?: string }> } | undefined)?.content
     const notice = content?.[0]?.text ?? ''
     expect(Buffer.byteLength(notice)).toBeLessThanOrEqual(80)
     expect(notice).toContain('background job subagent-2 (subagent: xxxx')
@@ -761,8 +843,8 @@ describe('completion notices', () => {
       prior.settle({ status: 'completed' })
       await tick()
     }
-    const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { steer })
     const target = producer({
       owner,
       kind: 'pty-send',
@@ -774,7 +856,7 @@ describe('completion notices', () => {
     target.settle({ status: 'completed', detail: 'd'.repeat(1_000) })
     await tick()
 
-    const content = (inject.mock.calls[0]?.[0] as { content?: Array<{ type: string; text?: string }> } | undefined)?.content
+    const content = (steer.mock.calls[0]?.[0] as { content?: Array<{ type: string; text?: string }> } | undefined)?.content
     const notice = content?.[0]?.text ?? ''
     expect(Buffer.byteLength(notice)).toBeLessThanOrEqual(64)
     expect(notice).toBe('background job pty-send-100\n[notice truncated]\nDone; job_output.')
@@ -782,8 +864,8 @@ describe('completion notices', () => {
 
   it('reserves the collection-action tail when a producer supplies a smaller budget', async () => {
     const { ctx } = await setup()
-    const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { steer })
     const tiny = producer({ owner, kind: 'pty-send', label: 'x'.repeat(100), outputLimitBytes: 8 })
     const short = producer({ owner, kind: 'pty-send', label: 'x'.repeat(100), outputLimitBytes: 32 })
     ctx.jobs.start(tiny.spec)
@@ -793,8 +875,8 @@ describe('completion notices', () => {
     short.settle({ status: 'completed' })
     await tick()
 
-    const tinyNotice = (inject.mock.calls[0]?.[0] as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? ''
-    const shortNotice = (inject.mock.calls[1]?.[0] as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? ''
+    const tinyNotice = (steer.mock.calls[0]?.[0] as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? ''
+    const shortNotice = (steer.mock.calls[1]?.[0] as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? ''
     expect(Buffer.byteLength(tinyNotice)).toBeLessThanOrEqual(8)
     expect(tinyNotice).toBe('_output.')
     expect(Buffer.byteLength(shortNotice)).toBeLessThanOrEqual(32)
@@ -804,7 +886,9 @@ describe('completion notices', () => {
   it('suppresses the notice for a job the model already killed', async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const steer = vi.fn()
+    const followup = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, steer, followup })
     const p = producer({ owner })
     ctx.jobs.start(p.spec)
 
@@ -812,12 +896,16 @@ describe('completion notices', () => {
     p.settle({ status: 'killed' })
     await tick()
     expect(inject).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
+    expect(followup).not.toHaveBeenCalled()
   })
 
   it('suppresses the notice when a wait returned the terminal state', async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const steer = vi.fn()
+    const followup = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, steer, followup })
     const p = producer({ owner, kind: 'subagent' })
     ctx.jobs.start(p.spec)
 
@@ -825,6 +913,8 @@ describe('completion notices', () => {
     p.settle({ status: 'completed', output: 'answer' })
     expect(text(await pending)).toContain('answer')
     expect(inject).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
+    expect(followup).not.toHaveBeenCalled()
   })
 
   it('drops the notice for unowned jobs without throwing', async () => {
@@ -838,41 +928,40 @@ describe('completion notices', () => {
 
   it('does not route an old owner completion notice to a same-session replacement', async () => {
     const { ctx } = await setup()
-    // Delivery into a tearing-down owner is a plain inject: the loop has no
-    // terminal state, so the notice lands in the old owner's (detached)
-    // session instead of throwing or re-routing.
-    const oldInject = vi.fn()
-    const oldOwner = fakeAgent(ctx, 'shared', { inject: oldInject })
+    // Delivery uses the exact owner supplied at start. Detaching it from the
+    // registry must not re-route the notice to a same-session replacement.
+    const oldSteer = vi.fn()
+    const oldOwner = fakeAgent(ctx, 'shared', { steer: oldSteer })
     const p = producer({ owner: oldOwner })
     ctx.jobs.start(p.spec)
 
     detachAgent(oldOwner)
-    const replacementInject = vi.fn()
-    fakeAgent(ctx, 'shared', { inject: replacementInject })
+    const replacementSteer = vi.fn()
+    fakeAgent(ctx, 'shared', { steer: replacementSteer })
     p.settle({ status: 'completed' })
     await tick()
 
-    expect(oldInject).toHaveBeenCalledTimes(1)
-    expect(replacementInject).not.toHaveBeenCalled()
+    expect(oldSteer).toHaveBeenCalledTimes(1)
+    expect(replacementSteer).not.toHaveBeenCalled()
   })
 
-  it('surfaces an inject failure through listener containment (a real bug must be visible)', async () => {
+  it('surfaces a steer failure through listener containment (a real bug must be visible)', async () => {
     const { ctx } = await setup()
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
-    const owner = fakeAgent(ctx, 'sess-1', { inject: () => { throw new Error('unexpected inject bug') } })
+    const owner = fakeAgent(ctx, 'sess-1', { steer: () => { throw new Error('unexpected steer bug') } })
     const p = producer({ owner })
     ctx.jobs.start(p.spec)
     p.settle({ status: 'completed' })
     await tick()
     // The throw escapes the notice listener and is contained (logged) by the
     // registry's per-listener containment — visible, not swallowed.
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('unexpected inject bug'))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('unexpected steer bug'))
   })
 
   it('keeps using the exact owner after the agent registry is gone', async () => {
     const { ctx, agentsFiber } = await setup()
-    const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { steer })
 
     // Settlement must not depend on a later registry lookup: the exact owner
     // supplied at start remains the destination while its own scope is live.
@@ -885,6 +974,6 @@ describe('completion notices', () => {
     p1.settle({ status: 'completed' })
     p2.settle({ status: 'failed' })
     await tick()
-    expect(inject).toHaveBeenCalledTimes(2)
+    expect(steer).toHaveBeenCalledTimes(2)
   })
 })

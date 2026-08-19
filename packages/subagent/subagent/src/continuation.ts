@@ -52,6 +52,7 @@ import { seedDescriptorTurn } from './descriptor-seed.ts'
 import type { ContinuableCreateRequest, ContinuableCreateSpec, SubagentResult, SubagentStartRequest } from './types.ts'
 import type { ActivationObserver, ActivationTerminal } from './lifecycle.ts'
 import { SubagentError } from './error.ts'
+import { readBusyDelivery } from './delivery-settings.ts'
 import type SubagentActivationSetupRegistry from './activation-setup-registry.ts'
 
 /** Attribution for a model coordinator's follow-up to one of its children. */
@@ -654,11 +655,17 @@ export class SubagentContinuationManager {
         senderSessionId: activation.childId,
       },
     })
-    if (delivery === 'wakeup') {
-      this.sendWaking(parent, message, () => { this.sendReport(parent, message, delivery) })
-    } else {
-      this.sendReport(parent, message, delivery)
+    if (delivery === 'quiet') {
+      this.sendReport(parent, message, 'quiet')
+      return message.id
     }
+    this.sendWaking(parent, message, () => {
+      if (parent.status !== 'idle' && readBusyDelivery(this.ctx, 'reportBusy') === 'steer') {
+        parent.steer(message)
+        return
+      }
+      this.sendReport(parent, message, 'wakeup')
+    })
     return message.id
   }
 
@@ -1441,14 +1448,18 @@ export class SubagentContinuationManager {
         return
       }
       // An idle parent has nothing else to look at, so it gets one ordinary
-      // turn. A busy parent is steered instead of woken: `Inbox.claim()` takes
-      // the whole next-step batch at one boundary, so several children settling
-      // together cost one step rather than one turn each. Steering rather than
-      // injecting closes the window where a driver retires between this status
-      // read and the send, which would strand the notice unclaimed.
+      // turn. A busy parent follows Host `subagent-delivery.settlementBusy` at
+      // send time: `steer` (default) admits the notice at the nearest later
+      // step so several children settling together cost one step; `queue` opens
+      // a later turn. Steering rather than injecting closes the window where a
+      // driver retires between this status read and the send, which would
+      // strand the notice unclaimed.
       this.sendWaking(parent, message, () => {
-        if (parent.status === 'idle') parent.followup(message)
-        else parent.steer(message)
+        if (parent.status !== 'idle' && readBusyDelivery(this.ctx, 'settlementBusy') === 'steer') {
+          parent.steer(message)
+          return
+        }
+        parent.followup(message)
       })
     } catch (error: unknown) {
       this.ctx.logger.warn(

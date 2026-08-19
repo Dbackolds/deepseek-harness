@@ -1856,6 +1856,32 @@ describe('continuable settlement delivery', () => {
       .toEqual(new Set([first.childId, second.childId]))
   })
 
+  it('queues simultaneous notices onto later turns when settlementBusy is queue', async () => {
+    const releaseChildren = Promise.withResolvers<undefined>()
+    const releaseParent = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: textResponse('parent works'), gate: releaseParent.promise },
+      { chunks: textResponse('first child'), gate: releaseChildren.promise },
+      { chunks: textResponse('second child'), gate: releaseChildren.promise },
+      { chunks: textResponse('parent reacts') },
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    ctx.provide('settings', { get: () => ({ settlementBusy: 'queue' }) })
+    parent.followup(createUserMessage({ content: message('start working'), source: { kind: 'user' } }))
+    await vi.waitFor(() => { expect(parent.status).toBe('running') })
+
+    const first = await ctx.subagents.startContinuable(startSpec(parent))
+    const second = await ctx.subagents.startContinuable(startSpec(parent))
+    releaseChildren.resolve(undefined)
+    await waitNoActivation(ctx, first.childId)
+    await waitNoActivation(ctx, second.childId)
+
+    expect(parent.inbox.nextStep).toHaveLength(0)
+    expect(parent.inbox.nextTurn).toHaveLength(2)
+    releaseParent.resolve(undefined)
+    await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(2) })
+  })
+
   it('holds a maintaining parent live until it can read the notice', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const releaseSecond = Promise.withResolvers<undefined>()

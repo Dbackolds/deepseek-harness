@@ -1,12 +1,15 @@
 /**
- * Subagent settings surface, browser half — one section over the user
- * definition library stored in user-subagents.
+ * Subagent settings surface, browser half — Behavior preferences plus the
+ * user definition library stored in user-subagents.
  */
 
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import { SUBAGENT_DELIVERY_SETTINGS_NAMESPACE } from '../delivery-settings.ts'
+import type { SubagentDeliverySettings } from '../delivery-settings.ts'
+import { SubagentDeliveryPolicy } from './delivery-policy.ts'
 import { SubagentsSection } from './SubagentsSection.tsx'
 import type { SubagentsSectionInjected } from './SubagentsSection.tsx'
 import { en, zh, type SubagentsKey } from './locales.ts'
@@ -16,6 +19,7 @@ export type { SubagentsSectionInjected, SubagentsSectionProps } from './Subagent
 export type { SubagentsKey } from './locales.ts'
 export type { DefinitionDraft, DefinitionRow, SubagentsState } from './store.ts'
 export { USER_SUBAGENTS_NS, parseToolList, slugFromName } from './store.ts'
+export { SubagentDeliveryPolicy } from './delivery-policy.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -28,7 +32,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'settings.subagents'
 
 /** Required services (cordis fiber inject). */
-export const inject = ['slots', 'locale', 'connection', 'remote']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'settingsScope']
 
 /**
  * Register the Subagents section once settings.section is declared.
@@ -39,9 +43,21 @@ export function apply(ctx: ClientContext): void {
 
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new SubagentsStore(connection.api)
+  const delivery = new SubagentDeliveryPolicy(
+    ctx.settingsScope.bind<SubagentDeliverySettings>({
+      namespace: SUBAGENT_DELIVERY_SETTINGS_NAMESPACE,
+    }),
+  )
   const t = ctx.locale.bind(NS)
   const injected = (): SubagentsSectionInjected => ({
-    hooks: { subagents: controller.store },
+    hooks: {
+      subagents: controller.store,
+      settlementBusy: delivery.settlementBusy,
+      reportBusy: delivery.reportBusy,
+      jobBusy: delivery.jobBusy,
+      deliveryWritable: delivery.writable,
+    },
+    setDelivery: (field, behavior) => { delivery.set(field, behavior) },
     load: () => controller.load(),
     beginCreate: () => { controller.beginCreate() },
     beginEdit: (id: string) => { controller.beginEdit(id) },

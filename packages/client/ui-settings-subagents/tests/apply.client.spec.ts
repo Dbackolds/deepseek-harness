@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
+import { stubSettingsScope, TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-settings-subagents/client'
 import type { SubagentsSectionInjected } from '@deepseek-ai/dsh-client-ui-settings-subagents/client'
 
@@ -23,6 +23,7 @@ async function bench() {
       settings: { describe: vi.fn(() => Promise.resolve({ rpcId: 's', result: { ok: false, error: { message: 'no' } } })) },
     },
   } as never)
+  ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   return { ctx, slots: ctx.get('slots') as SlotRegistry }
 }
 
@@ -35,7 +36,7 @@ function declareRoot(slots: SlotRegistry): () => void {
 
 describe('ui-settings-subagents apply', () => {
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'settingsScope'])
   })
 
   it('registers one Subagents section between Models and Plugins', async () => {
@@ -58,6 +59,8 @@ describe('ui-settings-subagents apply', () => {
     await face.saveDraft()
     await face.remove()
     expect(typeof face.load).toBe('function')
+    expect(typeof face.setDelivery).toBe('function')
+    expect(face.hooks.settlementBusy.getSnapshot()).toBe('steer')
     ctx.remote.$dispatch('settings/document-updated', ['user-subagents'])
     ctx.remote.$dispatch('settings/document-updated', ['other'])
     ctx.emit('connection/reset')

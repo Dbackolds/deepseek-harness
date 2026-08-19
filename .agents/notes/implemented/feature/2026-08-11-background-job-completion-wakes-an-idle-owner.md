@@ -16,11 +16,11 @@ The delivery machinery was never the obstacle. `Agent.send(message, target, wake
 
 ## Decision
 
-An unreported completion picks its lane from what the owner is doing. A busy owner is injected, unchanged. An idle owner is woken with `followup()`.
+An unreported completion picks its lane from what the owner is doing. A busy owner follows Host `subagent-delivery.jobBusy` at send time: `steer` (the default) admits the notice at the nearest later step; `queue` opens a later turn. An idle owner is woken with `followup()`.
 
 This adopts the delivery rule the [continuation manager](2026-08-06-manager-owned-subagent-settlement-delivery.md) already ships for subagent settlement, where "steering rather than injecting is deliberate … This is a correctness rule, not a deployment preference." The two paths do not overlap: `tool-subagent` registers a Task only for a one-shot background child and returns `continuable` before reaching that code, so a child is delivered by exactly one of the two mechanisms.
 
-### The busy owner keeps injection
+### The busy owner defaults to Steer
 
 For a driver that is genuinely running, `steer()` and `inject()` are the same delivery: `wakeDriver()` returns early without latching for a running, unaborted phase. They differ only for an owner whose turn is cancelled but has not yet converged, where steering redirects to the next turn and replays the wake at convergence.
 

@@ -20,7 +20,7 @@ When a producer supplies `outputLimitBytes`, `job_output`, terminal `job_kill`, 
 
 An unreported completion delivers `background job <id> (<kind>: <label>) finished [status: ...]. Read its output with job_output.` to the exact owner. When bounded, the stable id prefix and collection command outrank variable label/detail so the notice remains actionable at PTY's supported 64-byte minimum. A kill or terminal read/wait marks delivery reported and suppresses the redundant notice, as does the teardown cancel that drains an owner or the service.
 
-Which lane carries it depends on what the owner is doing. A busy owner is injected: the notice joins the next-step inbox, and the turn cannot close while that inbox holds it, so several jobs settling together cost one step rather than one turn each. An idle owner is instead woken with a follow-up turn, because a pending notice nothing claims is a completion the model never learns about. `completionDelivery: quiet` keeps the injection lane for idle owners too, which is what a deterministic transcript needs.
+Which lane carries it depends on what the owner is doing. A busy owner follows Host `subagent-delivery.jobBusy` at send time: `steer` (the default, including when settings are absent) admits the notice at the nearest later step, and `queue` opens a later turn. An idle owner is instead woken with a follow-up turn, because a pending notice nothing claims is a completion the model never learns about. `completionDelivery: quiet` keeps the injection lane for idle owners too, which is what a deterministic transcript needs; a busy owner still follows `jobBusy`.
 
 Waking is bounded. Each owner may open `maxConsecutiveWakes` turns this way before further notices degrade to injection, and claiming any user-authored message restores the budget. The bound exists because the chain is self-exciting: a woken turn may start the background job whose completion wakes it again. Notices this plugin queued never refill the budget they spent.
 
@@ -81,7 +81,7 @@ Reads return output or `(no new output)` followed by `[status: <status>]` and op
 
 #### Token effect
 
-Results and notices remain in parent history until compaction. Stream reads do not repeat consumed output; a producer-supplied `outputLimitBytes` bounds each complete read or notice. Under `wakeup`, a notice reaching an idle owner also buys a model request the user did not ask for, capped per owner by `maxConsecutiveWakes`; a notice reaching a busy owner adds a step to the turn it is already paying for.
+Results and notices remain in parent history until compaction. Stream reads do not repeat consumed output; a producer-supplied `outputLimitBytes` bounds each complete read or notice. Under `wakeup`, a notice reaching an idle owner also buys a model request the user did not ask for, capped per owner by `maxConsecutiveWakes`; a notice reaching a busy owner under `steer` adds a step to the turn it is already paying for, while `queue` opens a later turn without spending that idle-wake budget.
 
 #### KV Cache effect
 
@@ -89,7 +89,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 ## Known Limitations and Deferred Work
 
-- **A settlement inside the driver's retirement window still strands its notice** — between the turn loop's last inbox check and the driver committing its idle phase the owner still reads as busy, so the notice is injected and nothing wakes. Steering has the same hole; closing it belongs to `agent-loop`.
+- **A settlement inside the driver's retirement window still strands its notice** — between the turn loop's last inbox check and the driver committing its idle phase the owner still reads as busy, so the notice follows `jobBusy` and nothing wakes. Closing that window belongs to `agent-loop`.
 - **A spent wake budget is not restored by time** — only user-authored input refills it, so an unattended agent whose budget ran out collects its remaining notices on the next turn something else opens.
 - **A notice pending on an idle owner does not survive that owner's disposal** — the disposal cancel clears the unclaimed inbox, and the log keeps the insert/cancel pair as the record.
 - **Stream reads are single-consumer** — independent observers need another runtime API.

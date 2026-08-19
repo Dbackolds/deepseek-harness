@@ -5,6 +5,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import {
+  JOB_BUSY_FIELD, REPORT_BUSY_FIELD, SETTLEMENT_BUSY_FIELD,
+} from '../src/delivery-settings.ts'
+import type { SubagentBusyDelivery } from '../src/delivery-settings.ts'
 import { SubagentsSection } from '../src/client/SubagentsSection.tsx'
 import type { SubagentsSectionProps } from '../src/client/SubagentsSection.tsx'
 import type { SubagentsState } from '../src/client/store.ts'
@@ -23,7 +27,15 @@ const READY: SubagentsState = {
   deleting: false,
 }
 
-function renderSection(state: Partial<SubagentsState> = {}) {
+function renderSection(
+  state: Partial<SubagentsState> = {},
+  delivery: {
+    settlementBusy?: SubagentBusyDelivery
+    reportBusy?: SubagentBusyDelivery
+    jobBusy?: SubagentBusyDelivery
+    writable?: boolean
+  } = {},
+) {
   const store = createSnapshotStore<SubagentsState>({ ...READY, ...state })
   const actions = {
     load: vi.fn(() => Promise.resolve()),
@@ -38,10 +50,15 @@ function renderSection(state: Partial<SubagentsState> = {}) {
     saveDraft: vi.fn(() => Promise.resolve()),
     confirmDelete: vi.fn(),
     remove: vi.fn(() => Promise.resolve()),
+    setDelivery: vi.fn(),
   }
   render(<SubagentsSection {...({
     ...actions,
     useSubagents: bindSnapshotSelector(store),
+    useSettlementBusy: bindSnapshotSelector(createSnapshotStore(delivery.settlementBusy ?? 'steer')),
+    useReportBusy: bindSnapshotSelector(createSnapshotStore(delivery.reportBusy ?? 'steer')),
+    useJobBusy: bindSnapshotSelector(createSnapshotStore(delivery.jobBusy ?? 'steer')),
+    useDeliveryWritable: bindSnapshotSelector(createSnapshotStore(delivery.writable ?? true)),
     t: (key: keyof typeof en) => en[key],
     close: vi.fn(),
   } as unknown as SubagentsSectionProps)} />)
@@ -53,6 +70,27 @@ describe('SubagentsSection', () => {
     const actions = renderSection()
     expect(actions.load).toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: 'Subagents' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Behavior' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Steer' })).toHaveLength(3)
+  })
+
+  it('keeps Behavior when the library namespace is unavailable', () => {
+    const actions = renderSection({ status: 'unavailable', definitions: [] })
+    expect(screen.getByRole('heading', { name: 'Behavior' })).toBeTruthy()
+    expect(screen.getByText('This deployment does not expose subagent settings.')).toBeTruthy()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Steer' })[0]!)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Queue' }))
+    expect(actions.setDelivery).toHaveBeenCalledWith(SETTLEMENT_BUSY_FIELD, 'queue')
+  })
+
+  it('writes independent delivery fields', () => {
+    const actions = renderSection()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Steer' })[1]!)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Queue' }))
+    expect(actions.setDelivery).toHaveBeenCalledWith(REPORT_BUSY_FIELD, 'queue')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Steer' })[2]!)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Queue' }))
+    expect(actions.setDelivery).toHaveBeenCalledWith(JOB_BUSY_FIELD, 'queue')
     expect(screen.getByRole('button', { name: 'Edit: Reviewer' })).toBeTruthy()
     expect(screen.getByText('Reviews a change.')).toBeTruthy()
   })

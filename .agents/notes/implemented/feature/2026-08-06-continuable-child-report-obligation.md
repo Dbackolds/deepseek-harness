@@ -17,7 +17,7 @@ The return channel is an instruction the child receives, not a capability it may
 - the `report` tool, whose description now states that the child calls it once before finishing with a self-contained final result, and earlier for progress that changes what the parent should do next;
 - a `tool:report` system-prompt section at order 117 carrying the same obligation in the child's own voice, so a child that never reads tool descriptions closely still receives it.
 
-`reportDelivery` now defaults to `wakeup`. An accepted report creates exactly one ordinary later parent turn and wakes a parked parent driver; it still never steers an open turn. `quiet` remains available for deployments that prefer unread reports over turn amplification.
+`reportDelivery` now defaults to `wakeup`. An accepted report wakes a parked parent with one ordinary later turn. A busy parent follows Host `subagent-delivery.reportBusy` at send time: `steer` (the default) admits the report at the nearest later step; `queue` opens a later turn. `quiet` remains available for deployments that prefer unread reports over turn amplification and still never wakes.
 
 ### Why the section and the description both exist
 

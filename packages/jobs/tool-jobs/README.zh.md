@@ -20,7 +20,7 @@
 
 一项尚未报告的完成会把 `background job <id> (<kind>: <label>) finished [status: ...]. Read its output with job_output.` 交付给确切所有者。应用上限时，即使采用 PTY 支持的 64 字节下限，稳定 id 前缀和收集命令的优先级也高于可变 label/detail，因此通知仍可操作。kill 或针对已终止任务的 read/wait 会把交付标为已报告并抑制重复通知；排空 owner 或服务的 teardown 取消同样如此。
 
-由哪条通道承载取决于所有者当时在做什么。繁忙的所有者走注入：通知进入 next-step inbox，而该 inbox 尚有内容时 turn 无法结束，因此同时结算的多个任务只花掉一步，而不是各占一轮。空闲的所有者则被 follow-up 唤醒，因为无人领取的待发通知等于模型永远不会知道的完成。`completionDelivery: quiet` 让空闲所有者也留在注入通道上，确定性 transcript 需要的正是这一点。
+由哪条通道承载取决于所有者当时在做什么。繁忙的所有者在发送时遵循 Host `subagent-delivery.jobBusy`：`steer`（默认值，包括 settings 缺失时）在最近的后续步骤接纳通知，`queue` 则开启一轮后续 turn。空闲的所有者则被 follow-up 唤醒，因为无人领取的待发通知等于模型永远不会知道的完成。`completionDelivery: quiet` 让空闲所有者也留在注入通道上，确定性 transcript 需要的正是这一点；繁忙的所有者仍遵循 `jobBusy`。
 
 唤醒是有界的。每个所有者最多可通过唤醒开启 `maxConsecutiveWakes` 轮，此后的通知降级为注入；领取任何用户撰写的消息都会恢复该预算。设界是因为这条链会自激：被唤醒的一轮可能启动某个后台任务，而它的完成又会唤醒同一个所有者。本插件自己排队的通知永远不会补充它刚花掉的预算。
 
@@ -81,7 +81,7 @@ Track every background job id you start. You are notified in-session when a job 
 
 #### Token 影响
 
-结果与通知在压缩（compaction）前保留于父级历史。流读取不会重复已消费的输出；生产方提供的 `outputLimitBytes` 会限制每次完整读取或通知。在 `wakeup` 下，抵达空闲所有者的通知还会额外买下一次用户并未要求的模型请求，其数量按所有者由 `maxConsecutiveWakes` 封顶；抵达繁忙所有者的通知则只是给它已经在支付的那一轮加一步。
+结果与通知在压缩（compaction）前保留于父级历史。流读取不会重复已消费的输出；生产方提供的 `outputLimitBytes` 会限制每次完整读取或通知。在 `wakeup` 下，抵达空闲所有者的通知还会额外买下一次用户并未要求的模型请求，其数量按所有者由 `maxConsecutiveWakes` 封顶；抵达繁忙所有者的通知在 `steer` 下只是给它已经在支付的那一轮加一步，在 `queue` 下则开启一轮后续 turn，且不消耗该空闲唤醒预算。
 
 #### KV Cache 影响
 
@@ -89,7 +89,7 @@ Track every background job id you start. You are notified in-session when a job 
 
 ## 已知限制与暂缓事项
 
-- **落在 driver 退休窗口内的结算仍会让通知搁浅**：在轮次循环最后一次检查 inbox 与 driver 提交 idle 相位之间，所有者读起来仍是繁忙，因此通知走注入且无人唤醒。steer 有同样的洞；堵上它属于 `agent-loop`。
+- **落在 driver 退休窗口内的结算仍会让通知搁浅**：在轮次循环最后一次检查 inbox 与 driver 提交 idle 相位之间，所有者读起来仍是繁忙，因此通知遵循 `jobBusy` 且无人唤醒。堵上该窗口属于 `agent-loop`。
 - **已花掉的唤醒预算不会随时间恢复**：只有用户撰写的输入才能补充，因此预算耗尽的无人值守 agent 要等到其他原因开启下一轮时才收走剩余通知。
 - **待领于空闲所有者的通知无法在该所有者释放后存活**：释放时的取消会清空未领取的 inbox，日志保留插入/取消这一对作为记录。
 - **流读取只有单一消费方**：独立观察者需要另一套运行时 API。

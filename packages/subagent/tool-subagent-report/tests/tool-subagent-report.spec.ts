@@ -7,7 +7,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { CallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { CallId, createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -220,6 +220,48 @@ describe('dsh-tool-subagent-report', () => {
     await vi.waitFor(() => {
       expect(adapter.requests.some(request => request.sessionId === parent.id)).toBe(true)
     })
+  })
+
+  it('steers a wakeup report into a busy parent when reportBusy is steer', async () => {
+    const { ctx, parent } = await setup({ config: { reportDelivery: 'wakeup' } })
+    parent.followup(createUserMessage({
+      content: [{ type: 'text', text: 'stay busy' }],
+      source: { kind: 'user' },
+    }))
+    await vi.waitFor(() => { expect(parent.status).toBe('running') })
+    const { child } = await startChild(ctx, parent)
+    const enqueues: string[] = []
+    ctx.on('agent/inbox/inserted', ({ agent, message }) => {
+      if (agent === parent) {
+        enqueues.push(agent.inbox.nextTurn.some(queued => queued.id === message.id) ? 'queued' : 'steering')
+      }
+    })
+
+    expect((await callReport(ctx, child, 'BUSY_STEER')).isError).toBe(false)
+    expect(enqueues).toEqual(['steering'])
+    expect(parent.inbox.nextStep).toHaveLength(1)
+    expect(parent.inbox.nextTurn).toHaveLength(0)
+  })
+
+  it('queues a wakeup report behind a busy parent when reportBusy is queue', async () => {
+    const { ctx, parent } = await setup({ config: { reportDelivery: 'wakeup' } })
+    ctx.provide('settings', { get: () => ({ reportBusy: 'queue' }) })
+    parent.followup(createUserMessage({
+      content: [{ type: 'text', text: 'stay busy' }],
+      source: { kind: 'user' },
+    }))
+    await vi.waitFor(() => { expect(parent.status).toBe('running') })
+    const { child } = await startChild(ctx, parent)
+    const enqueues: string[] = []
+    ctx.on('agent/inbox/inserted', ({ agent, message }) => {
+      if (agent === parent) {
+        enqueues.push(agent.inbox.nextTurn.some(queued => queued.id === message.id) ? 'queued' : 'steering')
+      }
+    })
+
+    expect((await callReport(ctx, child, 'BUSY_QUEUE')).isError).toBe(false)
+    expect(enqueues).toEqual(['queued'])
+    expect(parent.inbox.nextTurn.length).toBeGreaterThan(0)
   })
 
   it('preserves accepted order across repeated reports', async () => {

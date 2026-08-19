@@ -1,5 +1,6 @@
 /**
- * Subagent settings section: the user definition library.
+ * Subagent settings section: busy-state delivery preferences and the user
+ * definition library.
  */
 
 import { useEffect } from 'react'
@@ -13,6 +14,11 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import {
+  JOB_BUSY_FIELD, REPORT_BUSY_FIELD, SETTLEMENT_BUSY_FIELD,
+} from '../delivery-settings.ts'
+import type { SubagentBusyDelivery } from '../delivery-settings.ts'
+import { DeliveryRow } from './DeliveryRow.tsx'
 import type { SubagentsState } from './store.ts'
 import css from './SubagentsSection.module.css'
 
@@ -21,7 +27,20 @@ export interface SubagentsSectionInjected {
   hooks: {
     /** Page snapshot bound by the renderer as useSubagents. */
     subagents: SnapshotStore<SubagentsState>
+    /** Settlement busy placement bound as useSettlementBusy. */
+    settlementBusy: SnapshotStore<SubagentBusyDelivery>
+    /** Report busy placement bound as useReportBusy. */
+    reportBusy: SnapshotStore<SubagentBusyDelivery>
+    /** Job-completion busy placement bound as useJobBusy. */
+    jobBusy: SnapshotStore<SubagentBusyDelivery>
+    /** Whether the delivery Host scope accepts writes, bound as useDeliveryWritable. */
+    deliveryWritable: SnapshotStore<boolean>
   }
+  /** Change one busy-state delivery field. */
+  setDelivery: (
+    field: typeof SETTLEMENT_BUSY_FIELD | typeof REPORT_BUSY_FIELD | typeof JOB_BUSY_FIELD,
+    behavior: SubagentBusyDelivery,
+  ) => void
   /** Read the library. */
   load: () => Promise<void>
   /** Open a create draft. */
@@ -60,16 +79,55 @@ export type SubagentsSectionProps =
  * @returns the section.
  */
 export function SubagentsSection(props: SubagentsSectionProps): ReactNode {
-  const { useSubagents, t, load } = props
+  const {
+    useSubagents, useSettlementBusy, useReportBusy, useJobBusy, useDeliveryWritable,
+    setDelivery, t, load,
+  } = props
   const state = useSubagents(snapshot => snapshot)
+  const settlementBusy = useSettlementBusy(value => value)
+  const reportBusy = useReportBusy(value => value)
+  const jobBusy = useJobBusy(value => value)
+  const deliveryWritable = useDeliveryWritable(value => value)
 
   useEffect(() => {
     void load()
   }, [load])
 
+  const behavior = (
+    <section className={css.group}>
+      <h3 className={css.groupHead}>{t('behaviorGroup')}</h3>
+      <p className={css.empty}>{t('behaviorIntro')}</p>
+      <DeliveryRow
+        title={t('delivery.settlement.title')}
+        description={t('delivery.settlement.description')}
+        value={settlementBusy}
+        writable={deliveryWritable}
+        onChange={(next) => { setDelivery(SETTLEMENT_BUSY_FIELD, next) }}
+        t={t}
+      />
+      <DeliveryRow
+        title={t('delivery.report.title')}
+        description={t('delivery.report.description')}
+        value={reportBusy}
+        writable={deliveryWritable}
+        onChange={(next) => { setDelivery(REPORT_BUSY_FIELD, next) }}
+        t={t}
+      />
+      <DeliveryRow
+        title={t('delivery.job.title')}
+        description={t('delivery.job.description')}
+        value={jobBusy}
+        writable={deliveryWritable}
+        onChange={(next) => { setDelivery(JOB_BUSY_FIELD, next) }}
+        t={t}
+      />
+    </section>
+  )
+
   if (state.status === 'unavailable') {
     return (
       <div className={css.section}>
+        {behavior}
         <p className={css.empty}>{t('unavailable')}</p>
       </div>
     )
@@ -77,6 +135,7 @@ export function SubagentsSection(props: SubagentsSectionProps): ReactNode {
   if (state.status === 'error') {
     return (
       <div className={css.section}>
+        {behavior}
         <p className={css.error} role="alert">{t('error') + ' ' + String(state.error)}</p>
         <button type="button" className={css.secondaryButton} onClick={() => { void load() }}>
           {t('retry')}
@@ -96,6 +155,8 @@ export function SubagentsSection(props: SubagentsSectionProps): ReactNode {
       <p className={css.intro}>{t('intro')}</p>
       {state.error === null ? null : <p className={css.error} role="alert">{state.error}</p>}
       {!state.writable && state.status === 'ready' ? <p className={css.empty}>{t('readOnly')}</p> : null}
+
+      {behavior}
 
       <section className={css.group}>
         <h3 className={css.groupHead}>{t('libraryGroup')}</h3>

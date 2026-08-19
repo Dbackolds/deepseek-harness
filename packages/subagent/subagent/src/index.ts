@@ -122,6 +122,8 @@ export type {
   SubagentSettledMessageSource,
 } from './continuation.ts'
 export type { ContinuableSetupContribution } from './activation-setup-registry.ts'
+export { readBusyDelivery, SUBAGENT_DELIVERY_SETTINGS_NAMESPACE } from './delivery-settings.ts'
+export type { SubagentBusyDelivery } from './delivery-settings.ts'
 export type { SubagentDescendantListEntry, SubagentListEntry } from './list-children.ts'
 export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 export type { SubagentIdentityProjection, SubagentTimingProjection } from './projection-types.ts'

@@ -16,11 +16,11 @@ Status: implemented
 
 ## 决策
 
-尚未报告的完成按所有者当时在做什么来选择通道。繁忙的所有者走注入，保持原样。空闲的所有者用 `followup()` 唤醒。
+尚未报告的完成按所有者当时在做什么来选择通道。繁忙的所有者在发送时遵循 Host `subagent-delivery.jobBusy`：`steer`（默认）把通知准入到最近的后续 step；`queue` 则开启后续一轮。空闲的所有者用 `followup()` 唤醒。
 
 这采纳了[延续管理器](2026-08-06-manager-owned-subagent-settlement-delivery.md)已经为 subagent 结算所采用的交付规则，那里写着「用 steer 而非 inject 是刻意的……这是一条正确性规则，不是部署偏好」。两条路径不重叠：`tool-subagent` 只为一次性后台子 agent 注册 Task，而 continuable 分支在抵达那段代码之前就已返回，因此一个子 agent 恰好由两种机制中的一种交付。
 
-### 繁忙的所有者保留注入
+### 繁忙的所有者默认 Steer
 
 对真正在运行的 driver 而言，`steer()` 与 `inject()` 是同一次交付：对于运行中且未中止的相位，`wakeDriver()` 会提前返回且不设置 latch。二者只在一种所有者上有区别——轮次已取消但尚未收敛，此时 steer 会重定向到下一轮并在收敛时重放唤醒。
 

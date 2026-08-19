@@ -3,6 +3,11 @@
 /** Locale keys this page renders. */
 export type SubagentsKey =
   | 'nav' | 'title' | 'intro' | 'libraryGroup'
+  | 'behaviorGroup' | 'behaviorIntro'
+  | 'delivery.settlement.title' | 'delivery.settlement.description'
+  | 'delivery.report.title' | 'delivery.report.description'
+  | 'delivery.job.title' | 'delivery.job.description'
+  | 'delivery.steer' | 'delivery.queue'
   | 'loading' | 'error' | 'retry' | 'unavailable' | 'readOnly'
   | 'emptyLibrary' | 'emptySection'
   | 'addDefinition' | 'edit' | 'delete'
@@ -21,6 +26,18 @@ export const en: Record<SubagentsKey, string> = {
   intro:
     'Create reusable child definitions. The model can pick one by id when it calls subagent; '
     + 'that definition supplies the child persona and optional tool filter.',
+  behaviorGroup: 'Behavior',
+  behaviorIntro:
+    'Busy parent only. Steer waits for the current step; Queue waits for the current turn. '
+    + 'An idle parent always opens a later turn.',
+  'delivery.settlement.title': 'When a subagent finishes',
+  'delivery.settlement.description': 'Runtime notice after a continuable child Activation ends',
+  'delivery.report.title': 'When a subagent reports',
+  'delivery.report.description': 'Content the child sent with the report tool',
+  'delivery.job.title': 'When a background job finishes',
+  'delivery.job.description': 'Completion notice for bash and other parent-owned Jobs',
+  'delivery.steer': 'Steer',
+  'delivery.queue': 'Queue',
   libraryGroup: 'Library',
   loading: 'Loading subagents…',
   error: 'Could not load subagents.',
@@ -60,6 +77,16 @@ export const zh: Record<SubagentsKey, string> = {
   nav: '子代理',
   title: '子代理',
   intro: '创建可复用的子代理定义。模型调用 subagent 时可按 id 选用一条；该定义提供子代理的 persona 与可选工具过滤。',
+  behaviorGroup: '行为',
+  behaviorIntro: '仅父代理运行中生效。插话等到当前步结束；排队等到本轮结束。空闲时始终新开一轮。',
+  'delivery.settlement.title': '子代理完成时',
+  'delivery.settlement.description': '可继续子代理 Activation 结束后的运行时通知',
+  'delivery.report.title': '子代理报告时',
+  'delivery.report.description': '子代理通过 report 工具主动发回的内容',
+  'delivery.job.title': '后台任务完成时',
+  'delivery.job.description': 'bash 及其他父级 Job 的完成通知',
+  'delivery.steer': '插话发送',
+  'delivery.queue': '排队发送',
   libraryGroup: '定义库',
   loading: '正在加载子代理…',
   error: '无法加载子代理。',

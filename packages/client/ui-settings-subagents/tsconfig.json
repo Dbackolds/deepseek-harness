@@ -12,6 +12,7 @@
     { "path": "../../test-support/client-runtime" },
     { "path": "../ui-primitives" },
     { "path": "../ui-settings" },
+    { "path": "../../settings/settings" },
     { "path": "../../api/remotes/tsconfig.client.json" },
     { "path": "../ui-slots" },
     { "path": "../web-react" },

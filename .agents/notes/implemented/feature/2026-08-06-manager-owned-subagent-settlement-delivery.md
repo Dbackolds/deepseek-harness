@@ -34,7 +34,7 @@ Both rules are pinned by tests that fail when the ordering is reversed or the ac
 
 ### Scheduling
 
-An idle parent gets one ordinary later turn. A busy parent is steered into its nearest step boundary, because `Inbox.claim()` takes the whole next-step batch at one boundary: four children settling together then cost one step rather than four turns. Steering rather than injecting is deliberate — the wake is a no-op while the driver is running, and it closes the window where a driver retires between the status read and the send, which would strand the notice unclaimed until something unrelated woke the parent. This is a correctness rule, not a deployment preference, so it is not a `Config` field.
+An idle parent gets one ordinary later turn. A busy parent follows Host `subagent-delivery.settlementBusy` at send time: `steer` (the default) admits the notice at the nearest later step, because `Inbox.claim()` takes the whole next-step batch at one boundary; `queue` opens a later turn. Steering rather than injecting is still the correctness default — the wake is a no-op while the driver is running, and it closes the window where a driver retires between the status read and the send. The field is a user placement choice, not a deployment switch that can omit the notice. Teardown injection stays fixed.
 
 One `running` parent is not steerable: one whose turn is already cancelled but has not yet exited. `Agent.send()` redirects waking input submitted after cancellation to the next turn, latches the wake, and replays it once the cancelled driver converges — except for a disposal cancellation, which never latches and belongs to the teardown rule below. The notice therefore still opens its own turn without waiting for unrelated input; the cost is a redirected turn boundary, not the message.
 
@@ -74,7 +74,7 @@ The refusal and interruption wordings are pinned verbatim in unit tests rather t
 
 **Deliver only when the child did not report.** This was the first design. It needs per-Activation bookkeeping, still misses the child that reported progress and then died before its result, and — decisively — makes the parent-facing promise conditional. "Usually you are told" is not a contract a tool description can state, and a model that cannot rely on the notice will poll anyway.
 
-**Make delivery configurable.** A deployment switch would return the model-facing text to "usually", which is the failure this change exists to remove. Protocol constants and safety invariants stay fixed; this is one of them.
+**Make delivery optional.** A deployment switch that can omit the notice would return the model-facing text to "usually", which is the failure this change exists to remove. Host `subagent-delivery.settlementBusy` may choose nearest-step or later-turn placement; it cannot drop the notice. Teardown injection stays fixed.
 
 **Change `subagent/end` to carry the parent, and let a plugin deliver.** That widens a published payload for one in-package consumer, keeps every ordering hazard, and makes the return channel an optional plugin again. Extending the package-private `ActivationObserver` with `terminal(failure)` keeps one computation of the terminal facts and no public surface change.
 
