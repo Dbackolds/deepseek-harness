@@ -22,12 +22,22 @@ export interface WorkspaceListState {
    * build their own transient Set.
    */
   archivedSessionIds: readonly SessionId[]
+  /**
+   * Registry-global hidden Workspace set in Host hide-append order. Hidden
+   * rows stay in `items` with their `sessionIds` accounts; grouping
+   * surfaces fold them into Hidden. Membership lookups build a transient Set.
+   */
+  hiddenWorkspaceIds: readonly WorkspaceId[]
   state: 'idle' | 'loading' | 'error'
   phase: WorkspaceListPhase
   error: RpcError | null
   /** True only after both workspace.list and session.list have succeeded. */
   baselinesReady: boolean
-  /** Most recently active Workspace, derived without changing `items` order. */
+  /**
+   * Most recently active *visible* Workspace, derived without changing
+   * `items` order. Hidden ids are ignored so implicit New Session / cold
+   * start never land on a folded group.
+   */
   recentWorkspaceId: WorkspaceId | undefined
 }
 
@@ -66,7 +76,8 @@ export class WorkspaceRuntime implements IWorkspaces {
   constructor(ctx: Context, private readonly api: IApiClient, private readonly sessions: SessionsPort) {
     this.manager = new WorkspaceManager(api)
     this.list = createSnapshotStore<WorkspaceListState>({
-      items: [], archivedSessionIds: [], state: 'idle', phase: 'pending', error: null,
+      items: [], archivedSessionIds: [], hiddenWorkspaceIds: [],
+      state: 'idle', phase: 'pending', error: null,
       baselinesReady: false, recentWorkspaceId: undefined,
     })
     this.manager.subscribe(() => { this.project() })
@@ -117,8 +128,9 @@ export class WorkspaceRuntime implements IWorkspaces {
 
   /**
    * Follow the first complete Workspace/Session baseline and select a default
-   * session exactly once. A restored current session wins; otherwise No Repo
-   * is connected when listed, else the most recent Workspace.
+   * session exactly once. A restored current session wins even when its
+   * Workspace is hidden; otherwise visible No Repo is connected when listed,
+   * else the most recent visible Workspace.
    * Later explicit clears stay cleared instead of retriggering this startup
    * policy. A failed connect may retry on the next baseline projection.
    * @returns disposer for the baseline subscription; late work cannot navigate after disposal.
@@ -135,7 +147,8 @@ export class WorkspaceRuntime implements IWorkspaces {
       const workspace = this.list.getSnapshot()
       if (!workspace.baselinesReady) return
       const current = this.sessions.list.getSnapshot().current
-      const target = noRepoWorkspace(workspace.items)?.workspaceId ?? workspace.recentWorkspaceId
+      const hidden = new Set(workspace.hiddenWorkspaceIds)
+      const target = noRepoWorkspace(workspace.items, hidden)?.workspaceId ?? workspace.recentWorkspaceId
       if (current !== undefined || target === undefined) {
         state = 'done'
         return
@@ -167,9 +180,10 @@ export class WorkspaceRuntime implements IWorkspaces {
   /**
    * The shared New Session action behind the shell entry points (sidebar
    * button, workspace browser): resolve the target Workspace — explicit wins,
-   * then the current Session's Workspace, then No Repo when listed, then
-   * the recent-Workspace projection — connect its blank session and navigate there; with no
-   * Workspace at all, clear the selection into the New Session view state.
+   * then the current Session's Workspace (hidden still counts), then visible
+   * No Repo, then the recent *visible* Workspace — connect its blank session
+   * and navigate there; with no Workspace at all, clear the selection into
+   * the New Session view state.
    * Connect failures are non-fatal (console diagnostics; the current view
    * stays usable).
    * @param workspaceId - explicit target Workspace for scoped actions.
@@ -180,9 +194,10 @@ export class WorkspaceRuntime implements IWorkspaces {
     const currentWorkspaceId = current === undefined
       ? undefined
       : workspace.items.find(item => item.sessionIds.includes(current))?.workspaceId
+    const hidden = new Set(workspace.hiddenWorkspaceIds)
     const target = workspaceId
       ?? currentWorkspaceId
-      ?? noRepoWorkspace(workspace.items)?.workspaceId
+      ?? noRepoWorkspace(workspace.items, hidden)?.workspaceId
       ?? workspace.recentWorkspaceId
     if (target === undefined) {
       this.sessions.clear()
@@ -296,6 +311,26 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
+   * Hide a Workspace in the registry-global set. Membership and the current
+   * Session stay; grouping surfaces fold the row into Hidden.
+   * @param workspaceId - Workspace to hide.
+   */
+  async hide(workspaceId: WorkspaceId): Promise<void> {
+    const result = await this.manager.hide(workspaceId)
+    if (!result.ok) throw new Error(`workspace hide failed: ${result.error.code}: ${result.error.message}`)
+  }
+
+  /**
+   * Show a Workspace from the registry-global hidden set, restoring it at
+   * its prior durable index.
+   * @param workspaceId - Workspace to show.
+   */
+  async show(workspaceId: WorkspaceId): Promise<void> {
+    const result = await this.manager.show(workspaceId)
+    if (!result.ok) throw new Error(`workspace show failed: ${result.error.code}: ${result.error.message}`)
+  }
+
+  /**
    * Add an existing directory as an additional folder of a Workspace.
    * @param workspaceId - target workspace.
    * @param path - existing host directory.
@@ -372,29 +407,53 @@ export class WorkspaceRuntime implements IWorkspaces {
     this.list.set({
       items: workspace.items,
       archivedSessionIds: workspace.archivedSessionIds,
+      hiddenWorkspaceIds: workspace.hiddenWorkspaceIds,
       state: workspace.state,
       phase: workspace.phase,
       error: workspace.error,
       baselinesReady,
-      recentWorkspaceId: baselinesReady ? recentWorkspace(workspace.items, sessions.byId) : undefined,
+      recentWorkspaceId: baselinesReady
+        ? recentWorkspace(workspace.items, sessions.byId, new Set(workspace.hiddenWorkspaceIds))
+        : undefined,
     })
   }
 }
 
-/** The No Repo workspace when the Host registered one. */
-function noRepoWorkspace(workspaces: readonly WorkspaceView[]): WorkspaceView | undefined {
-  return workspaces.find(item => item.title === 'No Repo')
+/**
+ * The No Repo workspace when the Host registered one. Title/path detection
+ * is unchanged; a hidden No Repo is not an implicit New Session target.
+ * @param workspaces - Host Workspace list.
+ * @param hidden - registry-global hidden set.
+ * @returns the visible No Repo row, if any.
+ */
+function noRepoWorkspace(
+  workspaces: readonly WorkspaceView[],
+  hidden: ReadonlySet<WorkspaceId>,
+): WorkspaceView | undefined {
+  const match = workspaces.find(item => item.title === 'No Repo')
     ?? workspaces.find(item => item.path.endsWith('/no-repo') || item.path.endsWith('\\no-repo'))
+  if (match === undefined || hidden.has(match.workspaceId)) return undefined
+  return match
 }
 
-/** Stable tie-breaking follows Host Workspace order. */
+/**
+ * Most recent *visible* Workspace. Hidden ids are skipped so implicit New
+ * Session / cold start never land on a folded group. Stable tie-breaking
+ * follows Host Workspace order among remaining rows.
+ * @param workspaces - Host Workspace list (full order, including hidden).
+ * @param sessions - Session list rows keyed by id.
+ * @param hidden - registry-global hidden set.
+ * @returns the most recently active visible Workspace id, if any.
+ */
 function recentWorkspace(
   workspaces: readonly WorkspaceView[],
   sessions: SessionsPortList['byId'],
+  hidden: ReadonlySet<WorkspaceId>,
 ): WorkspaceId | undefined {
   let selected: WorkspaceId | undefined
   let selectedTime = Number.NEGATIVE_INFINITY
   for (const workspace of workspaces) {
+    if (hidden.has(workspace.workspaceId)) continue
     let latest = Number.NEGATIVE_INFINITY
     for (const sessionId of workspace.sessionIds) {
       const session = sessions[sessionId]

@@ -123,6 +123,16 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
   /** Delete only a Host Workspace registration; directory and Session logs remain. */
   deleteWorkspace: (workspaceId: WorkspaceId) => Promise<void>
   /**
+   * Hide a Workspace in the registry-global set. Membership and the current
+   * Session stay; the grouped list folds the row into Hidden.
+   */
+  hideWorkspace: (workspaceId: WorkspaceId) => Promise<void>
+  /**
+   * Show a Workspace from the registry-global hidden set, restoring it at
+   * its prior durable index.
+   */
+  showWorkspace: (workspaceId: WorkspaceId) => Promise<void>
+  /**
    * Reorder a Workspace in the durable registry display order.
    * Omitted anchor appends to the end.
    */

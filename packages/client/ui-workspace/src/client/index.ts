@@ -94,6 +94,8 @@ export function apply(ctx: ClientContext): void {
     openSplit: (sessionId) => { ctx.sessions.open(sessionId) },
     renameWorkspace: async (workspaceId, title) => { await ctx.workspaces.rename(workspaceId, title) },
     deleteWorkspace: async (workspaceId) => { await ctx.workspaces.delete(workspaceId) },
+    hideWorkspace: async (workspaceId) => { await ctx.workspaces.hide(workspaceId) },
+    showWorkspace: async (workspaceId) => { await ctx.workspaces.show(workspaceId) },
     insertWorkspaceBefore: async (workspaceId, beforeWorkspaceId) => {
       await ctx.workspaces.insertBefore(workspaceId, beforeWorkspaceId)
     },

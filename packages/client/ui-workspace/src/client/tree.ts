@@ -12,6 +12,9 @@ import {
 /** Group key for Sessions outside every Workspace. */
 export const UNGROUPED_KEY = ''
 
+/** Browser-local expansion account for the trailing Hidden section. */
+export const HIDDEN_SECTION_KEY = '__hidden__'
+
 /** Display label for the ungrouped bucket row. */
 export const UNGROUPED_LABEL = 'Ungrouped'
 
@@ -184,7 +187,8 @@ function orderedUngrouped(members: readonly SessionSummary[], stored: readonly s
  * Group Sessions by Host Workspace: one group per entity in stable Host
  * order, with members resolved from sessionIds in their stored order. Sessions
  * outside every Workspace trail in the browser-local Ungrouped order, which
- * falls back to recency before that order is initialized.
+ * falls back to recency before that order is initialized. Hidden Workspaces
+ * stay accounted so their Sessions never spill into Ungrouped.
  */
 function groupByWorkspace(
   list: SessionListState,
@@ -338,18 +342,23 @@ export function partitionSessionActivity(sessions: readonly SessionNode[]): read
  * Content search lives outside this derivation
  * (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot (`current` feeds containsCurrent).
- * @param workspaces - real workspaces in stable Host order.
+ * @param workspaces - real workspaces in stable Host order (including hidden).
  * @param archivedSessionIds - registry-global archive set.
  * @param view - local expansion arrays.
- * @returns group sections in render order.
+ * @param hiddenWorkspaceIds - registry-global hidden Workspace set. Hidden
+ * rows stay out of the main grouped list; callers that need Hidden-section
+ * rows pass those ids into {@link deriveHiddenGroups}.
+ * @returns group sections in render order (visible Workspaces, then Ungrouped).
  */
 export function deriveGroups(
   list: SessionListState,
   workspaces: readonly WorkspaceView[],
   archivedSessionIds: readonly SessionId[],
   view: TreeView,
+  hiddenWorkspaceIds: readonly WorkspaceId[] = [],
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
+  const hidden = new Set(hiddenWorkspaceIds)
   const expandedGroups = new Set(view.expandedGroups)
   const descendants = indexSubagentDescendants(list.byId)
   const currentGroup = list.current === undefined
@@ -358,6 +367,53 @@ export function deriveGroups(
         ?? UNGROUPED_KEY
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)) {
+    if (g.workspaceId !== undefined && hidden.has(g.workspaceId)) continue
+    const expanded = expandedGroups.has(g.key)
+    groups.push({
+      key: g.key,
+      workspaceId: g.workspaceId,
+      cwd: g.cwd,
+      folders: g.folders,
+      createdAt: g.createdAt,
+      label: g.label,
+      sessionCount: g.sessions.length,
+      expanded,
+      containsCurrent: g.key === currentGroup,
+      sessions: expanded ? g.sessions.map(session => sessionNode(session, descendants)) : [],
+    })
+  }
+  return groups
+}
+
+/**
+ * Hidden-section Workspace groups in durable Host `workspaceIds` order.
+ * Expanding one group lists its Sessions with the same live/idle split as a
+ * visible group. Auto-expand of the current group still applies inside Hidden.
+ * @param list - sessions list snapshot (`current` feeds containsCurrent).
+ * @param workspaces - real workspaces in stable Host order (including hidden).
+ * @param archivedSessionIds - registry-global archive set.
+ * @param view - local expansion arrays.
+ * @param hiddenWorkspaceIds - registry-global hidden Workspace set.
+ * @returns hidden Workspace groups in Host items order; empty when none are hidden.
+ */
+export function deriveHiddenGroups(
+  list: SessionListState,
+  workspaces: readonly WorkspaceView[],
+  archivedSessionIds: readonly SessionId[],
+  view: TreeView,
+  hiddenWorkspaceIds: readonly WorkspaceId[],
+): GroupNode[] {
+  if (hiddenWorkspaceIds.length === 0) return []
+  const hidden = new Set(hiddenWorkspaceIds)
+  const archived = new Set(archivedSessionIds)
+  const expandedGroups = new Set(view.expandedGroups)
+  const descendants = indexSubagentDescendants(list.byId)
+  const currentGroup = list.current === undefined
+    ? undefined
+    : (workspaces.find(w => w.sessionIds.includes(list.current as SessionId))?.workspaceId as string | undefined)
+  const groups: GroupNode[] = []
+  for (const g of groupByWorkspace(list, workspaces, archived, undefined)) {
+    if (g.workspaceId === undefined || !hidden.has(g.workspaceId)) continue
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,
@@ -382,18 +438,22 @@ export function deriveGroups(
  * (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot.
  * @param archivedSessionIds - registry-global archive set.
+ * @param hiddenSessionIds - Sessions whose owning Workspace is hidden (omit
+ * from the flat list and Pinned; Ungrouped rows have no owner and stay).
  * @returns flat rows in render order.
  */
 export function deriveFlat(
   list: SessionListState,
   archivedSessionIds: readonly SessionId[],
+  hiddenSessionIds: readonly SessionId[] = [],
 ): SessionNode[] {
   const archived = new Set(archivedSessionIds)
+  const hidden = new Set(hiddenSessionIds)
   const descendants = indexSubagentDescendants(list.byId)
   const rows: SessionSummary[] = []
   for (const id of list.ids) {
     const s = list.byId[id]
-    if (s === undefined || !sessionVisible(s, archived)) continue
+    if (s === undefined || !sessionVisible(s, archived) || hidden.has(s.id)) continue
     rows.push(s)
   }
   rows.sort(byRecency)

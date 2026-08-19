@@ -255,4 +255,39 @@ export class TestWorkspaces implements IWorkspaces {
       draft.archivedSessionIds = [...draft.archivedSessionIds, sessionId]
     })
   }
+
+  /**
+   * Hide a Workspace (recorded). The default mirrors the production face:
+   * the id joins the list state's hidden set.
+   * @param workspaceId - Workspace to hide.
+   */
+  async hide(workspaceId: WorkspaceId): Promise<void> {
+    this.calls.push({ method: 'hide', args: [workspaceId] })
+    const stub = this.stubs.get('hide')
+    if (stub !== undefined) {
+      await (stub(workspaceId) as Promise<void>)
+      return
+    }
+    await this.update((draft) => {
+      if (draft.hiddenWorkspaceIds.includes(workspaceId)) return
+      draft.hiddenWorkspaceIds = [...draft.hiddenWorkspaceIds, workspaceId]
+    })
+  }
+
+  /**
+   * Show a Workspace (recorded). The default drops the id from the list
+   * state's hidden set.
+   * @param workspaceId - Workspace to show.
+   */
+  async show(workspaceId: WorkspaceId): Promise<void> {
+    this.calls.push({ method: 'show', args: [workspaceId] })
+    const stub = this.stubs.get('show')
+    if (stub !== undefined) {
+      await (stub(workspaceId) as Promise<void>)
+      return
+    }
+    await this.update((draft) => {
+      draft.hiddenWorkspaceIds = draft.hiddenWorkspaceIds.filter(id => id !== workspaceId)
+    })
+  }
 }

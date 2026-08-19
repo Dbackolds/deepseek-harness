@@ -83,7 +83,8 @@ export function WorkspacePickFlow({
   selectedId,
 }: WorkspacePickFlowProps) {
   const workspaceSnapshot = useWorkspaces(state => state)
-  const workspaces = workspaceSnapshot.items
+  const hidden = new Set(workspaceSnapshot.hiddenWorkspaceIds)
+  const workspaces = workspaceSnapshot.items.filter(workspace => !hidden.has(workspace.workspaceId))
   const getAnchorRect = useCallback(
     () => anchorRef?.current?.getBoundingClientRect() ?? null,
     [anchorRef],

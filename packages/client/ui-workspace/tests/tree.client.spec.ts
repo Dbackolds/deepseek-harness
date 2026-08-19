@@ -3,9 +3,9 @@ import type {
   SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, partitionLiveIdle, partitionSessionActivity, sessionActivityBucket,
+  deriveFlat, deriveGroups, deriveHiddenGroups, deriveSearchResults, partitionLiveIdle, partitionSessionActivity, sessionActivityBucket,
   workspaceLabel, relativeTime,
-  UNGROUPED_KEY, UNGROUPED_LABEL,
+  HIDDEN_SECTION_KEY, UNGROUPED_KEY, UNGROUPED_LABEL,
 } from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 
@@ -199,6 +199,42 @@ describe('deriveGroups', () => {
     expect(groups[0]!.sessionCount).toBe(1)
   })
 
+  it('keeps hidden Workspace sessions accounted and out of the main grouped list', () => {
+    const owned = summary('owned', 1, '/projects/first')
+    const hiddenOwned = summary('hidden-owned', 2, '/projects/hidden')
+    const loose = summary('loose', 3, '/other')
+    const sessions = list(owned, hiddenOwned, loose)
+    const workspaces = [workspace('first', ['owned']), workspace('hidden', ['hidden-owned'])]
+    const groups = deriveGroups(
+      sessions, workspaces, noArchive, view(['first', 'hidden', UNGROUPED_KEY]), [wid('hidden')],
+    )
+    expect(groups.map(group => group.key)).toEqual(['first', UNGROUPED_KEY])
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([owned.id])
+    expect(groups[1]!.sessions.map(session => session.id)).toEqual([loose.id])
+    const hidden = deriveHiddenGroups(
+      sessions, workspaces, noArchive, view(['hidden']), [wid('hidden')],
+    )
+    expect(hidden.map(group => group.key)).toEqual(['hidden'])
+    expect(hidden[0]!.sessions.map(session => session.id)).toEqual([hiddenOwned.id])
+    expect(hidden[0]!.containsCurrent).toBe(false)
+    const currentHidden = deriveHiddenGroups(
+      { ...sessions, current: hiddenOwned.id }, workspaces, noArchive, view(['hidden']), [wid('hidden')],
+    )
+    expect(currentHidden[0]!.containsCurrent).toBe(true)
+    expect(deriveHiddenGroups(sessions, workspaces, noArchive, view(), [])).toEqual([])
+  })
+
+  it('lists hidden Workspaces in durable Host items order', () => {
+    const sessions = list(summary('a', 1), summary('c', 2))
+    const workspaces = [workspace('alpha', ['a']), workspace('beta', []), workspace('gamma', ['c'])]
+    const hidden = deriveHiddenGroups(
+      sessions, workspaces, noArchive, view(['gamma']), [wid('gamma'), wid('alpha')],
+    )
+    expect(hidden.map(group => group.key)).toEqual(['alpha', 'gamma'])
+    expect(hidden[0]!.expanded).toBe(false)
+    expect(hidden[1]!.expanded).toBe(true)
+  })
+
   it('marks selected Workspace and Ungrouped sessions without relying on an Intent', () => {
     const owned = summary('owned', 1)
     const loose = summary('loose', 2)
@@ -253,6 +289,17 @@ describe('deriveFlat', () => {
     const gone = summary('gone', 2)
     expect(deriveFlat(list(kept, gone), archived('gone')).map(row => row.id)).toEqual([kept.id])
   })
+
+  it('omits sessions whose owning Workspace is hidden and keeps Ungrouped rows', () => {
+    const owned = summary('owned', 1)
+    const hiddenOwned = summary('hidden-owned', 3)
+    const loose = summary('loose', 2)
+    expect(deriveFlat(
+      list(owned, hiddenOwned, loose),
+      noArchive,
+      [hiddenOwned.id],
+    ).map(row => row.id)).toEqual([loose.id, owned.id])
+  })
 })
 
 describe('deriveSearchResults archive filtering', () => {
@@ -270,6 +317,21 @@ describe('deriveSearchResults archive filtering', () => {
       10,
     )
     expect(result.items.map(item => item.id)).toEqual([hit.id])
+  })
+
+  it('still matches sessions whose owning Workspace is hidden', () => {
+    const hiddenOwned = summary('hidden-owned', 2)
+    hiddenOwned.displayTitle = 'Needle hidden'
+    const result = deriveSearchResults(
+      list(hiddenOwned),
+      [workspace('hidden', ['hidden-owned'], 'Hidden Home')],
+      'needle',
+      noArchive,
+      { items: [], hasMore: false },
+      10,
+    )
+    expect(result.items.map(item => item.id)).toEqual([hiddenOwned.id])
+    expect(result.items[0]?.workspace).toBe('Hidden Home')
   })
 })
 
@@ -502,10 +564,11 @@ describe('createWorkspaceViewStore', () => {
     store.actions.setActivityExpanded('alpha:running', false)
     store.actions.setActivityExpanded('deleted:abnormal', false)
 
-    store.actions.retainAccountKeys(['', 'alpha'])
+    store.actions.setGroupExpanded(HIDDEN_SECTION_KEY, true)
+    store.actions.retainAccountKeys(['', 'alpha', HIDDEN_SECTION_KEY])
 
     const snapshot = store.getSnapshot()
-    expect(snapshot.groupExpansion).toEqual({ '': true, alpha: true })
+    expect(snapshot.groupExpansion).toEqual({ '': true, alpha: true, [HIDDEN_SECTION_KEY]: true })
     expect(snapshot.sessionOrderByAccount).toEqual({ alpha: ['alpha-session'] })
     expect(snapshot.sessionUpdatedAtByAccount).toEqual({ alpha: { 'alpha-session': 2 } })
     expect(snapshot.activityExpansion).toEqual({ 'alpha:running': false })

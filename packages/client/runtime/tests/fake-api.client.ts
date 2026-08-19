@@ -203,8 +203,9 @@ export class FakeApiClient implements IApiClient {
     openPath: (payload: unknown) => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }
 
-  // The archive-set field defaults at the binding below so list stubs keep
-  // the pre-archive `{ items }` shape; a stub carrying the field wins.
+  // Archive and hidden-set fields default at the binding below so list stubs
+  // keep the pre-field `{ items }` / `{ items, archivedSessionIds }` shapes;
+  // a stub carrying a field wins.
   onWorkspaceList: (payload: unknown) => Promise<RpcResponse<{
     items: never[]
     archivedSessionIds?: never[]

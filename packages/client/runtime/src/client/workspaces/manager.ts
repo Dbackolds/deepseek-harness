@@ -21,6 +21,12 @@ export interface WorkspaceListSnapshot {
    * lookups build their own transient Set where they need one.
    */
   archivedSessionIds: readonly SessionId[]
+  /**
+   * Registry-global hidden Workspace set in Host hide-append order.
+   * Hidden rows stay in `items` (Host `workspaceIds` order) with their
+   * `sessionIds` accounts; grouping surfaces fold them into Hidden.
+   */
+  hiddenWorkspaceIds: readonly WorkspaceId[]
   state: 'idle' | 'loading' | 'error'
   phase: WorkspaceListPhase
   error: RpcError | null
@@ -39,6 +45,7 @@ export class WorkspaceManager {
   // Full-snapshot state (list response / unary response / changed frame all
   // carry the complete set), so deltas never merge — installs replace.
   private archivedSessionIds: readonly SessionId[] = []
+  private hiddenWorkspaceIds: readonly WorkspaceId[] = []
   private state: WorkspaceListSnapshot['state'] = 'idle'
   private phase: WorkspaceListPhase = 'pending'
   private error: RpcError | null = null
@@ -51,6 +58,8 @@ export class WorkspaceManager {
    * mirror of replaying refreshFrames over the item baseline.
    */
   private archivedSupersedesRefresh = false
+  /** Same race flag as {@link archivedSupersedesRefresh} for the hidden set. */
+  private hiddenSupersedesRefresh = false
   /** Latest local reorder request; only its unary echo may install order. */
   private orderRequestGeneration = 0
   /** Increments on order frames so a later remote commit outranks an older unary echo. */
@@ -99,6 +108,7 @@ export class WorkspaceManager {
           for (const delta of frames) items = applyWorkspaceDelta(items, delta)
           this.installViews(items)
           if (!this.archivedSupersedesRefresh) this.installArchived(result.value.archivedSessionIds)
+          if (!this.hiddenSupersedesRefresh) this.installHidden(result.value.hiddenWorkspaceIds)
           this.state = 'idle'
           this.phase = 'ready'
         } else {
@@ -113,6 +123,7 @@ export class WorkspaceManager {
       } finally {
         this.refreshFrames = null
         this.archivedSupersedesRefresh = false
+        this.hiddenSupersedesRefresh = false
         this.inflight = null
         this.notifier.markDirty()
       }
@@ -232,6 +243,30 @@ export class WorkspaceManager {
   }
 
   /**
+   * Hide one registered Workspace in the registry-global set, then install
+   * the returned full set without waiting for the changed frame.
+   * @param workspaceId - Workspace to hide.
+   * @returns the wire result.
+   */
+  async hide(workspaceId: WorkspaceId): Promise<RpcResult<{ hiddenWorkspaceIds: WorkspaceId[] }>> {
+    const { result } = await this.api.workspace.hide({ workspaceId })
+    if (result.ok) this.installHidden(result.value.hiddenWorkspaceIds)
+    return result
+  }
+
+  /**
+   * Show one registered Workspace from the registry-global set, then install
+   * the returned full set without waiting for the changed frame.
+   * @param workspaceId - Workspace to show.
+   * @returns the wire result.
+   */
+  async show(workspaceId: WorkspaceId): Promise<RpcResult<{ hiddenWorkspaceIds: WorkspaceId[] }>> {
+    const { result } = await this.api.workspace.show({ workspaceId })
+    if (result.ok) this.installHidden(result.value.hiddenWorkspaceIds)
+    return result
+  }
+
+  /**
    * Add an additional folder, then publish the returned snapshot without
    * waiting for the changed frame.
    * @param workspaceId - target workspace.
@@ -272,6 +307,9 @@ export class WorkspaceManager {
     else if (envelope.payload.type === 'host/archived-sessions-changed') {
       this.installArchived(envelope.payload.archivedSessionIds)
     }
+    else if (envelope.payload.type === 'host/hidden-workspaces-changed') {
+      this.installHidden(envelope.payload.hiddenWorkspaceIds)
+    }
   }
 
   /** Re-pull the baseline after each connection generation. */
@@ -301,6 +339,7 @@ export class WorkspaceManager {
     return {
       items: this.itemViews(),
       archivedSessionIds: this.archivedSessionIds,
+      hiddenWorkspaceIds: this.hiddenWorkspaceIds,
       state: this.state,
       phase: this.phase,
       error: this.error,
@@ -317,6 +356,19 @@ export class WorkspaceManager {
     if (archivedSessionIds.length === this.archivedSessionIds.length
       && archivedSessionIds.every((id, index) => id === this.archivedSessionIds[index])) return
     this.archivedSessionIds = [...archivedSessionIds]
+    this.notifier.markDirty()
+  }
+
+  /**
+   * Replace the hidden set when membership actually changed (array identity
+   * backs Object.is short-circuits). Host snapshots are append-ordered, so
+   * positional comparison is exact, not merely heuristic.
+   */
+  private installHidden(hiddenWorkspaceIds: readonly WorkspaceId[]): void {
+    if (this.refreshFrames !== null) this.hiddenSupersedesRefresh = true
+    if (hiddenWorkspaceIds.length === this.hiddenWorkspaceIds.length
+      && hiddenWorkspaceIds.every((id, index) => id === this.hiddenWorkspaceIds[index])) return
+    this.hiddenWorkspaceIds = [...hiddenWorkspaceIds]
     this.notifier.markDirty()
   }
 

@@ -551,6 +551,156 @@ describe('WorkspaceRuntime', () => {
     await workspaces.refresh()
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
   })
+
+  it('hides a Workspace, projects the set from the response, list, and frame, and keeps the current Session', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('alpha', [sid('s-open')]), workspace('beta', [sid('s-idle')])] as never[],
+    }))
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        { sessionId: sid('s-open'), updatedAt: 2, running: false, blank: false },
+        { sessionId: sid('s-idle'), updatedAt: 1, running: false, blank: false },
+      ],
+    }) as never)
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    sessions.open(sid('s-open'))
+
+    await expect(workspaces.hide(wid('alpha'))).resolves.toBeUndefined()
+    expect(api.callsOf('workspace.hide')).toEqual([{ workspaceId: 'alpha' }])
+    expect(workspaces.list.getSnapshot().hiddenWorkspaceIds).toEqual(['alpha'])
+    expect(workspaces.list.getSnapshot().items.map(item => item.workspaceId)).toEqual(['alpha', 'beta'])
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+
+    api.onWorkspaceHide = () => Promise.resolve(ok({ hiddenWorkspaceIds: [wid('alpha'), wid('beta')] }))
+    await workspaces.hide(wid('beta'))
+    expect(workspaces.list.getSnapshot().hiddenWorkspaceIds).toEqual(['alpha', 'beta'])
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+
+    api.onWorkspaceHide = () => Promise.resolve(err({
+      code: 'workspace-not-found', message: 'no workspace ghost', details: { workspaceId: wid('ghost') },
+    }))
+    await expect(workspaces.hide(wid('ghost'))).rejects.toThrow(/workspace-not-found/)
+    expect(workspaces.list.getSnapshot().hiddenWorkspaceIds).toEqual(['alpha', 'beta'])
+
+    workspaces.handleHostEnvelope({
+      rpcId: 'frame' as never,
+      payload: { type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [wid('alpha')] },
+    } as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(workspaces.list.getSnapshot().hiddenWorkspaceIds).toEqual(['alpha'])
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+
+    api.onWorkspaceShow = () => Promise.resolve(ok({ hiddenWorkspaceIds: [] }))
+    await expect(workspaces.show(wid('alpha'))).resolves.toBeUndefined()
+    expect(api.callsOf('workspace.show')).toEqual([{ workspaceId: 'alpha' }])
+    expect(workspaces.list.getSnapshot().hiddenWorkspaceIds).toEqual([])
+
+    api.onWorkspaceShow = () => Promise.resolve(err({
+      code: 'workspace-not-found', message: 'no workspace ghost', details: { workspaceId: wid('ghost') },
+    }))
+    await expect(workspaces.show(wid('ghost'))).rejects.toThrow(/workspace-not-found/)
+
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('alpha')] as never[],
+      hiddenWorkspaceIds: [wid('alpha')],
+    }) as never)
+    await workspaces.refresh()
+    expect(workspaces.list.getSnapshot().hiddenWorkspaceIds).toEqual(['alpha'])
+  })
+
+  it('shields the hidden set from a stale in-flight baseline', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({ items: [workspace('alpha')] as never[] }))
+    api.onList = () => Promise.resolve(ok({
+      items: [{ sessionId: sid('s-open'), updatedAt: 1, running: false, blank: false }],
+    }) as never)
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    sessions.open(sid('s-open'))
+
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onWorkspaceList']>>>()
+    api.onWorkspaceList = () => gate.promise
+    const hydration = workspaces.refresh()
+    workspaces.handleHostEnvelope({
+      rpcId: 'frame' as never,
+      payload: { type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [wid('alpha')] },
+    } as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+    gate.resolve(ok({ items: [workspace('alpha')] as never[], hiddenWorkspaceIds: [] }))
+    await hydration
+    expect(workspaces.list.getSnapshot().hiddenWorkspaceIds).toEqual(['alpha'])
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('alpha')] as never[],
+      hiddenWorkspaceIds: [],
+    }) as never)
+    await workspaces.refresh()
+    expect(workspaces.list.getSnapshot().hiddenWorkspaceIds).toEqual([])
+  })
+
+  it('targets New Session at a hidden current Workspace and skips hidden No Repo / recent fallbacks', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        workspace('current-home', [sid('current')]),
+        workspace('recent-home', [sid('recent')]),
+        { ...workspace('no-repo'), title: 'No Repo', path: '/root/.dsh/no-repo' },
+      ] as never[],
+      hiddenWorkspaceIds: [wid('current-home'), wid('no-repo')],
+    }))
+    api.onList = () => Promise.resolve(ok({ items: [
+      { sessionId: sid('current'), updatedAt: 1, running: false, blank: false },
+      { sessionId: sid('recent'), updatedAt: 2, running: false, blank: false },
+    ] as never[] }))
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    await Promise.resolve()
+    sessions.open(sid('current'))
+    const unresolved = new Promise<SessionId>(() => {})
+    const connect = vi.spyOn(workspaces, 'connectWorkspace').mockReturnValue(unresolved)
+
+    workspaces.startSession()
+    await Promise.resolve()
+    expect(connect).toHaveBeenLastCalledWith(wid('current-home'))
+    expect(sessions.list.getSnapshot().current).toBe('current')
+
+    sessions.clear()
+    workspaces.startSession()
+    await Promise.resolve()
+    expect(connect).toHaveBeenLastCalledWith(wid('recent-home'))
+
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        workspace('hidden-recent', [sid('recent')]),
+        { ...workspace('no-repo'), title: 'No Repo', path: '/root/.dsh/no-repo' },
+      ] as never[],
+      hiddenWorkspaceIds: [wid('hidden-recent')],
+    }))
+    await workspaces.refresh()
+    workspaces.startSession()
+    await Promise.resolve()
+    expect(connect).toHaveBeenLastCalledWith(wid('no-repo'))
+
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        workspace('hidden-recent', [sid('recent')]),
+        { ...workspace('no-repo'), title: 'No Repo', path: '/root/.dsh/no-repo' },
+      ] as never[],
+      hiddenWorkspaceIds: [wid('hidden-recent'), wid('no-repo')],
+    }))
+    await workspaces.refresh()
+    workspaces.startSession()
+    await Promise.resolve()
+    expect(connect).toHaveBeenCalledTimes(3)
+  })
 })
 
 describe('startInitialSelection', () => {
@@ -597,6 +747,74 @@ describe('startInitialSelection', () => {
     expect(b.api.callsOf('session.create')).toEqual([{ workspaceId: 'recent' }])
     expect(b.sessions.list.getSnapshot().current).toBe('s-new')
     stop()
+  })
+
+  it('restores a current Session even when its Workspace is hidden', async () => {
+    const b = bench()
+    b.api.onList = () => Promise.resolve(ok({
+      items: [{ sessionId: sid('s1'), updatedAt: 1, running: false, blank: false }] as never[],
+    }))
+    await b.sessions.refresh()
+    b.sessions.open(sid('s1'))
+    b.api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('hidden-home', [sid('s1')])] as never[],
+      hiddenWorkspaceIds: [wid('hidden-home')],
+    }))
+    const stop = b.workspaces.startInitialSelection()
+    await b.workspaces.refresh()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(b.api.callsOf('session.create')).toHaveLength(0)
+    expect(b.sessions.list.getSnapshot().current).toBe('s1')
+    stop()
+  })
+
+  it('skips hidden No Repo and a hidden recent Workspace at cold start', async () => {
+    const hiddenNoRepo = bench()
+    hiddenNoRepo.api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        { ...workspace('sun-town', [], '2026-01-03T00:00:00.000Z'), title: 'sun-town', path: '/root/CODE/sun-town' },
+        { ...workspace('no-repo', [], '2026-01-01T00:00:00.000Z'), title: 'No Repo', path: '/root/.dsh/no-repo' },
+      ] as never[],
+      hiddenWorkspaceIds: [wid('no-repo')],
+    }))
+    hiddenNoRepo.api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-sun') }))
+    const stopNoRepo = hiddenNoRepo.workspaces.startInitialSelection()
+    await hiddenNoRepo.workspaces.refresh()
+    await hiddenNoRepo.sessions.refresh()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(hiddenNoRepo.api.callsOf('session.create')).toEqual([{ workspaceId: 'sun-town' }])
+    expect(hiddenNoRepo.sessions.list.getSnapshot().current).toBe('s-sun')
+    stopNoRepo()
+
+    const hiddenRecent = bench()
+    hiddenRecent.api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        workspace('hidden-recent', [], '2026-01-03T00:00:00.000Z'),
+        workspace('visible', [], '2026-01-01T00:00:00.000Z'),
+      ] as never[],
+      hiddenWorkspaceIds: [wid('hidden-recent')],
+    }))
+    hiddenRecent.api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-visible') }))
+    const stopRecent = hiddenRecent.workspaces.startInitialSelection()
+    await hiddenRecent.workspaces.refresh()
+    await hiddenRecent.sessions.refresh()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(hiddenRecent.api.callsOf('session.create')).toEqual([{ workspaceId: 'visible' }])
+    expect(hiddenRecent.sessions.list.getSnapshot().current).toBe('s-visible')
+    stopRecent()
+
+    const allHidden = bench()
+    allHidden.api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('only', [], '2026-01-02T00:00:00.000Z')] as never[],
+      hiddenWorkspaceIds: [wid('only')],
+    }))
+    const stopEmpty = allHidden.workspaces.startInitialSelection()
+    await allHidden.workspaces.refresh()
+    await allHidden.sessions.refresh()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(allHidden.api.callsOf('session.create')).toHaveLength(0)
+    expect(allHidden.sessions.list.getSnapshot().current).toBeUndefined()
+    stopEmpty()
   })
 
   it('stays idle when a session is already current or no recent Workspace exists', async () => {

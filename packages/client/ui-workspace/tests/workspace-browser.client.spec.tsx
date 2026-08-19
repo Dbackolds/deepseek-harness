@@ -40,8 +40,12 @@ const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView 
   workspaceId: wid(id), path: `/projects/${id}`, folders: [], title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
-const workspaceState = (items: readonly WorkspaceView[], archivedSessionIds: readonly SessionId[] = []): WorkspaceListState => ({
-  items, archivedSessionIds, state: 'idle', phase: 'ready', error: null, baselinesReady: true,
+const workspaceState = (
+  items: readonly WorkspaceView[],
+  archivedSessionIds: readonly SessionId[] = [],
+  hiddenWorkspaceIds: readonly WorkspaceId[] = [],
+): WorkspaceListState => ({
+  items, archivedSessionIds, hiddenWorkspaceIds, state: 'idle', phase: 'ready', error: null, baselinesReady: true,
   recentWorkspaceId: items[0]?.workspaceId,
 })
 function hook<T>(snapshot: T) {
@@ -77,6 +81,8 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     forkSession: vi.fn(),
     renameWorkspace: vi.fn(async () => {}),
     deleteWorkspace: vi.fn(async () => {}),
+    hideWorkspace: vi.fn(async () => {}),
+    showWorkspace: vi.fn(async () => {}),
     archiveSession: vi.fn(async () => {}),
     markUnread: vi.fn(),
     openPath: vi.fn(async () => {}),
@@ -1196,6 +1202,78 @@ describe('WorkspaceBrowser', () => {
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('denied') })
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
     expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+  })
+
+  it('hides a Workspace immediately without a confirmation dialog', async () => {
+    const hideWorkspace = vi.fn(async () => {})
+    const sessions = sessionState([summary('alpha-s', 1), summary('hidden-s', 2)])
+    const b = mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'], 'Alpha'), workspace('hidden', ['hidden-s'], 'Hidden Home')])),
+      hideWorkspace,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '隐藏工作区' }))
+    expect(hideWorkspace).toHaveBeenCalledWith(wid('alpha'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    rerender(b, {
+      useWorkspaces: hook(workspaceState(
+        [workspace('alpha', ['alpha-s'], 'Alpha'), workspace('hidden', ['hidden-s'], 'Hidden Home')],
+        [],
+        [wid('hidden')],
+      )),
+    })
+    expect(screen.getByText('Alpha')).toBeTruthy()
+    expect(screen.queryByText('Hidden Home')).toBeNull()
+    expect(screen.getByRole('button', { name: '已隐藏' })).toBeTruthy()
+    expect(screen.queryByText('hidden-s')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '已隐藏' }))
+    expect(screen.getByText('Hidden Home')).toBeTruthy()
+    expect(screen.queryByText('hidden-s')).toBeNull()
+    fireEvent.click(screen.getByText('Hidden Home'))
+    expect(screen.getByText('hidden-s')).toBeTruthy()
+  })
+
+  it('shows a hidden Workspace from the Hidden-section menu', async () => {
+    const showWorkspace = vi.fn(async () => {})
+    const sessions = sessionState([summary('hidden-s', 1)])
+    mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState(
+        [workspace('hidden', ['hidden-s'], 'Hidden Home')],
+        [],
+        [wid('hidden')],
+      )),
+      showWorkspace,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '已隐藏' }))
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Hidden Home”的操作' }))
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['显示工作区', '删除工作区'])
+    fireEvent.click(screen.getByRole('menuitem', { name: '显示工作区' }))
+    expect(showWorkspace).toHaveBeenCalledWith(wid('hidden'))
+  })
+
+  it('omits hidden-workspace sessions from the flat list and Pinned while search still matches', async () => {
+    const sessions = sessionState([summary('alpha-s', 2), summary('hidden-s', 1)])
+    const b = mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState(
+        [workspace('alpha', ['alpha-s'], 'Alpha'), workspace('hidden', ['hidden-s'], 'Hidden Home')],
+        [],
+        [wid('hidden')],
+      )),
+    })
+    act(() => { b.store.actions.pinSession('hidden-s') })
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    expect(screen.getByText('alpha-s')).toBeTruthy()
+    expect(screen.queryByText('hidden-s')).toBeNull()
+    expect(screen.queryByText('置顶')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+    fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: 'hidden' } })
+    await waitFor(() => { expect(screen.getByText('hidden-s')).toBeTruthy() })
   })
 
   it('Cancel, Escape, and Close dismiss deletion without calling the action', () => {

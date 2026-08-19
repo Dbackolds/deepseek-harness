@@ -80,6 +80,7 @@ export function workspaceListState(): WorkspaceListState {
   return {
     items: [],
     archivedSessionIds: [],
+    hiddenWorkspaceIds: [],
     state: 'idle',
     phase: 'ready',
     error: null,

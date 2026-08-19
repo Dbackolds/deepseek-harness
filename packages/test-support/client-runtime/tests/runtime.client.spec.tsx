@@ -585,8 +585,12 @@ describe('workspaces action face', () => {
     // state's archive set (features render against the same snapshot).
     await ws.archiveSession('s1' as SessionId)
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
+    await ws.hide('w1' as WorkspaceId)
+    expect(ws.list.getSnapshot().hiddenWorkspaceIds).toEqual(['w1'])
+    await ws.show('w1' as WorkspaceId)
+    expect(ws.list.getSnapshot().hiddenWorkspaceIds).toEqual([])
     expect(ws.calls.map(c => c.method)).toEqual(
-      ['create', 'create', 'pickDirectory', 'rename', 'delete', 'openPath', 'insertBefore', 'insertSessionBefore', 'archiveSession'])
+      ['create', 'create', 'pickDirectory', 'rename', 'delete', 'openPath', 'insertBefore', 'insertSessionBefore', 'archiveSession', 'hide', 'show'])
 
     ws.stub('create', () => Promise.resolve({ workspaceId: 'ws-x', title: 'X', path: '/x', sessionIds: [] } as never))
     ws.stub('pickDirectory', () => Promise.resolve('/picked'))
@@ -597,6 +601,8 @@ describe('workspaces action face', () => {
     ws.stub('insertBefore', insertBefore)
     ws.stub('insertSessionBefore', () => Promise.resolve({ workspaceId: 'w1', title: '', path: '', sessionIds: [] } as never))
     ws.stub('archiveSession', () => Promise.resolve())
+    ws.stub('hide', () => Promise.resolve())
+    ws.stub('show', () => Promise.resolve())
     expect((await ws.create({ path: '/y' })).title).toBe('X')
     await expect(ws.pickDirectory()).resolves.toBe('/picked')
     expect((await ws.rename('w1' as WorkspaceId, 'z')).title).toBe('S')
@@ -608,6 +614,10 @@ describe('workspaces action face', () => {
     // The stub replaces the default set mutation: the set stays as-is.
     await ws.archiveSession('s2' as SessionId)
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
+    await ws.hide('w2' as WorkspaceId)
+    expect(ws.list.getSnapshot().hiddenWorkspaceIds).toEqual([])
+    await ws.show('w2' as WorkspaceId)
+    expect(ws.list.getSnapshot().hiddenWorkspaceIds).toEqual([])
     await runtime.dispose()
   })
 })

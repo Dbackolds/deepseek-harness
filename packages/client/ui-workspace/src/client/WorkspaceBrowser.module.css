@@ -472,6 +472,14 @@
   margin-top: 8px;
 }
 
+.hiddenSection {
+  margin-top: 8px;
+}
+
+.hiddenSection > .groupSection {
+  margin-top: 8px;
+}
+
 .listTopDropIndicator,
 .workspaceDropBefore::before,
 .workspaceDropAfter::after {

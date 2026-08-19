@@ -22,10 +22,11 @@ export interface IWorkspaces {
   connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>
   /**
    * The New Session flow: connect the explicit, current-Session, or recent
-   * Workspace and open the resulting session; failures surface on the session
-   * list state.
+   * visible Workspace and open the resulting session; failures surface on
+   * the session list state.
    * @param workspaceId - explicit target; omitted inherits the current
-   * Session's Workspace before falling back to the recency projection.
+   * Session's Workspace (hidden still counts) before falling back to visible
+   * No Repo, then the recency projection over visible Workspaces.
    */
   startSession(workspaceId?: WorkspaceId): void
   /**
@@ -91,6 +92,18 @@ export interface IWorkspaces {
    * @param sessionId - session to archive.
    */
   archiveSession(sessionId: SessionId): Promise<void>
+  /**
+   * Hide a Workspace in the registry-global set. Membership and the current
+   * Session stay put; grouping surfaces fold the row into Hidden.
+   * @param workspaceId - Workspace to hide.
+   */
+  hide(workspaceId: WorkspaceId): Promise<void>
+  /**
+   * Show a Workspace from the registry-global hidden set, restoring it at
+   * its prior durable index.
+   * @param workspaceId - Workspace to show.
+   */
+  show(workspaceId: WorkspaceId): Promise<void>
   /**
    * Add an existing directory as an additional folder of a Workspace.
    * @param workspaceId - target workspace.

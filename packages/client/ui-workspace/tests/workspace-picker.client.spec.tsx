@@ -30,8 +30,11 @@ function hook<T>(snapshot: T) {
 const sessions: SessionListState = {
   ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
 }
-const workspaceState = (items: readonly WorkspaceView[]): WorkspaceListState => ({
-  items, archivedSessionIds: [], state: 'idle', phase: 'ready', error: null, baselinesReady: true,
+const workspaceState = (
+  items: readonly WorkspaceView[],
+  hiddenWorkspaceIds: readonly WorkspaceId[] = [],
+): WorkspaceListState => ({
+  items, archivedSessionIds: [], hiddenWorkspaceIds, state: 'idle', phase: 'ready', error: null, baselinesReady: true,
   recentWorkspaceId: items[0]?.workspaceId,
 })
 function anchor(): { current: HTMLElement } {
@@ -81,6 +84,7 @@ function mount(
   items: readonly WorkspaceView[] = [workspace('alpha', 'Alpha')],
   createWorkspace = vi.fn(),
   occupancy = occupancySource(),
+  hiddenWorkspaceIds: readonly WorkspaceId[] = [],
 ) {
   const onPick = vi.fn()
   const onClose = vi.fn()
@@ -91,7 +95,7 @@ function mount(
       open
       anchorRef={anchorRef}
       useSessions={hook(sessions)}
-      useWorkspaces={hook(workspaceState(nextItems))}
+      useWorkspaces={hook(workspaceState(nextItems, hiddenWorkspaceIds))}
       onPick={onPick}
       onClose={onClose}
       createWorkspace={createWorkspace}
@@ -114,6 +118,17 @@ function chooseAdd(): void {
 }
 
 describe('WorkspacePicker', () => {
+  it('omits hidden Workspaces from the picker list', () => {
+    mount(
+      [workspace('alpha', 'Alpha'), workspace('hidden', 'Hidden Home')],
+      vi.fn(),
+      occupancySource(),
+      [wid('hidden')],
+    )
+    expect(screen.getByRole('menuitem', { name: 'Alpha' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Hidden Home' })).toBeNull()
+  })
+
   it('lists same-title Workspaces separately and forwards the selected id', () => {
     const b = mount([workspace('alpha', 'Shared'), workspace('beta', 'Shared')])
     const entries = screen.getAllByRole('menuitem', { name: 'Shared' })

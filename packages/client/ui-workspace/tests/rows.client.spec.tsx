@@ -297,6 +297,47 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('visible Workspace menu offers Hide as the primary action without a confirmation dialog', () => {
+    const onHide = vi.fn()
+    const onRename = vi.fn()
+    const group: GroupNode = {
+      key: 'project', workspaceId: wid('project'), cwd: '/projects/project', folders: [], createdAt: 0, label: 'Project',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    render(<ProjectRowItem
+      group={group} onToggle={vi.fn()} onCreate={vi.fn()}
+      actions={{ hide: onHide, rename: onRename, addFolder: vi.fn(), removeFolder: vi.fn(), delete: vi.fn() }} t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Project”的操作' }))
+    const items = screen.getAllByRole('menuitem').map(item => item.textContent)
+    expect(items[0]).toBe('隐藏工作区')
+    expect(screen.queryByRole('menuitem', { name: '显示工作区' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: '隐藏工作区' }))
+    expect(onHide).toHaveBeenCalledOnce()
+    expect(onRename).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('hidden Workspace menu is Show plus Delete and omits rename and folder edits', () => {
+    const onShow = vi.fn()
+    const onDelete = vi.fn()
+    const group: GroupNode = {
+      key: 'project', workspaceId: wid('project'), cwd: '/projects/project', folders: ['/extra'], createdAt: 0, label: 'Project',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    render(<ProjectRowItem
+      group={group} onToggle={vi.fn()} onCreate={vi.fn()}
+      actions={{ show: onShow, delete: onDelete }} t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Project”的操作' }))
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['显示工作区', '删除工作区'])
+    expect(screen.queryByRole('menuitem', { name: '重命名' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: '添加文件夹…' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: '显示工作区' }))
+    expect(onShow).toHaveBeenCalledOnce()
+    expect(onDelete).not.toHaveBeenCalled()
+  })
+
   it('workspace hover card shows its details and copies the full directory path', async () => {
     vi.useFakeTimers()
     const writeText = vi.fn(async () => {})

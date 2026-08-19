@@ -34,9 +34,11 @@ function pointerAnchorRect(event: MouseEvent): DOMRect {
 }
 
 type WorkspaceRowActions = {
-  rename: () => void
-  addFolder: () => void
-  removeFolder: (path: string) => void
+  rename?: () => void
+  addFolder?: () => void
+  removeFolder?: (path: string) => void
+  hide?: () => void
+  show?: () => void
   delete: () => void
 }
 
@@ -100,14 +102,14 @@ function sessionLogPath(node: SessionNode): string {
 /** Dispatch one Workspace row-menu id. Unknown ids leave without a fallback. */
 function selectWorkspaceMenu(id: string, actions: WorkspaceRowActions): void {
   if (id.startsWith('remove:')) {
-    actions.removeFolder(id.slice('remove:'.length))
+    actions.removeFolder?.(id.slice('remove:'.length))
     return
   }
-  /* v8 ignore next -- remaining ids are the three static workspace rows. */
-  if (id !== 'rename' && id !== 'addFolder' && id !== 'delete') return
-  if (id === 'rename') actions.rename()
-  else if (id === 'addFolder') actions.addFolder()
-  else actions.delete()
+  if (id === 'rename') actions.rename?.()
+  else if (id === 'addFolder') actions.addFolder?.()
+  else if (id === 'hide') actions.hide?.()
+  else if (id === 'show') actions.show?.()
+  else if (id === 'delete') actions.delete()
 }
 
 /** Localized compact relative time ("刚刚"/"5分钟" in zh, "now"/"5min" in en). */
@@ -212,19 +214,26 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState<DOMRect | null>(null)
-  const workspaceMenuItems = [
-    { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
-    { id: 'addFolder', label: t('menu.addFolder'), icon: <IconPlusOutline16 /> },
-    ...row.folders.length === 0
-      ? []
-      : [{
-        id: 'removeFolder',
-        label: t('menu.removeFolder'),
-        icon: <IconFolderClose16 />,
-        submenu: row.folders.map(folder => ({ id: `remove:${folder}`, label: folder })),
-      }],
-    { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
-  ]
+  const hidden = actions?.show !== undefined
+  const workspaceMenuItems: MenuEntry[] = hidden
+    ? [
+      { id: 'show', label: t('menu.showWorkspace'), icon: <IconFolderOpen16 /> },
+      { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
+    ]
+    : [
+      { id: 'hide', label: t('menu.hideWorkspace'), icon: <IconFolderClose16 /> },
+      { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
+      { id: 'addFolder', label: t('menu.addFolder'), icon: <IconPlusOutline16 /> },
+      ...row.folders.length === 0
+        ? []
+        : [{
+          id: 'removeFolder',
+          label: t('menu.removeFolder'),
+          icon: <IconFolderClose16 />,
+          submenu: row.folders.map(folder => ({ id: `remove:${folder}`, label: folder })),
+        }],
+      { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
+    ]
   const ownRow = (
     <div
       className={clsx(css.projectRow, (menuOpen || contextMenu !== null) && css.menuOpen)}
