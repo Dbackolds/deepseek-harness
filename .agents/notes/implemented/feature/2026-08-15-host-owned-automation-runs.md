@@ -12,7 +12,7 @@ A second need is an internal open interface: Settings, Host RPC, and later model
 
 ## Decision
 
-`ctx.automation` owns a Host-level rule table in the `automation` storage domain. A live Web Host arms timers from enabled rules and fires by creating a Session with `origin: 'automation'`, pinning an optional permission preset, appending log-only `automation/start`, and queueing the task as a plugin-sourced user message.
+`ctx.automation` owns a Host-level rule table in the `automation` storage domain. A live Web Host arms timers from enabled rules and fires by creating a Session with `origin: 'automation'`, pinning an optional permission preset, appending log-only `automation/start`, queueing the task as a plugin-sourced user message, and naming the Session after the rule when `ctx.sessionTitle` is present.
 
 Selectors are `after`, `at`, `every` (≥ 300s, latest-only), and `local-clock` (`HH:mm` plus optional ISO weekdays and an explicit IANA zone). There is no Cron evaluator. `onOverlap` is per-rule `skip` | `replace` and looks only at that rule's previous `started` Session: busy means a live Agent with `status === 'running'`. `skip` records `skipped_busy`; `replace` cancels with `{ kind: 'automation', ruleId }` and opens the new Session immediately.
 

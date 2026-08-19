@@ -22,7 +22,7 @@
 
 创建需要非空 `task`、已存在的 `workspaceId`，以及恰好一个时间选择器。`onOverlap` 默认为 `skip`。省略 `agentPreset` / `permissionPreset` 时，开火使用当时的部署默认值。具名 `permissionPreset` 在 Session 发布之后、入队 prompt 之前通过 `permissionPresets.set` 固定。
 
-开火会创建 `origin: 'automation'` 的 Session，追加仅日志的 `automation/start`，再把 task 作为插件来源的 user message `followup()`。dispatch 表示 prompt 已入队，不表示模型已跑完。一次性规则在成功开火后 disable。周期规则推进到下一个创建锚点或 local-clock 出现时刻，从不回放错过的积压。
+开火会创建 `origin: 'automation'` 的 Session，追加仅日志的 `automation/start`，把 task 作为插件来源的 user message `followup()`，并在 `ctx.sessionTitle` 存在时用规则名 `rename` 该 Session。dispatch 表示 prompt 已入队，不表示模型已跑完。一次性规则在成功开火后 disable。周期规则推进到下一个创建锚点或 local-clock 出现时刻，从不回放错过的积压。
 
 `onOverlap: skip` 在上一次 `started` Session 仍有 live 且 `running` 的 Agent 时写入 `skipped_busy`，不再排队另一条 Session。一次性 skip 保留原目标并监视该 Agent 进入 `idle`。周期 skip 仍会推进，避免同一时刻死循环。`onOverlap: replace` 用 `{ kind: 'automation', ruleId }` 和 `{ keepInbox: false }` 取消忙碌 Agent，把旧 run 标为 `replaced`，并立即打开新 Session。
 

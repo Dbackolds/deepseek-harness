@@ -22,7 +22,7 @@ English | [中文](README.zh.md)
 
 Create requires a non-empty `task`, an existing `workspaceId`, and exactly one selector. `onOverlap` defaults to `skip`. Omitted `agentPreset` / `permissionPreset` inherit the deployment defaults at fire time. A named `permissionPreset` is pinned with `permissionPresets.set` after the Session is published and before the prompt is queued.
 
-A fire creates a Session with `origin: 'automation'`, appends log-only `automation/start`, then `followup()`s the task as a plugin-sourced user message. Dispatch means the prompt was queued, not that the model finished. One-shot rules disable after a successful fire. Recurring rules advance to the next creation-anchor or local-clock occurrence and never replay a missed backlog.
+A fire creates a Session with `origin: 'automation'`, appends log-only `automation/start`, `followup()`s the task as a plugin-sourced user message, and names the Session after the rule through `ctx.sessionTitle.rename` when that service is present. Dispatch means the prompt was queued, not that the model finished. One-shot rules disable after a successful fire. Recurring rules advance to the next creation-anchor or local-clock occurrence and never replay a missed backlog.
 
 `onOverlap: skip` writes `skipped_busy` when the previous `started` Session still has a live `running` Agent and does not queue another Session. One-shot skip leaves the target in place and watches that Agent for `idle`. Recurring skip still advances so the same instant cannot loop. `onOverlap: replace` cancels the busy Agent with `{ kind: 'automation', ruleId }` and `{ keepInbox: false }`, marks the old run `replaced`, and opens the new Session immediately.
 

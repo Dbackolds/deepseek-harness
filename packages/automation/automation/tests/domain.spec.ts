@@ -246,6 +246,33 @@ describe('automation service', () => {
     expect(await service.delete(rule.id)).toBe(false)
   })
 
+  it('names a fired Session after the rule', async () => {
+    const { ctx, service, created } = await harness()
+    const rename = vi.fn()
+    ctx.provide('sessionTitle', { rename })
+    const rule = await service.create({
+      name: 'FAC Sub2API daily deploy',
+      task: 'read AGENTS.md and deploy',
+      workspaceId: WORKSPACE,
+      afterSeconds: 60,
+    })
+    await service.runNow(rule.id)
+    expect(rename).toHaveBeenCalledWith(created[0]!.session, 'FAC Sub2API daily deploy')
+  })
+
+  it('keeps firing when naming the Session fails', async () => {
+    const { ctx, service } = await harness()
+    ctx.provide('sessionTitle', {
+      rename: () => { throw new Error('not live') },
+    })
+    const rule = await service.create({
+      task: 'still fire',
+      workspaceId: WORKSPACE,
+      afterSeconds: 60,
+    })
+    await expect(service.runNow(rule.id)).resolves.toMatchObject({ outcome: 'started' })
+  })
+
   it('deleteRun removes one fire and keeps the rule', async () => {
     const { service } = await harness()
     const rule = await service.create({

@@ -10,6 +10,7 @@ import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-agent-presets'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-permission-presets'
+import type {} from '@deepseek-ai/dsh-session-title'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { DomainGlobal, KvTable } from '@deepseek-ai/dsh-storage-domain'
@@ -374,6 +375,7 @@ export class AutomationService extends Service {
         content: [{ type: 'text', text: rule.task }],
         source: { kind: 'plugin', plugin: 'automation' },
       }))
+      this.applyFiredSessionTitle(agent.session, rule.name)
       const workspace = this.ctx.workspaceRegistry.get(rule.workspaceId)
       if (workspace !== undefined)
         await workspace.attachSession(agent.session.id)
@@ -465,6 +467,22 @@ export class AutomationService extends Service {
       updatedAt: formatUtcInstant(now),
     })
   }
+  /**
+   * Name a fired Session after the rule so the list does not fall back to the workspace basename.
+   * Title-service absence or a failed rename leaves the fire itself intact.
+   * @param session - published Session this fire opened.
+   * @param name - durable rule name.
+   */
+  private applyFiredSessionTitle(session: { id: SessionId }, name: string): void {
+    const titles = this.ctx.get('sessionTitle')
+    if (titles === undefined) return
+    try {
+      titles.rename(session as never, name)
+    } catch (error) {
+      this.ctx.logger.warn(`automation: naming session '${session.id}' failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   private latestStartedRun(ruleId: AutomationRuleId) {
     return [...this.requireRuns().entries()]
       .map(([, record]) => record)

@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`ctx.automation` 在 `automation` storage domain 里拥有 Host 级规则表。存活的 Web Host 从 enabled 规则武装定时器，开火时创建 `origin: 'automation'` 的 Session，固定可选 permission preset，追加仅日志的 `automation/start`，并把 task 作为插件来源的 user message 入队。
+`ctx.automation` 在 `automation` storage domain 里拥有 Host 级规则表。存活的 Web Host 从 enabled 规则武装定时器，开火时创建 `origin: 'automation'` 的 Session，固定可选 permission preset，追加仅日志的 `automation/start`，把 task 作为插件来源的 user message 入队，并在 `ctx.sessionTitle` 存在时用规则名命名该 Session。
 
 选择器是 `after`、`at`、`every`（≥ 300 秒，只取最近一次）和 `local-clock`（`HH:mm` 加可选 ISO 星期与显式 IANA 时区）。没有 Cron 求值器。`onOverlap` 是逐条规则的 `skip` | `replace`，只看该规则上一次 `started` Session：忙表示 live Agent 且 `status === 'running'`。`skip` 记录 `skipped_busy`；`replace` 用 `{ kind: 'automation', ruleId }` 取消并立即打开新 Session。
 
