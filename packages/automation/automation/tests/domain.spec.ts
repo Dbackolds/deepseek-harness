@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
@@ -298,7 +299,7 @@ describe('automation service', () => {
     const run = await service.fireDue(rule.id, NOW)
     expect(run.source).toBe('schedule')
     expect(run.endedAt).toBeUndefined()
-    created[0]!.ctx.emit('agent/status', { agent: created[0]!, status: 'idle' })
+    created[0]!.ctx.emit('agent/status', { agent: created[0]! as unknown as Agent, status: 'idle' })
     await vi.waitFor(() => {
       expect(service.listRuns(rule.id)[0]?.endedAt).toBe('2026-08-15T12:00:00.000Z')
     })
