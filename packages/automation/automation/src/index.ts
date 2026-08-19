@@ -11,7 +11,7 @@ import type {} from '@deepseek-ai/dsh-agent-presets'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import type {} from '@deepseek-ai/dsh-session-title'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { DomainGlobal, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -469,17 +469,32 @@ export class AutomationService extends Service {
   }
   /**
    * Name a fired Session after the rule so the list does not fall back to the workspace basename.
+   * Prefers the live store Session, then `sessionTitle.rename`, then a direct `session/title` append.
    * Title-service absence or a failed rename leaves the fire itself intact.
    * @param session - published Session this fire opened.
    * @param name - durable rule name.
    */
-  private applyFiredSessionTitle(session: { id: SessionId }, name: string): void {
+  private applyFiredSessionTitle(session: Session, name: string): void {
+    const live = this.ctx.sessions.get(session.id) ?? session
     const titles = this.ctx.get('sessionTitle')
-    if (titles === undefined) return
+    if (titles !== undefined) {
+      try {
+        titles.rename(live, name)
+        return
+      } catch (error) {
+        this.ctx.logger.warn(`automation: naming session '${session.id}' failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    const title = name.trim()
+    if (title.length === 0) return
     try {
-      titles.rename(session as never, name)
+      live.append('session/title', {
+        title,
+        messageSeqs: [],
+        source: { kind: 'user' },
+      })
     } catch (error) {
-      this.ctx.logger.warn(`automation: naming session '${session.id}' failed: ${error instanceof Error ? error.message : String(error)}`)
+      this.ctx.logger.warn(`automation: appending title for session '${session.id}' failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

@@ -71,7 +71,11 @@ async function harness(options: {
     }),
     get: (id: SessionId) => agents.get(id),
   })
-  ctx.provide('sessions', { get: () => undefined, list: () => [], flush: async () => undefined })
+  ctx.provide('sessions', {
+    get: (id: SessionId) => created.find(item => item.session.id === id)?.session,
+    list: () => created.map(item => item.session),
+    flush: async () => undefined,
+  })
   ctx.provide('agentDefaultModel', {
     currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }),
   })
@@ -259,6 +263,22 @@ describe('automation service', () => {
     })
     await service.runNow(rule.id)
     expect(rename).toHaveBeenCalledWith(created[0]!.session, 'FAC Sub2API daily deploy')
+  })
+
+  it('appends a title event when sessionTitle is absent', async () => {
+    const { service, created } = await harness()
+    const rule = await service.create({
+      name: 'FAC Sub2API daily deploy',
+      task: 'read AGENTS.md and deploy',
+      workspaceId: WORKSPACE,
+      afterSeconds: 60,
+    })
+    await service.runNow(rule.id)
+    expect(created[0]?.session.append).toHaveBeenCalledWith('session/title', {
+      title: 'FAC Sub2API daily deploy',
+      messageSeqs: [],
+      source: { kind: 'user' },
+    })
   })
 
   it('keeps firing when naming the Session fails', async () => {

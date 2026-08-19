@@ -159,7 +159,7 @@ export interface SessionTitleProvider {
 }
 
 /**
- * Collect human text-bearing user messages in log order.
+ * Collect title-eligible text-bearing user messages in log order.
  * @param events - session log or persisted replay.
  * @param throughSeq - optional inclusive event boundary.
  * @returns eligible messages with exact source seqs.
@@ -171,7 +171,7 @@ export function collectSessionTitleMessages(
   const messages: SessionTitleUserMessage[] = []
   for (const event of events) {
     if (throughSeq !== undefined && event.seq > throughSeq) break
-    if (event.type !== 'user/message' || event.data.source.kind !== 'user') continue
+    if (event.type !== 'user/message' || !isSessionTitleInput(event.data.source)) continue
     const content = event.data.content
     const text = content
       .filter((block): block is Extract<(typeof content)[number], { type: 'text' }> => block.type === 'text')
@@ -198,6 +198,11 @@ export function foldSessionTitle(events: readonly SessionEvent[]): SessionTitleS
     eventSeq: event.seq,
     updatedAt: event.time,
   })
+}
+
+/** Human prompts and Host Automation tasks are title input; other plugin messages are not. */
+function isSessionTitleInput(source: { kind: string; plugin?: string }): boolean {
+  return source.kind === 'user' || (source.kind === 'plugin' && source.plugin === 'automation')
 }
 
 /** Defensive copy of a logged title source (the snapshot must not alias log-owned objects). */
@@ -316,6 +321,16 @@ export class SessionTitleService extends Service {
       })
     })
 
+    ctx.on('session/created', (session) => {
+      this.defer(async () => {
+        try {
+          await this.ensureFallback(session)
+        } catch (error: unknown) {
+          if (!this.serviceActive()) return
+          this.ctx.logger.warn(`session "${session.id}": fallback title on create failed: ${String(error)}`)
+        }
+      })
+    })
     ctx.on('session/event', (session, event) => {
       switch (event.type) {
         case 'user/message':
@@ -461,7 +476,7 @@ export class SessionTitleService extends Service {
   /** Schedule fallback creation and any provider cadence for one eligible event. */
   private onUserMessage(session: Session, event: Extract<SessionEvent, { type: 'user/message' }>): void {
     if (!this.serviceActive()) return
-    if (event.data.source.kind !== 'user' || collectSessionTitleMessages([event]).length === 0) return
+    if (!isSessionTitleInput(event.data.source) || collectSessionTitleMessages([event]).length === 0) return
     // A user rename pins the title: no automatic revision may override it.
     if (this.get(session)?.source.kind === 'user') return
     const registration = this.registration

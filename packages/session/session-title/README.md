@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Log-backed session titles with an immediate deterministic fallback and one optional asynchronous provider. Every accepted revision is a log-only `session/title` event; `foldSessionTitle()` and `ctx.sessionTitle.get()` select the latest event and return its event seq and timestamp.
 
-Only text blocks from human `user/message` events are eligible. The first eligible prompt schedules a fallback from its first words within the configured UTF-8 byte limit. Whitespace is normalized, terminal control sequences are removed, and truncation never splits a code point. Empty and non-text prompts wait for later eligible input.
+Text blocks from human `user/message` events and Host Automation plugin tasks (`source.plugin === 'automation'`) are eligible. Other plugin messages stay out. The first eligible prompt schedules a fallback from its first words within the configured UTF-8 byte limit. Whitespace is normalized, terminal control sequences are removed, and truncation never splits a code point. Empty and non-text prompts wait for later eligible input.
 
 ## Service: `SessionTitleService` (ctx key: `sessionTitle`)
 
