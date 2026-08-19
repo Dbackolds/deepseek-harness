@@ -146,7 +146,7 @@ You are a delegated subagent: your permission scope was fixed when you were star
 
 - **ACP 子 agent 仍为一次性，且无法通过追踪枚举**：ACP 运行在 parent 会话语料中没有本地 child 会话。ACP 的 `prepareContinuable` 需要在提供方专用描述符数据中持久化远端会话 id，以及逐子 agent 的继续执行能力声明，因为 ACP 的 `loadSession` 支持按子 agent 协商，而不是通过方法是否存在来确定。远程提供方还需要一份独立的 Activation 所有权约定，具备等效的经认证控制和子先于父的完全停稳保证，才能支持可继续子 agent。
 - **无 host-user 继续执行**：`followup()` 要求确切在线直接父级。只有 `interrupt()` 接受持久化 parent 地址形式的用户授权，因为停止一个轮次是幂等的且不投递任何内容；未来 host 适配器需要具体的经认证交互，才能让该 seam 获得用户投递能力。
-- **不对当前轮次进行 steering**：可继续消息和唤醒式 report 会排入后续轮次，均不会重定向正在进行的轮次。
+- **不中止当前轮次**：可继续消息、结算通知和唤醒式 report 都不会中止正在进行的生成或已经派出的工具。Host `subagent-delivery` 可在繁忙 parent 上 steer 到最近的后续 step，或排队到后续一轮。
 - **取消收敛期间存在唤醒缺口**：中断信号发出后、活动 driver 进入 idle 前被接受的唤醒型 follow-up 会保持排队，直到另一条唤醒发送到达。Issue #1838 负责 agent-loop 的唤醒锁存；普通会话取消也受此影响。
 - **驻留仅限进程内**：Activation inbox 与所有权图不会在两个 harness 进程之间协调；对单个持久化存储的并发访问仍然需要持久化邮箱和跨进程租约协议。
 - **不回放已接受但未记录的消息**：只有写入子 agent 会话日志的消息才能连同提供该消息的来源一起重建。崩溃可能丢失从未写入日志、已被接受的初始提示词或后续消息；此后一条经授权的消息可以冷恢复该子 agent，但丢失的消息不会自动回放。

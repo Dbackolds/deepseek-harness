@@ -46,7 +46,7 @@ The browser side of the dsh web GUI: shell boot, browser-host communication, sha
 | [`ui-settings-general/`](ui-settings-general/README.md) | Provides the general settings section. |
 | [`ui-settings-llm-policy/`](ui-settings-llm-policy/README.md) | Edits the product-wide model-request retry budget and stream-idle timeout. |
 | [`ui-settings-models/`](ui-settings-models/README.md) | Provides model-provider configuration and DeepSeek onboarding. |
-| [`ui-settings-subagents/`](ui-settings-subagents/README.md) | Owns the Subagents settings section: the user definition library. |
+| [`ui-settings-subagents/`](ui-settings-subagents/README.md) | Owns the Subagents settings section: busy-state delivery preferences and the user definition library. |
 | [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.md) | Contributes the read-only Host Loader inventory tab to Plugins settings. |
 
 Each child reference owns its contract and detailed behavior. The [slot system standard](../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md) and [web client architecture note](../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) own the cross-package composition and loading decisions.
