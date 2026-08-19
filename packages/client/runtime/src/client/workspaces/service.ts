@@ -117,8 +117,8 @@ export class WorkspaceRuntime implements IWorkspaces {
 
   /**
    * Follow the first complete Workspace/Session baseline and select a default
-   * session exactly once. A restored current session wins; otherwise the most
-   * recent Workspace is connected (reusing or creating its blank session).
+   * session exactly once. A restored current session wins; otherwise No Repo
+   * is connected when listed, else the most recent Workspace.
    * Later explicit clears stay cleared instead of retriggering this startup
    * policy. A failed connect may retry on the next baseline projection.
    * @returns disposer for the baseline subscription; late work cannot navigate after disposal.
@@ -135,7 +135,7 @@ export class WorkspaceRuntime implements IWorkspaces {
       const workspace = this.list.getSnapshot()
       if (!workspace.baselinesReady) return
       const current = this.sessions.list.getSnapshot().current
-      const target = workspace.recentWorkspaceId
+      const target = noRepoWorkspace(workspace.items)?.workspaceId ?? workspace.recentWorkspaceId
       if (current !== undefined || target === undefined) {
         state = 'done'
         return
@@ -167,8 +167,8 @@ export class WorkspaceRuntime implements IWorkspaces {
   /**
    * The shared New Session action behind the shell entry points (sidebar
    * button, workspace browser): resolve the target Workspace — explicit wins,
-   * then the current Session's Workspace, then the recent-Workspace
-   * projection — connect its blank session and navigate there; with no
+   * then the current Session's Workspace, then No Repo when listed, then
+   * the recent-Workspace projection — connect its blank session and navigate there; with no
    * Workspace at all, clear the selection into the New Session view state.
    * Connect failures are non-fatal (console diagnostics; the current view
    * stays usable).
@@ -180,7 +180,10 @@ export class WorkspaceRuntime implements IWorkspaces {
     const currentWorkspaceId = current === undefined
       ? undefined
       : workspace.items.find(item => item.sessionIds.includes(current))?.workspaceId
-    const target = workspaceId ?? currentWorkspaceId ?? workspace.recentWorkspaceId
+    const target = workspaceId
+      ?? currentWorkspaceId
+      ?? noRepoWorkspace(workspace.items)?.workspaceId
+      ?? workspace.recentWorkspaceId
     if (target === undefined) {
       this.sessions.clear()
       return
@@ -376,6 +379,12 @@ export class WorkspaceRuntime implements IWorkspaces {
       recentWorkspaceId: baselinesReady ? recentWorkspace(workspace.items, sessions.byId) : undefined,
     })
   }
+}
+
+/** The No Repo workspace when the Host registered one. */
+function noRepoWorkspace(workspaces: readonly WorkspaceView[]): WorkspaceView | undefined {
+  return workspaces.find(item => item.title === 'No Repo')
+    ?? workspaces.find(item => item.path.endsWith('/no-repo') || item.path.endsWith('\\no-repo'))
 }
 
 /** Stable tie-breaking follows Host Workspace order. */

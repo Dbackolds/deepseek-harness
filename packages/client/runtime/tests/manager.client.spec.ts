@@ -814,6 +814,19 @@ describe('remaining branches', () => {
     expect(manager.getListSnapshot().items).toHaveLength(1)
   })
 
+  it('replaces cwd when a later host frame reports a new effective home', () => {
+    const manager = new SessionManager(new FakeApiClient(), fakeRemote())
+    manager.handleHostEnvelope({
+      rpcId: 'born' as never,
+      payload: { type: 'host/session-added', blank: true, sessionId: S1, cwd: '/no-repo' },
+    })
+    manager.handleHostEnvelope({
+      rpcId: 'moved' as never,
+      payload: { type: 'host/session-added', blank: true, sessionId: S1, cwd: '/proj' },
+    })
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S1, cwd: '/proj' })
+  })
+
   it('subscribe notifies on list changes and stops after unsubscribe', async () => {
     const api = new FakeApiClient()
     const manager = new SessionManager(api, fakeRemote())

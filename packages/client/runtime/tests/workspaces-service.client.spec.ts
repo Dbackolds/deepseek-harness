@@ -454,6 +454,17 @@ describe('WorkspaceRuntime', () => {
     await Promise.resolve()
     expect(connect).toHaveBeenLastCalledWith(wid('recent-home'))
 
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        { ...workspace('recent-home', [sid('recent')]), title: 'recent-home' },
+        { ...workspace('no-repo'), title: 'No Repo', path: '/root/.dsh/no-repo' },
+      ] as never[],
+    }))
+    await workspaces.refresh()
+    workspaces.startSession()
+    await Promise.resolve()
+    expect(connect).toHaveBeenLastCalledWith(wid('no-repo'))
+
     const emptyCtx = new Context()
     const emptyApi = new FakeApiClient()
     const emptySessions = new SessionRuntime(emptyCtx, emptyApi, fakeRemote())
@@ -550,6 +561,24 @@ describe('startInitialSelection', () => {
     const workspaces = new WorkspaceRuntime(ctx, api, sessions)
     return { api, sessions, workspaces }
   }
+
+  it('prefers No Repo over a more recent project workspace', async () => {
+    const b = bench()
+    const stop = b.workspaces.startInitialSelection()
+    b.api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        { ...workspace('sun-town', [], '2026-01-03T00:00:00.000Z'), title: 'sun-town', path: '/root/CODE/sun-town' },
+        { ...workspace('no-repo', [], '2026-01-01T00:00:00.000Z'), title: 'No Repo', path: '/root/.dsh/no-repo' },
+      ] as never[],
+    }))
+    b.api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-no-repo') }))
+    await b.workspaces.refresh()
+    await b.sessions.refresh()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(b.api.callsOf('session.create')).toEqual([{ workspaceId: 'no-repo' }])
+    expect(b.sessions.list.getSnapshot().current).toBe('s-no-repo')
+    stop()
+  })
 
   it('connects the recent Workspace blank session once baselines are ready and opens it', async () => {
     const b = bench()
