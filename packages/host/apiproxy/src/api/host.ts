@@ -36,8 +36,8 @@ export interface DirectoryListing {
 export interface HostApi {
   /**
    * One-shot host snapshot. Empty payload uses the literal `{}` (extend in place when fields arrive).
-   * version = the host app's (apps/cli) package.json version; cwd = the host process working
-   * directory (root for session persistence and tool execution); provider/model = the defaults
+   * version = the host app's (apps/cli) package.json version; cwd = the No Repo directory
+   * used when session.create omits a project; provider/model = the defaults
    * applied when a new agent doesn't specify them explicitly, absent when the host configures
    * no explicit default (the adapter falls back internally);
    * attachedSessions = count of currently attached sessions (those with a live agent);

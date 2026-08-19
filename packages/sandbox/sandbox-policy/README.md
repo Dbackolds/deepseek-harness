@@ -22,14 +22,14 @@ Filesystem tools, one-shot bash commands, and terminal sessions may enforce the 
 - `workspace:folders` — a request-time cache-safe context contribution from `foldersOf(session)`. Empty for a single-folder workspace; otherwise it lists the session current working directory and every additional folder, including vanished ones marked `(missing)`.
 - `effectiveSandboxMode(events)` — the pure fold of a session's `sandbox/mode` events (the last switch wins, or `undefined`), used inside `resolve()`.
 - `setSandboxMode(session, mode)` — THE write path for a per-session override: appends exactly one `sandbox/mode` event. The switch IS its event; nothing mutates the mode out of band.
-- `sessionWorkingDirectory(session)` / `setSessionWorktree(session, overlay)` — the last `git/worktree` overlay, or the header cwd; THE write path appends exactly one `git/worktree` event.
+- `sessionWorkingDirectory(session)` / `setSessionHome(session, path)` / `setSessionWorktree(session, overlay)` — the last `workspace/home` or `git/worktree` by log time, or the header cwd; THE home write path appends exactly one `workspace/home` event.
 - `SANDBOX_MODES` — every mode, for option advertisement and runtime validation.
 
 The optional `./invariant` companion rejects a forged durable `sandbox/mode` event whose value falls outside that closed vocabulary; Session and its companion own the surrounding storage and core execution-enclosure rules. The agent loop logs the assembled full runtime-context snapshot as a sourced `user/message`, so exact policy input remains reconstructable without an in-memory “last told” mirror.
 
 ## The per-session store
 
-A runtime switch is one log-only `sandbox/mode` event on the session it applies to. `effective = explicit grant ?? fold(events) ?? deployment default`, so an override survives restart by replay and two sessions never see each other's state. Workspace membership still uses the immutable `SessionHeader.cwd` recorded at creation. Tool cwd and `workspace-write` roots additionally fold the last `git/worktree` overlay so two sessions can sit on different branches. The events stay log-only; before the next request, the owner contributes the current fact to the full runtime-context snapshot.
+A runtime switch is one log-only `sandbox/mode` event on the session it applies to. `effective = explicit grant ?? fold(events) ?? deployment default`, so an override survives restart by replay and two sessions never see each other's state. Birth cwd stays the persistence identity. Live workspace membership and tool cwd fold the last `workspace/home` or `git/worktree` overlay so a session can move projects or sit on a different branch. The events stay log-only; before the next request, the owner contributes the current fact to the full runtime-context snapshot.
 
 ## Model Experience
 
@@ -83,6 +83,6 @@ The stable system prompt remains byte-identical across mode changes. A changed f
 
 ## Known Limitations and Deferred Work
 
-- **One primary workspace root per session** — policy resolves the last `git/worktree` overlay or `SessionHeader.cwd` as the process cwd; extra folders remain the owning workspace folders and appear in `workspace:folders` plus default grep/glob roots.
+- **One primary workspace root per session** — policy resolves the last `workspace/home` or `git/worktree` overlay, else `SessionHeader.cwd`, as the process cwd; extra folders remain the owning workspace folders and appear in `workspace:folders` plus default grep/glob roots.
 - **File-effect modes only** — `SandboxMode` governs file effects; network and process policy are outside its vocabulary, so no knob here restricts them.
 - **Temporary areas are deliberately summarized** — enforcing backends grant different platform temporary areas, which are selected after policy resolution and therefore cannot be enumerated truthfully in the current context.

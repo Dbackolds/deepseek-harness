@@ -11,7 +11,7 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import { sessionWorkingDirectory } from '@deepseek-ai/dsh-sandbox-policy'
 import {
   escapeText,
   isModelInvocable,
@@ -33,7 +33,7 @@ function skillLookup(ctx: Context, agent: Agent | undefined, signal: AbortSignal
       .filter(folder => !folder.missing)
       .map(folder => folder.path)
   return {
-    cwd: agent?.session.header.cwd,
+    cwd: agent === undefined ? undefined : sessionWorkingDirectory(agent.session),
     ...extraRoots === undefined || extraRoots.length === 0 ? {} : { extraRoots },
     signal,
     scope: agent,

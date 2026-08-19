@@ -105,6 +105,7 @@ export class WorkspaceRegistry extends Service {
     table: () => this.requireTable(),
     sessionPath: id => this.sessionPaths.get(id),
     readSessionHeader: id => this.readSessionHeader(id),
+    liveSessionEvents: id => this.ctx.get('sessions')?.get(id)?.events,
     rememberSessionPath: (id, path) => {
       this.sessionPaths.set(id, path)
       this.invalidSessionPaths.delete(id)

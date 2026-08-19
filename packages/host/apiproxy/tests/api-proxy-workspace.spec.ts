@@ -603,3 +603,64 @@ describe('workspace.addFolder', () => {
     })
   })
 })
+
+describe('session.create omitted project', () => {
+  it('lands in No Repo and attaches there', async () => {
+    const { api, ctx } = await harness()
+    const created = expectOk(await api.sessions.create(request({})))
+    const { dshHomePath } = await import('@deepseek-ai/dsh-home-paths')
+    const noRepo = dshHomePath('no-repo')
+    expect(ctx.sessions.get(created.sessionId)?.header.cwd).toBe(noRepo)
+    const listed = expectOk(await api.workspace.list(request({})))
+    const row = listed.items.find(item => item.path === noRepo)
+    expect(row?.title).toBe('No Repo')
+    expect(row?.sessionIds).toContain(created.sessionId)
+  })
+})
+
+describe('session.rehome', () => {
+  it('moves the live home and workspace account without rewriting birth cwd', async () => {
+    const { api, ctx, root } = await harness()
+    const birth = stageDir(root, 'birth')
+    const target = stageDir(root, 'target')
+    const birthWorkspace = expectOk(await api.workspace.create(request({ path: birth }))).workspace
+    const created = expectOk(await api.sessions.create(request({ workspaceId: birthWorkspace.workspaceId })))
+    const moved = expectOk(await api.sessions.rehome(request({
+      sessionId: created.sessionId,
+      path: target,
+    })))
+    expect(moved.path).toBe(target)
+    expect(moved.cwd).toBe(target)
+    const session = ctx.sessions.get(created.sessionId)
+    expect(session?.header.cwd).toBe(birth)
+    expect(session?.events.some(event => event.type === 'workspace/home')).toBe(true)
+    const listed = expectOk(await api.workspace.list(request({})))
+    const targetRow = listed.items.find(item => item.path === target)
+    const birthRow = listed.items.find(item => item.path === birth)
+    expect(targetRow?.sessionIds).toContain(created.sessionId)
+    expect(birthRow?.sessionIds ?? []).not.toContain(created.sessionId)
+  })
+
+  it('refuses the canonical No Repo directory', async () => {
+    const { api, root } = await harness()
+    const birth = stageDir(root, 'stay')
+    const created = expectOk(await api.sessions.create(request({ cwd: birth })))
+    const { dshHomePath } = await import('@deepseek-ai/dsh-home-paths')
+    const refused = await api.sessions.rehome(request({
+      sessionId: created.sessionId,
+      path: dshHomePath('no-repo'),
+    }))
+    expect(refused.result).toMatchObject({ ok: false, error: { code: 'session-rehome-no-repo' } })
+  })
+
+  it('refuses a missing path', async () => {
+    const { api, root } = await harness()
+    const birth = stageDir(root, 'keep')
+    const created = expectOk(await api.sessions.create(request({ cwd: birth })))
+    const refused = await api.sessions.rehome(request({
+      sessionId: created.sessionId,
+      path: join(root, 'missing-home'),
+    }))
+    expect(refused.result).toMatchObject({ ok: false, error: { code: 'workspace-invalid-path' } })
+  })
+})

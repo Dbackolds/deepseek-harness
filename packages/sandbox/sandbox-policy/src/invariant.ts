@@ -26,6 +26,11 @@ function validateEvent(event: SessionEvent, fail: InvariantFailure): void {
       fail(`git/worktree carries empty branch ${JSON.stringify(event.data.branch)}`)
     }
   }
+  if (event.type === 'workspace/home') {
+    if (typeof event.data.path !== 'string' || event.data.path.length === 0) {
+      fail(`workspace/home carries empty path ${JSON.stringify(event.data.path)}`)
+    }
+  }
 }
 
 /** Install validation for loaded and newly appended sandbox modes. */

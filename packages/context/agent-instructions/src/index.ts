@@ -15,7 +15,7 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import { sessionWorkingDirectory } from '@deepseek-ai/dsh-sandbox-policy'
 import { Config, resolveConfig, workspaceBaselineIdentity, type ResolvedConfig } from './config.ts'
 import { findProjectRoot, loadBaselineInstructionSet } from './files.ts'
 import {
@@ -122,7 +122,7 @@ export function apply(ctx: Context, config: Config): void {
     let desiredBaseline = false
     const authorityMessages = [...claimed]
     /* v8 ignore next -- normal agents carry an absolute session cwd. */
-    const cwd = agent.session.header.cwd ?? process.cwd()
+    const cwd = sessionWorkingDirectory(agent.session) ?? process.cwd()
     const extraRoots = ctx.get('sandboxPolicy')?.foldersOf(agent.session).additional
       .filter(folder => !folder.missing)
       .map(folder => folder.path) ?? []

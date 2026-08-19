@@ -1,7 +1,9 @@
 /** Fold and write path for the per-session git/worktree overlay. */
 import { describe, expect, it } from 'vitest'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
-import { effectiveWorktree, sessionWorkingDirectory, setSessionWorktree } from '../src/session-worktree.ts'
+import {
+  effectiveHome, effectiveWorktree, sessionWorkingDirectory, setSessionHome, setSessionWorktree,
+} from '../src/session-worktree.ts'
 import { isValidBranchName } from '../src/git-worktree.ts'
 
 function session(id: string, cwd?: string): Session {
@@ -28,7 +30,21 @@ describe('session worktree overlay', () => {
   it('falls back to the header cwd without an overlay', () => {
     const active = session('s2', '/ws')
     expect(effectiveWorktree(active.events)).toBeUndefined()
+    expect(effectiveHome(active.events)).toBeUndefined()
     expect(sessionWorkingDirectory(active)).toBe('/ws')
+  })
+
+  it('folds the last workspace/home or git/worktree by log time', () => {
+    const active = session('s3', '/birth')
+    setSessionHome(active, '/home-a')
+    expect(effectiveHome(active.events)).toBe('/home-a')
+    expect(sessionWorkingDirectory(active)).toBe('/home-a')
+    setSessionWorktree(active, { path: '/wt', branch: 'feature' })
+    expect(sessionWorkingDirectory(active)).toBe('/wt')
+    setSessionHome(active, '/home-b')
+    expect(effectiveHome(active.events)).toBe('/home-b')
+    expect(sessionWorkingDirectory(active)).toBe('/home-b')
+    expect(effectiveWorktree(active.events)).toEqual({ path: '/wt', branch: 'feature' })
   })
 })
 

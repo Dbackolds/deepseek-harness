@@ -203,7 +203,7 @@ export interface SessionSummary {
   parentSessionId?: SessionId
   /** Coarse durable origin used by navigation surfaces; never proves resumability. */
   origin?: 'subagent' | 'automation'
-  /** Session working directory (header.cwd passthrough); absent when unrecorded. */
+  /** Effective working directory (workspace/home or git/worktree, else header.cwd); absent when unrecorded. */
   cwd?: string
   /**
    * Agent preset this session's agent was composed from (header passthrough);
@@ -250,7 +250,7 @@ export interface SessionsApi {
 
   /**
    * Creates a real session and its idle agent. At most one of `workspaceId` /
-   * `cwd` is accepted; an omitted project uses the Host cwd. A caller may
+   * `cwd` is accepted; an omitted project uses the No Repo directory. A caller may
    * preallocate `sessionId`: retries with the same id and cwd return the same
    * session, while a different cwd fails with `session-conflict`. Workspace
    * creation attaches the session after publication; an attach failure
@@ -318,6 +318,17 @@ export interface SessionsApi {
   Promise<RpcResponse<{ title: string; seq: number }>>
 
   /**
+   * Moves this session's effective home and workspace account to an existing
+   * directory without rewriting `SessionHeader.cwd`. Missing or non-directory
+   * paths fail with `workspace-invalid-path`. The canonical No Repo directory
+   * fails with `session-rehome-no-repo`. Session-backed subagents reject with
+   * `agent-busy`. An unregistered directory is created as a workspace. Already
+   * at that home and accounted there is a success no-op.
+   */
+  rehome(request: RpcRequest<{ sessionId: SessionId; path: string }>):
+  Promise<RpcResponse<{ workspaceId: WorkspaceId; path: string; cwd: string }>>
+
+  /**
    * Sends a message. content is core's ContentBlock[] verbatim; mode maps 1:1 — queue→send, steer→steer.
    * A prompt whose content is exactly one text block starting with '/' is a slash command: the host
    * executes it through the command registry (mode-agnostic) and it is never sent to the model. A
@@ -332,7 +343,7 @@ export interface SessionsApi {
    * that whole turn); a boundary past the log end, or an omitted `atSeq`,
    * falls back to the source's last completed turn. An in-log anchor whose
    * turn is still open fails with `fork-unavailable` instead of clipping to
-   * an earlier turn. The child inherits the source cwd, latest logged model
+   * an earlier turn. The child inherits the source effective home as birth cwd, latest logged model
    * target and `parentSessionId` lineage; the seed prefix carries the source
    * title. Reading the source uses attached state or persistence inspection
    * without acquiring an Agent. Workspace attachment follows the source

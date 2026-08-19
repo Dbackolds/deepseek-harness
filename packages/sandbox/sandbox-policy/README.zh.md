@@ -22,14 +22,14 @@
 - `workspace:folders`：由 `foldersOf(session)` 贡献的请求时缓存安全上下文。单文件夹工作区不输出；否则列出会话当前工作目录和每个附加文件夹，已消失的路径标为 `(missing)`。
 - `effectiveSandboxMode(events)`：会话 `sandbox/mode` 事件的纯 fold（最后一次切换胜出，没有则为 `undefined`），在 `resolve()` 内使用。
 - `setSandboxMode(session, mode)`：逐会话覆盖的唯一写入路径：恰好追加一条 `sandbox/mode` 事件。切换本身就是事件；不会在带外修改模式。
-- `sessionWorkingDirectory(session)`／`setSessionWorktree(session, overlay)`：最后一条 `git/worktree` overlay，或 header cwd；唯一写入路径恰好追加一条 `git/worktree` 事件。
+- `sessionWorkingDirectory(session)`／`setSessionHome(session, path)`／`setSessionWorktree(session, overlay)`：按日志时间取最后一条 `workspace/home` 或 `git/worktree`，否则 header cwd；家的唯一写入路径恰好追加一条 `workspace/home` 事件。
 - `SANDBOX_MODES`：所有模式，用于选项展示与运行时验证。
 
 可选的 `./invariant` 配套组件会拒绝伪造的持久 `sandbox/mode` 事件，只要其值不在该封闭词汇中；Session 与其配套组件负责相关存储与核心执行封闭规则。agent loop（智能体循环）会将组装后的完整运行时上下文快照记录为一条带来源的 `user/message`，因此无需内存中的「上次告知」镜像，也能重建确切的策略输入。
 
 ## 逐会话存储
 
-运行时切换是在对应会话日志中追加的一条 `sandbox/mode` 事件。`effective = explicit grant ?? fold(events) ?? deployment default`，因此覆盖会通过回放跨重启保留，两个会话也绝不会看到彼此状态。工作区成员关系仍使用创建时记录的不可变 `SessionHeader.cwd`。工具 cwd 与 `workspace-write` 根目录还会 fold 最后一条 `git/worktree` overlay，因此两个会话可以停在不同分支上。这些事件仍只进入日志；在下一次请求前，归属方会将当前事实贡献给完整运行时上下文快照。
+运行时切换是在对应会话日志中追加的一条 `sandbox/mode` 事件。`effective = explicit grant ?? fold(events) ?? deployment default`，因此覆盖会通过回放跨重启保留，两个会话也绝不会看到彼此状态。出生 cwd 仍是持久化身份。活动工作区成员关系和工具 cwd 会 fold 最后一条 `workspace/home` 或 `git/worktree` overlay，因此会话可以换项目或停在不同分支上。这些事件仍只进入日志；在下一次请求前，归属方会将当前事实贡献给完整运行时上下文快照。
 
 ## 模型体验
 
@@ -83,6 +83,6 @@ These additional folders are part of the same workspace. Use their absolute path
 
 ## 已知限制与暂缓事项
 
-- **每个会话只有一个主要工作区根目录**：策略把最后一条 `git/worktree` overlay 或 `SessionHeader.cwd` 解析为进程 cwd；附加文件夹仍属于所属 workspace，并出现在 `workspace:folders` 以及默认 grep／glob 根目录中。
+- **每个会话只有一个主要工作区根目录**：策略把最后一条 `workspace/home` 或 `git/worktree` overlay，否则 `SessionHeader.cwd`，解析为进程 cwd；附加文件夹仍属于所属 workspace，并出现在 `workspace:folders` 以及默认 grep／glob 根目录中。
 - **仅限文件操作模式**：`SandboxMode` 管控文件操作；网络和进程策略不在其词汇中，因此这里没有限制它们的旋钮。
 - **有意概述临时区域**：强制执行后端会授予不同的平台临时区域，这些区域在策略解析后才会选定，因此无法在当前上下文中如实枚举。

@@ -93,6 +93,9 @@
       "path": "../../interaction/user-questions"
     },
     {
+      "path": "../../util/home-paths"
+    },
+    {
       "path": "../../sandbox/sandbox-policy"
     },
     {

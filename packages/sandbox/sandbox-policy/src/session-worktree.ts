@@ -1,8 +1,9 @@
 /**
- * Per-session Git worktree overlay: the session log as the store. A branch
- * pick is recorded as one `git/worktree` event on the session it applies to.
- * The last event is the overlay; without one, tools keep using
- * `SessionHeader.cwd`. The header stays the Workspace membership key.
+ * Per-session working-directory overlays: the session log as the store.
+ * A Git branch pick is one `git/worktree` event; a project rehome is one
+ * `workspace/home` event. Tool cwd folds the later of those two by log
+ * time, otherwise `SessionHeader.cwd`. Birth cwd stays the persistence
+ * identity; membership follows the effective home after a live attach.
  *
  * @module dsh-sandbox-policy/session-worktree
  */
@@ -25,6 +26,16 @@ declare module '@deepseek-ai/dsh-session/types' {
       branch: string
       /** Marks an overlay seeded into a child at delegation. */
       source?: 'delegation'
+    }
+    /**
+     * The session's workspace home was switched — log-only. The last
+     * `workspace/home` or `git/worktree` by log time is the effective
+     * working directory ({@link sessionWorkingDirectory}). Birth
+     * `SessionHeader.cwd` is unchanged.
+     */
+    'workspace/home': {
+      /** Absolute directory this session should operate in. */
+      path: string
     }
   }
 }
@@ -67,8 +78,33 @@ export function setSessionWorktree(session: Session, overlay: SessionWorktree): 
 }
 
 /**
+ * THE write path for a session's workspace home: appends exactly one
+ * `workspace/home` event. The switch IS its event. Takes effect on the
+ * session's next cwd-sensitive call because consumers fold on every read.
+ * @param session - the session the home belongs to.
+ * @param path - absolute directory this session should operate in.
+ */
+export function setSessionHome(session: Session, path: string): void {
+  session.append('workspace/home', { path })
+}
+
+/**
+ * Last project-home or git-worktree overlay by log time.
+ * @param events - session events in log order.
+ * @returns the last overlay path, or undefined without one.
+ */
+export function effectiveHome(events: readonly SessionEvent[]): string | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index] as SessionEvent
+    if (event.type === 'workspace/home' || event.type === 'git/worktree') return event.data.path
+  }
+  return undefined
+}
+
+/**
  * Working directory a session should use for tools and `{{cwd}}`: the last
- * worktree overlay when one exists, otherwise the immutable header cwd.
+ * `workspace/home` or `git/worktree` by log time, otherwise the immutable
+ * header cwd.
  * @param session - session whose log and header supply the path.
  * @returns the overlay path, the header cwd, or undefined when neither exists.
  */
@@ -76,5 +112,5 @@ export function sessionWorkingDirectory(session: {
   header: { cwd?: string }
   events?: readonly SessionEvent[]
 }): string | undefined {
-  return effectiveWorktree(session.events ?? [])?.path ?? session.header.cwd
+  return effectiveHome(session.events ?? []) ?? session.header.cwd
 }

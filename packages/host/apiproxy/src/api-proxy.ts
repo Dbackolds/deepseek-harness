@@ -4,8 +4,9 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir, realpath, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
@@ -28,6 +29,7 @@ import { isUserInvocable } from '@deepseek-ai/dsh-skill'
 import type { Workspace, WorkspaceRecord } from '@deepseek-ai/dsh-workspace'
 import {
   checkoutSessionBranch, createSessionBranch, describeSessionGit, GitWorktreeError,
+  sessionWorkingDirectory, setSessionHome,
 } from '@deepseek-ai/dsh-sandbox-policy'
 import {
   workspaceDomainState, workspaceRecord, WorkspaceId as brandWorkspaceId,
@@ -547,7 +549,10 @@ function sessionListFields(header: SessionHeader, events: readonly SessionEvent[
   return {
     ...header.parentSession === undefined ? {} : { parentSessionId: header.parentSession },
     ...header.origin === undefined ? {} : { origin: header.origin },
-    ...header.cwd === undefined ? {} : { cwd: header.cwd },
+    ...(() => {
+      const cwd = sessionWorkingDirectory({ header, events })
+      return cwd === undefined ? {} : { cwd }
+    })(),
     ...agentPreset === undefined ? {} : { agentPreset },
   }
 }
@@ -1723,12 +1728,19 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return agent
   }
 
+  /** Canonical No Repo directory; created on first use. */
+  async function ensureNoRepoDirectory(): Promise<string> {
+    const path = dshHomePath('no-repo')
+    await mkdir(path, { recursive: true })
+    return await realpath(path)
+  }
+
   /** Resolve or create one path while holding the Host's workspace-create chain. */
-  function ensureWorkspace(path: string): Promise<{ workspace: Workspace; created: boolean }> {
+  function ensureWorkspace(path: string, title?: string): Promise<{ workspace: Workspace; created: boolean }> {
     const operation = workspaceCreationChain.then(async () => {
       const existing = await ctx.workspaceRegistry.resolveByPath(path)
       if (existing !== undefined) return { workspace: existing, created: false }
-      return { workspace: await ctx.workspaceRegistry.create(path), created: true }
+      return { workspace: await ctx.workspaceRegistry.create(path, title), created: true }
     })
     workspaceCreationChain = operation.then(() => undefined, () => undefined)
     return operation
@@ -1871,7 +1883,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     const found = await agentFor(sessionId)
     if ('error' in found) return err(request, found.error)
     const session = found.agent.session
-    const cwd = session.header.cwd
+    const cwd = sessionWorkingDirectory(session)
     if (cwd === undefined) {
       return err(request, { code: 'internal', message: `session "${sessionId}" has no project cwd`, details: {} })
     }
@@ -2231,7 +2243,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             })
           }
         }
-        const cwd = workspace?.path ?? request.payload.cwd ?? defaults.cwd
+        const cwd = workspace?.path ?? request.payload.cwd ?? await ensureNoRepoDirectory()
         const requestedPreset = request.payload.agentPreset
         try {
           await ensureSession(sessionId, cwd, request.payload.sessionId !== undefined, requestedPreset)
@@ -2268,6 +2280,18 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             message: `failed to create session "${sessionId}": ${String(error)}`,
             details: {},
           })
+        }
+        if (workspace === undefined && request.payload.cwd === undefined) {
+          try {
+            const ensured = await ensureWorkspace(cwd, 'No Repo')
+            workspace = ensured.workspace
+          } catch (error: unknown) {
+            return err(request, {
+              code: 'workspace-attach-failed',
+              message: `session "${sessionId}" was created but could not attach to No Repo: ${String(error)}`,
+              details: { sessionId, workspaceId: '' },
+            })
+          }
         }
         if (workspace !== undefined) {
           try {
@@ -2414,6 +2438,70 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async rehome(request) {
+        const { sessionId, path } = request.payload
+        const found = await agentFor(sessionId)
+        if ('error' in found) return err(request, found.error)
+        const session = found.agent.session
+        let canonical: string
+        try {
+          canonical = await realpath(path)
+          if (!(await stat(canonical)).isDirectory()) {
+            return err(request, {
+              code: 'workspace-invalid-path',
+              message: `cannot rehome session "${sessionId}" to "${path}": path is not a directory`,
+              details: { path },
+            })
+          }
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'workspace-invalid-path',
+            message: `cannot rehome session "${sessionId}" to "${path}": ${error instanceof Error ? error.message : String(error)}`,
+            details: { path },
+          })
+        }
+        const noRepo = await ensureNoRepoDirectory()
+        if (canonical === noRepo) {
+          return err(request, {
+            code: 'session-rehome-no-repo',
+            message: `cannot rehome session "${sessionId}" back to No Repo`,
+            details: { path: canonical },
+          })
+        }
+        let target: Workspace
+        try {
+          target = (await ensureWorkspace(canonical)).workspace
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'workspace-invalid-path',
+            message: `cannot rehome session "${sessionId}" to "${path}": ${error instanceof Error ? error.message : String(error)}`,
+            details: { path },
+          })
+        }
+        const currentHome = sessionWorkingDirectory(session)
+        const alreadyHome = currentHome === canonical
+        const accounted = target.sessionIds.includes(sessionId)
+        if (alreadyHome && accounted) {
+          return ok(request, { workspaceId: target.id, path: target.path, cwd: canonical })
+        }
+        if (!alreadyHome) setSessionHome(session, canonical)
+        for (const workspace of ctx.workspaceRegistry.list()) {
+          if (workspace.id !== target.id && workspace.sessionIds.includes(sessionId)) {
+            await workspace.detachSession(sessionId)
+          }
+        }
+        try {
+          await target.attachSession(sessionId)
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'workspace-attach-failed',
+            message: `session "${sessionId}" could not attach to workspace "${target.id}": ${String(error)}`,
+            details: { sessionId, workspaceId: target.id },
+          })
+        }
+        return ok(request, { workspaceId: target.id, path: target.path, cwd: canonical })
+      },
+
       async fork(request) {
         const { sessionId, atSeq } = request.payload
         let source: SessionReadState
@@ -2478,7 +2566,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             sessionId: childId,
             seed: events.slice(0, cut),
             meta: {
-              ...source.header.cwd === undefined ? {} : { cwd: source.header.cwd },
+              ...(() => {
+                const cwd = sessionWorkingDirectory({ header: source.header, events: source.events })
+                return cwd === undefined ? {} : { cwd }
+              })(),
               parentSession: source.id,
               seedLength: cut,
               ...forkComposition.agentPreset === undefined
@@ -3042,7 +3133,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           version: '0.0.1',
           // Same source as session.create's fallback: the UI's default project
           // must match where an unspecified-cwd session actually lands.
-          cwd: defaults.cwd,
+          cwd: dshHomePath('no-repo'),
           // Read live for the same reason: this is what the NEXT session will
           // start from, so a saved default has to be what it reports.
           provider: selection.provider,
@@ -3455,12 +3546,12 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { sessionId },
           })
         }
-        if (session.header.cwd === undefined) {
+        const cwd = sessionWorkingDirectory(session)
+        if (cwd === undefined) {
           // Every served session records its project at create time; a
           // cwd-less header is a pre-project legacy log (not served).
           return err(request, { code: 'internal', message: `session "${sessionId}" has no project cwd`, details: {} })
         }
-        const cwd = session.header.cwd
         const extraRoots = ctx.get('sandboxPolicy')?.foldersOf(session).additional
           .filter(folder => !folder.missing)
           .map(folder => folder.path)

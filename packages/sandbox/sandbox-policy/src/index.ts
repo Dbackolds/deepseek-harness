@@ -33,7 +33,7 @@ import { sessionWorkingDirectory } from './session-worktree.ts'
 
 export { SANDBOX_MODES, effectiveSandboxMode, setSandboxMode } from './session-mode.ts'
 export {
-  effectiveWorktree, sessionWorkingDirectory, setSessionWorktree,
+  effectiveHome, effectiveWorktree, sessionWorkingDirectory, setSessionHome, setSessionWorktree,
   type SessionWorktree,
 } from './session-worktree.ts'
 export {
@@ -212,8 +212,9 @@ export class SandboxPolicyService extends Service {
   /**
    * Resolve the complete policy for one capability call. An approved explicit
    * mode outranks the session's last `sandbox/mode` event, which outranks the
-   * deployment default. A session's last `git/worktree` overlay outranks its
-   * immutable header cwd as the primary workspace-write boundary; additional
+   * deployment default. A session's last `workspace/home` or `git/worktree`
+   * overlay outranks its immutable header cwd as the primary workspace-write
+   * boundary; additional
    * folders from the owning workspace join the same allow-list. The configured
    * root is the fallback for agentless calls and sessions without a cwd.
    * @param request - optional session and approved mode override.

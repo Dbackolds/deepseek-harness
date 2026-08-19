@@ -128,6 +128,19 @@ export const sessionRenameValueSchema = z.object({
   seq: z.number().int().nonnegative(),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.rename'>>>
 
+/** session.rehome request payload. */
+export const sessionRehomeRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  path: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'session.rehome'>>>
+
+/** session.rehome response value. */
+export const sessionRehomeValueSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  path: z.string().min(1),
+  cwd: z.string().min(1),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.rehome'>>>
+
 /** session.fork request payload (atSeq anchors the completed-turn cut). */
 export const sessionForkRequestSchema = z.object({
   sessionId: sessionIdSchema,

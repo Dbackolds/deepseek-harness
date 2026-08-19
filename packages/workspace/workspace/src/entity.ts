@@ -9,7 +9,7 @@
  */
 
 import { stat } from 'node:fs/promises'
-import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceRecord } from './spec.ts'
 import type { Workspace, WorkspaceId } from './types.ts'
@@ -53,6 +53,13 @@ export interface WorkspaceEntityHost {
    * no session with this id.
    */
   readSessionHeader(id: SessionId): Promise<SessionHeader>
+
+  /**
+   * Live session events when the session is attached in this process.
+   * Cold sessions return undefined so attach falls back to birth cwd.
+   * @param id - Session whose live log is requested.
+   */
+  liveSessionEvents(id: SessionId): readonly SessionEvent[] | undefined
 
   /**
    * Publish a successfully validated canonical cwd to the projection index.
@@ -120,12 +127,13 @@ export class WorkspaceEntity implements Workspace {
 
   async attachSession(sessionId: SessionId): Promise<void> {
     // Validation is skipped when the settled snapshot already accounts the
-    // id: the cwd fact was checked when it first attached and both inputs
-    // (stored header cwd, workspace path) are immutable. Membership itself is
-    // decided on the write chain inside `mutate`, never on this snapshot.
+    // id. A later rehome updates the indexed path before attach. Membership
+    // itself is decided on the write chain inside `mutate`, never on this
+    // snapshot.
     if (!this.record.sessionIds.includes(sessionId)) {
       const header = await this.host.readSessionHeader(sessionId)
-      if (header.cwd === undefined) {
+      const home = effectiveSessionHome(header.cwd, this.host.liveSessionEvents(sessionId))
+      if (home === undefined) {
         throw new Error(
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
           + 'its stored header carries no cwd to validate against',
@@ -133,18 +141,18 @@ export class WorkspaceEntity implements Workspace {
       }
       let cwd: string
       try {
-        cwd = await realpathNormalize(header.cwd)
+        cwd = await realpathNormalize(home)
       } catch (error) {
         throw new Error(
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + `its cwd '${header.cwd}' does not resolve, so it cannot be validated`,
+          + `its cwd '${home}' does not resolve, so it cannot be validated`,
           { cause: error },
         )
       }
       if (!(await stat(cwd)).isDirectory()) {
         throw new Error(
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + `its cwd '${header.cwd}' is not a directory`,
+          + `its cwd '${home}' is not a directory`,
         )
       }
       if (cwd !== this.record.path) {
@@ -266,4 +274,26 @@ export class WorkspaceEntity implements Workspace {
     }
     this.record = next
   }
+}
+
+/**
+ * Live effective home when the log carries a workspace/home or git/worktree
+ * overlay; otherwise the immutable header cwd. Cold attach has no events.
+ * @param headerCwd - birth cwd from the session header.
+ * @param events - live log, or undefined for a cold session.
+ */
+export function effectiveSessionHome(
+  headerCwd: string | undefined,
+  events: readonly SessionEvent[] | undefined,
+): string | undefined {
+  if (events !== undefined) {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index]
+      if (event.type === 'workspace/home' || event.type === 'git/worktree') {
+        const path = (event.data as { path?: unknown }).path
+        if (typeof path === 'string' && path.length > 0) return path
+      }
+    }
+  }
+  return headerCwd
 }

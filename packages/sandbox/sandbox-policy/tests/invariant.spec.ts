@@ -54,6 +54,20 @@ describe('sandbox-policy invariants', () => {
     } as SessionEvent) }).not.toThrow()
   })
 
+  it('rejects an empty workspace/home path', async () => {
+    const ctx = await setup()
+    expect(() => { ctx.emit('session/event', {} as Session, {
+      type: 'workspace/home', seq: 0, time: 0, data: { path: '' },
+    } as SessionEvent) }).toThrow(/workspace\/home carries empty path/)
+  })
+
+  it('accepts a well-formed workspace/home overlay', async () => {
+    const ctx = await setup()
+    expect(() => { ctx.emit('session/event', {} as Session, {
+      type: 'workspace/home', seq: 0, time: 0, data: { path: '/proj' },
+    } as SessionEvent) }).not.toThrow()
+  })
+
   it('rejects and attributes an unknown durable sandbox mode', async () => {
     const ctx = await setup()
     expect(() => { ctx.emit('session/event', {} as Session, modeEvent('host-root')) })

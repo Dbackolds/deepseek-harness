@@ -14,6 +14,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type { ApiProxy } from './api/index.ts'
 import { createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES } from './api-proxy.ts'
@@ -101,7 +102,7 @@ export class ApiProxyService extends Service implements ApiProxy {
     const api = createApiProxy(ctx, {
       defaultModelSelection: () => ctx.agentDefaultModel.currentSelection(),
       saveDefaultModelSelection: selection => ctx.agentDefaultModel.saveSelection(selection),
-      cwd: process.cwd(),
+      cwd: dshHomePath('no-repo'),
       ...config.nativeOpen === undefined ? {} : { canOpenPath: () => config.nativeOpen as boolean },
       ...(config.sessionExportCompressionLevel === undefined
         ? {}

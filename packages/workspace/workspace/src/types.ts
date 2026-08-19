@@ -18,7 +18,7 @@ export type WorkspaceId = Branded<'WorkspaceId'>
  * One workspace: a stable id over an existing primary directory, optional
  * additional folders, a display title, and an ordered candidate account of
  * sessions. Membership requires both an id in that account and a session
- * header whose canonical cwd equals the workspace path. Consumers only see
+ * whose canonical effective home equals the workspace path. Consumers only see
  * this interface; the implementation stays private.
  */
 export interface Workspace {
@@ -71,7 +71,8 @@ export interface Workspace {
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
    * live or persisted
-   * header cwd must resolve to an existing directory equal to {@link path};
+   * effective home (live `workspace/home` or `git/worktree`, else header cwd)
+   * must resolve to an existing directory equal to {@link path};
    * unknown ids, missing or invalid cwd values, and mismatches reject without
    * writing.
    * @param sessionId - The session to record.

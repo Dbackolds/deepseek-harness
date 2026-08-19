@@ -83,6 +83,7 @@ describe('rpcErrorSchema', () => {
     expect(rpcErrorSchema.parse({ code: 'command-error', message: 'm', details: {} }).code).toBe('command-error')
     expect(rpcErrorSchema.parse({ code: 'unknown-command', message: 'm', details: {} }).code).toBe('unknown-command')
     expect(rpcErrorSchema.parse({ code: 'title-invalid', message: 'm', details: { sessionId: 's' } }).code).toBe('title-invalid')
+    expect(rpcErrorSchema.parse({ code: 'session-rehome-no-repo', message: 'm', details: { path: '/x' } }).code).toBe('session-rehome-no-repo')
     // The credentials producer still emits this code, so the branch has to stay.
     expect(rpcErrorSchema.parse({ code: 'credential-rejected', message: 'm', details: { ref: 'r' } }).code).toBe('credential-rejected')
     expect(rpcErrorSchema.parse({ code: 'internal', message: 'm', details: {} }).code).toBe('internal')

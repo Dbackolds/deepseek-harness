@@ -251,7 +251,7 @@ Source: [`packages/core/session/src/types.ts:275`](../packages/core/session/src/
 
 Types: [AutomationStartEvent](subsystems/automation.md)
 
-Source: [`packages/automation/automation/src/types.ts:149`](../packages/automation/automation/src/types.ts)
+Source: [`packages/automation/automation/src/types.ts:155`](../packages/automation/automation/src/types.ts)
 
 ### `command/*`
 
@@ -422,6 +422,32 @@ Source: [`packages/compaction/compaction/src/types.ts:33`](../packages/compactio
 ```
 
 Source: [`packages/feedback/command-feedback/src/index.ts:62`](../packages/feedback/command-feedback/src/index.ts)
+
+### `git/*`
+
+<a id="gitworktree--log-only"></a>
+
+#### `git/worktree` — log-only
+
+```ts persistence-catalog
+/**
+ * The session's Git worktree overlay was switched — log-only (like
+ * `sandbox/mode`; NOT a surface event). The LAST such event is the
+ * session's overlay ({@link effectiveWorktree}). `source: 'delegation'`
+ * marks an overlay seeded into a child; an absent source is a runtime
+ * switch.
+ */
+'git/worktree': {
+  /** Absolute worktree directory this session should operate in. */
+  path: string
+  /** Branch name checked out in that worktree. */
+  branch: string
+  /** Marks an overlay seeded into a child at delegation. */
+  source?: 'delegation'
+}
+```
+
+Source: [`packages/sandbox/sandbox-policy/src/session-worktree.ts:22`](../packages/sandbox/sandbox-policy/src/session-worktree.ts)
 
 ### `goal/*`
 
@@ -960,3 +986,24 @@ Source: [`packages/core/session/src/types.ts:266`](../packages/core/session/src/
 ```
 
 Source: [`packages/web/web-search-deepseek/src/provider.ts:83`](../packages/web/web-search-deepseek/src/provider.ts)
+
+### `workspace/*`
+
+<a id="workspacehome--log-only"></a>
+
+#### `workspace/home` — log-only
+
+```ts persistence-catalog
+/**
+ * The session's workspace home was switched — log-only. The last
+ * `workspace/home` or `git/worktree` by log time is the effective
+ * working directory ({@link sessionWorkingDirectory}). Birth
+ * `SessionHeader.cwd` is unchanged.
+ */
+'workspace/home': {
+  /** Absolute directory this session should operate in. */
+  path: string
+}
+```
+
+Source: [`packages/sandbox/sandbox-policy/src/session-worktree.ts:36`](../packages/sandbox/sandbox-policy/src/session-worktree.ts)

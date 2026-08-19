@@ -52,7 +52,7 @@ Session 自己持有首条输入并驱动一条内部流水线：必要时以预
 
 顶部 New Session、Workspace 行内加号和 Workspace picker 最终都调用同一 New Session 动作：显式 Workspace id 直接成为目标，未指定时先使用当前 Session 所属 Workspace，再使用最近 Workspace；没有真实 Workspace 时进入空白 New Session 页面。Workspace picker 的单一 Add workspace 动作（见[单一路径 Note](../simplification/2026-07-31-one-route-to-add-a-workspace.md)；本决策做出时是 Use an existing folder 与按名称创建两个动作）会在用户确认目录时立即创建真实 Workspace，再将前端 Session 的目标改为该 Workspace；即使用户不发送消息，显式创建的空 Workspace 也保留。
 
-新建 Workspace 的显示名取自其所在目录。不同 canonical path 可以拥有相同的 basename 派生显示名（见[身份决策](../bug-fix/2026-07-31-same-basename-workspace-adoption.md)）；显式的重命名操作仍保留显示名重名检查。跨 Workspace 移动 Session、从 Ungrouped 手动收编以及分别输入显示名和目录名仍不在此动线范围内。
+新建 Workspace 的显示名取自其所在目录。不同 canonical path 可以拥有相同的 basename 派生显示名（见[身份决策](../bug-fix/2026-07-31-same-basename-workspace-adoption.md)）；显式的重命名操作仍保留显示名重名检查。分别输入显示名和目录名仍不在此动线范围内。对话中途改挂（同一条对话、新的有效家和工作区账本，含 No Repo 起步）见[Session rehome](../../proposed/feature/2026-08-20-session-rehome.md)。Ungrouped 历史会话的手动收编仍不在此动线范围内。
 
 ### 首次发送与恢复
 

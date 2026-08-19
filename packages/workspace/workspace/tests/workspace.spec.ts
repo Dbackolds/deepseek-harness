@@ -715,6 +715,31 @@ describe('Workspace session ordering', () => {
     expect(workspace.sessionIds).toEqual([])
   })
 
+  it('attaches a live session whose workspace/home differs from birth cwd', async () => {
+    const birth = await makeDir('home-birth')
+    const home = await makeDir('home-live')
+    const ctx = new Context()
+    await ctx.plugin(Storage)
+    ctx.storage.backend.register('memory', new MemoryStorageBackend())
+    const facility = new DomainFacility(ctx, { backend: 'memory', routes: {} })
+    ctx.storage.mount('domain', facility)
+    ctx.provide('storageDomain', facility)
+    ctx.provide('sessionPersistence', {
+      list: async () => [],
+      load: () => { throw new Error('event bodies must not be loaded') },
+      inspect: () => { throw new Error('event bodies must not be inspected') },
+    } as never)
+    await ctx.plugin(SessionStore)
+    const live = ctx.sessions.create(SessionId('moved'), { meta: { cwd: birth } })
+    live.append('workspace/home', { path: home })
+    await ctx.plugin(WorkspaceRegistry)
+    const workspace = await ctx.workspaceRegistry.create(home)
+    await workspace.attachSession(SessionId('moved'))
+    expect(workspace.sessionIds).toEqual(['moved'])
+    const birthWorkspace = await ctx.workspaceRegistry.create(birth)
+    expect(birthWorkspace.sessionIds).toEqual([])
+  })
+
   it('decides detach/attach membership at domain write-chain slots', async () => {
     const dir = await makeDir('race')
     const result = await harness({ sessions: [header('s1', dir)] })
