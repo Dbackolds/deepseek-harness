@@ -2309,6 +2309,33 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         const appended = logOf(sessionId).at(-1) as SessionEvent
         return ok(request, { title: normalized, seq: appended.seq })
       },
+      rehome: (request) => {
+        const { sessionId, path } = request.payload
+        const summary = summaryOf(sessionId)
+        if (summary === undefined) {
+          return err(request, {
+            code: 'session-not-found',
+            message: `no session ${sessionId}`,
+            details: { sessionId },
+          })
+        }
+        summary.cwd = path
+        const workspace = workspaces.find(item => item.path === path)
+          ?? {
+            workspaceId: `w-${path}` as WorkspaceId,
+            path,
+            folders: [] as string[],
+            title: path.split('/').at(-1) ?? path,
+            sessionIds: [] as SessionId[],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        if (!workspaces.includes(workspace)) workspaces.push(workspace)
+        if (!workspace.sessionIds.includes(sessionId)) workspace.sessionIds = [sessionId, ...workspace.sessionIds]
+        emitHost({ type: 'host/workspace-changed', workspace: { ...workspace } })
+        emitHost({ type: 'host/session-added', sessionId, blank: summary.blank, cwd: path })
+        return ok(request, { workspaceId: workspace.workspaceId, path, cwd: path })
+      },
       fork: (request) => {
         const { sessionId, atSeq } = request.payload
         const source = summaryOf(sessionId)
@@ -3230,6 +3257,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.models': return this.api.sessions.models(request)
       case 'session.selectModel': return this.api.sessions.selectModel(request)
       case 'session.rename': return this.api.sessions.rename(request)
+      case 'session.rehome': return this.api.sessions.rehome(request)
       case 'session.fork': return this.api.sessions.fork(request)
       case 'session.prompt': return this.api.sessions.prompt(request)
       case 'session.attachment': return this.api.sessions.attachment(request)
