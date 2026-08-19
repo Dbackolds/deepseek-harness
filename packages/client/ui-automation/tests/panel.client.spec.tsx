@@ -153,6 +153,7 @@ function mount(options: {
     useWorkspaces: select => select({
       items: options.workspaces ?? [workspace],
       archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
       state: 'idle',
       phase: 'ready',
       error: null,
@@ -396,6 +397,7 @@ describe('AutomationPanel', () => {
     const useWorkspaces: AutomationPanelProps['useWorkspaces'] = select => select({
       items: [workspace],
       archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
       state: 'idle',
       phase: 'ready',
       error: null,

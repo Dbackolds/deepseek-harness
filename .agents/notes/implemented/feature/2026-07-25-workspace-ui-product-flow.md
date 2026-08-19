@@ -18,9 +18,10 @@ The Host provides the following GUI wiring on the Workspace entity:
 
 | RPC | Behavior |
 | --- | --- |
-| `workspace.list` | Returns persistent Workspaces in order and filters out Session ids that fail header validation |
-| `workspace.create({ path })` | Adopts an existing directory by canonical path; basename-derived display titles may repeat |
+| `workspace.list` | Returns persistent Workspaces in order, the archive set, and `hiddenWorkspaceIds`, and filters out Session ids that fail header validation |
+| `workspace.create({ path })` | Adopts an existing directory by canonical path; basename-derived display titles may repeat; a hidden owner of that path is shown in place |
 | `workspace.insertBefore({ workspaceId, beforeWorkspaceId? })` | Moves one Workspace within durable registry order and returns the complete committed order |
+| `workspace.hide({ workspaceId })` / `workspace.show({ workspaceId })` | Adds or removes one registered Workspace in the Host-durable hidden set without rewriting membership ([Hide Workspace](2026-08-20-workspace-hide.md)) |
 | `workspace.delete({ workspaceId })` | Removes the Workspace registration while retaining its directory and session logs; its Sessions become Ungrouped |
 | `session.create({ workspaceId, sessionId? })` | Resolves cwd from the Workspace, idempotently creates a Session with an optional preallocated id, and attaches it |
 | `session.create({ cwd })` | Remains available to non-Workspace callers and creates an Ungrouped Session |
@@ -76,7 +77,7 @@ The current blank Session appears as a “New session” row without a count, ti
 
 Real Sessions that cannot be assigned to any Workspace appear under Ungrouped. Host `session-added` and `workspace-changed` events may arrive in either order; list merging does not depend on frame order.
 
-Deleting a Workspace registration removes its group without deleting or closing any Session. Its accounted Sessions immediately join Ungrouped, including the current Session; a reload reconstructs the same result from the independent Workspace and Session baselines.
+Deleting a Workspace registration removes its group without deleting or closing any Session. Its accounted Sessions immediately join Ungrouped, including the current Session; a reload reconstructs the same result from the independent Workspace and Session baselines. Hide workspace folds the group into Hidden without that spill.
 
 ### React and slot boundaries
 
