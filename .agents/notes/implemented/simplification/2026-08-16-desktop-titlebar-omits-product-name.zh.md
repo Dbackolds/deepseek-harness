@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`titlebarMarkup` 仍保留拖拽区和平台内边距，不再绘制产品名标签。Electron 窗口标题、Dock 名称、启动页 `document.title` 以及开始菜单快捷方式仍使用 `DeepSeek Harness`，以便操作系统切换器与安装入口保持可识别名称。
+`titlebarMarkup` 仍保留拖拽区和平台 inset，不再绘制产品名标签。Electron 窗口标题、Dock 名称、启动页 `document.title` 以及开始菜单快捷方式仍使用 `DeepSeek Harness`，以便操作系统切换器与安装入口保持可识别名称。
 
 ## 曾考虑的替代方案
 

@@ -14,6 +14,7 @@ import {
   TITLEBAR_HEIGHT_PX,
   loadingPage,
   titlebarInjectScript,
+  titlebarStyles,
   titlebarVariantForPlatform,
 } from './titlebar.ts'
 
@@ -161,6 +162,9 @@ function bindWindowChrome(window: BrowserWindow): void {
 }
 
 function attachTitlebar(window: BrowserWindow): void {
+  window.webContents.on('dom-ready', () => {
+    void window.webContents.insertCSS(titlebarStyles(TITLEBAR_VARIANT))
+  })
   window.webContents.on('did-finish-load', () => {
     void window.webContents.executeJavaScript(titlebarInjectScript(TITLEBAR_VARIANT))
   })

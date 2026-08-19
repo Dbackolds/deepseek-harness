@@ -31,16 +31,19 @@ export function titlebarVariantForPlatform(platform: NodeJS.Platform): TitlebarV
   return platform === 'darwin' ? 'mac' : 'windows'
 }
 
-/** Drag-region padding that keeps native controls outside the draggable area. */
-function dragPadding(variant: TitlebarVariant): string {
+/**
+ * Drag-region insets that keep native controls outside the hit box.
+ * Padding would sit inside a full-width box and still register as drag.
+ */
+function dragInset(variant: TitlebarVariant): string {
   return variant === 'mac'
-    ? `padding: 0 12px 0 ${String(MAC_TRAFFIC_LIGHT_WIDTH_PX)}px;`
-    : `padding: 0 ${String(WINDOWS_OVERLAY_WIDTH_PX)}px 0 12px;`
+    ? `left: ${String(MAC_TRAFFIC_LIGHT_WIDTH_PX)}px; right: 12px;`
+    : `left: 12px; right: ${String(WINDOWS_OVERLAY_WIDTH_PX)}px;`
 }
 
 /**
  * HTML for the frameless title bar. The page must also run {@link titlebarScript}.
- * @param variant platform variant controlling the drag-region padding.
+ * @param variant platform variant controlling the drag-region inset.
  * @returns a single root element string.
  */
 export function titlebarMarkup(variant: TitlebarVariant): string {
@@ -54,7 +57,10 @@ export function titlebarMarkup(variant: TitlebarVariant): string {
  * Only `body` receives the reserved padding: the Web GUI sets
  * `html, body, #root { height: 100% }`, and padding both `html` and `body`
  * stacks two gaps under the fixed bar.
- * @param variant platform variant controlling the drag-region padding.
+ * The drag rule is a block with an explicit height and side insets. A flex
+ * child with no content has no hit box, so Chromium never registers
+ * `-webkit-app-region`.
+ * @param variant platform variant controlling the drag-region inset.
  * @returns a CSS text block.
  */
 export function titlebarStyles(variant: TitlebarVariant): string {
@@ -62,14 +68,14 @@ export function titlebarStyles(variant: TitlebarVariant): string {
 #${TITLEBAR_ID} {
   position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
   height: var(--dsh-desktop-titlebar);
-  display: flex; align-items: stretch;
   background: #151517; color: #ececf1;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   font: 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
   user-select: none;
 }
 #${TITLEBAR_ID} .dsh-desktop-drag {
-  flex: 1; display: flex; align-items: center; ${dragPadding(variant)}
+  position: absolute; top: 0; ${dragInset(variant)}
+  height: var(--dsh-desktop-titlebar);
   -webkit-app-region: drag;
 }
 body { padding-top: var(--dsh-desktop-titlebar); box-sizing: border-box; }
@@ -90,16 +96,16 @@ function titlebarScript(): string {
 }
 
 /**
- * One document that injects the title bar into an already-loaded page.
- * @param variant platform variant controlling the drag-region padding.
- * @returns HTML that a `executeJavaScript` caller can treat as a script body.
+ * One document that injects the title-bar markup into an already-loaded page.
+ * Styles arrive separately through `webContents.insertCSS` so Chromium sees
+ * `-webkit-app-region` before first paint. Re-inserting the same rule from a
+ * page `<style>` after load does not register a drag region.
+ * @param variant platform variant controlling the drag-region inset.
+ * @returns JavaScript that a `executeJavaScript` caller can run as a script body.
  */
 export function titlebarInjectScript(variant: TitlebarVariant): string {
   return `(() => {
   if (document.getElementById(${JSON.stringify(TITLEBAR_ID)}) !== null) return true;
-  const style = document.createElement("style");
-  style.textContent = ${JSON.stringify(titlebarStyles(variant))};
-  document.head.append(style);
   document.body.insertAdjacentHTML("afterbegin", ${JSON.stringify(titlebarMarkup(variant))});
   ${titlebarScript()}
   return document.getElementById(${JSON.stringify(TITLEBAR_ID)}) !== null
@@ -109,7 +115,7 @@ export function titlebarInjectScript(variant: TitlebarVariant): string {
 
 /**
  * Self-contained loading page shown until the Host prints its URL.
- * @param variant platform variant controlling the drag-region padding.
+ * @param variant platform variant controlling the drag-region inset.
  * @returns a complete HTML document.
  */
 export function loadingPage(variant: TitlebarVariant): string {

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-16-desktop-titlebar-omits-product-name.md
-2026-08-16-desktop-titlebar-omits-product-name.md: 34ce73a5f627bb6b35503d733932675409ddde20
-2026-08-16-desktop-titlebar-omits-product-name.zh.md: 5968936b9ad8ed96fb916020b4ed835e971d77e9
+2026-08-16-desktop-titlebar-omits-product-name.md: 67e4be511b6b9b647cc917f0b2731975a0975ec3
+2026-08-16-desktop-titlebar-omits-product-name.zh.md: e18680b1208406f14731302f3364c71f01aaa451

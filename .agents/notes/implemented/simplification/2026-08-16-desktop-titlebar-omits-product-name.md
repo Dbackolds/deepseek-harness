@@ -10,7 +10,7 @@ The frameless desktop chrome painted `DeepSeek Harness` in the reserved title-ba
 
 ## Decision
 
-`titlebarMarkup` keeps the drag region and platform padding, and does not render a product-name label. The Electron window title, dock name, loading-page document title, and Start-menu shortcut still use `DeepSeek Harness` so the OS switcher and installer surfaces stay named.
+`titlebarMarkup` keeps the drag region and platform insets, and does not render a product-name label. The Electron window title, dock name, loading-page document title, and Start-menu shortcut still use `DeepSeek Harness` so the OS switcher and installer surfaces stay named.
 
 ## Alternatives considered
 
