@@ -319,7 +319,7 @@ describe('automation service', () => {
     const run = await service.runNow(rule.id)
     expect(run.endedAt).toBeUndefined()
     created[0]!.status = 'idle'
-    service['runtime']?.watchEnded(created[0]! as never, (endedAt) => {
+    service['runtime']?.watchEnded(created[0]! as never, (endedAt: string) => {
       void service.markRunEnded(created[0]!.session.id, endedAt)
     })
     await vi.waitFor(() => {
