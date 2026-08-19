@@ -48,7 +48,8 @@ export interface ISession {
     attachmentId: AttachmentIdType,
   ): Promise<RpcResult<{ attachment: ImageAttachmentRef; data: Uint8Array }>>
   /**
-   * Apply one edit, remove, reorder, or strict steer action to a still-pending queue occurrence.
+   * Apply one text edit, remove, reorder, or strict steer action to a still-pending queue occurrence.
+   * An edit payload is one text block; the host keeps already-admitted non-text blocks.
    * @param itemId - agent-owned inbox occurrence identity.
    * @param action - requested queue operation.
    * @returns acceptance, or a business/transport error.

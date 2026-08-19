@@ -40,7 +40,8 @@ export interface IConversation {
    */
   send(text: string): Promise<void>
   /**
-   * Apply one edit, remove, or strict steer operation to a pending queue occurrence.
+   * Apply one text edit, remove, or strict steer operation to a pending queue occurrence.
+   * An edit payload is one text block; the host keeps already-admitted non-text blocks.
    * @param itemId - agent-owned inbox occurrence identity.
    * @param action - requested queue operation.
    * @returns completion; converged strict-steer races resolve, while other failures reject.

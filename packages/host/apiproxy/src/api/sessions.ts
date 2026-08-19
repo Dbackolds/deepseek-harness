@@ -363,6 +363,8 @@ export interface SessionsApi {
 
   /**
    * Edits, removes, reorders, or strictly steers one pending queued occurrence on an ordinary session.
+   * An edit payload is exactly one text block: the host replaces every existing
+   * text block with that text and keeps already-admitted non-text blocks.
    * Session-backed subagents reject with `agent-busy`.
    */
   updateQueue(request: RpcRequest<{ sessionId: SessionId; itemId: MessageId; action: QueueAction }>):

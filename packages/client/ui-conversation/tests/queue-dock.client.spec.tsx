@@ -35,10 +35,10 @@ function fireDrag(row: HTMLElement, kind: 'dragOver' | 'drop', clientY: number):
   fireEvent(row, event)
 }
 
-function row(id: string, text: string | null, preview = text ?? '[image]'): QueuedMessage {
+function row(id: string, text: string, preview = text, content?: QueuedMessage['content']): QueuedMessage {
   return {
     id: iid(id), messageId: `message-${id}` as never, placement: 'queued',
-    content: text === null ? [{ type: 'image', data: 'x' } as never] : [{ type: 'text', text }],
+    content: content ?? [{ type: 'text', text }],
     preview, text,
   }
 }
@@ -208,10 +208,13 @@ describe('QueueDock', () => {
     expect(view.queryByText('three')).toBeNull()
   })
 
-  it('renders active actions and disables editing for mixed-content rows', () => {
+  it('renders active actions and edits mixed-content rows as text', () => {
     const snap = snapshotWith([
       row('i-1', '第一条排队消息'),
-      row('i-2', null, 'image [image]'),
+      row('i-2', 'image', 'image [image]', [
+        { type: 'text', text: 'image' },
+        { type: 'image', data: 'x' } as never,
+      ]),
     ])
     const source = liveSession(snap)
     const { container, getByRole } = render(<QueueDock {...kitFor(snap)} useSession={source.useSession} />)
@@ -223,9 +226,8 @@ describe('QueueDock', () => {
     expect(container.querySelectorAll('[aria-label="删除排队消息"]')).toHaveLength(2)
     expect(container.querySelectorAll('[aria-label="插话发送"]')).toHaveLength(2)
     expect((container.querySelectorAll('[aria-label="编辑排队消息"]')[0] as HTMLButtonElement).disabled).toBe(false)
-    expect((container.querySelectorAll('[aria-label="编辑排队消息"]')[1] as HTMLButtonElement).disabled).toBe(true)
-    expect(container.querySelectorAll('[aria-label="编辑排队消息"]')[1]?.getAttribute('title'))
-      .toBe('包含非文本内容，暂不支持编辑')
+    expect((container.querySelectorAll('[aria-label="编辑排队消息"]')[1] as HTMLButtonElement).disabled).toBe(false)
+    expect(container.querySelectorAll('[aria-label="编辑排队消息"]')[1]?.getAttribute('title')).toBeNull()
   })
 
   it('edits text inline with save and cancel controls, then saves with the same item identity', async () => {
@@ -246,6 +248,29 @@ describe('QueueDock', () => {
 
     await waitFor(() => {
       expect(updateQueue).toHaveBeenCalledWith(iid('i-edit'), {
+        kind: 'edit',
+        content: [{ type: 'text', text: 'after' }],
+      })
+    })
+  })
+
+  it('saves mixed-content text without sending the image blocks', async () => {
+    const snap = snapshotWith([row('i-mixed', 'before', 'before [image]', [
+      { type: 'text', text: 'before' },
+      { type: 'image', data: 'x' } as never,
+    ])])
+    const source = liveSession(snap)
+    const updateQueue = vi.fn(() => Promise.resolve())
+    const { getByLabelText } = render(
+      <QueueDock {...kitFor(snap, { updateQueue })} useSession={source.useSession} />,
+    )
+
+    fireEvent.click(getByLabelText('编辑排队消息'))
+    fireEvent.change(getByLabelText('编辑排队消息'), { target: { value: 'after' } })
+    fireEvent.click(getByLabelText('保存排队消息'))
+
+    await waitFor(() => {
+      expect(updateQueue).toHaveBeenCalledWith(iid('i-mixed'), {
         kind: 'edit',
         content: [{ type: 'text', text: 'after' }],
       })
@@ -397,7 +422,7 @@ describe('QueueDock', () => {
   })
 
   it('strictly steers complete row content only while the agent is running', async () => {
-    const running = snapshotWith([row('i-steer', null, 'image [image]')])
+    const running = snapshotWith([row('i-steer', '', 'image [image]', [{ type: 'image', data: 'x' } as never])])
     const source = liveSession(running)
     const updateQueue = vi.fn(() => Promise.resolve())
     const rendered = render(

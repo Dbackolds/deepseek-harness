@@ -45,7 +45,96 @@ function queued(text: string) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
 }
 
+function queuedImage(text: string, name = 'shot.png') {
+  return createUserMessage({
+    content: [
+      { type: 'text', text },
+      {
+        type: 'image',
+        attachment: {
+          attachmentId: 'att-queued' as never,
+          mediaType: 'image/png',
+          bytes: 4,
+          width: 2,
+          height: 2,
+          name,
+        },
+      },
+    ],
+    source: { kind: 'user' },
+  })
+}
+
 describe('session.updateQueue', () => {
+  it('edits queued text in place and keeps already-admitted images', async () => {
+    const { ctx, agent, api } = await harness()
+    const mixed = queuedImage('before')
+    const imageOnly = createUserMessage({
+      content: [mixed.content[1]!],
+      source: { kind: 'user' },
+    })
+    agent.inbox.append('next-turn', mixed)
+    agent.inbox.append('next-turn', imageOnly)
+
+    const edited = await api.sessions.updateQueue(request({
+      sessionId: agent.id,
+      itemId: mixed.id,
+      action: { kind: 'edit', content: [{ type: 'text', text: 'after' }] },
+    }))
+    expect(edited.result).toEqual({ ok: true, value: { accepted: true } })
+    expect(agent.inbox.nextTurn[0]?.content).toEqual([
+      { type: 'text', text: 'after' },
+      mixed.content[1],
+    ])
+    expect(agent.inbox.nextTurn[0]?.id).toBe(mixed.id)
+
+    const split = createUserMessage({
+      content: [
+        { type: 'text', text: 'one' },
+        mixed.content[1]!,
+        { type: 'text', text: 'two' },
+      ],
+      source: { kind: 'user' },
+    })
+    agent.inbox.append('next-turn', split)
+    const collapsed = await api.sessions.updateQueue(request({
+      sessionId: agent.id,
+      itemId: split.id,
+      action: { kind: 'edit', content: [{ type: 'text', text: 'joined' }] },
+    }))
+    expect(collapsed.result).toEqual({ ok: true, value: { accepted: true } })
+    expect(agent.inbox.nextTurn[2]?.content).toEqual([
+      { type: 'text', text: 'joined' },
+      mixed.content[1],
+    ])
+
+    const added = await api.sessions.updateQueue(request({
+      sessionId: agent.id,
+      itemId: imageOnly.id,
+      action: { kind: 'edit', content: [{ type: 'text', text: 'caption' }] },
+    }))
+    expect(added.result).toEqual({ ok: true, value: { accepted: true } })
+    expect(agent.inbox.nextTurn[1]?.content).toEqual([
+      imageOnly.content[0],
+      { type: 'text', text: 'caption' },
+    ])
+
+    const refused = await api.sessions.updateQueue(request({
+      sessionId: agent.id,
+      itemId: mixed.id,
+      action: { kind: 'edit', content: [mixed.content[1]!] },
+    }))
+    expect(refused.result).toMatchObject({
+      ok: false,
+      error: { code: 'attachment-error', details: { reason: 'QUEUE_EDIT_NON_TEXT' } },
+    })
+    expect(agent.inbox.nextTurn[0]?.content).toEqual([
+      { type: 'text', text: 'after' },
+      mixed.content[1],
+    ])
+    await ctx.fiber.dispose()
+  })
+
   it('reorders a still-pending next-turn occurrence before an explicit sibling or the tail', async () => {
     const { ctx, agent, api } = await harness()
     const first = queued('first')

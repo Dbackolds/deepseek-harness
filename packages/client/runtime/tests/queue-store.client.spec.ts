@@ -62,7 +62,7 @@ describe('queue snapshot intake', () => {
     ])
   })
 
-  it('marks mixed-content messages non-editable while retaining their preview', () => {
+  it('projects mixed-content text for the queue editor while retaining the preview', () => {
     const session = makeSession()
     session.handleMuxEnvelope(rid('env-2'), queueFrame([{
       id: 'q-image',
@@ -75,7 +75,7 @@ describe('queue snapshot intake', () => {
       {
         id: 'q-image', placement: 'queued',
         content: [{ type: 'text', text: 'hi' }, { type: 'image', data: 'x' }],
-        preview: 'hi [image]', text: null,
+        preview: 'hi [image]', text: 'hi',
       },
     ])
   })

@@ -258,17 +258,14 @@ export function QueueDock({ useSession, updateQueue, notify, t }: QueueDockProps
                     )
                     : (
                       <>
-                        <Tooltip label={t('queue.edit')} side="bottom" delayMs={500} disabled={row.text === null}>
+                        <Tooltip label={t('queue.edit')} side="bottom" delayMs={500}>
                           <button
                             type="button"
                             className={css.action}
                             aria-label={t('queue.edit')}
-                            // Disabled buttons fire no hover events, so the
-                            // unsupported hint stays a native title.
-                            title={row.text === null ? t('queue.edit.unsupported') : undefined}
-                            disabled={busy !== null || row.text === null}
+                            disabled={busy !== null}
                             onClick={() => {
-                              if (row.text !== null) setEditing({ id: row.id, text: row.text })
+                              setEditing({ id: row.id, text: row.text })
                             }}
                           >
                             <IconEditOutline16 size={14} />

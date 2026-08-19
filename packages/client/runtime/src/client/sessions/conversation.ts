@@ -319,8 +319,8 @@ export interface QueuedMessage {
   /** Complete content used to render pending steering before it becomes durable. */
   readonly content: readonly ContentBlock[]
   readonly preview: string
-  /** Complete editable text; null when the message contains non-text blocks. */
-  readonly text: string | null
+  /** Concatenated text blocks used by the queue editor; empty when none exist. */
+  readonly text: string
 }
 
 /** In-progress assistant output (chunk accumulator product). */

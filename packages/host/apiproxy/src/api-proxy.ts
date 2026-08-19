@@ -141,6 +141,36 @@ function decodeBase64(data: string): Uint8Array {
   return new Uint8Array(decoded)
 }
 
+/**
+ * Replace every text block with the requested text while keeping the original
+ * non-text blocks, including already-admitted images, in their original order.
+ * An image-only message receives one trailing text block.
+ * @param current - still-pending message content.
+ * @param next - replacement payload; must be exactly one text block.
+ * @returns merged content, or null when the payload is not exactly one text block.
+ */
+function mergeQueueEditText(
+  current: readonly ContentBlock[],
+  next: readonly ContentBlock[],
+): ContentBlock[] | null {
+  if (next.length !== 1 || next[0]?.type !== 'text') return null
+  const text = next[0].text
+  let replaced = false
+  const merged: ContentBlock[] = []
+  for (const block of current) {
+    if (block.type !== 'text') {
+      merged.push(block)
+      continue
+    }
+    if (!replaced) {
+      merged.push({ type: 'text', text })
+      replaced = true
+    }
+  }
+  if (!replaced) merged.push({ type: 'text', text })
+  return merged
+}
+
 /** Validate one prompt as a batch before publishing any durable image object. */
 async function durablePromptContent(ctx: Context, content: readonly PromptContentPart[]): Promise<ContentBlock[]> {
   if (content.every(part => part.type === 'text')) {
@@ -2591,13 +2621,6 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       updateQueue(request) {
         const { sessionId, itemId, action } = request.payload
-        if (action.kind === 'edit' && action.content.some(block => block.type !== 'text')) {
-          return Promise.resolve(err(request, {
-            code: 'attachment-error',
-            message: 'queue edits accept text content only',
-            details: { reason: 'QUEUE_EDIT_NON_TEXT' },
-          }))
-        }
         const agent = ctx.agents.get(sessionId)
         if (agent !== undefined && hasSubagentOwner(agent.session, agent)) {
           return Promise.resolve(err(request, subagentOwnershipError(sessionId)))
@@ -2638,7 +2661,15 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           }))
         }
         if (action.kind === 'edit') {
-          agent.inbox.replace(itemId, freezeMessage({ ...message, content: action.content }))
+          const content = mergeQueueEditText(message.content, action.content)
+          if (content === null) {
+            return Promise.resolve(err(request, {
+              code: 'attachment-error',
+              message: 'queue edits accept one text block',
+              details: { reason: 'QUEUE_EDIT_NON_TEXT' },
+            }))
+          }
+          agent.inbox.replace(itemId, freezeMessage({ ...message, content }))
         } else if (action.kind === 'move') {
           if (action.beforeItemId !== undefined && action.beforeItemId !== itemId) {
             const beforePending = agent.inbox.nextTurn.some(candidate => candidate.id === action.beforeItemId)
