@@ -139,11 +139,15 @@ function resolveMaxParallelToolCalls(value: number | undefined): number {
   return maxParallelToolCalls
 }
 
-/** Reject an output-token cap that cannot be represented exactly on the request wire. */
+/** Reject an output-token cap or reasoning effort that cannot be sent on the request. */
 function assertAgentOptions(options: AgentOptions): void {
   if (options.maxTokens !== undefined
     && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens <= 0)) {
     throw new TypeError('agent maxTokens must be a positive safe integer')
+  }
+  if (options.reasoningEffort !== undefined
+    && (typeof options.reasoningEffort !== 'string' || options.reasoningEffort.length === 0)) {
+    throw new TypeError('agent reasoningEffort must be a non-empty string')
   }
 }
 

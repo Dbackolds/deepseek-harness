@@ -1,4 +1,4 @@
-import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { CallId, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { type Agent, type AgentOptions } from '@deepseek-ai/dsh-agent'
@@ -23,13 +23,13 @@ async function mountInvariants(ctx: Context): Promise<void> {
   await ctx.plugin(AgentLoopInvariant)
 }
 
-async function setup(script: Script, parentOptions: Partial<AgentOptions> = {}) {
+async function setup(script: Script, parentOptions: Partial<AgentOptions> = {}, reasoning?: ConstructorParameters<typeof MockAdapter>[1]) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
   await mountInvariants(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
-  const adapter = new MockAdapter(script)
+  const adapter = new MockAdapter(script, reasoning)
   ctx.llm.registerAdapter(['mock'], adapter)
   const parent = ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock', ...parentOptions })
   return { ctx, parent, adapter }
@@ -228,6 +228,48 @@ describe('startInProcessRun', () => {
       origin: 'subagent',
       delegationDepth: 1,
     })
+    await run.dispose()
+  })
+
+  it('inherits the parent reasoning effort and accepts an explicit child override', async () => {
+    const { ctx, parent, adapter } = await setup(
+      [textResponse('inherited'), textResponse('overridden')],
+      { reasoningEffort: ReasoningEffortId('xhigh') },
+      {
+        efforts: [
+          { id: ReasoningEffortId('low'), name: 'Low' },
+          { id: ReasoningEffortId('xhigh'), name: 'Extra high' },
+        ],
+      },
+    )
+    const inherited = await startInProcessRun(request(parent), {})
+    await inherited.result
+    expect(adapter.requests[0]?.reasoningEffort).toBe(ReasoningEffortId('xhigh'))
+    expect(ctx.agents.get(inherited.id)?.options.reasoningEffort).toBe(ReasoningEffortId('xhigh'))
+    await inherited.dispose()
+
+    const overridden = await startInProcessRun({
+      ...request(parent),
+      agentOptions: { reasoningEffort: ReasoningEffortId('low') },
+    }, {})
+    await overridden.result
+    expect(adapter.requests[1]?.reasoningEffort).toBe(ReasoningEffortId('low'))
+    expect(ctx.agents.get(overridden.id)?.options.reasoningEffort).toBe(ReasoningEffortId('low'))
+    await overridden.dispose()
+  })
+
+  it('does not inherit reasoning effort across a child model change', async () => {
+    const { ctx, parent, adapter } = await setup(
+      [textResponse('other model')],
+      { reasoningEffort: ReasoningEffortId('xhigh') },
+    )
+    const run = await startInProcessRun({
+      ...request(parent),
+      agentOptions: { model: 'other' },
+    }, {})
+    await run.result
+    expect(adapter.requests[0]?.reasoningEffort).toBeUndefined()
+    expect(ctx.agents.get(run.id)?.options.reasoningEffort).toBeUndefined()
     await run.dispose()
   })
 

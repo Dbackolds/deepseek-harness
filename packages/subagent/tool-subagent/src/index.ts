@@ -12,7 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { assertSubagentMaxDepth, settleRun } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider, SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
@@ -90,7 +90,13 @@ export const Config: z<Config> = z.object({
     provider: z.string(),
     model: z.string(),
     maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
-  }).default(undefined as unknown as { provider: string; model: string; maxTokens: number }),
+    reasoningEffort: z.string() as z<NonNullable<AgentOptions['reasoningEffort']>>,
+  }).default(undefined as unknown as {
+    provider: string
+    model: string
+    maxTokens: number
+    reasoningEffort: NonNullable<AgentOptions['reasoningEffort']>
+  }),
   persona: z.string(),
   // Preserve omission; Schemastery's `{ allow: [] }` default would deny every tool.
   toolFilter: z.object({
@@ -415,11 +421,20 @@ export function apply(ctx: Context, config: Config): void {
           throw new Error(`unknown subagent definition "${selectedId}"`)
         }
         const composition = selected === undefined ? undefined : compositionFromUserSubagent(selected)
+        const configuredOptions = config.agentOptions
+        const agentOptions = configuredOptions === undefined
+          ? undefined
+          : {
+            ...configuredOptions,
+            ...configuredOptions.reasoningEffort === undefined
+              ? {}
+              : { reasoningEffort: ReasoningEffortId(configuredOptions.reasoningEffort) },
+          }
         const request = {
           label: args.description,
           prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
           parent,
-          ...config.agentOptions !== undefined ? { agentOptions: config.agentOptions } : {},
+          ...agentOptions !== undefined ? { agentOptions } : {},
           ...composition !== undefined
             ? {
               persona: composition.persona,

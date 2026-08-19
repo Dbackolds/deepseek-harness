@@ -442,13 +442,14 @@ export class SubagentContinuationManager {
 
     const lineageSeedLength = prepared.seed?.length ?? 0
     const seed = seedDescriptorTurn(childId, prepared.seed, descriptor)
+    const childCwd = spec.cwd ?? prepared.cwd
     const messageId = await this.locks.run(childId, async () => {
       const activation = await this.materialize({
         childId,
         provider: spec.provider,
         parent,
         create: { seed, meta: childSessionMeta(parent, childDepth, lineageSeedLength, {
-          cwd: spec.cwd ?? prepared.cwd,
+          ...childCwd === undefined ? {} : { cwd: childCwd },
         }), delegatedPolicies },
         agentOptions: resolveChildAgentOptions(parent, request.agentOptions, childDepth),
         composition: { persona: request.persona, toolFilter: request.toolFilter },

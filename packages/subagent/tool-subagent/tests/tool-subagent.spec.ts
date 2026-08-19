@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { CallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import { assembleContextFor, type Agent } from '@deepseek-ai/dsh-agent'
@@ -236,7 +236,7 @@ describe('dsh-tool-subagent', () => {
   it('forwards configured agentOptions into the start request', async () => {
     // Cover the `config.agentOptions ? … : {}` spread: a provider that captures
     // the request lets us assert the agentOptions reached it.
-    let seen: { agentOptions?: { model?: string } } | undefined
+    let seen: { agentOptions?: { model?: string; reasoningEffort?: string } } | undefined
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
@@ -259,6 +259,36 @@ describe('dsh-tool-subagent', () => {
 
     await callSubagent(ctx, { description: 'd', prompt: 'p' })
     expect(seen?.agentOptions).toEqual({ model: 'child-model' })
+  })
+
+  it('brands a configured reasoningEffort before forwarding agentOptions', async () => {
+    let seen: { agentOptions?: { reasoningEffort?: string } } | undefined
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SubagentRuntime)
+    ctx.subagents.registerProvider({
+      name: 'capture-effort',
+      capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      inheritsParentContext: false,
+      start: async (request) => {
+        seen = request
+        return {
+          id: SessionId('capture-effort-child'),
+          localAgent: undefined,
+          result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
+          dispose: async () => {},
+        }
+      },
+    })
+    await ctx.plugin(tool, {
+      provider: 'capture-effort',
+      agentOptions: { reasoningEffort: ReasoningEffortId('xhigh') },
+      maxDepth: 'provider-managed',
+    })
+
+    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    expect(seen?.agentOptions).toEqual({ reasoningEffort: ReasoningEffortId('xhigh') })
   })
 
   it('defaults toolName and omits agentOptions when apply() is called directly (schema bypass)', async () => {
