@@ -148,7 +148,7 @@ Ownership truth is the record's ordered `sessionIds`, never derived from session
 
 ## The registry: `ctx.workspaceRegistry`
 
-`WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?)` canonicalizes the path, rejects a nonexistent path (the original `ENOENT`) or a non-directory, returns the existing entity unchanged when the canonical path is already owned, and otherwise creates a record with `title ?? basename(path)` prepended to the durable registry order — a new record cannot duplicate an existing display title (`WorkspaceNameConflictError`). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path)` applies the same realpath canon without creating and matches either the primary path or an additional folder. `delete(id)` removes only the registration, order entry, and session account — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption.
+`WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?)` canonicalizes the path, rejects a nonexistent path (the original `ENOENT`) or a non-directory, returns the existing entity unchanged when the canonical path is already owned — showing a hidden owner in place without minting an id or moving order — and otherwise creates a record with `title ?? basename(path)` prepended to the durable registry order — a new record cannot duplicate an existing display title (`WorkspaceNameConflictError`). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path)` applies the same realpath canon without creating and matches either the primary path or an additional folder. `hide(id)` and `show(id)` maintain the registry-global hidden set over that order: hide appends a registered id, show removes it, unknown ids return `false` without writing, and already-hidden hide or already-visible show succeed without writing. `delete(id)` removes only the registration, order entry, session account, and that id from the hidden set — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption.
 
 Sessions get their birth cwd at create time from whoever creates them, not from this registry — the API gateway resolves a new session's cwd from the chosen workspace's `path` (falling back to an explicit or default cwd), creates the session so the cwd lands in its immutable [`SessionHeader`](persistence.md#sessionheader--metadata-beside-the-log), then calls `attachSession`, which re-validates the live effective home (or birth cwd when cold) against the workspace path. `session.rehome` later moves the effective home and workspace account without rewriting the header. On the first successful start, the registry bootstraps history from persisted headers alone (`id`, `cwd`, `createdAt` — never event bodies), grouping sessions with a valid canonical cwd into per-directory workspaces, newest first; the initialized marker is written last so an interrupted bootstrap resumes safely. The bootstrap is one-time: cwd-less legacy sessions stay Ungrouped, and sessions created afterwards join a workspace only through `attachSession`.
 
@@ -191,9 +191,11 @@ Durable workspace registry. Startup waits for `sessionPersistence`, builds one c
  * Create or reuse a workspace for an existing directory. The path is
  * canonicalized through `fs.realpath`; a nonexistent path rejects with the
  * original error and a non-directory rejects. Repeated calls for the same
- * canonical path return the existing entity without changing its title.
- * A newly created workspace is prepended to the durable registry order.
- * Different canonical paths may share a display title.
+ * canonical path return the existing entity without changing its title
+ * or its registry-order position; a hidden owner of that path is shown
+ * in place as part of the same serialized write. A newly created
+ * workspace is prepended to the durable registry order. Different
+ * canonical paths may share a display title.
  * @param path - Existing directory to own, in any path spelling.
  * @param title - Display title used only when a new record is created.
  * @returns the existing or newly durable workspace.
@@ -219,7 +221,9 @@ list(): Workspace[]
  * Delete one workspace registration while retaining its directory and every
  * session log. The durable order is updated before the table deletion; a
  * failed table write restores the prior order and keeps the entity
- * published. Unknown ids are an idempotent no-op for domain callers.
+ * published. A hidden id is dropped from the hidden set in the same
+ * serialized operation. Unknown ids are an idempotent no-op for domain
+ * callers.
  * @param id - Workspace registration to remove.
  * @returns `true` when a record was deleted, `false` when it was unknown.
  */
@@ -242,6 +246,24 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
  * @returns resolution after durability.
  */
 archiveSession(sessionId: SessionId): Promise<void>
+
+/**
+ * Hide one registered workspace durably. Unknown ids are an idempotent
+ * no-op returning false (Host maps that to workspace-not-found). An
+ * already-hidden id succeeds without writing.
+ * @param id - Workspace to hide.
+ * @returns `true` when the workspace is registered, `false` when unknown.
+ */
+hide(id: WorkspaceId): Promise<boolean>
+
+/**
+ * Show one registered workspace durably. Unknown ids are an idempotent
+ * no-op returning false (Host maps that to workspace-not-found). A
+ * registered id that is not hidden succeeds without writing.
+ * @param id - Workspace to show.
+ * @returns `true` when the workspace is registered, `false` when unknown.
+ */
+show(id: WorkspaceId): Promise<boolean>
 
 /**
  * Resolve by canonical directory path without creating or mutating a

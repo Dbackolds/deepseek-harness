@@ -30,6 +30,7 @@ export const workspaceListRequestSchema = z.object({}) satisfies z.ZodType<Wire<
 export const workspaceListValueSchema = z.object({
   items: z.array(workspaceViewSchema),
   archivedSessionIds: z.array(sessionIdSchema),
+  hiddenWorkspaceIds: z.array(workspaceIdSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.list'>>>
 
 /** workspace.create request payload: the existing directory to adopt. */
@@ -121,3 +122,23 @@ export const workspaceArchiveSessionRequestSchema = z.object({
 export const workspaceArchiveSessionValueSchema = z.object({
   archivedSessionIds: z.array(sessionIdSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.archiveSession'>>>
+
+/** workspace.hide request payload. */
+export const workspaceHideRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.hide'>>>
+
+/** workspace.hide response value: the full updated hidden set. */
+export const workspaceHideValueSchema = z.object({
+  hiddenWorkspaceIds: z.array(workspaceIdSchema),
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.hide'>>>
+
+/** workspace.show request payload. */
+export const workspaceShowRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.show'>>>
+
+/** workspace.show response value: the full updated hidden set. */
+export const workspaceShowValueSchema = z.object({
+  hiddenWorkspaceIds: z.array(workspaceIdSchema),
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.show'>>>

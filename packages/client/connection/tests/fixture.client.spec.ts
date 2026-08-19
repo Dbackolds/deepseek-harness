@@ -702,6 +702,47 @@ describe('createFixtureApi', () => {
     expect(sessions.result.value.items.map(session => session.sessionId)).toContain('fx-alpha')
   })
 
+  it('workspace.hide/show update the set, emit the frame, and unhide on same-path create', async () => {
+    const api = createFixtureApi()
+    const wsid = 'fx-ws-fixture' as WorkspaceId
+    const listed = await api.workspace.list(req({}))
+    if (!listed.result.ok) throw new Error('list failed')
+    expect(listed.result.value.hiddenWorkspaceIds).toEqual([])
+
+    const abort = new AbortController()
+    const seen: HostFrame[] = []
+    const consuming = (async () => {
+      for await (const envelope of api.events.host(req({}), abort.signal)) {
+        seen.push(envelope.payload)
+        if (seen.length >= 2) abort.abort()
+      }
+    })()
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    const missing = await api.workspace.hide(req({ workspaceId: 'fx-ws-void' as WorkspaceId }))
+    expect(missing.result).toMatchObject({ ok: false, error: { code: 'workspace-not-found' } })
+    const hidden = await api.workspace.hide(req({ workspaceId: wsid }))
+    expect(hidden.result).toEqual({ ok: true, value: { hiddenWorkspaceIds: [wsid] } })
+    const again = await api.workspace.hide(req({ workspaceId: wsid }))
+    expect(again.result).toEqual({ ok: true, value: { hiddenWorkspaceIds: [wsid] } })
+    const shown = await api.workspace.show(req({ workspaceId: wsid }))
+    expect(shown.result).toEqual({ ok: true, value: { hiddenWorkspaceIds: [] } })
+    await consuming
+    expect(seen).toEqual([
+      { type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [wsid] },
+      { type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [] },
+    ])
+
+    await api.workspace.hide(req({ workspaceId: wsid }))
+    const reused = await api.workspace.create(req({ path: '/tmp/fixture' }))
+    if (!reused.result.ok) throw new Error('reuse failed')
+    expect(reused.result.value).toMatchObject({ created: false, workspace: { workspaceId: wsid } })
+    const afterReuse = await api.workspace.list(req({}))
+    if (!afterReuse.result.ok) throw new Error('list after reuse failed')
+    expect(afterReuse.result.value.hiddenWorkspaceIds).toEqual([])
+    expect(afterReuse.result.value.items[0]?.workspaceId).toBe(wsid)
+  })
+
   it('session.create({workspaceId}) lands on the account and unknown ids error', async () => {
     const api = createFixtureApi()
     const abort = new AbortController()

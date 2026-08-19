@@ -45,18 +45,27 @@ export interface WorkspaceApi {
   /**
    * Lists all workspaces in the registry's durable display order, plus the
    * registry-global archive set (the reconnect baseline of
-   * `host/archived-sessions-changed`). Archived sessions stay in their
-   * workspace's `sessionIds` account; grouping surfaces hide them.
+   * `host/archived-sessions-changed`) and the registry-global hidden set
+   * (the reconnect baseline of `host/hidden-workspaces-changed`). Archived
+   * sessions stay in their workspace's `sessionIds` account; grouping
+   * surfaces hide them. Hidden workspaces stay in `items` and keep
+   * membership; grouping surfaces fold them into Hidden.
    */
-  list(request: RpcRequest<{}>): Promise<RpcResponse<{ items: WorkspaceView[]; archivedSessionIds: SessionId[] }>>
+  list(request: RpcRequest<{}>): Promise<RpcResponse<{
+    items: WorkspaceView[]
+    archivedSessionIds: SessionId[]
+    hiddenWorkspaceIds: WorkspaceId[]
+  }>>
 
   /**
    * Creates (or idempotently resolves) a workspace over an EXISTING directory
    * (no mkdir — a missing or non-directory path fails with
    * `workspace-invalid-path`). A path resolving to a directory already owned
-   * by a workspace returns that workspace (`created: false`). Adoption allows
-   * distinct canonical paths whose basenames produce the same display title;
-   * the registry's basename title default names the new workspace.
+   * by a workspace returns that workspace (`created: false`) and shows it
+   * in place when it was hidden, without minting a new id or moving order.
+   * Adoption allows distinct canonical paths whose basenames produce the
+   * same display title; the registry's basename title default names the
+   * new workspace.
    */
   create(request: RpcRequest<{ path: string }>):
   Promise<RpcResponse<{ workspace: WorkspaceView; created: boolean }>>
@@ -73,7 +82,8 @@ export interface WorkspaceApi {
   /**
    * Removes one Workspace registration. The directory, every user file, and
    * every session log remain untouched; those Sessions consequently become
-   * ungrouped. An unknown id fails with `workspace-not-found`.
+   * ungrouped. A hidden id is dropped from the hidden set in the same
+   * operation. An unknown id fails with `workspace-not-found`.
    */
   delete(request: RpcRequest<{ workspaceId: WorkspaceId }>):
   Promise<RpcResponse<{ deleted: true }>>
@@ -130,4 +140,24 @@ export interface WorkspaceApi {
    */
   archiveSession(request: RpcRequest<{ sessionId: SessionId }>):
   Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>>
+
+  /**
+   * Adds one registered workspace to the registry-global hidden set: the
+   * workspace leaves the main grouping list but keeps its registry-order
+   * slot and its `sessionIds` account (Show restores that position).
+   * Idempotent for an already hidden id. An unknown id fails with
+   * `workspace-not-found`. Returns the full updated set (same snapshot the
+   * changed frame carries).
+   */
+  hide(request: RpcRequest<{ workspaceId: WorkspaceId }>):
+  Promise<RpcResponse<{ hiddenWorkspaceIds: WorkspaceId[] }>>
+
+  /**
+   * Removes one registered workspace from the registry-global hidden set.
+   * A registered id that is not hidden is success without writing. An
+   * unknown id fails with `workspace-not-found`. Returns the full updated
+   * set (same snapshot the changed frame carries).
+   */
+  show(request: RpcRequest<{ workspaceId: WorkspaceId }>):
+  Promise<RpcResponse<{ hiddenWorkspaceIds: WorkspaceId[] }>>
 }

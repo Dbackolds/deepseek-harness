@@ -148,7 +148,7 @@ interface Workspace {
 
 ## 注册表：`ctx.workspaceRegistry`
 
-`WorkspaceRegistry`（[签名](#ctxworkspaceregistry--workspaceregistry)）拥有注册与解析。`create(path, title?)` 规范化路径，拒绝不存在的路径（原样传出原始 `ENOENT`）或非目录；当规范路径已被拥有时原样返回既有实体；否则创建一条标题为 `title ?? basename(path)` 的记录并前插到持久的注册表顺序中——新记录不得与既有显示标题重复（`WorkspaceNameConflictError`）。`get(id)` 与有序的 `list()` 是同步缓存读取；`resolveByPath(path)` 应用同一套 realpath 规范但不创建。`delete(id)` 只移除注册记录、顺序条目和会话账本——目录、用户文件、实时会话和已持久化日志一概不动，因此这些会话变为 Ungrouped（[决策](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)）；未知 id 返回 `false`。create 与 delete 会在其两次写入（记录 + 顺序）可能分叉之前先持久写入一个待定变更标记；启动时恰好解决被标记的那次变更——通过删除被标记的表行：这会补完被中断的 delete，并回滚被中断的 create（注册可以重建，因此回滚是安全方向）——而没有标记的顺序/表不一致则作为损坏大声失败。
+`WorkspaceRegistry`（[签名](#ctxworkspaceregistry--workspaceregistry)）拥有注册与解析。`create(path, title?)` 规范化路径，拒绝不存在的路径（原样传出原始 `ENOENT`）或非目录；当规范路径已被拥有时原样返回既有实体——若该拥有者已隐藏，则就地显示（Show workspace，显示工作区），不铸造新 id、也不移动顺序；否则创建一条标题为 `title ?? basename(path)` 的记录并前插到持久的注册表顺序中——新记录不得与既有显示标题重复（`WorkspaceNameConflictError`）。`get(id)` 与有序的 `list()` 是同步缓存读取；`resolveByPath(path)` 应用同一套 realpath 规范但不创建。`hide(id)` 与 `show(id)` 维护覆盖该顺序的注册表级全局已隐藏（Hidden）集合：Hide workspace（隐藏工作区）把已注册 id 追加进去，Show 则移除；未知 id 返回 `false` 且不写入，已隐藏再 Hide 或未隐藏再 Show 均成功且不写入。`delete(id)` 只移除注册记录、顺序条目、会话账本，以及已隐藏集合中的该 id——目录、用户文件、实时会话和已持久化日志一概不动，因此这些会话变为 Ungrouped（[决策](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)）；未知 id 返回 `false`。create 与 delete 会在其两次写入（记录 + 顺序）可能分叉之前先持久写入一个待定变更标记；启动时恰好解决被标记的那次变更——通过删除被标记的表行：这会补完被中断的 delete，并回滚被中断的 create（注册可以重建，因此回滚是安全方向）——而没有标记的顺序/表不一致则作为损坏大声失败。
 
 会话的出生 cwd 在创建时由创建者赋予，而不是由本注册表赋予——API 网关从所选工作区的 `path` 解析新会话的 cwd（回退到显式或默认 cwd），先创建会话使 cwd 落入其不可变的 [`SessionHeader`](persistence.md#sessionheader--metadata-beside-the-log)，再调用 `attachSession`，后者会把活动有效家（冷会话则用出生 cwd）与工作区路径重新校验一遍。`session.rehome` 之后会改有效家和工作区账本，不改写 header。首次成功启动时，注册表仅凭已持久化的 header（`id`、`cwd`、`createdAt`——绝不读事件正文）引导历史：把规范 cwd 有效的会话按目录分组为工作区，最新的排在最前；「已初始化」标记最后写入，因此被中断的引导可以安全续跑。引导只发生这一次：没有 cwd 的历史遗留会话保持 Ungrouped，此后创建的会话只能通过 `attachSession` 加入工作区。
 
@@ -191,9 +191,11 @@ Durable workspace registry. Startup waits for `sessionPersistence`, builds one c
  * Create or reuse a workspace for an existing directory. The path is
  * canonicalized through `fs.realpath`; a nonexistent path rejects with the
  * original error and a non-directory rejects. Repeated calls for the same
- * canonical path return the existing entity without changing its title.
- * A newly created workspace is prepended to the durable registry order.
- * Different canonical paths may share a display title.
+ * canonical path return the existing entity without changing its title
+ * or its registry-order position; a hidden owner of that path is shown
+ * in place as part of the same serialized write. A newly created
+ * workspace is prepended to the durable registry order. Different
+ * canonical paths may share a display title.
  * @param path - Existing directory to own, in any path spelling.
  * @param title - Display title used only when a new record is created.
  * @returns the existing or newly durable workspace.
@@ -219,7 +221,9 @@ list(): Workspace[]
  * Delete one workspace registration while retaining its directory and every
  * session log. The durable order is updated before the table deletion; a
  * failed table write restores the prior order and keeps the entity
- * published. Unknown ids are an idempotent no-op for domain callers.
+ * published. A hidden id is dropped from the hidden set in the same
+ * serialized operation. Unknown ids are an idempotent no-op for domain
+ * callers.
  * @param id - Workspace registration to remove.
  * @returns `true` when a record was deleted, `false` when it was unknown.
  */
@@ -242,6 +246,24 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
  * @returns resolution after durability.
  */
 archiveSession(sessionId: SessionId): Promise<void>
+
+/**
+ * Hide one registered workspace durably. Unknown ids are an idempotent
+ * no-op returning false (Host maps that to workspace-not-found). An
+ * already-hidden id succeeds without writing.
+ * @param id - Workspace to hide.
+ * @returns `true` when the workspace is registered, `false` when unknown.
+ */
+hide(id: WorkspaceId): Promise<boolean>
+
+/**
+ * Show one registered workspace durably. Unknown ids are an idempotent
+ * no-op returning false (Host maps that to workspace-not-found). A
+ * registered id that is not hidden succeeds without writing.
+ * @param id - Workspace to show.
+ * @returns `true` when the workspace is registered, `false` when unknown.
+ */
+show(id: WorkspaceId): Promise<boolean>
 
 /**
  * Resolve by canonical directory path without creating or mutating a

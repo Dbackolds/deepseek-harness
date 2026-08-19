@@ -1564,6 +1564,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   // Registry-global archive set mirroring the host: archived sessions keep
   // their workspace accounting slot and only grouping surfaces hide them.
   const archivedSessionIds: SessionId[] = []
+  // Registry-global hidden set mirroring the host: hidden workspaces keep
+  // their registry-order slot and sessionIds; grouping surfaces fold them.
+  const hiddenWorkspaceIds: WorkspaceId[] = []
 
   // In-memory browse tree behind the fixture's `browse` picker capability —
   // deterministic content mirroring the design mock so assembled Web tests
@@ -2595,11 +2598,19 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       list: request => ok(request, {
         items: workspaces.map(w => ({ ...w })),
         archivedSessionIds: [...archivedSessionIds],
+        hiddenWorkspaceIds: [...hiddenWorkspaceIds],
       }),
       create: (request) => {
         const { path } = request.payload
         const existing = workspaces.find(w => w.path === path)
-        if (existing !== undefined) return ok(request, { workspace: { ...existing }, created: false })
+        if (existing !== undefined) {
+          const hiddenAt = hiddenWorkspaceIds.indexOf(existing.workspaceId)
+          if (hiddenAt !== -1) {
+            hiddenWorkspaceIds.splice(hiddenAt, 1)
+            emitHost({ type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [...hiddenWorkspaceIds] })
+          }
+          return ok(request, { workspace: { ...existing }, created: false })
+        }
         const now = new Date().toISOString()
         const created: WorkspaceView = {
           workspaceId: wid(`fx-ws-${nextWorkspace++}`),
@@ -2650,7 +2661,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           })
         }
         workspaces.splice(index, 1)
+        const hiddenAt = hiddenWorkspaceIds.indexOf(workspaceId)
+        if (hiddenAt !== -1) hiddenWorkspaceIds.splice(hiddenAt, 1)
         emitHost({ type: 'host/workspace-removed', workspaceId })
+        if (hiddenAt !== -1) {
+          emitHost({ type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [...hiddenWorkspaceIds] })
+        }
         return ok(request, { deleted: true as const })
       },
       insertBefore: (request) => {
@@ -2722,6 +2738,37 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           emitHost({ type: 'host/archived-sessions-changed', archivedSessionIds: [...archivedSessionIds] })
         }
         return ok(request, { archivedSessionIds: [...archivedSessionIds] })
+      },
+      hide: (request) => {
+        const { workspaceId } = request.payload
+        if (!workspaces.some(workspace => workspace.workspaceId === workspaceId)) {
+          return err(request, {
+            code: 'workspace-not-found',
+            message: `no workspace ${workspaceId}`,
+            details: { workspaceId },
+          })
+        }
+        if (!hiddenWorkspaceIds.includes(workspaceId)) {
+          hiddenWorkspaceIds.push(workspaceId)
+          emitHost({ type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [...hiddenWorkspaceIds] })
+        }
+        return ok(request, { hiddenWorkspaceIds: [...hiddenWorkspaceIds] })
+      },
+      show: (request) => {
+        const { workspaceId } = request.payload
+        if (!workspaces.some(workspace => workspace.workspaceId === workspaceId)) {
+          return err(request, {
+            code: 'workspace-not-found',
+            message: `no workspace ${workspaceId}`,
+            details: { workspaceId },
+          })
+        }
+        const hiddenAt = hiddenWorkspaceIds.indexOf(workspaceId)
+        if (hiddenAt !== -1) {
+          hiddenWorkspaceIds.splice(hiddenAt, 1)
+          emitHost({ type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [...hiddenWorkspaceIds] })
+        }
+        return ok(request, { hiddenWorkspaceIds: [...hiddenWorkspaceIds] })
       },
       addFolder: (request) => {
         const { workspaceId, path } = request.payload
@@ -3279,6 +3326,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertBefore': return this.api.workspace.insertBefore(request)
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
+      case 'workspace.hide': return this.api.workspace.hide(request)
+      case 'workspace.show': return this.api.workspace.show(request)
       case 'workspace.addFolder': return this.api.workspace.addFolder(request)
       case 'workspace.removeFolder': return this.api.workspace.removeFolder(request)
       case 'skill.list': return this.api.skills.list(request)

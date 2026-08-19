@@ -23,10 +23,12 @@ import {
   workspaceArchiveSessionRequestSchema, workspaceArchiveSessionValueSchema,
   workspaceCreateRequestSchema, workspaceCreateValueSchema, workspaceIdSchema,
   workspaceDeleteRequestSchema, workspaceDeleteValueSchema,
+  workspaceHideRequestSchema, workspaceHideValueSchema,
   workspaceInsertBeforeRequestSchema, workspaceInsertBeforeValueSchema,
   workspaceInsertSessionBeforeRequestSchema, workspaceInsertSessionBeforeValueSchema,
   workspaceListRequestSchema, workspaceListValueSchema,
-  workspaceRenameRequestSchema, workspaceRenameValueSchema, workspaceViewSchema,
+  workspaceRenameRequestSchema, workspaceRenameValueSchema,
+  workspaceShowRequestSchema, workspaceShowValueSchema, workspaceViewSchema,
 } from '../src/api/workspace.schema.ts'
 import { skillEntrySchema, skillListRequestSchema, skillListValueSchema } from '../src/api/skills.schema.ts'
 import {
@@ -369,8 +371,10 @@ describe('workspace domain schemas', () => {
     expect(workspaceViewSchema.parse(view).sessionIds).toEqual(['s1'])
     expect(() => workspaceViewSchema.parse({ ...view, sessionIds: 's1' })).toThrow()
     expect(workspaceListRequestSchema.parse({})).toEqual({})
-    expect(workspaceListValueSchema.parse({ items: [view], archivedSessionIds: ['s1'] }).items).toHaveLength(1)
-    expect(() => workspaceListValueSchema.parse({ items: [view] })).toThrow()
+    expect(workspaceListValueSchema.parse({
+      items: [view], archivedSessionIds: ['s1'], hiddenWorkspaceIds: ['w1'],
+    }).items).toHaveLength(1)
+    expect(() => workspaceListValueSchema.parse({ items: [view], archivedSessionIds: ['s1'] })).toThrow()
   })
 
   it('archiveSession request/value carry the id and the full updated set', () => {
@@ -379,6 +383,16 @@ describe('workspace domain schemas', () => {
     expect(workspaceArchiveSessionValueSchema.parse({ archivedSessionIds: ['s1', 's2'] }).archivedSessionIds)
       .toEqual(['s1', 's2'])
     expect(() => workspaceArchiveSessionValueSchema.parse({ archivedSessionIds: 's1' })).toThrow()
+  })
+
+  it('hide/show request/value carry the id and the full updated set', () => {
+    expect(workspaceHideRequestSchema.parse({ workspaceId: 'w1' }).workspaceId).toBe('w1')
+    expect(() => workspaceHideRequestSchema.parse({})).toThrow()
+    expect(workspaceHideValueSchema.parse({ hiddenWorkspaceIds: ['w1', 'w2'] }).hiddenWorkspaceIds)
+      .toEqual(['w1', 'w2'])
+    expect(() => workspaceHideValueSchema.parse({ hiddenWorkspaceIds: 'w1' })).toThrow()
+    expect(workspaceShowRequestSchema.parse({ workspaceId: 'w1' }).workspaceId).toBe('w1')
+    expect(workspaceShowValueSchema.parse({ hiddenWorkspaceIds: [] }).hiddenWorkspaceIds).toEqual([])
   })
 
   it('insertSessionBefore accepts an anchored and an anchorless move', () => {
@@ -535,6 +549,7 @@ describe('events frame schemas', () => {
         createdAt: '0', updatedAt: '0',
       } },
       { type: 'host/workspace-removed', workspaceId: 'w' },
+      { type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: ['w'] },
       { type: 'host/remote-event', event: 'commands/change', args: [] },
       { type: 'host/remote-event', event: 'settings/document-updated', args: ['ns', 3] },
       { type: 'host/remote-event', event: 'agent-preset/selected', args: ['s', 'minimal'] },

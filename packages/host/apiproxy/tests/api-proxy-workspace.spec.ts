@@ -567,6 +567,94 @@ describe('Host Workspace increments', () => {
     })
     abort.abort()
   })
+
+  it('hides a workspace into the global set, keeps its accounting, and streams the set once', async () => {
+    const { api, root } = await harness()
+    const first = expectOk(await api.workspace.create(request({ path: stageDir(root, 'hide-first') }))).workspace
+    const second = expectOk(await api.workspace.create(request({ path: stageDir(root, 'hide-second') }))).workspace
+    const sessionId = SessionId('session-in-hidden')
+    expectOk(await api.sessions.create(request({ workspaceId: first.workspaceId, sessionId })))
+    expect(expectOk(await api.workspace.list(request({}))).hiddenWorkspaceIds).toEqual([])
+
+    const abort = new AbortController()
+    const stream: AsyncIterator<RpcRequest<HostFrame>> =
+      api.events.host(request({}), abort.signal)[Symbol.asyncIterator]()
+    const changed = nextHostFrame(stream)
+    expect(expectOk(await api.workspace.hide(request({ workspaceId: first.workspaceId }))).hiddenWorkspaceIds)
+      .toEqual([first.workspaceId])
+    expect(await changed).toMatchObject({
+      payload: { type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [first.workspaceId] },
+    })
+
+    const listed = expectOk(await api.workspace.list(request({})))
+    expect(listed.hiddenWorkspaceIds).toEqual([first.workspaceId])
+    expect(listed.items.map(item => item.workspaceId)).toEqual([second.workspaceId, first.workspaceId])
+    expect(listed.items.find(item => item.workspaceId === first.workspaceId)?.sessionIds).toEqual([sessionId])
+
+    const after = nextHostFrame(stream)
+    expect(expectOk(await api.workspace.hide(request({ workspaceId: first.workspaceId }))).hiddenWorkspaceIds)
+      .toEqual([first.workspaceId])
+    expect(expectOk(await api.workspace.show(request({ workspaceId: first.workspaceId }))).hiddenWorkspaceIds)
+      .toEqual([])
+    expect((await after).payload).toMatchObject({
+      type: 'host/hidden-workspaces-changed',
+      hiddenWorkspaceIds: [],
+    })
+
+    const missing = await api.workspace.hide(request({ workspaceId: 'workspace-ghost' as WorkspaceId }))
+    expect(missing.result).toMatchObject({
+      ok: false,
+      error: { code: 'workspace-not-found', details: { workspaceId: 'workspace-ghost' } },
+    })
+    const missingShow = await api.workspace.show(request({ workspaceId: 'workspace-ghost' as WorkspaceId }))
+    expect(missingShow.result).toMatchObject({
+      ok: false,
+      error: { code: 'workspace-not-found', details: { workspaceId: 'workspace-ghost' } },
+    })
+    abort.abort()
+  })
+
+  it('create of a hidden path unhides in place without minting a new id', async () => {
+    const { api, root } = await harness()
+    const path = stageDir(root, 'hide-then-add')
+    const first = expectOk(await api.workspace.create(request({ path }))).workspace
+    const second = expectOk(await api.workspace.create(request({ path: stageDir(root, 'hide-other') }))).workspace
+    expectOk(await api.workspace.hide(request({ workspaceId: first.workspaceId })))
+
+    const abort = new AbortController()
+    const stream: AsyncIterator<RpcRequest<HostFrame>> =
+      api.events.host(request({}), abort.signal)[Symbol.asyncIterator]()
+    const changed = nextHostFrame(stream)
+    const reused = expectOk(await api.workspace.create(request({ path })))
+    expect(reused.created).toBe(false)
+    expect(reused.workspace.workspaceId).toBe(first.workspaceId)
+    expect(await changed).toMatchObject({
+      payload: { type: 'host/hidden-workspaces-changed', hiddenWorkspaceIds: [] },
+    })
+    const listed = expectOk(await api.workspace.list(request({})))
+    expect(listed.hiddenWorkspaceIds).toEqual([])
+    expect(listed.items.map(item => item.workspaceId)).toEqual([second.workspaceId, first.workspaceId])
+    abort.abort()
+  })
+
+  it('delete of a hidden workspace drops the id from the hidden set', async () => {
+    const { api, root } = await harness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'hide-delete') }))).workspace
+    expectOk(await api.workspace.hide(request({ workspaceId: workspace.workspaceId })))
+
+    const abort = new AbortController()
+    const stream: AsyncIterator<RpcRequest<HostFrame>> =
+      api.events.host(request({}), abort.signal)[Symbol.asyncIterator]()
+    const first = nextHostFrame(stream)
+    expectOk(await api.workspace.delete(request({ workspaceId: workspace.workspaceId })))
+    const frames = [await first, await nextHostFrame(stream)]
+    expect(frames.map(frame => frame.payload.type).sort()).toEqual([
+      'host/hidden-workspaces-changed',
+      'host/workspace-removed',
+    ])
+    expect(expectOk(await api.workspace.list(request({}))).hiddenWorkspaceIds).toEqual([])
+    abort.abort()
+  })
 })
 
 describe('workspace.addFolder', () => {

@@ -168,7 +168,7 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
     },
     workspace: {
       async list(request) {
-        return { rpcId: request.rpcId, result: { ok: true, value: { items: [], archivedSessionIds: [] } } }
+        return { rpcId: request.rpcId, result: { ok: true, value: { items: [], archivedSessionIds: [], hiddenWorkspaceIds: [] } } }
       },
       async create(request) {
         return {
@@ -196,6 +196,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       },
       async archiveSession(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { archivedSessionIds: [request.payload.sessionId] } } }
+      },
+      async hide(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { hiddenWorkspaceIds: [request.payload.workspaceId] } } }
+      },
+      async show(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { hiddenWorkspaceIds: [] } } }
       },
       async addFolder(request) {
         return {

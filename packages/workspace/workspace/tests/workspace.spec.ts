@@ -141,11 +141,12 @@ function record(path: string, sessionIds: string[], createdAt = '2026-07-24T00:0
 }
 
 /**
- * Media written before archivedSessionIds existed omit the field; keeping the
- * fixtures in that shape continuously proves the schema default upgrades them.
+ * Media written before archivedSessionIds / hiddenWorkspaceIds existed omit
+ * the fields; keeping the fixtures in that shape continuously proves the
+ * schema defaults upgrade them.
  */
-type StoredDomainState = Omit<WorkspaceDomainState, 'archivedSessionIds'>
-  & Partial<Pick<WorkspaceDomainState, 'archivedSessionIds'>>
+type StoredDomainState = Omit<WorkspaceDomainState, 'archivedSessionIds' | 'hiddenWorkspaceIds'>
+  & Partial<Pick<WorkspaceDomainState, 'archivedSessionIds' | 'hiddenWorkspaceIds'>>
 
 function storedPool(
   entries: Array<[string, WorkspaceRecord]>,
@@ -197,7 +198,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     await fiber.await()
     expect(ctx.workspaceRegistry.list()).toEqual([])
     expect(list).toHaveBeenCalledTimes(1)
-    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
   })
 
   it('bootstraps once from list headers only, in workspace/session createdAt order', async () => {
@@ -231,6 +232,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
       initialized: true,
       workspaceIds: result.registry.list().map(workspace => workspace.id),
       archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
     })
   })
 
@@ -259,7 +261,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     const second = await harness({ pool, sessions: [header('late', late, 100)] })
     expect(second.list).not.toHaveBeenCalled()
     expect(second.registry.list()).toEqual([])
-    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
   })
 
   it('reuses partial records after a bootstrap record write fails', async () => {
@@ -487,7 +489,7 @@ describe('WorkspaceRegistry create and lookup', () => {
     await expect(result.registry.delete(workspace.id)).resolves.toBe(false)
     expect(result.registry.get(workspace.id)).toBeUndefined()
     expect(result.registry.list()).toEqual([])
-    expect(storedState(result.pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(result.pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
     expect(result.pool.media.get('workspace')!.tables.get('workspaces')!.has(workspace.id)).toBe(false)
     await expect(realpath(dir)).resolves.toBe(dir)
     expect(result.list).toHaveBeenCalledTimes(1)
@@ -531,6 +533,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       initialized: true,
       workspaceIds: [],
       archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
       pendingMutation: { operation: 'delete', workspaceId: workspace.id },
     })
     const reregistered = await first.registry.create(dir)
@@ -539,6 +542,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       initialized: true,
       workspaceIds: [reregistered.id],
       archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
     })
     await first.fiber.dispose()
 
@@ -875,7 +879,7 @@ describe('header-validated membership projection', () => {
     const createRecovery = await harness({ pool: interruptedCreate })
     expect(createRecovery.registry.list()).toEqual([])
     expect(interruptedCreate.media.get('workspace')!.tables.get('workspaces')!.has(createId)).toBe(false)
-    expect(storedState(interruptedCreate)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(interruptedCreate)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
 
     const interruptedDelete = storedPool(
       [[deleteId, record(deleteDir, [])]],
@@ -888,7 +892,7 @@ describe('header-validated membership projection', () => {
     const deleteRecovery = await harness({ pool: interruptedDelete })
     expect(deleteRecovery.registry.list()).toEqual([])
     expect(interruptedDelete.media.get('workspace')!.tables.get('workspaces')!.has(deleteId)).toBe(false)
-    expect(storedState(interruptedDelete)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(interruptedDelete)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
 
     const corruptPending = storedPool(
       [[deleteId, record(deleteDir, [])]],
@@ -997,6 +1001,125 @@ describe('registry-global session archive', () => {
       { initialized: true, workspaceIds: [legacyId] },
     )
     const upgraded = await harness({ pool: legacy })
+    expect(upgraded.registry.archivedSessionIds).toEqual([])
+  })
+})
+
+describe('registry-global workspace hide', () => {
+  it('hides durably in order, idempotently skips repeats, and leaves accounting untouched', async () => {
+    const firstDir = await makeDir('hide-first')
+    const secondDir = await makeDir('hide-second')
+    const result = await harness()
+    const first = await result.registry.create(firstDir)
+    const second = await result.registry.create(secondDir)
+    expect(result.registry.list().map(workspace => workspace.id)).toEqual([second.id, first.id])
+    expect(result.registry.hiddenWorkspaceIds).toEqual([])
+
+    await expect(result.registry.hide(first.id)).resolves.toBe(true)
+    expect(result.registry.hiddenWorkspaceIds).toEqual([first.id])
+    expect(result.registry.list().map(workspace => workspace.id)).toEqual([second.id, first.id])
+    expect(first.sessionIds).toEqual([])
+    expect(storedState(result.pool).hiddenWorkspaceIds).toEqual([first.id])
+    const changesAfterFirst = result.changes.filter(change => change.table === '').length
+
+    await expect(result.registry.hide(first.id)).resolves.toBe(true)
+    expect(result.registry.hiddenWorkspaceIds).toEqual([first.id])
+    expect(result.changes.filter(change => change.table === '').length).toBe(changesAfterFirst)
+
+    await expect(result.registry.hide(second.id)).resolves.toBe(true)
+    expect(result.registry.hiddenWorkspaceIds).toEqual([first.id, second.id])
+  })
+
+  it('treats an unknown id as an idempotent no-op and does not write', async () => {
+    const dir = await makeDir('hide-unknown')
+    const result = await harness()
+    const workspace = await result.registry.create(dir)
+    await result.registry.hide(workspace.id)
+    const changesAfterHide = result.changes.filter(change => change.table === '').length
+
+    await expect(result.registry.hide(WorkspaceId('00000000-0000-4000-8000-0000000000ff'))).resolves.toBe(false)
+    expect(result.registry.hiddenWorkspaceIds).toEqual([workspace.id])
+    expect(storedState(result.pool).hiddenWorkspaceIds).toEqual([workspace.id])
+    expect(result.changes.filter(change => change.table === '').length).toBe(changesAfterHide)
+  })
+
+  it('shows a hidden workspace, no-ops an already-visible one, and no-ops unknown without writing', async () => {
+    const firstDir = await makeDir('show-first')
+    const secondDir = await makeDir('show-second')
+    const result = await harness()
+    const first = await result.registry.create(firstDir)
+    const second = await result.registry.create(secondDir)
+    await result.registry.hide(first.id)
+    await result.registry.hide(second.id)
+    const changesAfterHide = result.changes.filter(change => change.table === '').length
+
+    await expect(result.registry.show(first.id)).resolves.toBe(true)
+    expect(result.registry.hiddenWorkspaceIds).toEqual([second.id])
+    expect(result.registry.list().map(workspace => workspace.id)).toEqual([second.id, first.id])
+
+    await expect(result.registry.show(first.id)).resolves.toBe(true)
+    expect(result.registry.hiddenWorkspaceIds).toEqual([second.id])
+    expect(result.changes.filter(change => change.table === '').length).toBe(changesAfterHide + 1)
+
+    await expect(result.registry.show(WorkspaceId('00000000-0000-4000-8000-0000000000fe'))).resolves.toBe(false)
+    expect(storedState(result.pool).hiddenWorkspaceIds).toEqual([second.id])
+  })
+
+  it('drops a hidden id from the set when that workspace is deleted', async () => {
+    const dir = await makeDir('hide-delete')
+    const result = await harness({ sessions: [header('kept-hidden', dir)] })
+    const workspace = await result.registry.create(dir)
+    await workspace.attachSession(SessionId('kept-hidden'))
+    await result.registry.hide(workspace.id)
+
+    await expect(result.registry.delete(workspace.id)).resolves.toBe(true)
+    expect(result.registry.hiddenWorkspaceIds).toEqual([])
+    expect(storedState(result.pool).hiddenWorkspaceIds).toEqual([])
+    expect(result.registry.list()).toEqual([])
+  })
+
+  it('create of a hidden path shows in place without minting an id or reordering', async () => {
+    const firstDir = await makeDir('unhide-first')
+    const secondDir = await makeDir('unhide-second')
+    const result = await harness()
+    const first = await result.registry.create(firstDir, 'Original')
+    const second = await result.registry.create(secondDir)
+    await result.registry.hide(first.id)
+    const changesAfterHide = result.changes.filter(change => change.table === '').length
+
+    const reused = await result.registry.create(firstDir, 'Ignored')
+    expect(reused).toBe(first)
+    expect(first.title).toBe('Original')
+    expect(result.registry.list().map(workspace => workspace.id)).toEqual([second.id, first.id])
+    expect(result.registry.hiddenWorkspaceIds).toEqual([])
+    expect(storedState(result.pool).hiddenWorkspaceIds).toEqual([])
+    expect(result.changes.filter(change => change.table === '').length).toBe(changesAfterHide + 1)
+
+    const again = await result.registry.create(firstDir)
+    expect(again).toBe(first)
+    expect(result.changes.filter(change => change.table === '').length).toBe(changesAfterHide + 1)
+  })
+
+  it('restores the hidden set across restarts and defaults it for pre-field media', async () => {
+    const dir = await makeDir('hide-restart')
+    const pool = new MemoryMediaPool()
+    const first = await harness({ pool })
+    const workspace = await first.registry.create(dir)
+    await first.registry.hide(workspace.id)
+    await first.fiber.dispose()
+
+    const second = await harness({ pool })
+    expect(second.registry.hiddenWorkspaceIds).toEqual([workspace.id])
+    expect(second.registry.list().map(item => item.id)).toEqual([workspace.id])
+    await second.fiber.dispose()
+
+    const legacyId = WorkspaceId('00000000-0000-4000-8000-00000000000b')
+    const legacy = storedPool(
+      [[legacyId, record(dir, [])]],
+      { initialized: true, workspaceIds: [legacyId] },
+    )
+    const upgraded = await harness({ pool: legacy })
+    expect(upgraded.registry.hiddenWorkspaceIds).toEqual([])
     expect(upgraded.registry.archivedSessionIds).toEqual([])
   })
 })

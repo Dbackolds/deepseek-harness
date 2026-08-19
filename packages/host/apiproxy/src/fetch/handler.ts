@@ -40,11 +40,13 @@ import {
   workspaceArchiveSessionRequestSchema,
   workspaceCreateRequestSchema,
   workspaceDeleteRequestSchema,
+  workspaceHideRequestSchema,
   workspaceInsertBeforeRequestSchema,
   workspaceInsertSessionBeforeRequestSchema,
   workspaceListRequestSchema,
   workspaceRemoveFolderRequestSchema,
   workspaceRenameRequestSchema,
+  workspaceShowRequestSchema,
 } from '../api/workspace.schema.ts'
 import { skillListRequestSchema } from '../api/skills.schema.ts'
 import {
@@ -134,6 +136,8 @@ const UNARY_ROUTES: UnaryRoutes = {
   'workspace.insertBefore': { schema: workspaceInsertBeforeRequestSchema, invoke: (api, r) => api.workspace.insertBefore(r) },
   'workspace.insertSessionBefore': { schema: workspaceInsertSessionBeforeRequestSchema, invoke: (api, r) => api.workspace.insertSessionBefore(r) },
   'workspace.archiveSession': { schema: workspaceArchiveSessionRequestSchema, invoke: (api, r) => api.workspace.archiveSession(r) },
+  'workspace.hide': { schema: workspaceHideRequestSchema, invoke: (api, r) => api.workspace.hide(r) },
+  'workspace.show': { schema: workspaceShowRequestSchema, invoke: (api, r) => api.workspace.show(r) },
   'workspace.addFolder': { schema: workspaceAddFolderRequestSchema, invoke: (api, r) => api.workspace.addFolder(r) },
   'workspace.removeFolder': { schema: workspaceRemoveFolderRequestSchema, invoke: (api, r) => api.workspace.removeFolder(r) },
   'skill.list': { schema: skillListRequestSchema, invoke: (api, r) => api.skills.list(r) },

@@ -37,11 +37,13 @@ import {
   workspaceArchiveSessionValueSchema,
   workspaceCreateValueSchema,
   workspaceDeleteValueSchema,
+  workspaceHideValueSchema,
   workspaceInsertBeforeValueSchema,
   workspaceInsertSessionBeforeValueSchema,
   workspaceListValueSchema,
   workspaceRemoveFolderValueSchema,
   workspaceRenameValueSchema,
+  workspaceShowValueSchema,
 } from '../api/workspace.schema.ts'
 import { skillListValueSchema } from '../api/skills.schema.ts'
 import {
@@ -138,6 +140,8 @@ export interface IApiClient {
     insertBefore(payload: RequestPayload<'workspace.insertBefore'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.insertBefore'>>>
     insertSessionBefore(payload: RequestPayload<'workspace.insertSessionBefore'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.insertSessionBefore'>>>
     archiveSession(payload: RequestPayload<'workspace.archiveSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.archiveSession'>>>
+    hide(payload: RequestPayload<'workspace.hide'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.hide'>>>
+    show(payload: RequestPayload<'workspace.show'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.show'>>>
     addFolder(payload: RequestPayload<'workspace.addFolder'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.addFolder'>>>
     removeFolder(payload: RequestPayload<'workspace.removeFolder'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.removeFolder'>>>
   }
@@ -237,6 +241,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'workspace.insertBefore': workspaceInsertBeforeValueSchema,
   'workspace.insertSessionBefore': workspaceInsertSessionBeforeValueSchema,
   'workspace.archiveSession': workspaceArchiveSessionValueSchema,
+  'workspace.hide': workspaceHideValueSchema,
+  'workspace.show': workspaceShowValueSchema,
   'workspace.addFolder': workspaceAddFolderValueSchema,
   'workspace.removeFolder': workspaceRemoveFolderValueSchema,
   'skill.list': skillListValueSchema,
@@ -505,6 +511,8 @@ export abstract class AbstractApiClient implements IApiClient {
     insertBefore: (payload, signal) => this.callUnary('workspace.insertBefore', payload, signal),
     insertSessionBefore: (payload, signal) => this.callUnary('workspace.insertSessionBefore', payload, signal),
     archiveSession: (payload, signal) => this.callUnary('workspace.archiveSession', payload, signal),
+    hide: (payload, signal) => this.callUnary('workspace.hide', payload, signal),
+    show: (payload, signal) => this.callUnary('workspace.show', payload, signal),
     addFolder: (payload, signal) => this.callUnary('workspace.addFolder', payload, signal),
     removeFolder: (payload, signal) => this.callUnary('workspace.removeFolder', payload, signal),
   }

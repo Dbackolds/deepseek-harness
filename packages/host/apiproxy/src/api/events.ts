@@ -122,7 +122,9 @@ export type MuxFrame =
  * session-log deletion; workspace-order-changed pushes the complete durable
  * registry order after a reorder; archived-sessions-changed pushes the full registry
  * archive set after every durable change (same full-snapshot posture as
- * workspace-changed — `workspace.list` re-baselines it on reconnect).
+ * workspace-changed — `workspace.list` re-baselines it on reconnect);
+ * hidden-workspaces-changed pushes the full registry hidden set after every
+ * durable change (`workspace.list` re-baselines it on reconnect).
  */
 export type HostFrame =
   | {
@@ -141,6 +143,7 @@ export type HostFrame =
   | { type: 'host/workspace-removed'; workspaceId: WorkspaceView['workspaceId'] }
   | { type: 'host/workspace-order-changed'; workspaceIds: WorkspaceView['workspaceId'][] }
   | { type: 'host/archived-sessions-changed'; archivedSessionIds: SessionId[] }
+  | { type: 'host/hidden-workspaces-changed'; hiddenWorkspaceIds: WorkspaceView['workspaceId'][] }
   /**
    * One allowlisted host cordis event forwarded verbatim. The allowlist is
    * owned by `@deepseek-ai/dsh-api-remotes` (`API_REMOTE_FORWARDED_EVENTS`),

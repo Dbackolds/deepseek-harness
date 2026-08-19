@@ -2969,13 +2969,20 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         return Promise.resolve(ok(request, {
           items: ctx.workspaceRegistry.list().map(workspaceView),
           archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
+          hiddenWorkspaceIds: [...ctx.workspaceRegistry.hiddenWorkspaceIds],
         }))
       },
 
       async create(request) {
         const { path } = request.payload
         try {
-          const { workspace, created } = await ensureWorkspace(path)
+          const operation = workspaceCreationChain.then(async () => {
+            const existing = await ctx.workspaceRegistry.resolveByPath(path)
+            const workspace = await ctx.workspaceRegistry.create(path)
+            return { workspace, created: existing === undefined }
+          })
+          workspaceCreationChain = operation.then(() => undefined, () => undefined)
+          const { workspace, created } = await operation
           return ok(request, { workspace: workspaceView(workspace), created })
         } catch (error: unknown) {
           // The registry rejects a path that does not resolve to an existing
@@ -3122,6 +3129,24 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
+      },
+
+      async hide(request) {
+        const { workspaceId } = request.payload
+        const operation = workspaceCreationChain.then(() =>
+          ctx.workspaceRegistry.hide(brandWorkspaceId(workspaceId)))
+        workspaceCreationChain = operation.then(() => undefined, () => undefined)
+        if (!await operation) return workspaceNotFound(request, workspaceId)
+        return ok(request, { hiddenWorkspaceIds: [...ctx.workspaceRegistry.hiddenWorkspaceIds] })
+      },
+
+      async show(request) {
+        const { workspaceId } = request.payload
+        const operation = workspaceCreationChain.then(() =>
+          ctx.workspaceRegistry.show(brandWorkspaceId(workspaceId)))
+        workspaceCreationChain = operation.then(() => undefined, () => undefined)
+        if (!await operation) return workspaceNotFound(request, workspaceId)
+        return ok(request, { hiddenWorkspaceIds: [...ctx.workspaceRegistry.hiddenWorkspaceIds] })
       },
     },
 
@@ -3890,6 +3915,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         // stream opens against the current set; workspace.list re-baselines
         // reconnecting clients, so only later changes need frames.
         let archivedSessionIds = ctx.workspaceRegistry.archivedSessionIds
+        let hiddenWorkspaceIds = ctx.workspaceRegistry.hiddenWorkspaceIds
         const disposers = [
           ctx.on('session/created', (session: Session) => {
             queue.push(frame({
@@ -3941,6 +3967,14 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
                 queue.push(frame({
                   type: 'host/archived-sessions-changed',
                   archivedSessionIds: [...state.archivedSessionIds],
+                }))
+              }
+              if (state.hiddenWorkspaceIds.length !== hiddenWorkspaceIds.length
+                || state.hiddenWorkspaceIds.some((id, index) => id !== hiddenWorkspaceIds[index])) {
+                hiddenWorkspaceIds = state.hiddenWorkspaceIds
+                queue.push(frame({
+                  type: 'host/hidden-workspaces-changed',
+                  hiddenWorkspaceIds: [...state.hiddenWorkspaceIds],
                 }))
               }
               return

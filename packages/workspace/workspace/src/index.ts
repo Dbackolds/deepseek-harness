@@ -150,9 +150,11 @@ export class WorkspaceRegistry extends Service {
    * Create or reuse a workspace for an existing directory. The path is
    * canonicalized through `fs.realpath`; a nonexistent path rejects with the
    * original error and a non-directory rejects. Repeated calls for the same
-   * canonical path return the existing entity without changing its title.
-   * A newly created workspace is prepended to the durable registry order.
-   * Different canonical paths may share a display title.
+   * canonical path return the existing entity without changing its title
+   * or its registry-order position; a hidden owner of that path is shown
+   * in place as part of the same serialized write. A newly created
+   * workspace is prepended to the durable registry order. Different
+   * canonical paths may share a display title.
    * @param path - Existing directory to own, in any path spelling.
    * @param title - Display title used only when a new record is created.
    * @returns the existing or newly durable workspace.
@@ -199,7 +201,9 @@ export class WorkspaceRegistry extends Service {
    * Delete one workspace registration while retaining its directory and every
    * session log. The durable order is updated before the table deletion; a
    * failed table write restores the prior order and keeps the entity
-   * published. Unknown ids are an idempotent no-op for domain callers.
+   * published. A hidden id is dropped from the hidden set in the same
+   * serialized operation. Unknown ids are an idempotent no-op for domain
+   * callers.
    * @param id - Workspace registration to remove.
    * @returns `true` when a record was deleted, `false` when it was unknown.
    */
@@ -242,6 +246,16 @@ export class WorkspaceRegistry extends Service {
   }
 
   /**
+   * The registry-global hidden set: workspaces folded out of the main list.
+   * Hiding never rewrites `workspaceIds` or `sessionIds` — showing restores
+   * the prior durable order position and membership.
+   * @returns the hidden workspace ids in hide order.
+   */
+  get hiddenWorkspaceIds(): readonly WorkspaceId[] {
+    return this.requireState().hiddenWorkspaceIds
+  }
+
+  /**
    * Archive one session durably. The session must exist (live or in session
    * persistence); its workspace accounting — or lack of one — is irrelevant.
    * An already archived id resolves without writing.
@@ -258,6 +272,43 @@ export class WorkspaceRegistry extends Service {
       }
       const state = this.requireState()
       await this.setState({ ...state, archivedSessionIds: [...state.archivedSessionIds, sessionId] })
+    })
+  }
+
+  /**
+   * Hide one registered workspace durably. Unknown ids are an idempotent
+   * no-op returning false (Host maps that to workspace-not-found). An
+   * already-hidden id succeeds without writing.
+   * @param id - Workspace to hide.
+   * @returns `true` when the workspace is registered, `false` when unknown.
+   */
+  hide(id: WorkspaceId): Promise<boolean> {
+    return this.enqueueOperation(async () => {
+      const state = this.requireState()
+      if (!state.workspaceIds.includes(id)) return false
+      if (state.hiddenWorkspaceIds.includes(id)) return true
+      await this.setState({ ...state, hiddenWorkspaceIds: [...state.hiddenWorkspaceIds, id] })
+      return true
+    })
+  }
+
+  /**
+   * Show one registered workspace durably. Unknown ids are an idempotent
+   * no-op returning false (Host maps that to workspace-not-found). A
+   * registered id that is not hidden succeeds without writing.
+   * @param id - Workspace to show.
+   * @returns `true` when the workspace is registered, `false` when unknown.
+   */
+  show(id: WorkspaceId): Promise<boolean> {
+    return this.enqueueOperation(async () => {
+      const state = this.requireState()
+      if (!state.workspaceIds.includes(id)) return false
+      if (!state.hiddenWorkspaceIds.includes(id)) return true
+      await this.setState({
+        ...state,
+        hiddenWorkspaceIds: state.hiddenWorkspaceIds.filter(workspaceId => workspaceId !== id),
+      })
+      return true
     })
   }
 
@@ -291,7 +342,16 @@ export class WorkspaceRegistry extends Service {
 
   private async createCanonical(canonical: string, title?: string): Promise<WorkspaceEntity> {
     for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
+      if (entity.path === canonical || entity.folders.includes(canonical)) {
+        const state = this.requireState()
+        if (state.hiddenWorkspaceIds.includes(entity.id)) {
+          await this.setState({
+            ...state,
+            hiddenWorkspaceIds: state.hiddenWorkspaceIds.filter(workspaceId => workspaceId !== entity.id),
+          })
+        }
+        return entity
+      }
     }
 
     const workspaceName = title ?? basename(canonical)
@@ -339,6 +399,7 @@ export class WorkspaceRegistry extends Service {
         initialized: true,
         workspaceIds: [id, ...state.workspaceIds],
         archivedSessionIds: state.archivedSessionIds,
+        hiddenWorkspaceIds: state.hiddenWorkspaceIds,
       })
     } catch (error) {
       this.entities.delete(id)
@@ -371,6 +432,7 @@ export class WorkspaceRegistry extends Service {
       initialized: true,
       workspaceIds: state.workspaceIds.filter(workspaceId => workspaceId !== id),
       archivedSessionIds: state.archivedSessionIds,
+      hiddenWorkspaceIds: state.hiddenWorkspaceIds.filter(workspaceId => workspaceId !== id),
     }
     await this.setState({
       ...nextState,
@@ -428,6 +490,7 @@ export class WorkspaceRegistry extends Service {
       initialized: state.initialized,
       workspaceIds: state.workspaceIds,
       archivedSessionIds: state.archivedSessionIds,
+      hiddenWorkspaceIds: state.hiddenWorkspaceIds,
     })
   }
 
@@ -511,9 +574,19 @@ export class WorkspaceRegistry extends Service {
       .map(([id]) => id)
 
     if (!sameIds(state.workspaceIds, workspaceIds)) {
-      await this.setState({ initialized: false, workspaceIds, archivedSessionIds: state.archivedSessionIds })
+      await this.setState({
+        initialized: false,
+        workspaceIds,
+        archivedSessionIds: state.archivedSessionIds,
+        hiddenWorkspaceIds: state.hiddenWorkspaceIds,
+      })
     }
-    await this.setState({ initialized: true, workspaceIds, archivedSessionIds: state.archivedSessionIds })
+    await this.setState({
+      initialized: true,
+      workspaceIds,
+      archivedSessionIds: state.archivedSessionIds,
+      hiddenWorkspaceIds: state.hiddenWorkspaceIds,
+    })
   }
 
   private validateStoredState(state: WorkspaceDomainState): void {
