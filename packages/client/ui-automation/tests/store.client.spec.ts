@@ -190,7 +190,7 @@ describe('AutomationStore', () => {
     expect(store.store.getSnapshot().pageOpen).toBe(false)
     expect(sessions.opened).toEqual(['session-1'])
     expect(await store.remove(rule().id)).toBeUndefined()
-    expect(calls.filter(name => name === 'list')).toHaveLength(5)
+    expect(calls.filter(name => name === 'list')).toHaveLength(4)
     expect(calls).toContain('runNow')
   })
 

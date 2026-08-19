@@ -178,12 +178,12 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
         </thead>
         <tbody>
           {runs.map((run) => {
-            const outcomeKey = ('history.outcome.' + run.outcome) as AutomationKey
+            const status = historyStatus(run, runs)
             return (
               <tr key={run.id}>
                 <td>{formatNextAt(run.startedAt)}</td>
                 <td>{t(run.source === 'manual' ? 'history.source.manual' : 'history.source.schedule')}</td>
-                <td><span className={outcomeClass(run.outcome)}>{t(outcomeKey)}</span></td>
+                <td><span className={statusClass(status)}>{t(statusKey(status))}</span></td>
                 <td className={css.historyDuration}>{runDuration(run)}</td>
                 <td className={css.historyMenuCell}>
                   <Menu
@@ -227,14 +227,27 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
   )
 }
 
-function outcomeClass(outcome: AutomationRunView['outcome']): string {
-  switch (outcome) {
+type HistoryStatus = AutomationRunView['outcome'] | 'running'
+
+function historyStatus(run: AutomationRunView, runs: readonly AutomationRunView[]): HistoryStatus {
+  if (run.outcome !== 'started' || run.endedAt !== undefined) return run.outcome
+  const open = runs.find(item => item.outcome === 'started' && item.endedAt === undefined)
+  return open?.id === run.id ? 'running' : 'started'
+}
+
+function statusKey(status: HistoryStatus): AutomationKey {
+  return ('history.outcome.' + status) as AutomationKey
+}
+
+function statusClass(status: HistoryStatus): string {
+  switch (status) {
+    case 'running': return css.outcomeRun ?? ''
     case 'started': return css.outcomeOk ?? ''
     case 'skipped_busy':
     case 'replaced': return css.outcomeSkip ?? ''
     case 'failed': return css.outcomeFail ?? ''
     default: {
-      const exhaustive: never = outcome
+      const exhaustive: never = status
       return exhaustive
     }
   }

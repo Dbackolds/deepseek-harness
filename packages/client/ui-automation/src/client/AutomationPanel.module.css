@@ -427,6 +427,7 @@
 .historyDuration { color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
 .historyMenuCell { width: 44px; text-align: right; overflow: visible; }
 .outcomeOk { color: var(--dsw-alias-state-success-primary); }
+.outcomeRun { color: var(--dsw-alias-brand-primary); }
 .outcomeSkip { color: var(--dsw-alias-state-warn-label); }
 .outcomeFail { color: var(--dsw-alias-state-error-primary); }
 
