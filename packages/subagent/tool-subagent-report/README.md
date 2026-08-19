@@ -36,7 +36,7 @@ Prefix-stable within a child; neither the schema nor the section changes at runt
 
 #### Token effect
 
-One short acknowledgement per call in the reporting child. The reported content is additionally billed to the parent: waking delivery makes it the sole ordinary message of one new parent turn, while quiet delivery adds it to the parent's next request.
+One short acknowledgement per call in the reporting child. The reported content is additionally billed to the parent: quiet delivery adds it to the parent's next request; waking delivery on an idle parent is one later turn; a busy parent follows Host `subagent-delivery.reportBusy`.
 
 #### KV Cache effect
 
@@ -54,7 +54,7 @@ The child's complete `output` plus the one-line frame, uncapped by this package.
 
 #### KV Cache effect
 
-Append-only; the report follows the parent's reusable request prefix. Waking delivery starts an independent parent model request, while quiet delivery does not.
+Append-only; the report follows the parent's reusable request prefix. Quiet delivery does not start a request. Waking delivery on an idle parent starts one later turn; a busy parent follows Host `subagent-delivery.reportBusy`.
 
 ## Known Limitations and Deferred Work
 

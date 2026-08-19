@@ -591,6 +591,23 @@ describe('completion notice delivery', () => {
     expect(followup).not.toHaveBeenCalled()
   })
 
+  it('still wakes an idle owner when jobBusy is queue', async () => {
+    const { ctx } = await setup()
+    ctx.provide('settings', { get: () => ({ jobBusy: 'queue' }) })
+    const inject = vi.fn()
+    const followup = vi.fn()
+    const steer = vi.fn()
+    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, steer, status: 'idle' })
+    const p = producer({ owner, label: 'pnpm test' })
+    ctx.jobs.start(p.spec)
+
+    p.settle({ status: 'completed', detail: 'exit code: 0' })
+    await tick()
+    expect(followup).toHaveBeenCalledTimes(1)
+    expect(inject).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
+  })
+
   it('queues a later turn on a busy owner when jobBusy is queue', async () => {
     const { ctx } = await setup()
     ctx.provide('settings', { get: () => ({ jobBusy: 'queue' }) })

@@ -120,7 +120,7 @@ One notice per settled Activation in the parent's request, sized by the child's 
 
 #### KV Cache effect
 
-Append-only in the parent: the notice follows its reusable request prefix. Reaching an idle parent starts one independent model request; reaching a busy one does not.
+Append-only in the parent: the notice follows its reusable request prefix. An idle parent always starts one later turn. A busy parent follows Host `subagent-delivery.settlementBusy`: `steer` adds a step to the turn already in flight, and `queue` opens a later turn.
 
 ### Child delegation-scope statement
 

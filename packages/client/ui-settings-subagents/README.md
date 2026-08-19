@@ -10,7 +10,7 @@ The nav row sits between Models and Plugins (`order: 12`). A deployment that doe
 
 ## Model Experience
 
-None, as the section renders a browser configuration UI; the values it writes reach a model only through `dsh-user-subagents` and `dsh-tool-subagent`.
+None, as the section renders a browser configuration UI. Library values reach a model through `dsh-user-subagents` and `dsh-tool-subagent`. Delivery values reach a parent only as inbox placement for settlement, report, and Job notices.
 
 #### KV Cache effect
 

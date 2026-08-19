@@ -10,7 +10,7 @@
 
 ## 模型体验
 
-无。该分区渲染浏览器配置 UI；它写入的值只通过 `dsh-user-subagents` 和 `dsh-tool-subagent` 到达模型。
+无。该分区渲染浏览器配置 UI。定义库的值通过 `dsh-user-subagents` 和 `dsh-tool-subagent` 到达模型。投递值只作为结算、report 和 Job 通知的 inbox 位置到达父级。
 
 #### KV Cache 影响
 

@@ -222,6 +222,24 @@ describe('dsh-tool-subagent-report', () => {
     })
   })
 
+  it('wakes an idle parent even when reportBusy is queue', async () => {
+    const { ctx, parent, adapter } = await setup({ config: { reportDelivery: 'wakeup' } })
+    ctx.provide('settings', { get: () => ({ reportBusy: 'queue' }) })
+    const { child } = await startChild(ctx, parent)
+    const enqueues: string[] = []
+    ctx.on('agent/inbox/inserted', ({ agent, message }) => {
+      if (agent === parent) {
+        enqueues.push(agent.inbox.nextTurn.some(queued => queued.id === message.id) ? 'queued' : 'steering')
+      }
+    })
+
+    expect((await callReport(ctx, child, 'IDLE_QUEUE')).isError).toBe(false)
+    expect(enqueues).toEqual(['queued'])
+    await vi.waitFor(() => {
+      expect(adapter.requests.some(request => request.sessionId === parent.id)).toBe(true)
+    })
+  })
+
   it('steers a wakeup report into a busy parent when reportBusy is steer', async () => {
     const { ctx, parent } = await setup({ config: { reportDelivery: 'wakeup' } })
     parent.followup(createUserMessage({

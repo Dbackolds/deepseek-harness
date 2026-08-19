@@ -1821,6 +1821,22 @@ describe('continuable settlement delivery', () => {
     expect(turnStarts).toEqual([1])
   })
 
+  it('gives an idle parent one ordinary turn even when settlementBusy is queue', async () => {
+    const { ctx, parent, adapter } = await setup([textResponse('the answer'), textResponse('parent ack')])
+    ctx.provide('settings', { get: () => ({ settlementBusy: 'queue' }) })
+    const turnStarts: number[] = []
+    ctx.on('session/event', (session, event) => {
+      if (session.id === parent.id && event.type === 'turn/start') turnStarts.push(event.data.turn)
+    })
+
+    const started = await ctx.subagents.startContinuable(startSpec(parent))
+    await waitNoActivation(ctx, started.childId)
+    await vi.waitFor(() => {
+      expect(adapter.requests.filter(request => request.sessionId === parent.id)).toHaveLength(1)
+    })
+    expect(turnStarts).toEqual([1])
+  })
+
   it('batches simultaneous notices into one step of a busy parent', async () => {
     const releaseChildren = Promise.withResolvers<undefined>()
     const releaseParent = Promise.withResolvers<undefined>()
