@@ -1,5 +1,5 @@
 /** Selected-rule settings and history panes. */
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Button, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
 import { draftToUpdate, formatNextAt, ruleToDraft, type AutomationDraft } from './format.ts'
@@ -154,6 +154,8 @@ function SettingsPane({ item, workspaces, running, update, t }: {
   )
 }
 
+const LIVE_DURATION_MS = 950
+
 function HistoryPane({ runs, openRun, deleteRun, t }: {
   runs: readonly AutomationRunView[]
   openRun: AutomationStore['openRun']
@@ -162,6 +164,13 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
 }): ReactNode {
   const [openId, setOpenId] = useState<string | undefined>(undefined)
   const [notice, setNotice] = useState<string | undefined>(undefined)
+  const [now, setNow] = useState(() => Date.now())
+  const live = runs.some(run => historyStatus(run, runs) === 'running')
+  useEffect(() => {
+    if (!live) return
+    const timer = window.setInterval(() => { setNow(Date.now()) }, LIVE_DURATION_MS)
+    return () => { window.clearInterval(timer) }
+  }, [live])
   if (runs.length === 0) return <p className={css.emptyHint}>{t('history.empty')}</p>
   return (
     <div className={css.history}>
@@ -184,7 +193,7 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
                 <td>{formatNextAt(run.startedAt)}</td>
                 <td>{t(run.source === 'manual' ? 'history.source.manual' : 'history.source.schedule')}</td>
                 <td><span className={statusClass(status)}>{t(statusKey(status))}</span></td>
-                <td className={css.historyDuration}>{runDuration(run)}</td>
+                <td className={css.historyDuration}>{runDuration(run, now)}</td>
                 <td className={css.historyMenuCell}>
                   <Menu
                     open={openId === run.id}
@@ -253,18 +262,21 @@ function statusClass(status: HistoryStatus): string {
   }
 }
 
-function runDuration(run: AutomationRunView): string {
+function runDuration(run: AutomationRunView, now: number): string {
   if (run.outcome === 'skipped_busy') return '0s'
-  if (run.endedAt === undefined) return run.outcome === 'started' ? tLive() : '-'
   const start = Date.parse(run.startedAt)
-  const end = Date.parse(run.endedAt)
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return '-'
-  const seconds = Math.round((end - start) / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const rest = seconds % 60
-  return minutes === 0 ? rest + 's' : minutes + 'm ' + rest + 's'
+  if (!Number.isFinite(start)) return '-'
+  const end = run.endedAt === undefined ? now : Date.parse(run.endedAt)
+  if (!Number.isFinite(end) || end < start) return '-'
+  return formatDurationMs(end - start)
 }
 
-function tLive(): string {
-  return '…'
+function formatDurationMs(elapsed: number): string {
+  const seconds = Math.max(0, Math.floor(elapsed / 1000))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const rest = seconds % 60
+  if (hours > 0) return hours + 'h ' + minutes + 'm ' + rest + 's'
+  if (minutes > 0) return minutes + 'm ' + rest + 's'
+  return rest + 's'
 }

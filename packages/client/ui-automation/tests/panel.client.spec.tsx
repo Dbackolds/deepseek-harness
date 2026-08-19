@@ -69,6 +69,7 @@ function mount(options: {
   listed?: boolean
   listedWaitMs?: number
   lastSession?: boolean
+  startedAt?: string
 } = {}) {
   const items = options.items ?? [rule()]
   const calls: Array<{ name: string; payload: unknown }> = []
@@ -102,7 +103,12 @@ function mount(options: {
       listRuns: () => Promise.resolve(ok({
         items: options.lastSession === false
           ? []
-          : [{ id: 'run-1', sessionId: 'session-1', outcome: 'started' }],
+          : [{
+            id: 'run-1',
+            sessionId: 'session-1',
+            outcome: 'started',
+            startedAt: options.startedAt ?? '2026-08-15T12:00:00.000Z',
+          }],
       })),
       delete: (payload: unknown) => {
         calls.push({ name: 'delete', payload })
@@ -267,6 +273,7 @@ describe('AutomationPanel', () => {
     expect(screen.getByRole('tab', { name: 'History' })).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'History' }))
     await waitFor(() => { expect(screen.getByText('Running')).toBeTruthy() })
+    expect(screen.getByText(/\d+s$/)).toBeTruthy()
     fireEvent.click(screen.getAllByRole('button', { name: 'More' }).at(-1)!)
     expect(screen.getByRole('menuitem', { name: 'Jump to session' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Delete record' })).toBeTruthy()
