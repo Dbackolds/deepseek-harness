@@ -145,6 +145,12 @@ export class AutomationService extends Service {
       runtime.start()
       return () => runtime.dispose()
     }, 'automation.runtime')
+    this.ctx.effect(() => this.ctx.on('agent/created', ({ agent }) => {
+      this.runtime?.watchEnded(agent, (endedAt) => {
+        void this.markRunEnded(agent.session.id, endedAt)
+      })
+    }), 'automation.watchCreatedAgents')
+    this.reconcileOpenRuns()
   }
   /**
      * List every rule in creation order with derived delivery state.
@@ -291,6 +297,18 @@ export class AutomationService extends Service {
     return this.enqueue(async () => {
       return await this.requireRuns().delete(id)
     })
+  }
+
+  /** Close any started run whose Session is already idle or gone. */
+  private reconcileOpenRuns(): void {
+    const now = formatUtcInstant(internals.now())
+    for (const [, record] of this.requireRuns().entries()) {
+      if (record.outcome !== 'started' || record.endedAt !== undefined || record.sessionId === undefined) continue
+      const agent = this.ctx.agents.get(record.sessionId)
+      if (agent === undefined || agent.status === 'idle') {
+        void this.markRunEnded(record.sessionId, now)
+      }
+    }
   }
 
   /**

@@ -23,6 +23,7 @@ function localizeRunFailure(failure: string, t: AutomationPanelProps['t']): stri
 export function RuleDetail(props: {
   item: AutomationListedRule
   workspaces: readonly WorkspaceView[]
+  useSessions: AutomationPanelProps['useSessions']
   tab: AutomationState['detailTab']
   update: AutomationStore['update']
   setEnabled: AutomationStore['setEnabled']
@@ -34,14 +35,16 @@ export function RuleDetail(props: {
   setDetailTab: AutomationStore['setDetailTab']
   t: AutomationPanelProps['t']
 }): ReactNode {
-  const { item, workspaces, tab, update, setEnabled, runNow, openRun, deleteRun, remove, select, setDetailTab, t } = props
+  const { item, workspaces, useSessions, tab, update, setEnabled, runNow, openRun, deleteRun, remove, select, setDetailTab, t } = props
   const { rule } = item
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | undefined>(undefined)
-  const running = item.lastSessionId !== undefined
-    && item.runs?.some(run => run.outcome === 'started' && run.sessionId === item.lastSessionId) === true
+  const runningIds = useSessions(snapshot => new Set(
+    Object.values(snapshot.byId).filter(session => session.running === true).map(session => session.id),
+  ))
+  const running = item.lastSessionId !== undefined && runningIds.has(item.lastSessionId)
   const act = (work: () => Promise<string | undefined>): void => {
     if (busy) return
     setBusy(true)
@@ -91,7 +94,7 @@ export function RuleDetail(props: {
       {notice !== undefined && <p className={css.error} role="alert">{notice}</p>}
       {tab === 'settings'
         ? <SettingsPane item={item} workspaces={workspaces} running={running} update={update} t={t} />
-        : <HistoryPane runs={item.runs ?? []} openRun={openRun} deleteRun={deleteRun} t={t} />}
+        : <HistoryPane runs={item.runs ?? []} runningIds={runningIds} openRun={openRun} deleteRun={deleteRun} t={t} />}
       <Modal open={confirming} onClose={() => { setConfirming(false) }} title={t('delete.title')} closeLabel={t('close')} description={t('delete.description')} footer={(
         <>
           <Button variant="ghost" disabled={busy} onClick={() => { setConfirming(false) }}>{t('cancel')}</Button>
@@ -156,8 +159,9 @@ function SettingsPane({ item, workspaces, running, update, t }: {
 
 const LIVE_DURATION_MS = 950
 
-function HistoryPane({ runs, openRun, deleteRun, t }: {
+function HistoryPane({ runs, runningIds, openRun, deleteRun, t }: {
   runs: readonly AutomationRunView[]
+  runningIds: ReadonlySet<string>
   openRun: AutomationStore['openRun']
   deleteRun: AutomationStore['deleteRun']
   t: AutomationPanelProps['t']
@@ -165,7 +169,7 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
   const [openId, setOpenId] = useState<string | undefined>(undefined)
   const [notice, setNotice] = useState<string | undefined>(undefined)
   const [now, setNow] = useState(() => Date.now())
-  const live = runs.some(run => historyStatus(run, runs) === 'running')
+  const live = runs.some(run => historyStatus(run, runningIds) === 'running')
   useEffect(() => {
     if (!live) return
     const timer = window.setInterval(() => { setNow(Date.now()) }, LIVE_DURATION_MS)
@@ -187,13 +191,13 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
         </thead>
         <tbody>
           {runs.map((run) => {
-            const status = historyStatus(run, runs)
+            const status = historyStatus(run, runningIds)
             return (
               <tr key={run.id}>
                 <td>{formatNextAt(run.startedAt)}</td>
                 <td>{t(run.source === 'manual' ? 'history.source.manual' : 'history.source.schedule')}</td>
                 <td><span className={statusClass(status)}>{t(statusKey(status))}</span></td>
-                <td className={css.historyDuration}>{runDuration(run, now)}</td>
+                <td className={css.historyDuration}>{runDuration(run, now, status)}</td>
                 <td className={css.historyMenuCell}>
                   <Menu
                     open={openId === run.id}
@@ -238,10 +242,10 @@ function HistoryPane({ runs, openRun, deleteRun, t }: {
 
 type HistoryStatus = AutomationRunView['outcome'] | 'running'
 
-function historyStatus(run: AutomationRunView, runs: readonly AutomationRunView[]): HistoryStatus {
-  if (run.outcome !== 'started' || run.endedAt !== undefined) return run.outcome
-  const open = runs.find(item => item.outcome === 'started' && item.endedAt === undefined)
-  return open?.id === run.id ? 'running' : 'started'
+function historyStatus(run: AutomationRunView, runningIds: ReadonlySet<string>): HistoryStatus {
+  if (run.outcome !== 'started') return run.outcome
+  if (run.endedAt !== undefined) return 'started'
+  return run.sessionId !== undefined && runningIds.has(run.sessionId) ? 'running' : 'started'
 }
 
 function statusKey(status: HistoryStatus): AutomationKey {
@@ -262,12 +266,14 @@ function statusClass(status: HistoryStatus): string {
   }
 }
 
-function runDuration(run: AutomationRunView, now: number): string {
+function runDuration(run: AutomationRunView, now: number, status: HistoryStatus): string {
   if (run.outcome === 'skipped_busy') return '0s'
   const start = Date.parse(run.startedAt)
   if (!Number.isFinite(start)) return '-'
-  const end = run.endedAt === undefined ? now : Date.parse(run.endedAt)
-  if (!Number.isFinite(end) || end < start) return '-'
+  const end = run.endedAt === undefined
+    ? (status === 'running' ? now : undefined)
+    : Date.parse(run.endedAt)
+  if (end === undefined || !Number.isFinite(end) || end < start) return '-'
   return formatDurationMs(end - start)
 }
 

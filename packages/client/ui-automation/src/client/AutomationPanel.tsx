@@ -95,7 +95,10 @@ export type AutomationPanelProps =
 export type AutomationPageProps =
   PropsLocale<typeof NS>
   & InjectFace<AutomationPanelInjected>
-  & { useWorkspaces: AutomationPanelProps['useWorkspaces'] }
+  & {
+    useWorkspaces: AutomationPanelProps['useWorkspaces']
+    useSessions: AutomationPanelProps['useSessions']
+  }
 
 /**
  * Render the sidebar Automation trigger.
@@ -128,7 +131,7 @@ export function AutomationPanel(props: AutomationPanelProps): ReactNode {
  */
 export function AutomationPage(props: AutomationPageProps): ReactNode {
   const {
-    useAutomation, useKeepAwake, useWorkspaces, load, create, update, setEnabled, runNow, openRun,
+    useAutomation, useKeepAwake, useWorkspaces, useSessions, load, create, update, setEnabled, runNow, openRun,
     deleteRun, remove, select, setDetailTab, setPageOpen, setKeepAwake, t,
   } = props
   const state = useAutomation(snapshot => snapshot)
@@ -155,6 +158,7 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
       state={state}
       keepAwake={keepAwake}
       workspaces={workspaces}
+      useSessions={useSessions}
       load={load}
       create={create}
       update={update}
@@ -173,12 +177,13 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
 }
 
 function AutomationPageChrome({
-  state, keepAwake, workspaces, load, create, update, setEnabled, runNow, openRun,
+  state, keepAwake, workspaces, useSessions, load, create, update, setEnabled, runNow, openRun,
   deleteRun, remove, select, setDetailTab, setPageOpen, setKeepAwake, t,
 }: {
   state: AutomationState
   keepAwake: boolean
   workspaces: readonly WorkspaceView[]
+  useSessions: AutomationPanelProps['useSessions']
   load: () => Promise<void>
   create: AutomationStore['create']
   update: AutomationStore['update']
@@ -248,6 +253,7 @@ function AutomationPageChrome({
           state={state}
           keepAwake={keepAwake}
           workspaces={workspaces}
+          useSessions={useSessions}
           adding={adding}
           seed={seed}
           onAdd={openCreate}
@@ -277,6 +283,7 @@ interface BodyProps {
   state: AutomationState
   keepAwake: boolean
   workspaces: readonly WorkspaceView[]
+  useSessions: AutomationPanelProps['useSessions']
   adding: boolean
   seed: AutomationTemplate | undefined
   onAdd: (template?: AutomationTemplate) => void
@@ -296,7 +303,7 @@ interface BodyProps {
 }
 
 function AutomationBody({
-  state, keepAwake, workspaces, adding, seed, onAdd, onAdded, load, create, update,
+  state, keepAwake, workspaces, useSessions, adding, seed, onAdd, onAdded, load, create, update,
   setEnabled, runNow, openRun, deleteRun, remove, select, setDetailTab, setKeepAwake, t,
 }: BodyProps): ReactNode {
   const selected = state.selectedId === null
@@ -307,6 +314,7 @@ function AutomationBody({
       <RuleDetail
         item={selected}
         workspaces={workspaces}
+        useSessions={useSessions}
         tab={state.detailTab}
         update={update}
         setEnabled={setEnabled}

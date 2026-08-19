@@ -70,6 +70,7 @@ function mount(options: {
   listedWaitMs?: number
   lastSession?: boolean
   startedAt?: string
+  sessionRunning?: boolean
 } = {}) {
   const items = options.items ?? [rule()]
   const calls: Array<{ name: string; payload: unknown }> = []
@@ -123,20 +124,20 @@ function mount(options: {
     },
   }
   const listed = options.listed !== false
+  const sessions = createSnapshotStore({
+    ids: listed ? ['session-1'] : [],
+    byId: listed ? { 'session-1': { id: 'session-1', running: options.sessionRunning === true } } : {},
+    current: undefined,
+    phase: 'ready',
+  })
   const controller = new AutomationStore(face as never, {
-    list: createSnapshotStore({
-      ids: listed ? ['session-1'] : [],
-      byId: listed ? { 'session-1': { id: 'session-1' } } : {},
-      current: undefined,
-      phase: 'ready',
-    }),
+    list: sessions,
     open: () => undefined,
   }, options.listedWaitMs)
   const keepAwake = createSnapshotStore(false)
-  const unused = (() => { throw new Error('unused') }) as never
   const props: AutomationPanelProps = {
     wide: options.wide ?? true,
-    useSessions: unused,
+    useSessions: bindSnapshotSelector(sessions),
     useWorkspaces: select => select({
       items: options.workspaces ?? [workspace],
       archivedSessionIds: [],
@@ -170,6 +171,7 @@ function mount(options: {
         useAutomation={props.useAutomation}
         useKeepAwake={props.useKeepAwake}
         useWorkspaces={props.useWorkspaces}
+        useSessions={props.useSessions}
         load={props.load}
         create={props.create}
         update={props.update}
@@ -265,7 +267,7 @@ describe('AutomationPanel', () => {
   })
 
   it('opens the rule detail from the card body', async () => {
-    mount()
+    mount({ sessionRunning: true })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
     await waitFor(() => { expect(screen.getByText('morning')).toBeTruthy() })
     fireEvent.click(screen.getByText('summarize inbox'))

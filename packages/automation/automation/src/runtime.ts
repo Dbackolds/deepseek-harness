@@ -113,6 +113,10 @@ export class AutomationRuntime {
    * @param onEnded - called once with a UTC instant.
    */
   watchEnded(agent: Agent, onEnded: (endedAt: string) => void) {
+    if (agent.status === 'idle') {
+      onEnded(formatUtcInstant(this.now()))
+      return
+    }
     let reported = false
     const report = (): void => {
       if (reported) return

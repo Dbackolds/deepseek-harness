@@ -309,6 +309,24 @@ describe('automation service', () => {
     expect(await service.deleteRun(run.id)).toBe(false)
   })
 
+  it('records endedAt immediately when the Session is already idle', async () => {
+    const { service, created } = await harness()
+    const rule = await service.create({
+      task: 'timed',
+      workspaceId: WORKSPACE,
+      afterSeconds: 60,
+    })
+    const run = await service.runNow(rule.id)
+    expect(run.endedAt).toBeUndefined()
+    created[0]!.status = 'idle'
+    service['runtime']?.watchEnded(created[0]! as never, (endedAt) => {
+      void service.markRunEnded(created[0]!.session.id, endedAt)
+    })
+    await vi.waitFor(() => {
+      expect(service.listRuns(rule.id)[0]?.endedAt).toBe('2026-08-15T12:00:00.000Z')
+    })
+  })
+
   it('records endedAt when the started Session leaves running', async () => {
     const { service, created } = await harness()
     const rule = await service.create({
@@ -319,6 +337,7 @@ describe('automation service', () => {
     const run = await service.fireDue(rule.id, NOW)
     expect(run.source).toBe('schedule')
     expect(run.endedAt).toBeUndefined()
+    created[0]!.status = 'running'
     created[0]!.ctx.emit('agent/status', { agent: created[0]! as unknown as Agent, status: 'idle' })
     await vi.waitFor(() => {
       expect(service.listRuns(rule.id)[0]?.endedAt).toBe('2026-08-15T12:00:00.000Z')
