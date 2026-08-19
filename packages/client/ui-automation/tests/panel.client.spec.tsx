@@ -258,11 +258,11 @@ describe('AutomationPanel', () => {
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
   })
 
-  it('opens the rule detail from the card title', async () => {
+  it('opens the rule detail from the card body', async () => {
     mount()
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'morning' })).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: 'morning' }))
+    await waitFor(() => { expect(screen.getByText('morning')).toBeTruthy() })
+    fireEvent.click(screen.getByText('summarize inbox'))
     await waitFor(() => { expect(screen.getByRole('tab', { name: 'Settings' })).toBeTruthy() })
     expect(screen.getByRole('tab', { name: 'History' })).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'History' }))

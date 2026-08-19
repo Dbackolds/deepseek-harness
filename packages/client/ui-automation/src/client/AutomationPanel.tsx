@@ -423,28 +423,28 @@ function RuleCard({
   const nextWhen = formatNextIn(rule.nextAt, t)
   return (
     <li className={css.card}>
-      <div className={css.cardHead}>
-        <button type="button" className={css.cardOpen} onClick={onOpen}>
-          {rule.name}
-        </button>
-        <div className={css.cardTask}>{rule.task}</div>
-        {workspaceTitle === undefined ? null : <div className={css.cardWorkspace}>{workspaceTitle}</div>}
-      </div>
-      <div className={css.cardMeta}>
-        <span className={[css.scheduleChip, stateClass].join(' ')}>
-          <IconClockOutline16 size={12} />
-          <span className={css.visuallyHidden}>{formatState(rule.state, t)}</span>
-          {t('scheduleChip', { schedule: formatSelector(rule.selector, t), when: nextWhen })}
-        </span>
-        <span className={css.runCount}>
-          {item.runCount === undefined
-            ? null
-            : item.runCount === 0
-              ? t('runCount.zero')
-              : t('runCount', { n: item.runCount })}
-        </span>
-      </div>
-      {rowError !== undefined && <p className={css.error} role="alert">{rowError}</p>}
+      <button type="button" className={css.cardHit} onClick={onOpen}>
+        <div className={css.cardHead}>
+          <div className={css.cardName}>{rule.name}</div>
+          <div className={css.cardTask}>{rule.task}</div>
+          {workspaceTitle === undefined ? null : <div className={css.cardWorkspace}>{workspaceTitle}</div>}
+        </div>
+        <div className={css.cardMeta}>
+          <span className={[css.scheduleChip, stateClass].join(' ')}>
+            <IconClockOutline16 size={12} />
+            <span className={css.visuallyHidden}>{formatState(rule.state, t)}</span>
+            {t('scheduleChip', { schedule: formatSelector(rule.selector, t), when: nextWhen })}
+          </span>
+          <span className={css.runCount}>
+            {item.runCount === undefined
+              ? null
+              : item.runCount === 0
+                ? t('runCount.zero')
+                : t('runCount', { n: item.runCount })}
+          </span>
+        </div>
+        {rowError !== undefined && <p className={css.error} role="alert">{rowError}</p>}
+      </button>
       <div className={css.cardActions}>
         <Button
           size="sm"

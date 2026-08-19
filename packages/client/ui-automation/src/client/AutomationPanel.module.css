@@ -213,21 +213,14 @@
   border-radius: 16px;
   background: var(--dsw-alias-bg-layer-3);
 }
+.card:hover { border-color: var(--dsw-alias-border-l1); }
 
-.cardHead { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.cardName,
-.cardOpen {
+.cardHit {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22px;
-}
-.cardOpen {
-  display: block;
-  width: 100%;
   padding: 0;
   border: none;
   background: transparent;
@@ -236,7 +229,18 @@
   text-align: left;
   cursor: pointer;
 }
-.cardOpen:hover { color: var(--dsw-alias-brand-primary); }
+.cardHit:hover .cardName { color: var(--dsw-alias-brand-primary); }
+
+.cardHead { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cardName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
 .cardTask {
   overflow: hidden;
   display: -webkit-box;
