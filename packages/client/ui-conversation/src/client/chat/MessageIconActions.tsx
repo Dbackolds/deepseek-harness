@@ -1,9 +1,11 @@
 // Shared IconActions chrome for user and assistant messages: copy
-// live, optional branch wiring, and optional settled-turn metrics.
+// live, optional same-session edit, optional branch wiring, and optional
+// settled-turn metrics.
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
-  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, Tooltip, writeClipboard,
+  IconBranchOutline16, IconCheckOutline16, IconCloseOutline16, IconCopyOutline16, IconEditOutline16,
+  Tooltip, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatLatencySeconds, formatRunDuration, formatTokensPerSecond } from './message-chrome.ts'
@@ -18,6 +20,14 @@ export interface MessageIconActionsProps {
   ttftMs?: number | undefined
   /** Turn decode throughput, appended as `· 34 tok/s`; omitted when unrecorded. */
   tokensPerSecond?: number | undefined
+  /** Open in-place editing for this settled user prompt; omission hides the edit action. */
+  onEdit?: (() => void) | undefined
+  /** Save the in-place edit and resend; presence switches the row to save/cancel. */
+  onSaveEdit?: (() => void) | undefined
+  /** Cancel the in-place edit without rewriting history. */
+  onCancelEdit?: (() => void) | undefined
+  /** Whether the in-place save control is available. */
+  saveDisabled?: boolean | undefined
   /** Fork the session at this message; omission hides the branch action. */
   onBranch?: (() => void) | undefined
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
@@ -34,12 +44,13 @@ export interface MessageIconActionsProps {
 }
 
 /**
- * Copy / branch IconActions row shared by user and assistant chrome.
- * @param props - Copy text, optional run metrics, branch callback, className.
+ * Copy / edit / branch IconActions row shared by user and assistant chrome.
+ * @param props - Copy text, optional run metrics, edit/branch callbacks, className.
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, runMs, ttftMs, tokensPerSecond, onBranch, branchUnavailable = false, className,
+  text, runMs, ttftMs, tokensPerSecond, onEdit, onSaveEdit, onCancelEdit, saveDisabled = false,
+  onBranch, branchUnavailable = false, className,
   extraActions, t,
 }: MessageIconActionsProps) {
   const reasonId = useId()
@@ -103,6 +114,33 @@ export function MessageIconActions({
           {copied ? <IconCheckOutline16 /> : <IconCopyOutline16 />}
         </button>
       </Tooltip>
+      {onEdit !== undefined && (
+        <Tooltip label={t('message.edit')} side="bottom">
+          <button type="button" className={css.action} aria-label={t('message.edit')} onClick={onEdit}>
+            <IconEditOutline16 />
+          </button>
+        </Tooltip>
+      )}
+      {onSaveEdit !== undefined && (
+        <Tooltip label={t('message.saveEdit')} side="bottom">
+          <button
+            type="button"
+            className={css.action}
+            aria-label={t('message.saveEdit')}
+            disabled={saveDisabled}
+            onClick={onSaveEdit}
+          >
+            <IconCheckOutline16 />
+          </button>
+        </Tooltip>
+      )}
+      {onCancelEdit !== undefined && (
+        <Tooltip label={t('message.cancelEdit')} side="bottom">
+          <button type="button" className={css.action} aria-label={t('message.cancelEdit')} onClick={onCancelEdit}>
+            <IconCloseOutline16 />
+          </button>
+        </Tooltip>
+      )}
       {extraActions}
       {onBranch !== undefined && (
         <Tooltip label={branchUnavailable ? t('message.branchUnavailable') : t('message.branch')} side="bottom">

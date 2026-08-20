@@ -45,6 +45,31 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.editor {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 220px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 22px;
+  outline: none;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  line-height: 24px;
+  resize: vertical;
+}
+
+.editor:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.actions {
+  margin-right: -6px;
+}
+
 .contextRow {
   padding: 2px 0;
 }

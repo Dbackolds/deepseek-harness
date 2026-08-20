@@ -88,7 +88,7 @@ const CHAT_NODE_INJECT: ChatNodeTurnDataInjected = {
   },
 }
 
-/** Resolve the session-scoped conversation face (scope-addressed send/cancel), failing loud. */
+/** Resolve the session-scoped conversation face (scope-addressed send/rewrite/cancel), failing loud. */
 function scopedConversation(sessions: ISessions, id: SessionId): IConversation {
   const scoped = sessions.scope(id)
   if (scoped === undefined) throw new Error(`ui-conversation: session "${id}" resolved no scope`)
@@ -421,6 +421,11 @@ export function apply(ctx: Context): void {
             .catch(() => {
               // Fork or child-rename failure keeps the source view untouched.
             })
+        },
+        rewriteAt: (seq, text) => {
+          void scoped.rewrite(seq, text).catch(() => {
+            // Rewrite failure lands in promptError; the source view stays selected.
+          })
         },
       }
     },

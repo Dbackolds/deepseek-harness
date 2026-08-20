@@ -81,7 +81,7 @@ function MessageItem({ node, t: translate }: MessageItemProps) {
 }
 
 describe('MessageItem arms', () => {
-  it('user bubbles expose clock / copy and neither branch nor edit; copy writes the text', () => {
+  it('user bubbles expose clock / copy without branch; edit stays hidden until rewriteAt is supplied', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -101,9 +101,127 @@ describe('MessageItem arms', () => {
     expect(screen.getByText('2:24 下午')).toBeTruthy()
     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '编辑消息' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '复制' }))
     expect(writeText).toHaveBeenCalledWith('hello bubble')
+  })
+
+  it('user bubbles edit in place through rewriteAt and keep branch off the row', () => {
+    const rewriteAt = vi.fn()
+    render(
+      <UserMessageNodeView
+        node={{
+          key: 'user:1',
+          kind: 'user',
+          id: '1',
+          target: 'chat',
+          anchorSeq: 1,
+          location: { kind: 'session' },
+          visibility: 'visible',
+          data: {
+            kind: 'user',
+            seq: 1,
+            time: 1_000,
+            content: [{ type: 'text', text: 'hello bubble' }] as never,
+            source: null,
+          },
+        }}
+        openFile={() => {}}
+        inspectCall={() => {}}
+        forkAt={() => {}}
+        rewriteAt={rewriteAt}
+        loadImage={() => Promise.reject(new Error('unused'))}
+        fileMentions={() => undefined}
+        t={t}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '编辑消息' }))
+    const editor = screen.getByRole('textbox', { name: '编辑消息' }) as HTMLTextAreaElement
+    expect(editor.value).toBe('hello bubble')
+    fireEvent.change(editor, { target: { value: 'rewritten prompt' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存并重新发送' }))
+    expect(rewriteAt).toHaveBeenCalledWith(1, 'rewritten prompt')
+  })
+
+  it('cancels in-place edit without rewriting and ignores a blank save', () => {
+    const rewriteAt = vi.fn()
+    render(
+      <UserMessageNodeView
+        node={{
+          key: 'user:3',
+          kind: 'user',
+          id: '3',
+          target: 'chat',
+          anchorSeq: 3,
+          location: { kind: 'session' },
+          visibility: 'visible',
+          data: {
+            kind: 'user',
+            seq: 3,
+            time: 3_000,
+            content: [{ type: 'text', text: 'keep me' }] as never,
+            source: null,
+          },
+        }}
+        openFile={() => {}}
+        inspectCall={() => {}}
+        forkAt={() => {}}
+        rewriteAt={rewriteAt}
+        loadImage={() => Promise.reject(new Error('unused'))}
+        fileMentions={() => undefined}
+        t={t}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '编辑消息' }))
+    const editor = screen.getByRole('textbox', { name: '编辑消息' })
+    fireEvent.change(editor, { target: { value: '   ' } })
+    expect((screen.getByRole('button', { name: '保存并重新发送' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '保存并重新发送' }))
+    expect(rewriteAt).not.toHaveBeenCalled()
+    fireEvent.change(editor, { target: { value: 'changed' } })
+    fireEvent.keyDown(editor, { key: 'Escape' })
+    expect(screen.queryByRole('textbox', { name: '编辑消息' })).toBeNull()
+    expect(screen.getByText('keep me')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '编辑消息' }))
+    const again = screen.getByRole('textbox', { name: '编辑消息' })
+    fireEvent.change(again, { target: { value: 'from keyboard' } })
+    fireEvent.keyDown(again, { key: 'Enter', metaKey: true })
+    expect(rewriteAt).toHaveBeenCalledWith(3, 'from keyboard')
+  })
+
+  it('steering bubbles keep copy only even when rewriteAt is supplied', () => {
+    render(
+      <UserMessageNodeView
+        node={{
+          key: 'steering:2',
+          kind: 'steering',
+          id: '2',
+          target: 'chat',
+          anchorSeq: 2,
+          location: { kind: 'session' },
+          visibility: 'visible',
+          data: {
+            kind: 'steering',
+            messageId: 'steer-1' as never,
+            seq: 2,
+            time: 2_000,
+            content: [{ type: 'text', text: 'steer now' }] as never,
+            source: null,
+          },
+        }}
+        openFile={() => {}}
+        inspectCall={() => {}}
+        forkAt={() => {}}
+        rewriteAt={() => {}}
+        loadImage={() => Promise.reject(new Error('unused'))}
+        fileMentions={() => undefined}
+        t={t}
+      />,
+    )
+    expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '编辑消息' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
   })
 
   it('user copy falls back to execCommand when clipboard.writeText is unavailable', () => {

@@ -241,6 +241,29 @@ describe('unary round trip', () => {
     expect(response.result).toEqual({ ok: true, value: { sessionId: 's-child' } })
   })
 
+  it('routes session rewrite with its current-surface prompt through the wire', async () => {
+    let seen: RpcRequest<{ sessionId: SessionId; atSeq: number; content: { type: 'text'; text: string }[] }> | undefined
+    const api = scriptedApi({
+      sessions: {
+        rewrite: (request) => {
+          seen = request
+          return ok(request, { accepted: true as const })
+        },
+      },
+    })
+    const response = await client(api).sessions.rewrite({
+      sessionId: sid('s-parent'),
+      atSeq: 4,
+      content: [{ type: 'text', text: 'rewritten' }],
+    })
+    expect(seen?.payload).toEqual({
+      sessionId: 's-parent',
+      atSeq: 4,
+      content: [{ type: 'text', text: 'rewritten' }],
+    })
+    expect(response.result).toEqual({ ok: true, value: { accepted: true } })
+  })
+
   it('routes workspace rename, delete, and ordering through the wire', async () => {
     const api = scriptedApi()
     const c = client(api)

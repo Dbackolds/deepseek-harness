@@ -67,6 +67,7 @@ export class FakeApiClient implements IApiClient {
   onRehome: (payload: unknown) => Promise<RpcResponse<{ workspaceId: WorkspaceId; path: string; cwd: string }>> =
     () => Promise.resolve(ok({ workspaceId: 'fk-w' as WorkspaceId, path: '/proj', cwd: '/proj' }))
   onFork: (payload: unknown) => Promise<RpcResponse<{ sessionId: SessionId }>> = () => Promise.resolve(ok({ sessionId: 'fk-fork' as SessionId }))
+  onRewrite: (payload: unknown) => Promise<RpcResponse<{ accepted: true }>> = () => Promise.resolve(ok({ accepted: true as const }))
   onHistory: (payload: { sessionId: SessionId; beforeSeq?: number; maxMessages?: number })
   => Promise<RpcResponse<{ events: never[]; hasMore: boolean; modelSelection: ModelSelection }>> =
     () => Promise.resolve(ok({
@@ -137,6 +138,7 @@ export class FakeApiClient implements IApiClient {
     rename: (payload: unknown) => this.record('session.rename', payload, this.onRename(payload)),
     rehome: (payload: unknown) => this.record('session.rehome', payload, this.onRehome(payload)),
     fork: (payload: unknown) => this.record('session.fork', payload, this.onFork(payload)),
+    rewrite: (payload: unknown) => this.record('session.rewrite', payload, this.onRewrite(payload)),
     prompt: (payload: unknown) => this.record('session.prompt', payload, this.onPrompt(payload)),
     attachment: (payload: unknown) => this.record('session.attachment', payload, this.onAttachment(payload)),
     updateQueue: (payload: unknown) => this.record('session.updateQueue', payload, this.onUpdateQueue(payload)),

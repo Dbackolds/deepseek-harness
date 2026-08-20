@@ -16,7 +16,7 @@
  */
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type {
-  IApiClient, RpcError, RpcResult, SessionId, SubagentAddress, JobView, WorkspaceId,
+  IApiClient, PromptContentPart, RpcError, RpcResult, SessionId, SubagentAddress, JobView, WorkspaceId,
 } from '@deepseek-ai/dsh-api-remotes/client'
 // Value import from the inline-safe wire layer (not the connection plugin):
 // plugin-to-plugin value imports are a bundle purity error.
@@ -134,6 +134,22 @@ export class SessionForkError extends Error {
     readonly sourceSessionId: SessionId,
   ) {
     super(`session fork failed: ${rpcError.code}: ${rpcError.message}`)
+  }
+}
+
+/** Structured same-session prompt-rewrite failure. */
+export class SessionRewriteError extends Error {
+  override readonly name = 'SessionRewriteError'
+
+  /**
+   * @param rpcError - Host business or folded transport error.
+   * @param sourceSessionId - the session whose prompt was rewritten.
+   */
+  constructor(
+    readonly rpcError: RpcError,
+    readonly sourceSessionId: SessionId,
+  ) {
+    super(`session rewrite failed: ${rpcError.code}: ${rpcError.message}`)
   }
 }
 
@@ -539,6 +555,33 @@ export class SessionRuntime implements ISessions {
       if (!renamed.ok) throw new Error(`fork child rename failed: ${renamed.error.code}: ${renamed.error.message}`)
     }
     return childId
+  }
+
+  /**
+   * Rewrite a settled user prompt in this same session and start a new turn
+   * from the replacement. The source view stays selected.
+   * @param opts - source session id, the current-surface user-message seq, and
+   *   the replacement content.
+   * @throws {SessionRewriteError} with the source id.
+   */
+  async rewrite(opts: {
+    sessionId: SessionId
+    atSeq: number
+    content: PromptContentPart[]
+  }): Promise<void> {
+    const child = this.binding(opts.sessionId)?.session
+    if (child === undefined) {
+      throw new SessionRewriteError(
+        {
+          code: 'session-not-found',
+          message: `session "${opts.sessionId}" is not locally addressable`,
+          details: { sessionId: opts.sessionId },
+        },
+        opts.sessionId,
+      )
+    }
+    const result = await child.rewrite(Math.floor(opts.atSeq), opts.content)
+    if (!result.ok) throw new SessionRewriteError(result.error, opts.sessionId)
   }
 
   /**

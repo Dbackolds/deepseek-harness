@@ -132,6 +132,21 @@ function locationCoordinates(location: ConversationLocation): { turn?: number; s
   return {}
 }
 
+function hideRewritten(nodes: readonly ChatConversationViewNode[]): readonly ChatConversationViewNode[] {
+  const ranges: Array<{ start: number; before: number }> = []
+  for (const raw of nodes) {
+    if (raw.kind !== 'user') continue
+    const range = (raw.data as { replacedRange?: { start: number } }).replacedRange
+    if (range === undefined) continue
+    ranges.push({ start: range.start, before: raw.anchorSeq })
+  }
+  if (ranges.length === 0) return nodes
+  return nodes.map((raw) => {
+    if (!ranges.some(range => raw.anchorSeq >= range.start && raw.anchorSeq < range.before)) return raw
+    return raw.visibility === 'hidden' ? raw : { ...raw, visibility: 'hidden' }
+  })
+}
+
 function orderedVisible(nodes: readonly ChatConversationViewNode[]): ChatConversationViewNode[] {
   return nodes
     .filter(node => node.visibility === 'visible')
@@ -395,19 +410,25 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly nodes: readonly ChatConversationViewNode[]
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
-    this.store.replace(input.nodes)
-    this.order = orderedVisible(input.nodes).map(node => node.key)
+    const nodes = hideRewritten(input.nodes)
+    this.store.replace(nodes)
+    this.order = orderedVisible(nodes).map(node => node.key)
     this.locations.rebuild(this.order, this.store)
-    return this.snapshot(input.timeline, this.legacy.replace(input.nodes, input.timeline))
+    return this.snapshot(input.timeline, this.legacy.replace(nodes, input.timeline))
   }
 
   apply(input: {
     readonly upserts: readonly ChatConversationViewNode[]
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
+    const merged = new Map<string, ChatConversationViewNode>()
+    for (const node of this.store.values()) merged.set(node.key, node)
+    for (const node of input.upserts) merged.set(node.key, node)
+    const nextNodes = hideRewritten([...merged.values()])
+    const upserts = nextNodes.filter(node => this.store.get(node.key) !== node)
     let structural = false
     const contentOnly: ChatConversationViewNode[] = []
-    for (const node of input.upserts) {
+    for (const node of upserts) {
       const previous = this.store.get(node.key)
       const nodeStructural = previous === undefined
         || previous.anchorSeq !== node.anchorSeq
@@ -416,14 +437,14 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
       structural ||= nodeStructural
       if (!nodeStructural) contentOnly.push(node)
     }
-    this.store.upsert(input.upserts)
+    this.store.upsert(upserts)
     if (structural) {
       const next = orderedVisible(this.store.values()).map(node => node.key)
       this.order = sameReferences(this.order, next) ? this.order : next
       this.locations.rebuild(this.order, this.store)
     }
     this.locations.touch(contentOnly)
-    return this.snapshot(input.timeline, this.legacy.apply(input.upserts, input.timeline))
+    return this.snapshot(input.timeline, this.legacy.apply(upserts, input.timeline))
   }
 
   private snapshot(

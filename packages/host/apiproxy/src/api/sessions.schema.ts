@@ -367,3 +367,16 @@ export const sessionCancelRequestSchema = z.object({
 export const sessionCancelValueSchema = z.object({
   accepted: z.literal(true),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.cancel'>>>
+
+/** session.rewrite request payload (atSeq names the current-surface user prompt). */
+export const sessionRewriteRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  atSeq: z.number().int().nonnegative(),
+  content: z.array(promptContentPartSchema),
+  clientTimeZone: z.string().optional(),
+}) as unknown as z.ZodType<RequestPayload<'session.rewrite'>>
+
+/** session.rewrite response value. */
+export const sessionRewriteValueSchema = z.object({
+  accepted: z.literal(true),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.rewrite'>>>

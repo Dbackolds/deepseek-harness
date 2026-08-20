@@ -86,7 +86,7 @@ The handle every plugin programs against:
 
 #### What the model sees
 
-`send`, `steer`, and `inject` feed the owning session. `agent/pre-step` and other declared events let plugins reject a proposed step or add durable request material; this interface contributes no fixed prose itself.
+`send`, `steer`, and `inject` feed the owning session. `continueFromSurface` starts a new turn from the current model-visible surface without claiming inbox input, so a same-session prompt rewrite can keep the replacement as the only user message of the new turn. `agent/pre-step` and other declared events let plugins reject a proposed step or add durable request material; this interface contributes no fixed prose itself.
 
 #### Token effect
 

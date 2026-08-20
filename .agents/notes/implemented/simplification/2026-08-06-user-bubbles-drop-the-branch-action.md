@@ -20,7 +20,7 @@ A turn containing a steer keeps its fork point unchanged: fork is a log-prefix c
 
 **Keep the visible-but-unavailable control (status quo).** Rejected: the [completed-turn-tail decision](../bug-fix/2026-08-02-message-fork-actions-require-completed-turn-tail.md) chose visibility so the tooltip could explain a boundary the reader can reach; on user and steering bubbles the boundary is unreachable in practice, so the explanation props up a control that should not exist there.
 
-**Branch-before-the-message semantics on user bubbles.** Out of scope: re-asking from one's own prompt needs a cut before the message plus composer prefill, a different Host operation. Removing the current control keeps that seat free for such a feature instead of squatting on it with opposite semantics.
+**Branch-before-the-message semantics on user bubbles.** Rejected as a fork: re-asking from one's own prompt in this session is owned by [Same-session user prompt rewrite](../feature/2026-08-20-same-session-user-prompt-rewrite.md), not by a child-session cut.
 
 ## Consequences
 

@@ -11,6 +11,8 @@
 - button "Copy":
   - img
 - tooltip "Copy"
+- button "Edit message":
+  - img
 - button "Think The user wants me to read a.txt and b.txt, then reply with \"DONE\". Let me do both reads in parallel.":
   - img
   - img
@@ -41,6 +43,8 @@
   - text: Think Both files have been read. a.txt contains "alpha" and b.txt contains "beta". I'll now reply with DONE as instructed.
 - text: Stopped Now give the final answer. 7/25 {{clock}}
 - button "Copy":
+  - img
+- button "Edit message":
   - img
 - paragraph: DONE
 - button "Copy":

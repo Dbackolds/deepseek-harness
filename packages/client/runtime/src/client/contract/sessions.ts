@@ -9,7 +9,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  RpcResult, SessionId, SubagentAddress,
+  PromptContentPart, RpcResult, SessionId, SubagentAddress,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { HostObservable, SessionMaybeProvideInfo } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AgentContext } from '../agents/scope.ts'
@@ -101,6 +101,18 @@ export interface ISessions {
    * @throws when the fork fails, or when a requested child-title rename fails after creation.
    */
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
+  /**
+   * Rewrite a settled user prompt in this same session and start a new turn
+   * from the replacement. The source view stays selected.
+   * @param opts - source session id, the current-surface user-message seq, and
+   *   the replacement content.
+   * @throws when the rewrite fails.
+   */
+  rewrite(opts: {
+    sessionId: SessionId
+    atSeq: number
+    content: PromptContentPart[]
+  }): Promise<void>
   /**
    * Register a per-session standard-props provider (hooks become `use<Name>`
    * selector hooks on the render side; props spread verbatim).

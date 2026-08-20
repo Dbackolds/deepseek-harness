@@ -514,6 +514,45 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('shows a same-session prompt rewrite and hides the shadowed original turn', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('first-user', 'first'), { surfaceOp: 'append' }),
+      at(3, 'step/start', { turn: 1, step: 1 }),
+      at(4, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('first-assistant', 'first answer'),
+      }, { surfaceOp: 'append' }),
+      at(5, 'step/end', { turn: 1, step: 1 }),
+      at(6, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ])
+    value.append(at(7, 'user/message', textMessage('rewritten-user', 'rewritten'), {
+      surfaceOp: { op: 'replace', start: 2, end: 6 },
+    }))
+    value.flush()
+    const current = snapshot(value)
+    const rewritten = current.nodes.values().find(candidate =>
+      candidate.kind === 'user' && candidate.visibility === 'visible',
+    )
+    expect(rewritten?.visibility).toBe('visible')
+    expect(rewritten?.data).toMatchObject({
+      kind: 'user',
+      seq: 7,
+      replacedRange: { start: 2, end: 6 },
+    })
+    expect(current.order.map(key => current.nodes.get(key)?.kind)).toEqual(['user'])
+    expect(current.nodes.values().filter(candidate =>
+      candidate.kind === 'assistant-step' && candidate.visibility === 'visible',
+    )).toHaveLength(0)
+    const hiddenAssistant = current.nodes.values().find(candidate => candidate.kind === 'assistant-step')
+    expect(hiddenAssistant?.visibility).toBe('hidden')
+    value.append(at(8, 'turn/start', { turn: 2 }))
+    value.flush()
+    const later = snapshot(value)
+    expect(hiddenAssistant === undefined ? undefined : later.nodes.get(hiddenAssistant.key)).toBe(hiddenAssistant)
+  })
+
   it('keeps replacement copies out of Chat business nodes', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

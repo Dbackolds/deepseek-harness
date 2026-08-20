@@ -43,6 +43,7 @@ function props(
     openFile: vi.fn(),
     inspectCall: vi.fn(),
     forkAt: vi.fn(),
+    rewriteAt: vi.fn(),
     fileMentions: vi.fn(),
     t,
   } as unknown as ToolTreeProps

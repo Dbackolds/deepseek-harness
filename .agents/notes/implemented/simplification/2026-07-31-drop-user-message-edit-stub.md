@@ -10,11 +10,7 @@ The user bubble's IconActions row carried an edit button beside copy and branch.
 
 ## Decision
 
-`MessageIconActions` renders clock / copy / branch only, and its `edit` prop is gone with the button; `MessageItem` no longer passes it. The user bubble and the assistant chrome now differ only by clock side. The package README records the missing capability under Known Limitations, and the web message-actions golden pins the row without the control.
-
-The common locale keeps its generic `edit` term, which is shared vocabulary rather than this component's copy.
-
-Reintroduce the control together with the capability: a client mutation that edits a settled user message and the host behavior that decides what the edited message does to the turn that already consumed it.
+The unbound edit control was removed because it had no host mutation. Same-session rewrite later restored a backed edit control on settled user prompts ([Same-session user prompt rewrite](../feature/2026-08-20-same-session-user-prompt-rewrite.md)). The common locale's generic `edit` term remains shared vocabulary.
 
 ## Alternatives considered
 
@@ -24,4 +20,4 @@ Reintroduce the control together with the capability: a client mutation that edi
 
 ## Consequences
 
-Web offers no way to correct a sent message; branching from the message is the nearest available gesture. Reintroduction is a UI-only change once the mutation exists, since the row composes its actions from props.
+An unbound edit control must not return. Settled-prompt correction is owned by `session.rewrite` and the in-place editor on user bubbles.

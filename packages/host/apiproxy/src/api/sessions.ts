@@ -354,6 +354,27 @@ export interface SessionsApi {
   Promise<RpcResponse<{ sessionId: SessionId }>>
 
   /**
+   * Rewrites a settled user prompt in this same session and starts a new turn
+   * from the replacement. `atSeq` names the current-surface `user/message`
+   * being edited, including a previous rewrite. The Host waits for an idle
+   * Agent, then appends a replacement `user/message` that shadows that prompt
+   * and every later surface node, then wakes the Agent from the current
+   * surface so the replacement is the only user message of the new turn. A
+   * text-only payload keeps already-admitted non-text blocks from the original
+   * prompt. The operation never creates a child session. An unknown seq, a
+   * non-user prompt, a prompt off the current surface, or a still-running
+   * Agent after cancel returns `rewrite-unavailable`. Session-backed
+   * subagents reject with `agent-busy`.
+   */
+  rewrite(request: RpcRequest<{
+    sessionId: SessionId
+    atSeq: number
+    content: PromptContentPart[]
+    clientTimeZone?: string
+  }>):
+  Promise<RpcResponse<{ accepted: true }>>
+
+  /**
    * Sends text and temporary image bytes to an ordinary session Agent after durable host admission.
    * Browser callers attach their current IANA zone;
    * the Host validates, canonicalizes, and records it on that exact user message. Omission remains

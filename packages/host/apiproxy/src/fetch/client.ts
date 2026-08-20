@@ -22,6 +22,7 @@ import {
   sessionAttachmentValueSchema,
   sessionCreateValueSchema,
   sessionForkValueSchema,
+  sessionRewriteValueSchema,
   sessionHistoryValueSchema,
   sessionListValueSchema,
   sessionModelsValueSchema,
@@ -114,6 +115,7 @@ export interface IApiClient {
     rename(payload: RequestPayload<'session.rename'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.rename'>>>
     rehome(payload: RequestPayload<'session.rehome'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.rehome'>>>
     fork(payload: RequestPayload<'session.fork'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.fork'>>>
+    rewrite(payload: RequestPayload<'session.rewrite'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.rewrite'>>>
     prompt(payload: RequestPayload<'session.prompt'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.prompt'>>>
     attachment(payload: RequestPayload<'session.attachment'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.attachment'>>>
     updateQueue(payload: RequestPayload<'session.updateQueue'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.updateQueue'>>>
@@ -221,6 +223,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'session.rename': sessionRenameValueSchema,
   'session.rehome': sessionRehomeValueSchema,
   'session.fork': sessionForkValueSchema,
+  'session.rewrite': sessionRewriteValueSchema,
   'session.prompt': sessionPromptValueSchema,
   'session.attachment': sessionAttachmentValueSchema,
   'session.updateQueue': sessionUpdateQueueValueSchema,
@@ -478,6 +481,7 @@ export abstract class AbstractApiClient implements IApiClient {
     rename: (payload, signal) => this.callUnary('session.rename', payload, signal),
     rehome: (payload, signal) => this.callUnary('session.rehome', payload, signal),
     fork: (payload, signal) => this.callUnary('session.fork', payload, signal),
+    rewrite: (payload, signal) => this.callUnary('session.rewrite', payload, signal),
     prompt: (payload, signal) => this.callUnary('session.prompt', payload, signal),
     attachment: (payload, signal) => this.callUnary('session.attachment', payload, signal),
     updateQueue: (payload, signal) => this.callUnary('session.updateQueue', payload, signal),

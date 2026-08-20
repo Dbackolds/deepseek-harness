@@ -86,7 +86,7 @@ turn/end
 
 Input reaches the driver through one inbox. Some messages wake it immediately; injected context waits in the inbox until another message does.
 
-`agent/pre-step` decides what the model sees. Listeners may rewrite the claimed messages or reject them outright; a rejected or empty first claim still closes a durable turn that spent no step, so the log records the attempt. Each step reads the prompt sections and tool schemas that plugins registered.
+`agent/pre-step` decides what the model sees. Listeners may rewrite the claimed messages or reject them outright; a rejected or empty first claim still closes a durable turn that spent no step, unless the wake is `continueFromSurface` after a same-session prompt rewrite. Each step reads the prompt sections and tool schemas that plugins registered.
 
 Details: the [sequence diagram](agent-lifecycle.md), the [tool pipeline](tool-execution-pipeline.md), and [cancellation and error recovery](subsystems/core.md#the-agent-handle).
 
@@ -126,6 +126,7 @@ New behavior attaches to a documented extension point. Changing the loop itself 
 | Manage a same-session objective | use `ctx.goals`; continue through `agent/*` |
 | Open a fresh session on a timer | use `ctx.automation`; do not extend session-local Schedule |
 | Fork a live session | `ctx.sessions.fork(source, boundary?, childSessionId?)` |
+| Rewrite a settled user prompt in the same session | Host `session.rewrite` then `agent.continueFromSurface()` |
 | Scope a registration to one agent | use that agent's `agent.ctx` |
 
 The [extension cookbook](cookbook/extension-cookbook.md) maps features to capabilities and indexes the step-by-step guides for [packages](cookbook/adding-a-package.md), [tools](cookbook/adding-a-tool.md), [LLM adapters](cookbook/adding-an-llm-adapter.md), [Chat nodes](cookbook/adding-a-conversation-node.md), and [settings cards](cookbook/adding-a-settings-card.md).

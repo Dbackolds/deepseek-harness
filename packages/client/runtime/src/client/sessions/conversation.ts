@@ -80,6 +80,11 @@ export interface UserMessageNode {
   time: number
   content: readonly ContentBlock[]
   source: unknown
+  /**
+   * Inclusive original surface range this prompt replaced. Present only on
+   * same-session prompt rewrites; ordinary appends omit it.
+   */
+  replacedRange?: { start: number; end: number }
 }
 
 /** Recorded boundaries used to derive assistant latency and throughput. */
@@ -354,9 +359,9 @@ export type OpenState = 'cold' | 'loading' | 'open' | 'error'
  */
 export type ComposerPhase = 'blank' | 'engaging' | 'active'
 
-/** Send/stop failure surfaced in the input error strip; op picks the user-facing copy (发送失败 vs 停止失败). */
+/** Send/stop/rewrite failure surfaced in the input error strip; op picks the user-facing copy (发送失败 vs 停止失败 vs 编辑失败). */
 export interface PromptError {
-  op: 'send' | 'stop'
+  op: 'send' | 'stop' | 'rewrite'
   error: RpcError
 }
 

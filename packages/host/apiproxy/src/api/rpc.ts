@@ -88,6 +88,7 @@ export interface RpcErrorDetailsMap {
   'title-invalid': { sessionId: SessionId }
   'session-rehome-no-repo': { path: string }
   'fork-unavailable': { sessionId: SessionId }
+  'rewrite-unavailable': { sessionId: SessionId }
   'subagent-parent-unavailable': { parentSessionId: SessionId }
   'subagent-not-found': { parentSessionId: SessionId; childSessionId: SessionId }
   'subagent-catalog-diagnostic': {

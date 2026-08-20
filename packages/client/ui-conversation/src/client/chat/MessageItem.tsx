@@ -1,10 +1,11 @@
 // MessageItem: simple chat nodes — user and consumed-steering bubbles
-// (right-aligned, with a trailing clock and copy IconActions; branch lives
-// only under assistant answers), pending steering (copy only), context injection,
-// compaction marker, retry disclosure, and unknown-surface JSON rows.
+// (right-aligned, with a trailing clock, copy, and same-session edit;
+// branch lives only under assistant answers), pending steering (copy only),
+// context injection, compaction marker, retry disclosure, and unknown-surface
+// JSON rows.
 
-import { memo, useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import type {
   ModelRetryNode, TurnErrorNode, UserMessageNode,
 } from '@deepseek-ai/dsh-client-runtime/client'
@@ -178,7 +179,8 @@ function projectUserText(text: string): ReactNode {
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, imageLoader, actions, pending = false, time, t,
+  content, imageLoader, actions, pending = false, time, editing = false, draft, onDraftChange,
+  onSaveEdit, onCancelEdit, t,
 }: {
   content: readonly unknown[]
   imageLoader: ImageLoader
@@ -188,16 +190,43 @@ function UserStyleBubble({
   pending?: boolean
   /** Unix epoch ms from the source session event; omitted for pending steering. */
   time?: number | undefined
+  /** Replace the bubble body with an in-place editor. */
+  editing?: boolean
+  draft?: string
+  onDraftChange?: (text: string) => void
+  onSaveEdit?: () => void
+  onCancelEdit?: () => void
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const { text, images, rest } = contentParts(content)
   const truncated = (total: number): string => t('json.truncated', { total })
-  const showBubble = text !== '' || rest.length > 0
+  const showBubble = !editing && (text !== '' || rest.length > 0)
+  const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onCancelEdit?.()
+      return
+    }
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) {
+      event.preventDefault()
+      onSaveEdit?.()
+    }
+  }
   return (
     <div className={css.userRow} data-pending-steering={pending || undefined}>
       <div className={css.userBand}>
         <div className={css.userStack}>
           <ImageGallery images={images} load={imageLoader} align="end" labels={messageImageLabels(t)} />
+          {editing && (
+            <textarea
+              className={css.editor}
+              aria-label={t('message.edit')}
+              value={draft}
+              onChange={event => onDraftChange?.(event.currentTarget.value)}
+              onKeyDown={onEditorKeyDown}
+              autoFocus
+            />
+          )}
           {showBubble && <div className={css.bubble}>
             {projectUserText(text)}
             {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
@@ -241,19 +270,47 @@ export function PendingSteeringBubble({ content, loadImage, t }: {
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, loadImage, t,
+  node, loadImage, rewriteAt, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
+  const imageLoader = loadImage ?? (() => Promise.reject(new Error(t('image.serviceUnavailable'))))
+  const editable = node.kind === 'user' && rewriteAt !== undefined
+  const originalText = contentParts(data.content).text
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(originalText)
+  const beginEdit = useCallback(() => {
+    setDraft(originalText)
+    setEditing(true)
+  }, [originalText])
+  const cancelEdit = useCallback(() => {
+    setDraft(originalText)
+    setEditing(false)
+  }, [originalText])
+  const saveEdit = useCallback(() => {
+    const next = draft.trim()
+    if (next === '' || rewriteAt === undefined) return
+    setEditing(false)
+    rewriteAt(data.seq, next)
+  }, [data.seq, draft, rewriteAt])
   return (
     <UserStyleBubble
       content={data.content}
-      imageLoader={loadImage}
+      imageLoader={imageLoader}
       time={data.time}
       t={t}
+      editing={editing}
+      draft={draft}
+      onDraftChange={setDraft}
+      onSaveEdit={saveEdit}
+      onCancelEdit={cancelEdit}
       actions={text => (
         <MessageIconActions
           text={text}
           className={css.actions}
+          onEdit={editing || !editable ? undefined : beginEdit}
+          onSaveEdit={editing ? saveEdit : undefined}
+          onCancelEdit={editing ? cancelEdit : undefined}
+          saveDisabled={draft.trim() === ''}
           t={t}
         />
       )}

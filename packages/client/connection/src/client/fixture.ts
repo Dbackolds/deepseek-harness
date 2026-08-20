@@ -2389,6 +2389,45 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         }
         return ok(request, { sessionId: child.sessionId })
       },
+      rewrite: (request) => {
+        const { sessionId, atSeq, content } = request.payload
+        const source = summaryOf(sessionId)
+        if (source === undefined) {
+          return err(request, {
+            code: 'session-not-found',
+            message: `no session ${sessionId}`,
+            details: { sessionId },
+          })
+        }
+        const log = logs.get(sessionId) ?? []
+        const target = log[atSeq]
+        const surface = foldSurface(log).nodes
+        const startIdx = surface.indexOf(atSeq)
+        const endSeq = surface.at(-1)
+        if (target === undefined
+          || target.type !== 'user/message'
+          || startIdx === -1
+          || endSeq === undefined) {
+          return err(request, {
+            code: 'rewrite-unavailable',
+            message: `session ${sessionId} has no editable user prompt at event ${String(atSeq)}`,
+            details: { sessionId },
+          })
+        }
+        const text = content.filter(part => part.type === 'text').map(part => part.text).join('')
+        append(sessionId, {
+          type: 'user/message',
+          data: {
+            id: `fx-rewrite-${String(atSeq)}`,
+            role: 'user',
+            content: [{ type: 'text', text }],
+            source: { kind: 'user', rpcId: request.rpcId },
+          },
+          surfaceOp: { op: 'replace', start: atSeq, end: endSeq },
+          sourceEventSeqs: surface.slice(startIdx),
+        })
+        return ok(request, { accepted: true as const })
+      },
       history: async (request) => {
         const log = logs.get(request.payload.sessionId) ?? []
         // Snapshot at request time, deliver after the transit delay (mirrors a real host under latency).
@@ -3306,6 +3345,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.rename': return this.api.sessions.rename(request)
       case 'session.rehome': return this.api.sessions.rehome(request)
       case 'session.fork': return this.api.sessions.fork(request)
+      case 'session.rewrite': return this.api.sessions.rewrite(request)
       case 'session.prompt': return this.api.sessions.prompt(request)
       case 'session.attachment': return this.api.sessions.attachment(request)
       case 'session.updateQueue': return this.api.sessions.updateQueue(request)

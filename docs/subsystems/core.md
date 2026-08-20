@@ -52,7 +52,7 @@ interface AgentHandle {
 
 ## The agent handle
 
-`Agent` is the surface every plugin (UI, hooks, orchestrators) programs against; `ctx.agents.get(id)` returns it, and the [initiator scope](#initiating-agent) carries it. The concrete implementation is package-internal to dsh-agent-loop; nothing outside the loop depends on it. The unified `send` method exposes target and wakeup routing directly; `followup`, `steer`, and `inject` are fixed-preset aliases.
+`Agent` is the surface every plugin (UI, hooks, orchestrators) programs against; `ctx.agents.get(id)` returns it, and the [initiator scope](#initiating-agent) carries it. The concrete implementation is package-internal to dsh-agent-loop; nothing outside the loop depends on it. The unified `send` method exposes target and wakeup routing directly; `followup`, `steer`, and `inject` are fixed-preset aliases. `continueFromSurface` starts a new turn from the current model-visible surface without claiming inbox input.
 
 Source: [`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types.ts)
 
@@ -119,6 +119,14 @@ interface Agent {
    * @param message - identified prompt content and the source that supplied it.
    */
   followup(message: UserMessage): void
+
+  /**
+   * Start a new turn from the current model-visible surface without claiming
+   * inbox input. The Host uses this after a same-session prompt rewrite so the
+   * replacement already on the surface is the only user message of the new
+   * turn. Throws when the agent is not idle.
+   */
+  continueFromSurface(): void
 
   /**
    * Submit steering for the nearest step. An idle driver starts a turn;

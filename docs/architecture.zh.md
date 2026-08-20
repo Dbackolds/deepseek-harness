@@ -90,7 +90,7 @@ turn/end
 
 输入通过同一个 inbox 到达驱动器。有些消息会立即唤醒它；注入的上下文会留在 inbox 中，直到另一条消息将其唤醒。
 
-`agent/pre-step` 决定模型看到什么。监听器可以改写已领取的消息，也可以直接拒绝它们；首次领取被拒绝或被改写为空时，仍会关闭一个不含步骤的持久轮次，因此日志会记录这次尝试。每个步骤读取插件注册的提示词片段和工具 schema。
+`agent/pre-step` 决定模型看到什么。监听器可以改写已领取的消息，也可以直接拒绝它们；首次领取被拒绝或被改写为空时，仍会关闭一个不含步骤的持久轮次，除非这次唤醒是同一会话 prompt 改写之后的 `continueFromSurface`。每个步骤读取插件注册的提示词片段和工具 schema。
 
 详情见[时序图](agent-lifecycle.md)、[工具流水线](tool-execution-pipeline.md)和[取消与错误恢复](subsystems/core.md#the-agent-handle)。
 
@@ -130,6 +130,7 @@ seam 正是替换一个提供方就能改变整个产品的原因。文件系统
 | 管理同会话目标 | 使用 `ctx.goals`；通过 `agent/*` 续跑 |
 | 定时开启新会话 | 使用 `ctx.automation`；不要扩展仅限会话内的 Schedule |
 | fork 活跃会话 | `ctx.sessions.fork(source, boundary?, childSessionId?)` |
+| 在同一会话内改写已定稿的 user prompt | Host `session.rewrite`，然后 `agent.continueFromSurface()` |
 | 将注册项限定到单个 agent | 使用该 agent 的 `agent.ctx` |
 
 [扩展实操手册](cookbook/extension-cookbook.md)将功能映射到能力，并索引[包](cookbook/adding-a-package.md)、[工具](cookbook/adding-a-tool.md)、[LLM（大语言模型）适配器](cookbook/adding-an-llm-adapter.md)、[Chat 节点](cookbook/adding-a-conversation-node.md)和[设置卡片](cookbook/adding-a-settings-card.md)的分步指南。

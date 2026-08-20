@@ -162,6 +162,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     read: () => savedScroll,
   }
   const forkAt = vi.fn()
+  const rewriteAt = vi.fn()
   // Selection rides the REAL chat store (same construction path as
   // production; the view reads it through the PropsStore useStore share).
   const chat = createChatStore().create()
@@ -287,6 +288,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     inspectCall,
     chatScroll,
     forkAt,
+    rewriteAt,
     // Absent-service default; mention tests override with a real resolver.
     fileMentions: () => undefined,
     // Mirrors the real lookup chain (conversation namespace, then common).
@@ -295,7 +297,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   const setSelection = (next: SelectionTarget | null): void => { chat.actions.select(next) }
   return {
     set, ChatView, props, openDetails, openFile, loadOlder, inspectCall,
-    chatScroll, forkAt, setSelection, toolOwners,
+    chatScroll, forkAt, rewriteAt, setSelection, toolOwners,
   }
 }
 
@@ -739,6 +741,11 @@ describe('ChatView', () => {
     expect(buttons).toHaveLength(1)
     expect(buttons[0]!.getAttribute('aria-disabled')).toBeNull()
     fireEvent.click(buttons[0]!)
+    expect(h.forkAt.mock.calls).toEqual([[2]])
+    fireEvent.click(view.getByRole('button', { name: '编辑消息' }))
+    fireEvent.change(view.getByRole('textbox', { name: '编辑消息' }), { target: { value: 'rewritten question' } })
+    fireEvent.click(view.getByRole('button', { name: '保存并重新发送' }))
+    expect(h.rewriteAt).toHaveBeenCalledWith(1, 'rewritten question')
     expect(h.forkAt.mock.calls).toEqual([[2]])
   })
 

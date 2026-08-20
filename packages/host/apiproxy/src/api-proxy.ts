@@ -2603,6 +2603,103 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         return ok(request, { sessionId: childId })
       },
 
+      async rewrite(request) {
+        const { sessionId, atSeq, content, clientTimeZone } = request.payload
+        const canonicalTimeZone = clientTimeZone === undefined
+          ? undefined
+          : canonicalClientTimeZone(clientTimeZone)
+        if (clientTimeZone !== undefined && canonicalTimeZone === undefined) {
+          return err(request, {
+            code: 'invalid-time-zone',
+            message: 'clientTimeZone must be UTC or a valid IANA Area/Location name',
+            details: { value: clientTimeZone },
+          })
+        }
+        const resolved = await turnAgentFor<{ accepted: true }>(request, sessionId)
+        if ('refused' in resolved) return resolved.refused
+        const agent = resolved.agent
+        if (typeof agent.continueFromSurface !== 'function') {
+          return err(request, {
+            code: 'rewrite-unavailable',
+            message: `session "${sessionId}" cannot rewrite a settled prompt`,
+            details: { sessionId },
+          })
+        }
+        agent.cancel({ kind: 'user' }, { keepInbox: false })
+        await agent.whenIdle()
+        if (agent.status !== 'idle') {
+          return err(request, {
+            code: 'rewrite-unavailable',
+            message: `session "${sessionId}" is still running`,
+            details: { sessionId },
+          })
+        }
+        const events = agent.session.events
+        const target = events[atSeq]
+        const surface = agent.session.surface.nodes
+        const startIdx = surface.indexOf(atSeq)
+        const endSeq = surface.at(-1)
+        if (target === undefined
+          || target.type !== 'user/message'
+          || target.data.source.kind !== 'user'
+          || startIdx === -1
+          || endSeq === undefined) {
+          return err(request, {
+            code: 'rewrite-unavailable',
+            message: `session "${sessionId}" has no editable user prompt at event ${String(atSeq)}`,
+            details: { sessionId },
+          })
+        }
+        const shadowedSeqs = surface.slice(startIdx)
+        const source: MessageSource = {
+          kind: 'user',
+          rpcId: request.rpcId,
+          ...(canonicalTimeZone === undefined ? {} : { clientTimeZone: canonicalTimeZone }),
+        }
+        const hasImage = content.some(part => part.type === 'image')
+        const admit = async (): Promise<RpcResponse<{ accepted: true }>> => {
+          try {
+            if (hasImage) {
+              const current = selectionFor(agent).current
+              const modelInfo = await ctx.llm.resolveModelInfo(current.provider, current.model)
+              if (modelInfo.inputModalities !== undefined && !modelInfo.inputModalities.includes('image')) {
+                return err(request, {
+                  code: 'attachment-error',
+                  message: `Model "${current.model}" does not support image input.`,
+                  details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+                })
+              }
+            }
+            const durable = await durablePromptContent(ctx, content)
+            const merged = mergeQueueEditText(target.data.content, durable)
+            const message: UserMessage = createUserMessage({
+              content: merged ?? durable,
+              source,
+            })
+            agent.session.append('user/message', message, {
+              surfaceOp: { op: 'replace', start: atSeq, end: endSeq },
+              sourceEventSeqs: shadowedSeqs,
+            })
+            agent.continueFromSurface()
+          } catch (error: unknown) {
+            if (error instanceof AttachmentError) {
+              return err(request, {
+                code: 'attachment-error',
+                message: error.message,
+                details: { reason: error.code },
+              })
+            }
+            return err(request, {
+              code: 'rewrite-unavailable',
+              message: `failed to rewrite session "${sessionId}": ${String(error)}`,
+              details: { sessionId },
+            })
+          }
+          return ok(request, { accepted: true as const })
+        }
+        return hasImage ? serializeImageAdmission(agent, admit) : admit()
+      },
+
       async prompt(request) {
         const { sessionId, mode, content, clientTimeZone } = request.payload
         const canonicalTimeZone = clientTimeZone === undefined

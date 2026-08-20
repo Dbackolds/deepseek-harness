@@ -287,3 +287,253 @@ describe('sessions.fork', () => {
     await ctx.fiber.dispose()
   })
 })
+
+describe('sessions.rewrite', () => {
+  it('replaces the current-surface user prompt and wakes continueFromSurface', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite', 2)
+    const continueFromSurface = vi.fn()
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface,
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const sessions = api(ctx)
+    const userSeqs = source.events.filter(event => event.type === 'user/message').map(event => event.seq)
+    const atSeq = userSeqs[0]
+    if (atSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const beforeTail = source.surface.nodes.at(-1)
+    const response = await sessions.sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response.result).toEqual({ ok: true, value: { accepted: true } })
+    expect(continueFromSurface).toHaveBeenCalledTimes(1)
+    const replacement = source.events.at(-1)
+    expect(replacement?.type).toBe('user/message')
+    if (replacement?.type !== 'user/message') return
+    expect(replacement.surfaceOp).toEqual({ op: 'replace', start: atSeq, end: beforeTail })
+    expect(replacement.data.content).toEqual([{ type: 'text', text: 'rewritten' }])
+    expect(source.surface.nodes).toEqual([replacement.seq])
+    const again = await sessions.sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq,
+      content: [{ type: 'text', text: 'again' }],
+    }))
+    expect(again.result).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a seq that is not a current-surface user prompt', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-missing', 1)
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const sessions = api(ctx)
+    const response = await sessions.sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: 99,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response.result).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    const turnEnd = source.events.find(event => event.type === 'turn/end')?.seq
+    if (turnEnd === undefined) throw new Error('turn/end missing')
+    const notUser = await sessions.sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: turnEnd,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(notUser.result).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects an invalid client time zone before touching the session', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-zone', 1)
+    const response = await api(ctx).sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: 1,
+      content: [{ type: 'text', text: 'rewritten' }],
+      clientTimeZone: 'CST',
+    }))
+    expect(response.result).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-time-zone', details: { value: 'CST' } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a composition whose Agent cannot continue from the surface', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-no-continue', 1)
+    const response = await api(ctx).sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: 1,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response.result).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects when the Agent is still running after cancel', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-busy', 1)
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      status: 'running',
+      continueFromSurface: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const response = await api(ctx).sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: 1,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response.result).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a plugin user message even when it is on the current surface', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-plugin', 1)
+    source.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'plugin context' }],
+      source: { kind: 'plugin', plugin: 'foreign' },
+    }), { surfaceOp: 'append' })
+    const pluginSeq = source.events.at(-1)?.seq
+    if (pluginSeq === undefined) throw new Error('plugin message missing')
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const response = await api(ctx).sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: pluginSeq,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response.result).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps admitted images when the rewrite payload is text-only', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-image', 0)
+    source.append('turn/start', { turn: 1 })
+    source.append('user/message', createUserMessage({
+      content: [
+        { type: 'image', attachment: { attachmentId: 'att-keep', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+        { type: 'text', text: 'caption' },
+      ],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const continueFromSurface = vi.fn()
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface,
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const response = await api(ctx).sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: userSeq,
+      content: [{ type: 'text', text: 'new caption' }],
+      clientTimeZone: 'UTC',
+    }))
+    expect(response.result).toEqual({ ok: true, value: { accepted: true } })
+    const replacement = source.events.at(-1)
+    expect(replacement?.type).toBe('user/message')
+    if (replacement?.type !== 'user/message') return
+    expect(replacement.data.content).toEqual([
+      { type: 'image', attachment: { attachmentId: 'att-keep', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+      { type: 'text', text: 'new caption' },
+    ])
+    expect(replacement.data.source).toMatchObject({ kind: 'user', clientTimeZone: 'UTC' })
+    await ctx.fiber.dispose()
+  })
+
+  it('maps an image rewrite without an LLM registry to rewrite-unavailable', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-image-fail', 1)
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const response = await api(ctx).sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: userSeq,
+      content: [
+        { type: 'image', mediaType: 'image/png', data: 'AQ==' },
+        { type: 'text', text: 'caption' },
+      ],
+    }))
+    expect(response.result).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('maps a continueFromSurface throw to rewrite-unavailable', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-throw', 1)
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface: () => { throw new Error('wake failed') },
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const response = await api(ctx).sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: userSeq,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response.result).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+})

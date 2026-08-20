@@ -126,6 +126,14 @@ export interface Agent {
   followup(message: UserMessage): void
 
   /**
+   * Start a new turn from the current model-visible surface without claiming
+   * inbox input. The Host uses this after a same-session prompt rewrite so the
+   * replacement already on the surface is the only user message of the new
+   * turn. Throws when the agent is not idle.
+   */
+  continueFromSurface(): void
+
+  /**
    * Submit steering for the nearest step. An idle driver starts a turn;
    * a running driver consumes it at its next step boundary.
    * A rejected step leaves steering parked in the inbox until the next

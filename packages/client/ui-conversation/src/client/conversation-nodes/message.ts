@@ -27,12 +27,21 @@ function isCompactionCheckpoint(event: Parameters<ConversationNodeDefinition['ma
   return source.kind === 'plugin' && source.plugin === 'compact'
 }
 
+function isPromptRewrite(
+  event: Parameters<ConversationNodeDefinition['match']>[0],
+): event is Parameters<ConversationNodeDefinition['match']>[0]
+  & { type: 'user/message'; surfaceOp: { op: 'replace'; start: number; end: number } } {
+  return event.type === 'user/message'
+    && isReplacementSurfaceEvent(event)
+    && event.data.source.kind === 'user'
+}
+
 /** User, steering, and injected-context message classification Definition. */
 export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
   kind: 'input-message',
   target: 'chat',
   match: event => event.type === 'user/message'
-    && isAppendSurfaceEvent(event)
+    && (isAppendSurfaceEvent(event) || isPromptRewrite(event))
     && !isCompactionCheckpoint(event)
     ? { id: String(event.data.id), role: 'start' }
     : null,
@@ -66,6 +75,9 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         time: event.time,
         content: event.data.content,
         source: event.data.source,
+        ...isPromptRewrite(event)
+          ? { replacedRange: { start: event.surfaceOp.start, end: event.surfaceOp.end } }
+          : {},
       }
   },
   update: context => context.state,

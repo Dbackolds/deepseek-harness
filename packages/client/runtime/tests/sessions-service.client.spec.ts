@@ -9,7 +9,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
-import { SessionCreateError, SessionRuntime, scopeOf } from '../src/client/sessions/service.ts'
+import { SessionCreateError, SessionRewriteError, SessionRuntime, scopeOf } from '../src/client/sessions/service.ts'
 import { FakeApiClient, deferred, err, fakeRemote, ok } from './fake-api.client.ts'
 
 const sid = (s: string): SessionId => s as SessionId
@@ -599,6 +599,70 @@ describe('fork', () => {
     await expect(b.svc.fork({ sessionId: sid('source'), increaseTitle: true }))
       .rejects.toThrow('fork child rename failed: title-invalid: rejected')
     expect(b.svc.binding(sid('child'))).toBeDefined()
+  })
+})
+
+describe('rewrite', () => {
+  it('rewrites the settled prompt on the same session without opening a child', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 'source', cwd: '/work' }])
+    await expect(b.svc.rewrite({
+      sessionId: sid('source'),
+      atSeq: 4,
+      content: [{ type: 'text', text: 'rewritten' }],
+    })).resolves.toBeUndefined()
+    expect(b.api.callsOf('session.rewrite')).toEqual([{
+      sessionId: 'source',
+      atSeq: 4,
+      content: [{ type: 'text', text: 'rewritten' }],
+      clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }])
+    expect(b.api.callsOf('session.fork')).toEqual([])
+  })
+
+  it('floors a fractional rewrite anchor to the real event seq the wire accepts', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 'source' }])
+    await expect(b.svc.rewrite({
+      sessionId: sid('source'),
+      atSeq: 4.9,
+      content: [{ type: 'text', text: 'rewritten' }],
+    })).resolves.toBeUndefined()
+    expect(b.api.callsOf('session.rewrite')).toEqual([{
+      sessionId: 'source',
+      atSeq: 4,
+      content: [{ type: 'text', text: 'rewritten' }],
+      clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }])
+  })
+
+  it('rejects a locally missing session as SessionRewriteError', async () => {
+    const b = bench()
+    await feedList(b, [])
+    await expect(b.svc.rewrite({
+      sessionId: sid('missing'),
+      atSeq: 4,
+      content: [{ type: 'text', text: 'rewritten' }],
+    })).rejects.toMatchObject({
+      name: 'SessionRewriteError',
+      rpcError: { code: 'session-not-found' },
+      sourceSessionId: 'missing',
+    })
+  })
+
+  it('wraps a rewrite business failure as SessionRewriteError', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 'source' }])
+    b.api.onRewrite = () => Promise.resolve(err({
+      code: 'rewrite-unavailable',
+      message: 'not editable',
+      details: { sessionId: sid('source') },
+    }))
+    await expect(b.svc.rewrite({
+      sessionId: sid('source'),
+      atSeq: 4,
+      content: [{ type: 'text', text: 'rewritten' }],
+    })).rejects.toBeInstanceOf(SessionRewriteError)
   })
 })
 

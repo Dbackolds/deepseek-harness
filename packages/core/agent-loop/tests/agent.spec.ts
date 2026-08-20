@@ -164,4 +164,65 @@ describe('Agent', () => {
       expect.stringContaining('agent event "agent/status" listener threw'),
     )
   })
+
+  it('continueFromSurface opens a turn from the current surface without claiming inbox input', async () => {
+    const adapter = new MockAdapter([textResponse('first'), textResponse('rewritten')])
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(SessionId('rewrite-surface'), { provider: 'mock', model: 'mock' })
+    send(agent, 'original')
+    await agent.whenIdle()
+    const original = agent.session.events.find(event => event.type === 'user/message')
+    if (original === undefined || original.type !== 'user/message') throw new Error('original prompt missing')
+    const shadowed = [...agent.session.surface.nodes]
+    const endSeq = shadowed.at(-1)
+    if (endSeq === undefined) throw new Error('surface empty')
+    agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'rewritten' }],
+      source: { kind: 'user' },
+    }), {
+      surfaceOp: { op: 'replace', start: original.seq, end: endSeq },
+      sourceEventSeqs: shadowed,
+    })
+    agent.continueFromSurface()
+    await agent.whenIdle()
+    const request = JSON.stringify(adapter.requests[1]?.messages)
+    expect(request).toContain('rewritten')
+    expect(request).not.toContain('original')
+    expect(agent.session.events.filter(event => event.type === 'user/message')).toHaveLength(2)
+  })
+
+  it('continueFromSurface throws while the agent is already running', async () => {
+    const ctx = await harness(new MockAdapter(['hang']))
+    const agent = ctx.agentLoop.create(SessionId('rewrite-busy'), { provider: 'mock', model: 'mock' })
+    send(agent, 'busy')
+    await Promise.resolve()
+    expect(() => { agent.continueFromSurface() }).toThrow(/cannot continue from the surface while running/)
+    agent.cancel({ kind: 'user' })
+    await agent.whenIdle()
+  })
+
+  it('cancel clears a pending surface continuation without a completed model call', async () => {
+    const adapter = new MockAdapter(['hang'])
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(SessionId('rewrite-cancel'), { provider: 'mock', model: 'mock' })
+    agent.continueFromSurface()
+    await Promise.resolve()
+    agent.cancel({ kind: 'user' })
+    await agent.whenIdle()
+    expect(agent.status).toBe('idle')
+  })
+
+  it('continueFromSurface still claims a parked next-turn message', async () => {
+    const adapter = new MockAdapter([textResponse('parked')])
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(SessionId('rewrite-parked'), { provider: 'mock', model: 'mock' })
+    agent.send(createUserMessage({
+      content: [{ type: 'text', text: 'parked prompt' }],
+      source: { kind: 'user' },
+    }), 'next-turn', false)
+    agent.continueFromSurface()
+    await agent.whenIdle()
+    const request = JSON.stringify(adapter.requests[0]?.messages)
+    expect(request).toContain('parked prompt')
+  })
 })

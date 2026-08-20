@@ -537,6 +537,40 @@ describe('prompt and cancel errors', () => {
     expect(api.callsOf('session.cancel')).toEqual([])
   })
 
+  it('rewrites a settled prompt on the same session and lands failures in promptError with op=rewrite', async () => {
+    const { api, session } = makeSession()
+    const accepted = await session.rewrite(4, [{ type: 'text', text: 'rewritten' }])
+    expect(accepted).toEqual({ ok: true, value: { accepted: true } })
+    expect(api.callsOf('session.rewrite')).toMatchObject([{
+      sessionId: SID,
+      atSeq: 4,
+      content: [{ type: 'text', text: 'rewritten' }],
+      clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }])
+    api.onRewrite = () => Promise.resolve(err({
+      code: 'rewrite-unavailable',
+      message: 'not editable',
+      details: { sessionId: SID },
+    }))
+    const failed = await session.rewrite(4, [{ type: 'text', text: 'again' }])
+    expect(failed).toMatchObject({ ok: false, error: { code: 'rewrite-unavailable' } })
+    expect(session.getSnapshot().promptError).toMatchObject({
+      op: 'rewrite', error: { code: 'rewrite-unavailable' },
+    })
+  })
+
+  it('refuses rewrite on an addressed subagent conversation', async () => {
+    const api = new FakeApiClient()
+    const session = new Session(SID, api, fakeRemote(), {
+      address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
+      parentAvailable: true,
+    })
+    const result = await session.rewrite(4, [{ type: 'text', text: 'rewritten' }])
+    expect(result).toMatchObject({ ok: false, error: { code: 'rewrite-unavailable' } })
+    expect(api.callsOf('session.rewrite')).toEqual([])
+    expect(session.getSnapshot().promptError).toMatchObject({ op: 'rewrite' })
+  })
+
   it('sends content through session.prompt; composerPhase steps blank → engaging synchronously at send entry', async () => {
     const { api, session } = makeSession()
     session.handleBlank(true)

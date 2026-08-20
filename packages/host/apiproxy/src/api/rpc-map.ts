@@ -34,6 +34,7 @@ export interface RpcMethodMap {
   'session.rename': SessionsApi['rename']
   'session.rehome': SessionsApi['rehome']
   'session.fork': SessionsApi['fork']
+  'session.rewrite': SessionsApi['rewrite']
   'session.prompt': SessionsApi['prompt']
   'session.attachment': SessionsApi['attachment']
   'session.updateQueue': SessionsApi['updateQueue']

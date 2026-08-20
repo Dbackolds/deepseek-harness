@@ -260,6 +260,45 @@ export class Session implements SessionFace {
   }
 
   /**
+   * Rewrite a settled user prompt in this same session. Failures land in
+   * promptError with op=rewrite. Subagent addresses cannot rewrite history.
+   * @param atSeq - current-surface `user/message` seq being edited.
+   * @param content - replacement text plus browser-owned temporary image uploads.
+   * @returns the rewrite result (also mirrored into promptError on failure).
+   */
+  async rewrite(atSeq: number, content: PromptContentPart[]): Promise<RpcResult<{ accepted: true }>> {
+    this.promptError = null
+    this.lastAgentError = null
+    let result: RpcResult<{ accepted: true }>
+    try {
+      if (this.address !== undefined) {
+        result = {
+          ok: false,
+          error: {
+            code: 'rewrite-unavailable',
+            message: 'subagent conversations cannot rewrite settled prompts',
+            details: { sessionId: this.sessionId },
+          },
+        }
+      } else {
+        result = (await this.api.sessions.rewrite({
+          sessionId: this.sessionId,
+          atSeq,
+          content,
+          clientTimeZone: resolvedClientTimeZone(),
+        })).result
+      }
+    } catch (error) {
+      result = transportError(error)
+    }
+    if (!result.ok) {
+      this.promptError = { op: 'rewrite', error: result.error }
+      this.notifier.markDirty()
+    }
+    return result
+  }
+
+  /**
    * Resolve one image referenced by this session into browser-consumable bytes.
    * @param attachmentId - opaque id found in the folded session log.
    * @returns the authenticated reference and decoded bytes.

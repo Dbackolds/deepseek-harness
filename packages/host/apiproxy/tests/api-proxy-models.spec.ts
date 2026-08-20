@@ -203,6 +203,91 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it('rewrites a settled prompt with a new image after the model admits it', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const continueFromSurface = vi.fn()
+    Object.assign(agent, {
+      status: 'idle',
+      continueFromSurface,
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    agent.session.append('user/message', {
+      id: 'orig', role: 'user', source: { kind: 'user' },
+      content: [{ type: 'text', text: 'orig' }],
+    } as never, { surfaceOp: 'append' })
+    const atSeq = agent.session.events.find(event => event.type === 'user/message')?.seq
+    if (atSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const validateImage = vi.fn((_input: { data: Uint8Array }) => Promise.resolve())
+    const saveImage = vi.fn((input: { data: Uint8Array; mediaType: 'image/png'; name?: string }) => Promise.resolve({
+      attachmentId: 'att-rewrite',
+      mediaType: input.mediaType,
+      bytes: input.data.byteLength,
+      width: 1,
+      height: 1,
+    }))
+    const attachments = {
+      imageLimits: {
+        maxImageBytes: 4,
+        maxImagesPerMessage: 2,
+        maxMessageImageBytes: 4,
+        maxImagePixels: 4,
+        mediaTypes: ['image/png'],
+      },
+      validateImage,
+      saveImage,
+    }
+    ctx.provide('attachments', {
+      ...attachments,
+      saveImages(inputs: readonly Parameters<typeof saveImage>[0][]) {
+        return AttachmentStore.prototype.saveImages.call(attachments, inputs)
+      },
+    } as never)
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    const denied = await api.sessions.rewrite(request({
+      sessionId,
+      atSeq,
+      content: [{ type: 'image' as const, mediaType: 'image/png' as const, data: 'A' }],
+    }))
+    expect(denied.result).toMatchObject({
+      ok: false,
+      error: { code: 'attachment-error', details: { reason: 'INVALID_IMAGE_BASE64' } },
+    })
+    registerTextOnly(ctx)
+    expectValue(await api.sessions.selectModel(request({
+      sessionId, provider: 'text-only', model: 'plain',
+    })))
+    const textOnly = await api.sessions.rewrite(request({
+      sessionId,
+      atSeq,
+      content: [
+        { type: 'image' as const, mediaType: 'image/png' as const, data: 'AQ==' },
+        { type: 'text' as const, text: 'caption' },
+      ],
+    }))
+    expect(textOnly.result).toMatchObject({
+      ok: false,
+      error: { code: 'attachment-error', details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' } },
+    })
+    expectValue(await api.sessions.selectModel(request({
+      sessionId, provider: 'deepseek-official', model: 'deepseek-chat',
+    })))
+    const accepted = await api.sessions.rewrite(request({
+      sessionId,
+      atSeq,
+      content: [
+        { type: 'image' as const, mediaType: 'image/png' as const, data: 'AQ==' },
+        { type: 'text' as const, text: 'caption' },
+      ],
+    }))
+    expect(accepted.result).toEqual({ ok: true, value: { accepted: true } })
+    expect(continueFromSurface).toHaveBeenCalledTimes(1)
+    await ctx.fiber.dispose()
+  })
+
   it('refuses a text-only selection while durable or pending image content remains visible', async () => {
     const { ctx, agent, sessionId } = await harness()
     registerTextOnly(ctx)

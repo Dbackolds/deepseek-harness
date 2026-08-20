@@ -86,7 +86,7 @@ inbox 的实时通知刻意采用逐消息的最小载荷：`agent/inbox/inserte
 
 #### 模型看到的内容
 
-`send`、`steer` 与 `inject` 会向所属会话提供输入。`agent/pre-step` 和其他已声明事件让插件能够拒绝拟进入的步骤或添加持久请求材料；此接口本身不贡献固定文案。
+`send`、`steer` 与 `inject` 会向所属会话提供输入。`continueFromSurface` 从当前模型可见 surface 开启新一轮，且不领取 inbox 输入，因此同一会话内的 prompt 改写可以把替换消息作为新一轮唯一的 user 消息。`agent/pre-step` 和其他已声明事件让插件能够拒绝拟进入的步骤或添加持久请求材料；此接口本身不贡献固定文案。
 
 #### Token 影响
 

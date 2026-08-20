@@ -40,6 +40,14 @@ export interface ISession {
    */
   prompt(content: PromptContentPart[], mode: 'queue' | 'steer'): Promise<RpcResult<{ accepted: true }>>
   /**
+   * Rewrite a settled user prompt in this same session and start a new turn
+   * from the replacement. Failures also land in snapshot.promptError.
+   * @param atSeq - current-surface `user/message` seq being edited.
+   * @param content - replacement text plus browser-owned temporary image uploads.
+   * @returns acceptance, or the business error.
+   */
+  rewrite(atSeq: number, content: PromptContentPart[]): Promise<RpcResult<{ accepted: true }>>
+  /**
    * Resolve one durable image referenced by this session.
    * @param attachmentId - opaque id found in the folded session log.
    * @returns the authenticated reference and decoded bytes.
