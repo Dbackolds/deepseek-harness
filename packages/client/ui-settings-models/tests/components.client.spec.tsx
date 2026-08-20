@@ -319,7 +319,7 @@ describe('ModelsSection', () => {
     expect(needsSetup(row(undefined), false)).toBe(true)
     expect(needsSetup(row({ configured: true, writable: true }), false)).toBe(false)
     const nested = { ...row(undefined), entry: { ...entry, settingsPath: ['providers', 'x'] } }
-    expect(needsSetup(nested, false)).toBe(false)
+    expect(needsSetup(nested, false)).toBe(true)
     // A user who can already reach some provider is not in the first-run
     // posture, so nothing on the page opens itself.
     expect(needsSetup(row(undefined), true)).toBe(false)

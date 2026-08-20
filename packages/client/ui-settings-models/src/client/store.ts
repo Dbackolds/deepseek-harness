@@ -76,13 +76,25 @@ export function deriveKeyRef(provider: string): string {
 }
 
 /**
- * The wire protocols a hand-declared route may name, read out of the owning
- * namespace's own schema. This stays a schema read rather than a wire field so
- * the choices the page offers cannot drift from the ones the adapter accepts:
- * both come from the same `Config`.
- * @param namespace - the namespace view whose schema declares the profile shape.
- * @param schema - settings schema operations.
- * @returns the protocol identifiers, or an empty list when the schema has none.
+ * Derive a POSIX-safe per-model credential reference from the route and model id.
+ * @param provider - provider route id.
+ * @param modelId - model identifier.
+ * @returns the derived reference name.
+ */
+export function deriveModelKeyRef(provider: string, modelId: string): string {
+  const model = modelId.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+  const stem = model.length === 0 || /^[0-9]/.test(model) ? `M_${model}` : model
+  return `${deriveKeyRef(provider).replace(/_API_KEY$/, '')}_${stem}_API_KEY`
+}
+
+
+/**
+ * Whether this page created the reference: the route's conventional
+ * `<ROUTE>_API_KEY`, or a per-model `<ROUTE>_<MODEL>_API_KEY` it derived.
+ * Custom names and environment-owned refs stay out of deletion.
+ * @param provider - provider route id.
+ * @param ref - credential reference name.
+ * @returns whether the Models page owns this reference.
  */
 export function isPageManagedRef(provider: string, ref: string): boolean {
   if (ref === deriveKeyRef(provider)) return true

@@ -194,7 +194,7 @@ describe('MessageItem arms', () => {
           inspectCall: () => {},
           forkAt: () => {},
           rewriteAt,
-          loadImage: () => Promise.reject(new Error('unused')),
+          renderMessageImages,
           fileMentions: () => undefined,
           t,
         } as unknown as ChatNodeViewProps<'user'>)}
@@ -234,7 +234,7 @@ describe('MessageItem arms', () => {
           inspectCall: () => {},
           forkAt: () => {},
           rewriteAt,
-          loadImage: () => Promise.reject(new Error('unused')),
+          renderMessageImages,
           fileMentions: () => undefined,
           t,
         } as unknown as ChatNodeViewProps<'user'>)}
@@ -282,7 +282,7 @@ describe('MessageItem arms', () => {
           inspectCall: () => {},
           forkAt: () => {},
           rewriteAt: () => {},
-          loadImage: () => Promise.reject(new Error('unused')),
+          renderMessageImages,
           fileMentions: () => undefined,
           t,
         } as unknown as ChatNodeViewProps<'steering'>)}

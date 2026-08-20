@@ -2,47 +2,83 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
+import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
-  SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
-  SidebarSettingsOwnerProps,
+  SidebarAutomationOwnerProps, SidebarFooterActionOwnerProps, SidebarRootComponentProps,
+  SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
 import { en } from '../src/client/locales.ts'
 
 // English-dictionary translate stub: the shell renders the same copy the
 // assertions below query by accessible name.
-const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
+const t: SidebarRootComponentProps['t'] = (key, params) => {
+  const template = (en as Record<string, string>)[key] ?? key
+  if (params === undefined) return template
+  let text = template
+  for (const [name, value] of Object.entries(params)) {
+    text = text.replaceAll('{' + name + '}', String(value))
+  }
+  return text
+}
 
 afterEach(() => {
   cleanup()
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
 // The shell never reads the global hooks itself, but they ride the standard
 // props share; stub them as never-called functions.
-const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
+const neverWorkspaces = (() => { throw new Error('shell must not read workspaces') }) as never
 
-function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
+function sessionsHook(completedIds: readonly string[] = []): SidebarRootComponentProps['useSessions'] {
+  const byId = Object.fromEntries(completedIds.map(id => [id, { completed: true }])) as SessionListState['byId']
+  return select => select({
+    ids: completedIds as SessionListState['ids'],
+    byId,
+    current: undefined,
+    phase: 'ready',
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
+  })
+}
+
+function mountShell({
+  collapsed = false,
+  width = 300,
+  completedIds = [],
+}: {
+  collapsed?: boolean
+  width?: number
+  completedIds?: readonly string[]
+} = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
+  let automationOwner: SidebarAutomationOwnerProps | undefined
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
   const brandMark = <span data-testid="custom-brand-mark">M</span>
   const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
-  let current = { collapsed, width }
+  let current = { collapsed, width, completedIds }
   const root = () => (
     <SidebarRoot
       collapsed={current.collapsed} width={current.width}
-      useSessions={neverHook} useWorkspaces={neverHook}
+      useSessions={sessionsHook(current.completedIds)} useWorkspaces={neverWorkspaces}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
-        owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
+        owner: SidebarAutomationOwnerProps | SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
       ) => {
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
+        if (key === 'sidebar.automation') {
+          automationOwner = owner
+          return <div data-testid="automation-seat" data-wide={owner.wide} />
+        }
         if (key === 'sidebar.settings') {
           settingsOwner = owner
           return <div data-testid="settings-seat" data-wide={owner.wide} />
@@ -97,7 +133,7 @@ describe('SidebarRoot shell', () => {
     vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
     const { container } = render(<SidebarRoot
       collapsed={false} width={300}
-      useSessions={neverHook} useWorkspaces={neverHook}
+      useSessions={sessionsHook()} useWorkspaces={neverWorkspaces}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
