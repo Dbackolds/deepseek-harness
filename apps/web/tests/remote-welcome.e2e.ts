@@ -3,9 +3,11 @@
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   acknowledgeReloadConnectionLoss, launchWebScaffold, watchConsole, webSnapshotMode,
-  WELCOME_NOTICE_COPY,
+  WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_COPY, WELCOME_NOTICE_VERSION,
   type WebScaffold,
 } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE } from './support.ts'
@@ -49,12 +51,17 @@ describe.skipIf(MODE === 'record')('web e2e: remote welcome notice', () => {
       () => page.locator('#root').evaluate(root => (root as HTMLElement).inert),
       { timeout: 15_000 },
     ).toBe(false)
+    await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
+      .toContain(`${WELCOME_NOTICE_ACK_FIELD}: ${WELCOME_NOTICE_VERSION}`)
 
     const reloadWarnings = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     acknowledgeReloadConnectionLoss(tripwire, reloadWarnings)
-    await page.waitForSelector('#root', { timeout: 30_000 })
-    expect(await welcome.count()).toBe(0)
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await expect.poll(
+      () => page.getByRole('dialog', { name: WELCOME_NOTICE_COPY.zh.title }).count(),
+      { timeout: 15_000 },
+    ).toBe(0)
     expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

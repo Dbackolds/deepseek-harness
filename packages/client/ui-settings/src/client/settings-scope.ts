@@ -49,7 +49,7 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
   /**
    * @param api - settings wire face.
    * @param spec - namespace identity and optional narrowing decoder.
-   * @param persistence - undeclared remote browsers remain process-local; trusted-host and loopback write the Host document.
+   * @param persistence - `host` writes the Host document; `memory` is only for explicit compositions and tests.
    */
   constructor(
     private readonly api: SettingsFace,
