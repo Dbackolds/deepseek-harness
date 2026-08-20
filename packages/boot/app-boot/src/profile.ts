@@ -32,7 +32,8 @@ import { createRequire } from 'node:module'
 import {
   existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync,
 } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import { basename, dirname, delimiter, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -551,6 +552,10 @@ export interface RunProfilePnpmOptions {
    * `pipe` captures stdout and stderr (a Host plugin that must not write them).
    */
   stdio?: 'inherit' | 'pipe'
+  /** Override well-known fallback directories; tests pin an empty list. */
+  searchDirs?: readonly string[]
+  /** Look for Corepack next to this Node after PATH and searchDirs. */
+  includeCorepack?: boolean
 }
 
 /** Outcome of one {@link runProfilePnpm} invocation. */
@@ -565,19 +570,80 @@ export interface ProfilePnpmResult {
   stderr: string
 }
 
+const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+
+/**
+ * Directories a GUI-short PATH still misses on a machine that already has pnpm.
+ * PATH itself is searched first; these are fallbacks, in this order.
+ * @returns unique existing-candidate directories.
+ */
+export function profilePnpmSearchDirs(): string[] {
+  const home = homedir()
+  const nodeDir = dirname(process.execPath)
+  const dirs = [
+    process.env.PNPM_HOME,
+    join(home, 'Library', 'pnpm'),
+    join(home, '.local', 'share', 'pnpm'),
+    join(home, '.npm-global', 'bin'),
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    join(home, '.volta', 'bin'),
+    join(home, '.asdf', 'shims'),
+    nodeDir,
+  ]
+  return [...new Set(dirs.filter((dir): dir is string => dir !== undefined && dir.length > 0))]
+}
+
+/**
+ * Locate a host pnpm: PATH first, then well-known install directories, then
+ * Corepack next to this Node. Returns undefined when none exist.
+ * @returns the absolute pnpm executable, or undefined.
+ */
+export function resolveProfilePnpm(
+  searchDirs: readonly string[] = profilePnpmSearchDirs(),
+  includeCorepack = true,
+): string | undefined {
+  const pathDirs = (process.env.PATH ?? '').split(delimiter).filter(dir => dir.length > 0)
+  for (const dir of [...pathDirs, ...searchDirs]) {
+    const candidate = join(dir, PNPM_BIN)
+    if (existsSync(candidate)) return candidate
+  }
+  if (!includeCorepack) return undefined
+  const corepackName = process.platform === 'win32' ? 'corepack.cmd' : 'corepack'
+  const corepack = join(dirname(process.execPath), corepackName)
+  if (existsSync(corepack)) return corepack
+  return undefined
+}
+
 /**
  * Run `pnpm <args>` in a profile directory. Windows resolves pnpm through its
  * `.cmd` shim, which `spawn` refuses without a shell since the CVE-2024-27980
  * hardening. A missing `pnpm` is a structured result, not a throw; every other
- * spawn failure throws.
+ * spawn failure throws. Finder and desktop launches inherit a short GUI PATH,
+ * so resolution also searches well-known install directories.
  * @param options - the profile directory, pnpm arguments, and stdio mode.
  * @returns the process outcome, with `missingPnpm` set when pnpm is absent.
  */
 export function runProfilePnpm(options: RunProfilePnpmOptions): ProfilePnpmResult {
   const stdio = options.stdio ?? 'inherit'
-  const result = spawnSync('pnpm', [...options.args], {
+  const pnpm = resolveProfilePnpm(
+    options.searchDirs ?? profilePnpmSearchDirs(),
+    options.includeCorepack ?? true,
+  )
+  if (pnpm === undefined) {
+    return { missingPnpm: true, exitCode: 127, stdout: '', stderr: '' }
+  }
+  const extraPath = profilePnpmSearchDirs().join(delimiter)
+  const path = process.env.PATH === undefined || process.env.PATH.length === 0
+    ? extraPath
+    : `${process.env.PATH}${delimiter}${extraPath}`
+  const args = pnpm.endsWith('corepack') || pnpm.endsWith('corepack.cmd')
+    ? ['pnpm', ...options.args]
+    : [...options.args]
+  const result = spawnSync(pnpm, args, {
     cwd: options.profileDir,
     stdio,
+    env: { ...process.env, PATH: path },
     ...stdio === 'pipe' ? { encoding: 'utf8' as const } : {},
     shell: process.platform === 'win32',
   })

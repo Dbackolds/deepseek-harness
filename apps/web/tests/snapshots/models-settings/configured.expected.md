@@ -13,6 +13,9 @@
     - button "插件":
       - img
       - text: 插件
+    - button "Skills":
+      - img
+      - text: Skills
     - button "Agent 预设":
       - img
       - text: Agent 预设

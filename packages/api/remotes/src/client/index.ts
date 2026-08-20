@@ -39,7 +39,7 @@ export type {
   MuxFrame, PromptContentPart, QuestionResponsePayload, QueueAction, RegisteredPromptSectionView,
   RpcError, RpcId, RpcReceipt,
   RpcRequest, RpcResponse, RpcResult, SessionId, SessionModels, SessionSearchItem,
-  SessionSummary, SettingsNamespaceView, SettingsPathOpView, SkillEntry, StreamChunk,
+  SessionSummary, SettingsNamespaceView, SettingsPathOpView, SkillCatalogEntry, SkillEntry, StreamChunk,
   SubagentAddress, SubagentCatalog, JobView, ToolCallView, ToolEventView, ToolResultView,
   WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-connection/client'

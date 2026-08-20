@@ -44,6 +44,8 @@ export {
   reconcileProfilePlugins,
   resolveBundleDir,
   resolveProfileDir,
+  resolveProfilePnpm,
+  profilePnpmSearchDirs,
   runProfilePnpm,
   writeProfileManifest,
   writeProfilePatches,

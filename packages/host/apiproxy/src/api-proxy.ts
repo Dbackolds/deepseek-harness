@@ -3749,6 +3749,42 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           return err(request, { code: 'internal', message: `skill listing failed: ${String(error)}`, details: {} })
         }
       },
+      async catalog(request) {
+        const presets = ctx.get('agentPresets')
+        const skillRegistry = ctx.get('skills')
+        if (skillRegistry === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'skill registry is absent: the host composition does not mount @deepseek-ai/dsh-skill',
+            details: {},
+          })
+        }
+        let scope: Awaited<ReturnType<typeof presenterScopeFor>>
+        try {
+          scope = presets === undefined ? undefined : await presets.standingKeyFor()
+        } catch {
+          scope = undefined
+        }
+        try {
+          const skills = await skillRegistry.list({
+            cwd: defaults.cwd,
+            ...scope === undefined ? {} : { scope },
+          })
+          return ok(request, {
+            skills: skills.map(skill => ({
+              name: skill.name,
+              description: skill.description,
+              ...skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse },
+              modelInvocable: skill.invocation.modelInvocable,
+              userInvocable: skill.invocation.userInvocable,
+              source: skill.source,
+              provider: skill.provider,
+            })),
+          })
+        } catch (error: unknown) {
+          return err(request, { code: 'internal', message: `skill catalog failed: ${String(error)}`, details: {} })
+        }
+      },
     },
 
     settings: {

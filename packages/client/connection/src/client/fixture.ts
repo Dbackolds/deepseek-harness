@@ -2992,6 +2992,27 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           ],
         })
       },
+      catalog: request => ok(request, {
+        skills: [
+          {
+            name: 'fixture-demo',
+            description: 'fixture 技能样本',
+            whenToUse: '仅供 UI 目录渲染验收',
+            modelInvocable: true,
+            userInvocable: true,
+            source: 'bundled',
+            provider: 'fixture',
+          },
+          {
+            name: 'fixture-user-only',
+            description: 'fixture 仅用户技能样本',
+            modelInvocable: false,
+            userInvocable: true,
+            source: 'bundled',
+            provider: 'fixture',
+          },
+        ],
+      }),
     },
     goals: {
       // Compatibility face only: old API Proxy payloads and acknowledgements
@@ -3383,6 +3404,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.addFolder': return this.api.workspace.addFolder(request)
       case 'workspace.removeFolder': return this.api.workspace.removeFolder(request)
       case 'skill.list': return this.api.skills.list(request)
+      case 'skill.catalog': return this.api.skills.catalog(request)
       case 'git.describe': return this.api.git.describe(request)
       case 'git.checkout': return this.api.git.checkout(request)
       case 'git.createBranch': return this.api.git.createBranch(request)

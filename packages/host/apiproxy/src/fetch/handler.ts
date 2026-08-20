@@ -50,7 +50,7 @@ import {
   workspaceRenameRequestSchema,
   workspaceShowRequestSchema,
 } from '../api/workspace.schema.ts'
-import { skillListRequestSchema } from '../api/skills.schema.ts'
+import { skillCatalogRequestSchema, skillListRequestSchema } from '../api/skills.schema.ts'
 import {
   agentPresetCopyRequestSchema, agentPresetListRequestSchema, agentPresetOpenDocumentRequestSchema,
   agentPresetReadRequestSchema, agentPresetRemoveRequestSchema, agentPresetSelectRequestSchema,
@@ -145,6 +145,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'workspace.addFolder': { schema: workspaceAddFolderRequestSchema, invoke: (api, r) => api.workspace.addFolder(r) },
   'workspace.removeFolder': { schema: workspaceRemoveFolderRequestSchema, invoke: (api, r) => api.workspace.removeFolder(r) },
   'skill.list': { schema: skillListRequestSchema, invoke: (api, r) => api.skills.list(r) },
+  'skill.catalog': { schema: skillCatalogRequestSchema, invoke: (api, r) => api.skills.catalog(r) },
   'git.describe': { schema: gitDescribeRequestSchema, invoke: (api, r) => api.git.describe(r) },
   'git.checkout': { schema: gitCheckoutRequestSchema, invoke: (api, r) => api.git.checkout(r) },
   'git.createBranch': { schema: gitCreateBranchRequestSchema, invoke: (api, r) => api.git.createBranch(r) },

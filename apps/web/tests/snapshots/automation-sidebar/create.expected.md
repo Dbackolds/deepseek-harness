@@ -1,0 +1,32 @@
+- region "自动化":
+  - heading "自动化" [level=1]
+  - paragraph: 按计划运行任务，或在需要时随时执行。
+  - button "关闭":
+    - img
+  - form "新建规则":
+    - button "返回列表":
+      - img
+      - text: 返回列表
+    - text: 任务标题
+    - textbox "任务标题":
+      - /placeholder: 可选；留空则用任务开头
+    - text: 工作区
+    - combobox "工作区":
+      - option "workspace" [selected]
+    - text: 指令
+    - textbox "指令":
+      - /placeholder: 新会话要执行的任务
+    - group "调度":
+      - text: 调度
+      - button "延迟一次" [pressed]
+      - button "指定时刻一次"
+      - button "固定间隔"
+      - button "每天或每周"
+    - text: 延迟秒数
+    - spinbutton "延迟秒数": "60"
+    - text: 上次会话仍在跑时
+    - combobox "上次会话仍在跑时":
+      - option "跳过这次" [selected]
+      - option "取消上次并立刻开新会话"
+    - button "取消"
+    - button "创建"

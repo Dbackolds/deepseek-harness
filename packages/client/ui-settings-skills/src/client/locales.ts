@@ -1,0 +1,66 @@
+/** Copy dictionaries for the Skills settings section. */
+
+/** Simplified Chinese dictionary and key source of truth. */
+export const zh = {
+  nav: 'Skills',
+  title: 'Skills',
+  intro: '查看当前部署发现的全部 skill，包括内置、用户与项目来源。本页只读，不注册斜杠命令。',
+  loading: '正在读取 skill…',
+  error: '暂时无法读取 skill。',
+  retry: '重试',
+  search: '搜索 skill',
+  catalog: 'Skill 列表',
+  empty: '暂无 skill。',
+  emptySearch: '没有匹配的 skill。',
+  source: '来源',
+  provider: '提供方',
+  model: '模型',
+  user: '用户',
+  modelYes: '模型可调用',
+  modelNo: '模型不可调用',
+  userYes: '用户可调用',
+  userNo: '用户不可调用',
+  sourceBundled: '内置',
+  sourceRuntime: '运行时',
+  sourceUserDsh: '用户 DSH',
+  sourceUserAgents: '用户 Agents',
+  sourceProjectDsh: '项目 DSH',
+  sourceProjectAgents: '项目 Agents',
+  sourceProjectCodex: '项目 Codex',
+  sourceProjectClaude: '项目 Claude',
+  sourceCustom: '自定义',
+} satisfies Record<string, string>
+
+/** Skills settings locale key union. */
+export type SkillsSettingsKey = keyof typeof zh
+
+/** English dictionary checked against the Chinese key set. */
+export const en = {
+  nav: 'Skills',
+  title: 'Skills',
+  intro: 'Every skill this deployment discovers, including built-in, user, and project sources. This page is read-only and registers no slash command.',
+  loading: 'Reading skills…',
+  error: 'Skills are temporarily unavailable.',
+  retry: 'Retry',
+  search: 'Search skills',
+  catalog: 'Skill list',
+  empty: 'No skills are available.',
+  emptySearch: 'No matching skills.',
+  source: 'Source',
+  provider: 'Provider',
+  model: 'Model',
+  user: 'User',
+  modelYes: 'Model-invocable',
+  modelNo: 'Not model-invocable',
+  userYes: 'User-invocable',
+  userNo: 'Not user-invocable',
+  sourceBundled: 'Built-in',
+  sourceRuntime: 'Runtime',
+  sourceUserDsh: 'User DSH',
+  sourceUserAgents: 'User Agents',
+  sourceProjectDsh: 'Project DSH',
+  sourceProjectAgents: 'Project Agents',
+  sourceProjectCodex: 'Project Codex',
+  sourceProjectClaude: 'Project Claude',
+  sourceCustom: 'Custom',
+} satisfies Record<SkillsSettingsKey, string>

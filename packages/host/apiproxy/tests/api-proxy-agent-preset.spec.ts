@@ -113,6 +113,16 @@ async function harness(
   await ctx.plugin(UserQuestionService)
   ctx.provide('sessionPersistence', (persistence ?? { list: () => Promise.resolve([]) }) as never)
   if (presets !== undefined) ctx.provide('agentPresets', roster(presets, options.userIds) as never)
+  const workspaces = new Map<string, { id: string; path: string; attachSession: () => Promise<void> }>()
+  ctx.provide('workspaceRegistry', {
+    list: () => [...workspaces.values()],
+    resolveByPath: (path: string) => Promise.resolve(workspaces.get(path)),
+    create: (path: string, _title?: string) => {
+      const workspace = { id: 'no-repo', path, attachSession: () => Promise.resolve() }
+      workspaces.set(path, workspace)
+      return Promise.resolve(workspace)
+    },
+  } as never)
 
   const factory: AgentFactory = {
     async createAgent(_ownerCtx, options) {
@@ -380,7 +390,9 @@ describe('agentPreset.select', () => {
     // The host-stream opener reads the committed-workspace baseline; this
     // spec owns preset identity, so the stub suffices (api-proxy-commands
     // precedent).
-    ctx.provide('workspaceRegistry', { list: () => [] } as never)
+    if (ctx.get('workspaceRegistry') === undefined) {
+      ctx.provide('workspaceRegistry', { list: () => [] } as never)
+    }
     const abort = new AbortController()
     const frames: HostFrame[] = []
     const stream = api.events.host(request({}), abort.signal)
@@ -669,6 +681,39 @@ describe('skills over the layered host registry', () => {
 
     expect(response.result).toMatchObject({ ok: true, value: { skills: [] } })
     expect(seen).toEqual([undefined])
+  })
+
+  it('serves skill.catalog from the host registry at the default standing key', async () => {
+    const { api, ctx } = await harness(['standard'])
+    const seen: unknown[] = []
+    ctx.provide('skills', {
+      list: (options: { cwd?: string; scope?: unknown }) => {
+        seen.push({ cwd: options.cwd, scope: options.scope })
+        return Promise.resolve([{
+          name: 'badge',
+          description: 'built-in',
+          invocation: { modelInvocable: true, userInvocable: false },
+          source: 'bundled',
+          provider: 'dsh-badge',
+        }])
+      },
+    } as never)
+
+    const response = await api.skills.catalog(request({}))
+
+    expect(response.result).toMatchObject({
+      ok: true,
+      value: { skills: [{ name: 'badge', userInvocable: false, source: 'bundled', provider: 'dsh-badge' }] },
+    })
+    expect(seen).toEqual([{ cwd: expect.any(String), scope: standingKeys.get('standard') }])
+  })
+
+  it('says so when skill.catalog has no host registry', async () => {
+    const { api } = await harness(['standard'])
+    const response = await api.skills.catalog(request({}))
+    expect(response.result.ok).toBe(false)
+    const failure = response.result as { ok: false; error: { message: string } }
+    expect(failure.error.message).toContain('does not mount @deepseek-ai/dsh-skill')
   })
 })
 

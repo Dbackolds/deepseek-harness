@@ -24,6 +24,7 @@ import {
   reconcileProfilePlugins,
   resolveBundleDir,
   resolveProfileDir,
+  resolveProfilePnpm,
   runProfilePnpm,
   writeProfileManifest,
   writeProfilePatches,
@@ -364,9 +365,31 @@ describe('runProfilePnpm', () => {
     const previous = process.env.PATH
     process.env.PATH = ''
     try {
-      const result = runProfilePnpm({ profileDir: tmp(), args: ['--version'], stdio: 'pipe' })
+      const result = runProfilePnpm({
+        profileDir: tmp(), args: ['--version'], stdio: 'pipe', searchDirs: [], includeCorepack: false,
+      })
       expect(result.missingPnpm).toBe(true)
       expect(result.exitCode).toBe(127)
+    } finally {
+      process.env.PATH = previous
+    }
+  })
+
+  it('finds a well-known shim when PATH is a GUI-short list', () => {
+    if (process.platform === 'win32') return
+    const home = tmp()
+    const bin = join(home, '.npm-global', 'bin')
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\necho staged\n', { mode: 0o755 })
+    const previous = process.env.PATH
+    process.env.PATH = '/usr/bin:/bin'
+    try {
+      expect(resolveProfilePnpm([bin])).toBe(join(bin, 'pnpm'))
+      const result = runProfilePnpm({
+        profileDir: tmp(), args: ['--version'], stdio: 'pipe', searchDirs: [bin],
+      })
+      expect(result.missingPnpm).toBe(false)
+      expect(result.stdout).toContain('staged')
     } finally {
       process.env.PATH = previous
     }

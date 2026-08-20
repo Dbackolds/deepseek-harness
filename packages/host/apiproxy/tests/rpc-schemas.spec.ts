@@ -31,7 +31,10 @@ import {
   workspaceRenameRequestSchema, workspaceRenameValueSchema,
   workspaceShowRequestSchema, workspaceShowValueSchema, workspaceViewSchema,
 } from '../src/api/workspace.schema.ts'
-import { skillEntrySchema, skillListRequestSchema, skillListValueSchema } from '../src/api/skills.schema.ts'
+import {
+  skillCatalogEntrySchema, skillCatalogRequestSchema, skillCatalogValueSchema,
+  skillEntrySchema, skillListRequestSchema, skillListValueSchema,
+} from '../src/api/skills.schema.ts'
 import {
   agentPresetEntrySchema, agentPresetListValueSchema, agentPresetOpenDocumentValueSchema,
 } from '../src/api/agent-presets.schema.ts'
@@ -150,6 +153,21 @@ describe('sessions domain schemas', () => {
     expect(() => sessionIdSchema.parse('')).toThrow()
     expect(sessionSummarySchema.parse({ sessionId: 's1', updatedAt: 1, running: false, blank: true })).toMatchObject({ sessionId: 's1', blank: true })
     expect(sessionSummarySchema.parse({ sessionId: 's1', updatedAt: 1, running: true, blank: false, parentSessionId: 'p', cwd: '/x' }).cwd).toBe('/x')
+    expect(sessionSummarySchema.parse({
+      sessionId: 's1', updatedAt: 1, running: false, blank: true, origin: 'subagent',
+    }).origin).toBe('subagent')
+    expect(sessionSummarySchema.parse({
+      sessionId: 's1', updatedAt: 1, running: false, blank: true, origin: 'automation',
+    }).origin).toBe('automation')
+    expect(sessionListValueSchema.parse({
+      items: [
+        { sessionId: 's1', updatedAt: 1, running: false, blank: true },
+        { sessionId: 's2', updatedAt: 2, running: false, blank: true, origin: 'automation' },
+      ],
+    }).items).toHaveLength(2)
+    expect(() => sessionSummarySchema.parse({
+      sessionId: 's1', updatedAt: 1, running: false, blank: true, origin: 'fork',
+    })).toThrow()
     // blank is mandatory: a summary without it fails the parse.
     expect(() => sessionSummarySchema.parse({ sessionId: 's1', updatedAt: 1, running: false })).toThrow()
     const event = sessionEventSchema.parse({
@@ -461,6 +479,24 @@ describe('skills domain schemas', () => {
     // modelInvocable is required wire data: an entry without it fails.
     expect(() => skillEntrySchema.parse({ name: 'n', description: 'd' })).toThrow()
   })
+
+  it('validates the catalog request/value pair', () => {
+    expect(skillCatalogRequestSchema.parse({})).toEqual({})
+    expect(skillCatalogRequestSchema.parse({ sessionId: 's1' })).toEqual({})
+    const value = skillCatalogValueSchema.parse({ skills: [{
+      name: 'commit-helper',
+      description: 'Git commits',
+      modelInvocable: true,
+      userInvocable: false,
+      source: 'bundled',
+      provider: 'dsh-skill-filesystem',
+    }] })
+    expect(value.skills[0]?.userInvocable).toBe(false)
+    expect(value.skills[0]?.source).toBe('bundled')
+    expect(() => skillCatalogEntrySchema.parse({
+      name: 'n', description: 'd', modelInvocable: true, userInvocable: true, source: '', provider: 'p',
+    })).toThrow()
+  })
 })
 
 describe('goals domain schemas', () => {
@@ -550,6 +586,8 @@ describe('events frame schemas', () => {
     const frames = [
       { type: 'host/session-added', sessionId: 's', blank: true, parentSessionId: 'p' },
       { type: 'host/session-added', sessionId: 's', blank: true },
+      { type: 'host/session-added', sessionId: 's', blank: true, origin: 'subagent' },
+      { type: 'host/session-added', sessionId: 's', blank: true, origin: 'automation' },
       { type: 'host/session-removed', sessionId: 's' },
       { type: 'host/session-status', sessionId: 's', running: true },
       { type: 'host/agent-error', sessionId: 's', message: 'boom' },
@@ -566,6 +604,9 @@ describe('events frame schemas', () => {
       { type: 'stream/error', error: { code: 'internal', message: 'm', details: {} } },
     ]
     for (const frame of frames) expect(hostFrameSchema.parse(frame)).toMatchObject({ type: frame.type })
+    expect(() => hostFrameSchema.parse({
+      type: 'host/session-added', sessionId: 's', blank: true, origin: 'fork',
+    })).toThrow()
   })
 })
 

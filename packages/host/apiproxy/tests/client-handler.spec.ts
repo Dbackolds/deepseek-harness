@@ -97,7 +97,7 @@ function scriptedApi(overrides: {
       addFolder: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', folders: [], title: 't', sessionIds: [], createdAt: '0', updatedAt: '0' } }),
       removeFolder: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', folders: [], title: 't', sessionIds: [], createdAt: '0', updatedAt: '0' } }),
     },
-    skills: { list: r => ok(r, { skills: [] }), ...overrides.skills },
+    skills: { list: r => ok(r, { skills: [] }), catalog: r => ok(r, { skills: [] }), ...overrides.skills },
     git: {
       describe: r => ok(r, { currentBranch: 'main', detached: false, worktreePath: '/t', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] }),
       checkout: r => ok(r, { currentBranch: r.payload.branch, detached: false, worktreePath: '/t', isolated: false, dirtyCount: 0, unpushedCount: 0, branches: [] }),

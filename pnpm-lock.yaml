@@ -1466,6 +1466,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings-plugins':
         specifier: workspace:^
         version: link:../../client/ui-settings-plugins
+      '@deepseek-ai/dsh-client-ui-settings-skills':
+        specifier: workspace:^
+        version: link:../../client/ui-settings-skills
       '@deepseek-ai/dsh-client-ui-settings-subagents':
         specifier: workspace:^
         version: link:../../client/ui-settings-subagents
@@ -5263,6 +5266,9 @@ importers:
       '@deepseek-ai/dsh-goal':
         specifier: workspace:^
         version: link:../../goal/goal
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../util/home-paths
       '@deepseek-ai/dsh-host-directory-picker':
         specifier: workspace:^
         version: link:../directory-picker
@@ -6044,6 +6050,9 @@ importers:
       '@deepseek-ai/dsh-lsp-stdio':
         specifier: workspace:^
         version: link:../lsp-stdio
+      '@deepseek-ai/dsh-sandbox-policy':
+        specifier: workspace:^
+        version: link:../../sandbox/sandbox-policy
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
         version: link:../../core/session

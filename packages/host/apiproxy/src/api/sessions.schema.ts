@@ -48,6 +48,9 @@ export const sessionEventSchema = z.object({
   ignorable: z.literal(true).optional(),
 }) as unknown as z.ZodType<SessionEvent>
 
+/** Coarse durable origin on list rows and host/session-added. */
+export const sessionOriginSchema = z.enum(['subagent', 'automation'])
+
 /** SessionSummary row of session.list (`projections` reuses the history block's shape and schema). */
 export const sessionSummarySchema = z.object({
   sessionId: sessionIdSchema,
@@ -56,7 +59,7 @@ export const sessionSummarySchema = z.object({
   blank: z.boolean(),
   interrupted: z.boolean().optional(),
   parentSessionId: sessionIdSchema.optional(),
-  origin: z.literal('subagent').optional(),
+  origin: sessionOriginSchema.optional(),
   cwd: z.string().optional(),
   agentPreset: z.string().optional(),
   projections: z.lazy(() => sessionProjectionsBlockSchema).optional(),

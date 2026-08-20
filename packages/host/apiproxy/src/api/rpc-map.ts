@@ -61,6 +61,7 @@ export interface RpcMethodMap {
   'workspace.addFolder': WorkspaceApi['addFolder']
   'workspace.removeFolder': WorkspaceApi['removeFolder']
   'skill.list': SkillsApi['list']
+  'skill.catalog': SkillsApi['catalog']
   'git.describe': GitApi['describe']
   'git.checkout': GitApi['checkout']
   'git.createBranch': GitApi['createBranch']

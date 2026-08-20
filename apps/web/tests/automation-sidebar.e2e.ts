@@ -4,8 +4,17 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type {} from '@deepseek-ai/dsh-automation'
-import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
+  launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
+} from './scaffold.ts'
 import { connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
+
+const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/automation-sidebar', import.meta.url))
+const CREATE_EXPECTED = join(SNAPSHOT_DIR, 'create.expected.md')
+const MODE = webSnapshotMode()
 
 describe('web e2e: sidebar Automation under New Session', () => {
   let scaffold: WebScaffold
@@ -38,6 +47,9 @@ describe('web e2e: sidebar Automation under New Session', () => {
     await expect.poll(() => pageView.getByRole('switch', { name: '运行会话时保持电脑唤醒。' }).count(), { timeout: 10_000 }).toBe(1)
     await expect.poll(() => pageView.getByText('定时任务模板').count(), { timeout: 10_000 }).toBe(1)
     await pageView.getByRole('button', { name: '创建定时任务' }).click()
+    await pageView.getByRole('form', { name: '新建规则' }).waitFor({ timeout: 10_000 })
+    const createSnapshot = await captureStableAria(page, '[role="region"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(CREATE_EXPECTED, createSnapshot, MODE)
     await pageView.getByPlaceholder('新会话要执行的任务').fill('ping from automation e2e')
     await pageView.getByLabel('延迟秒数').fill('3600')
     await pageView.getByRole('button', { name: '创建' }).click()
@@ -48,5 +60,6 @@ describe('web e2e: sidebar Automation under New Session', () => {
     await expect.poll(() => pageView.getByText('ping from automation e2e').count(), { timeout: 10_000 }).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['create.expected.md', 'empty.expected.md'])
   })
 })

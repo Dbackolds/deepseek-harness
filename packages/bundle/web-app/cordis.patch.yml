@@ -221,6 +221,9 @@
     - id: ui-settings-subagents
       name: '@deepseek-ai/dsh-client-ui-settings-subagents'
 
+    - id: ui-settings-skills
+      name: '@deepseek-ai/dsh-client-ui-settings-skills'
+
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
       disabled: true

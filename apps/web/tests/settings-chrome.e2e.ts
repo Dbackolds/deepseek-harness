@@ -106,6 +106,7 @@ describe('web e2e: settings modal and General preferences', () => {
     // Plugins is a read-only projection of the same assembled Loader tree.
     // Capture one stable shipped row rather than the whole inventory so adding
     // an unrelated plugin does not rewrite this surface's golden.
+    await dialog.getByRole('button', { name: 'Skills', exact: true }).waitFor({ timeout: 10_000 })
     await dialog.getByRole('button', { name: '插件', exact: true }).click()
     await dialog.getByRole('heading', { name: '插件', exact: true }).waitFor({ timeout: 10_000 })
     await dialog.getByRole('tab', { name: '插件列表', exact: true }).click()
