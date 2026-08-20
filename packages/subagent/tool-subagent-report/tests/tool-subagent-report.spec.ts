@@ -558,7 +558,7 @@ describe('dsh-tool-subagent-report', () => {
     // Next-step delivery wakes a parked parent and lets a running parent act at
     // its nearest safe boundary.
     expect(tool.Config({}).reportDelivery).toBe('next-step')
-    expect(() => tool.Config({ reportDelivery: 'wakeup' } as never)).toThrow()
+    expect(() => tool.Config({ reportDelivery: 'next-step' } as never)).toThrow()
     expect(() => tool.Config({ reportDelivery: 'shout' } as never)).toThrow()
   })
 
@@ -605,7 +605,7 @@ describe('dsh-tool-subagent-report result independence', () => {
   })
 
   it('wakes an idle parent even when reportBusy is queue', async () => {
-    const { ctx, parent, adapter } = await setup({ config: { reportDelivery: 'wakeup' } })
+    const { ctx, parent, adapter } = await setup({ config: { reportDelivery: 'next-step' } })
     ctx.provide('settings', { get: () => ({ reportBusy: 'queue' }) })
     const { child } = await startChild(ctx, parent)
     const enqueues: string[] = []
@@ -623,7 +623,7 @@ describe('dsh-tool-subagent-report result independence', () => {
   })
 
   it('steers a wakeup report into a busy parent when reportBusy is steer', async () => {
-    const { ctx, parent } = await setup({ config: { reportDelivery: 'wakeup' } })
+    const { ctx, parent } = await setup({ config: { reportDelivery: 'next-step' } })
     parent.followup(createUserMessage({
       content: [{ type: 'text', text: 'stay busy' }],
       source: { kind: 'user' },
@@ -644,7 +644,7 @@ describe('dsh-tool-subagent-report result independence', () => {
   })
 
   it('queues a wakeup report behind a busy parent when reportBusy is queue', async () => {
-    const { ctx, parent } = await setup({ config: { reportDelivery: 'wakeup' } })
+    const { ctx, parent } = await setup({ config: { reportDelivery: 'next-step' } })
     ctx.provide('settings', { get: () => ({ reportBusy: 'queue' }) })
     parent.followup(createUserMessage({
       content: [{ type: 'text', text: 'stay busy' }],
