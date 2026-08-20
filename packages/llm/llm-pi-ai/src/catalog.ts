@@ -914,8 +914,6 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
       + ' must be listed in configuration')
   }
   const routeApi = sharedCatalogApi(defaults) ?? providerApi
-  const routeCompatDefined = request.compat?.thinkingFormat !== undefined
-    || request.compat?.supportsReasoningEffort !== undefined
   // Vocabulary before protocols: a withheld or undeclared switch is refused
   // wherever it is written, so it cannot look applied on a route whose models
   // never reach the protocol that would have taken it.

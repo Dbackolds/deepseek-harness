@@ -620,7 +620,8 @@ describe('dsh-tool-subagent-report result independence', () => {
     await vi.waitFor(() => {
       expect(adapter.requests.some(request => request.sessionId === parent.id)).toBe(true)
     })
-  }
+  })
+
   it('steers a wakeup report into a busy parent when reportBusy is steer', async () => {
     const { ctx, parent } = await setup({ config: { reportDelivery: 'wakeup' } })
     parent.followup(createUserMessage({
@@ -640,7 +641,8 @@ describe('dsh-tool-subagent-report result independence', () => {
     expect(enqueues).toEqual(['steering'])
     expect(parent.inbox.nextStep).toHaveLength(1)
     expect(parent.inbox.nextTurn).toHaveLength(0)
-  }
+  })
+
   it('queues a wakeup report behind a busy parent when reportBusy is queue', async () => {
     const { ctx, parent } = await setup({ config: { reportDelivery: 'wakeup' } })
     ctx.provide('settings', { get: () => ({ reportBusy: 'queue' }) })
@@ -660,5 +662,5 @@ describe('dsh-tool-subagent-report result independence', () => {
     expect((await callReport(ctx, child, 'BUSY_QUEUE')).isError).toBe(false)
     expect(enqueues).toEqual(['queued'])
     expect(parent.inbox.nextTurn.length).toBeGreaterThan(0)
-  }
+  })
 })

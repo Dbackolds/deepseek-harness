@@ -135,15 +135,6 @@ export const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES = 1024
 /** Conversation message event types (the pagination counting unit). */
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
 
-/** Decode the browser payload while rejecting non-canonical base64 forms. */
-function decodeBase64(data: string): Uint8Array {
-  const decoded = Buffer.from(data, 'base64')
-  if (data.length === 0 || decoded.toString('base64') !== data) {
-    throw new AttachmentError('Image upload is not canonical base64.', 'INVALID_IMAGE_BASE64')
-  }
-  return new Uint8Array(decoded)
-}
-
 /**
  * Replace every text block with the requested text while keeping the original
  * non-text blocks, including already-admitted images, in their original order.
