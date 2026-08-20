@@ -10,7 +10,7 @@ The Web chat already stores each message's event time, but the clock lives insid
 
 ## Decision
 
-Every user, steering, and assistant message row renders its event clock as an always-visible `<time>` label. `MessageClock` formats `node.time` through `formatMessageClock` and sits on the message band itself: a right-aligned user/steering bubble keeps the clock at the left of the bubble max-width track so short and long bubbles share one clock column, and assistant narration keeps it to the right of the markdown body. Same calendar day prints `h:mm` plus a locale meridiem (`上午` / `下午`, `AM` / `PM`); earlier this year prefixes the `clock.md` date template; other years prefix `clock.ymd`. `useCalendarDay` still widens the label after local midnight. Pending steering has no durable event time, so it mounts no clock.
+Every user, steering, and assistant message row renders its event clock as an always-visible `<time>` label. `MessageClock` formats `node.time` through `formatMessageClock` and sits on the message band itself: a right-aligned user/steering bubble keeps the clock flush against the bubble's left edge, and assistant narration keeps it to the right of the markdown body. Same calendar day prints `h:mm` plus a locale meridiem (`上午` / `下午`, `AM` / `PM`); earlier this year prefixes the `clock.md` date template; other years prefix `clock.ymd`. `useCalendarDay` still widens the label after local midnight. Pending steering has no durable event time, so it mounts no clock.
 
 The IconActions row no longer owns the clock. Settled-turn metrics (`Ran for`, TTFT, tok/s) stay on that row and remain visible when present. Copy and branch stay always-visible icon controls.
 
