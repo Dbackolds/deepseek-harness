@@ -31,6 +31,8 @@ describe('dsh-skill-session-control', () => {
     expect(loaded?.content).toContain('session_control_reorder')
     expect(loaded?.content).toContain('session_control_workspaces')
     expect(loaded?.content).toContain('session_control_rename')
+    expect(loaded?.content).toContain('archive=only')
+    expect(loaded?.content).toContain('The session log stays readable.')
     expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: resourcePath })
 
     await fiber.dispose()

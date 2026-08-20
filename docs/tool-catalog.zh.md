@@ -1844,7 +1844,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ### `session_control_search`
 
-列出全部逻辑会话及其实时驱动状态。可选 query 匹配会话 id、工作目录或标题。在停止某个会话、向其发送后续消息，或改变其归档/分组前，用它查找对话。结果按最新优先，且不搜索消息正文。
+列出全部逻辑会话及其实时驱动状态。可选 query 匹配会话 id、工作目录或标题。已归档对话默认包含，并以 `archived` 标记。archive=all（默认）包含它们，only 只保留它们，exclude 丢掉它们。在停止某个会话、向其发送后续消息、读取其日志，或改变其归档/分组前，用它查找对话。分组视图仍隐藏已归档行。结果按最新优先，且不搜索消息正文。
 
 ```json
 {
@@ -1857,6 +1857,15 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
     "limit": {
       "type": "integer",
       "description": "Optional positive result cap. Defaults to the service configuration."
+    },
+    "archive": {
+      "type": "string",
+      "description": "How to treat archived conversations. all (default) includes them, only keeps them, and exclude drops them. The filter runs before limit.",
+      "enum": [
+        "all",
+        "only",
+        "exclude"
+      ]
     }
   }
 }

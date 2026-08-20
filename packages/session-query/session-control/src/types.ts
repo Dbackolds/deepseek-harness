@@ -9,6 +9,12 @@ export type SessionControlActivity = 'running' | 'idle' | 'ready'
 /** How a later message should enter the target inbox. */
 export type SessionControlDeliveryMode = 'queue' | 'steer'
 
+/**
+ * How search treats registry-global archived membership.
+ * `all` includes archived rows, `only` keeps them, and `exclude` drops them.
+ */
+export type SessionControlArchiveFilter = 'all' | 'only' | 'exclude'
+
 /** One logical session plus its live driver status. */
 export interface SessionControlEntry {
   /** Opaque session identity. */
@@ -34,6 +40,11 @@ export interface SessionControlEntry {
   live: boolean
   /** Whether the active persistence backend currently materializes the id. */
   persisted: boolean
+  /**
+   * Whether the id is in `ctx.workspaceRegistry.archivedSessionIds`.
+   * False when the registry is not mounted.
+   */
+  archived: boolean
 }
 
 /** Search request over the complete logical corpus. */
@@ -42,6 +53,11 @@ export interface SessionControlSearchRequest {
   query?: string
   /** Optional positive result cap; defaults to the service configuration. */
   limit?: number
+  /**
+   * How to treat registry-global archived membership. Defaults to `all`.
+   * The filter runs before `limit`.
+   */
+  archive?: SessionControlArchiveFilter
 }
 
 /** Receipt returned once a stop request is admitted. */

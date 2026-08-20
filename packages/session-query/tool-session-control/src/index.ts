@@ -47,9 +47,11 @@ function registerDirectoryTools(ctx: Context): void {
     name: 'session_control_search',
     description:
       'List every logical session with live driver status. Optional query matches session id, '
-      + 'working directory, or title. Use this to find a conversation before stopping it, '
-      + 'sending it a later message, or changing its archive or group. Results are newest-first '
-      + 'and do not search message bodies.',
+      + 'working directory, or title. Archived conversations are included by default and marked '
+      + '`archived`. archive=all (default) includes them, only keeps them, and exclude drops them. '
+      + 'Use this to find a conversation before stopping it, sending it a later message, reading '
+      + 'its log, or changing its archive or group. Grouping surfaces still hide archived rows. '
+      + 'Results are newest-first and do not search message bodies.',
     parameters: {
       query: {
         type: 'string',
@@ -58,6 +60,13 @@ function registerDirectoryTools(ctx: Context): void {
       limit: {
         type: 'integer',
         description: 'Optional positive result cap. Defaults to the service configuration.',
+      },
+      archive: {
+        type: 'string',
+        enum: ['all', 'only', 'exclude'],
+        description:
+          'How to treat archived conversations. all (default) includes them, only keeps them, '
+          + 'and exclude drops them. The filter runs before limit.',
       },
     },
     output: {
@@ -71,6 +80,7 @@ function registerDirectoryTools(ctx: Context): void {
           {
             ...args.query === undefined ? {} : { query: args.query },
             ...args.limit === undefined ? {} : { limit: args.limit },
+            ...args.archive === undefined ? {} : { archive: args.archive },
           },
           exec.signal,
         )
@@ -82,6 +92,7 @@ function registerDirectoryTools(ctx: Context): void {
           row.cwd === undefined ? '' : ' cwd=' + row.cwd,
           row.parentSessionId === undefined ? '' : ' parent=' + row.parentSessionId,
           row.origin === undefined ? '' : ' origin=' + row.origin,
+          row.archived ? ' archived' : '',
         ].join(' ')).join('\n')
       } catch (error: unknown) {
         throw formatToolError(error)

@@ -8,11 +8,19 @@ Source: [`packages/session-query/session-control/src/types.ts`](../../packages/s
 
 ## Directory rows
 
-`SessionControlEntry` is one logical session plus its live driver status. `ready` names a corpus identity with no live Agent; `search()` never resumes that identity.
+`SessionControlEntry` is one logical session plus its live driver status. `ready` names a corpus identity with no live Agent; `search()` never resumes that identity. `archived` is registry-global grouping membership and is `false` when `ctx.workspaceRegistry` is not mounted.
 
 ```ts type-equiv
 /** Live driver activity for one logical session. */
 type SessionControlActivity = 'running' | 'idle' | 'ready'
+```
+
+```ts type-equiv
+/**
+ * How search treats registry-global archived membership.
+ * `all` includes archived rows, `only` keeps them, and `exclude` drops them.
+ */
+type SessionControlArchiveFilter = 'all' | 'only' | 'exclude'
 ```
 
 ```ts type-equiv
@@ -41,12 +49,17 @@ interface SessionControlEntry {
   live: boolean
   /** Whether the active persistence backend currently materializes the id. */
   persisted: boolean
+  /**
+   * Whether the id is in `ctx.workspaceRegistry.archivedSessionIds`.
+   * False when the registry is not mounted.
+   */
+  archived: boolean
 }
 ```
 
 ## Search, stop, and send
 
-`search()` filters id, cwd, and folded title. `stop()` cancels a live turn and keeps the inbox. `send()` delivers one text block to a live Agent and refuses to take a resume handle.
+`search()` filters id, cwd, and folded title. Optional `archive` defaults to `all` and may be `only` or `exclude`; that filter runs before `limit`. `stop()` cancels a live turn and keeps the inbox. `send()` delivers one text block to a live Agent and refuses to take a resume handle.
 
 ```ts type-equiv
 /** Search request over the complete logical corpus. */
@@ -55,6 +68,11 @@ interface SessionControlSearchRequest {
   query?: string
   /** Optional positive result cap; defaults to the service configuration. */
   limit?: number
+  /**
+   * How to treat registry-global archived membership. Defaults to `all`.
+   * The filter runs before `limit`.
+   */
+  archive?: SessionControlArchiveFilter
 }
 ```
 
@@ -129,7 +147,10 @@ Trusted directory, stop, and delivery operations over the logical session corpus
 ```ts cordis-catalog
 /**
  * Search every logical session and attach live driver status.
- * @param request - optional case-insensitive query and result cap.
+ * Optional `archive` defaults to `all` and includes archived rows from
+ * `ctx.workspaceRegistry` when that service is mounted. The filter runs
+ * before `limit`.
+ * @param request - optional case-insensitive query, result cap, and archive filter.
  * @param signal - optional cancellation for persistence listing and title reads.
  * @returns matching directory rows in newest-first corpus order.
  */

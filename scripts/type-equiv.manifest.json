@@ -707,6 +707,11 @@
     },
     {
       "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlArchiveFilter",
+      "source": "packages/session-query/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
       "symbol": "SessionControlEntry",
       "source": "packages/session-query/session-control/src/types.ts"
     },

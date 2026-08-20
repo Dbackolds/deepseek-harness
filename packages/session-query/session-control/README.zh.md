@@ -6,8 +6,8 @@
 
 ## 公共 API
 
-- `search(request?, signal?)` 从 `ctx.sessionQuery.listSessions()` 列出在线优先语料，为每行附加最新标题与在线 Agent 状态，并以不区分大小写的子串过滤会话 id、cwd 和标题。空查询按最新优先返回最多 `limit` 条。不搜索消息正文。
-- `get(sessionId, signal?)` 返回一行目录。缺失身份以 `SESSION_CONTROL_SESSION_NOT_FOUND` 失败。
+- `search(request?, signal?)` 从 `ctx.sessionQuery.listSessions()` 列出在线优先语料，为每行附加最新标题、在线 Agent 状态，以及挂载 `ctx.workspaceRegistry` 时的注册表级 `archived` 位。它以不区分大小写的子串过滤会话 id、cwd 和标题。`archive` 默认为 `all`，也可为 `only` 或 `exclude`；该过滤在 `limit` 之前生效。没有注册表时每行都是 `archived: false`，且 `only` 为空。空查询按最新优先返回最多 `limit` 条。不搜索消息正文。
+- `get(sessionId, signal?)` 返回一行目录，包含 `archived`。缺失身份以 `SESSION_CONTROL_SESSION_NOT_FOUND` 失败。
 - `stop(sessionId, signal?)` 以 `keepInbox: true` 取消在线 Agent 的当前轮次。已知身份若没有在线 Agent，则是被接受的空操作。该调用从不恢复冷会话。
 - `send(request, signal?)` 通过 `followup()`（`queue`）或 `steer()` 投递一块非空文本。必须有在线 Agent。已知但仅存于存储的身份以 `SESSION_CONTROL_RESUME_REQUIRED` 失败，而不会调用 `ctx.agents.resume()` 拿走调用方或 subagent continuation manager 必须持有的 `AgentHandle`。未知身份以 `SESSION_CONTROL_SESSION_NOT_FOUND` 失败。
 
@@ -18,6 +18,8 @@
 | `running` | 在线 Agent 有活动驱动。 |
 | `idle` | 在线 Agent 已附着且处于轮次之间。 |
 | `ready` | 身份存在于逻辑语料中，且没有在线 Agent。 |
+
+`archived` 与活动状态无关：它是分组隐藏，不是语料删除。仅当该 id 位于 `ctx.workspaceRegistry.archivedSessionIds` 时为 `true`。
 
 ## 配置
 

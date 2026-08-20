@@ -332,6 +332,12 @@ describe('dsh-tool-session-control', () => {
     const again = await callTool(ctx, 'session_control_archive', { session_id: 'kept' })
     expect(again.isError).toBe(false)
 
+    const all = await callTool(ctx, 'session_control_search', { query: 'kept' })
+    expect(text(all)).toContain('kept')
+    expect(text(all)).toContain('archived')
+    expect(text(await callTool(ctx, 'session_control_search', { archive: 'only' }))).toContain('archived')
+    expect(text(await callTool(ctx, 'session_control_search', { archive: 'exclude' }))).toBe('No matching sessions.')
+
     const unarchived = await callTool(ctx, 'session_control_unarchive', { session_id: 'kept' })
     expect(unarchived.isError).toBe(false)
     expect(unarchived.value).toEqual({ sessionId: 'kept', archived: false })

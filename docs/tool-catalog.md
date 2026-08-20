@@ -1840,7 +1840,7 @@ Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages
 
 ### `session_control_search`
 
-List every logical session with live driver status. Optional query matches session id, working directory, or title. Use this to find a conversation before stopping it, sending it a later message, or changing its archive or group. Results are newest-first and do not search message bodies.
+List every logical session with live driver status. Optional query matches session id, working directory, or title. Archived conversations are included by default and marked `archived`. archive=all (default) includes them, only keeps them, and exclude drops them. Use this to find a conversation before stopping it, sending it a later message, reading its log, or changing its archive or group. Grouping surfaces still hide archived rows. Results are newest-first and do not search message bodies.
 
 ```json
 {
@@ -1853,6 +1853,15 @@ List every logical session with live driver status. Optional query matches sessi
     "limit": {
       "type": "integer",
       "description": "Optional positive result cap. Defaults to the service configuration."
+    },
+    "archive": {
+      "type": "string",
+      "description": "How to treat archived conversations. all (default) includes them, only keeps them, and exclude drops them. The filter runs before limit.",
+      "enum": [
+        "all",
+        "only",
+        "exclude"
+      ]
     }
   }
 }
