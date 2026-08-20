@@ -16,5 +16,5 @@ None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
 
-- **Undeclared remote browsers get no durable settings** — a page whose Host is neither loopback nor a declared `trustedHosts` authority cannot call settings RPCs, so a scope bound there starts `unavailable` and every row it backs is inert. A `--trusted-host` browser writes the Host document.
+- **Undeclared remote browsers get no durable settings** — a page whose Host is neither loopback nor a declared `trustedHosts` authority cannot call settings RPCs, so a bound scope stays `loading` after a failed read and every row it backs stays on product defaults. A `--trusted-host` browser writes the Host document.
 - **One field per write** — `set` sends a single `set` op, so a row that must move two fields together has no transaction and publishes two revisions.

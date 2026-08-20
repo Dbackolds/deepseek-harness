@@ -468,8 +468,8 @@ describe('connection node half over a real HTTP server', () => {
     const { routes, dispose } = await mounted({ trustedHosts: ['harness.example'] })
     const { port, close } = await serve(routes)
     try {
-      // Reads are as privileged as writes: describe returns the exposed
-      // configuration, and credentials.describe probes arbitrary env-var names.
+      // Credentials describe still probes env-var names; settings describe
+      // rides the declared authority with ordinary /api reads.
       for (const method of [
         'settings.openDocument',
         'credentials.describe', 'credentials.set', 'credentials.unset',

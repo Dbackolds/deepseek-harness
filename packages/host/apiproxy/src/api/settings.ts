@@ -55,9 +55,9 @@ export interface SettingsApi {
    * Describe every registered namespace: redacted layered values plus the
    * serialized schema a client renders its form from. `hasDocument` reports
    * whether a file-backed provider owns a local document without exposing its
-   * Host path. Loopback and `--trusted-host` browsers may call this;
-   * `writable: false` (read-only provider) tells the client to disable every
-   * write control.
+   * Host path. Loopback and `--trusted-host` browsers may call this, the
+   * same grant as `update` / `replace` / `mutate`; `writable: false`
+   * (read-only provider) tells the client to disable every write control.
    */
   describe(request: RpcRequest<{}>): Promise<RpcResponse<{
     writable: boolean
@@ -70,6 +70,7 @@ export interface SettingsApi {
    * hand it to the platform text-document opener. macOS forces a text editor;
    * Linux and Windows use the desktop file association. The request carries
    * no path, so the browser cannot choose an arbitrary Host filesystem target.
+   * This method stays loopback-only: it opens a native editor on the Host.
    */
   openDocument(
     request: RpcRequest<{}>, signal: AbortSignal,
@@ -79,8 +80,9 @@ export interface SettingsApi {
    * Merge a patch into one namespace's user layer (validate → persist →
    * commit). Secret-role fields may be INCLUDED in the patch (write-only
    * direction); a form that leaves a secret untouched simply omits it and the
-   * merge preserves the stored value. Responds with the namespace's new
-   * redacted view; a schema or storage rejection is `settings-rejected`.
+   * merge preserves the stored value. Loopback and `--trusted-host` browsers
+   * may call this. Responds with the namespace's new redacted view; a schema
+   * or storage rejection is `settings-rejected`.
    */
   update(request: RpcRequest<{ ns: string; patch: object; expectedRevision?: number }>): Promise<RpcResponse<SettingsNamespaceView>>
 
@@ -89,7 +91,8 @@ export interface SettingsApi {
    * merge cannot express (`section: {}` resets to composition defaults). Keys
    * absent from `section` are dropped, secrets included: a client must first
    * fold the descriptor's `user` layer (and re-supply any secret it wants to
-   * keep) or accept the reset.
+   * keep) or accept the reset. Loopback and `--trusted-host` browsers may
+   * call this.
    */
   replace(request: RpcRequest<{ ns: string; section: object; expectedRevision?: number }>): Promise<RpcResponse<SettingsNamespaceView>>
 
@@ -98,7 +101,8 @@ export interface SettingsApi {
    * against the section as stored — NOT against whatever the caller last
    * read. This is the removal path for any client holding the redacted
    * descriptor: it names the field it means, so a secret the wire never
-   * returned cannot be deleted as a side effect. `replace` remains the
+   * returned cannot be deleted as a side effect. Loopback and
+   * `--trusted-host` browsers may call this. `replace` remains the
    * deliberate wholesale reset.
    */
   mutate(

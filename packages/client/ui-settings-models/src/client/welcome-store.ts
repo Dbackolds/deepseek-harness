@@ -24,7 +24,7 @@ function acknowledgementOf(view: SettingsNamespaceView): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-/** Coordinates durable Host acknowledgement or a process-local remote fallback. */
+/** Coordinates durable Host acknowledgement, with an optional process-local fallback. */
 export class WelcomeNoticeStore {
   /** uSES-safe state source shared by the registered welcome step. */
   readonly store: SnapshotStore<WelcomeNoticeState> = createSnapshotStore({
