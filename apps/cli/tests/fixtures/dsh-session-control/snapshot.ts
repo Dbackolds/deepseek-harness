@@ -28,6 +28,7 @@ try {
     status: 'idle',
     send: () => {},
     followup: () => {},
+    continueFromSurface: () => {},
     steer: () => {},
     inject: () => { throw new Error('dsh-session-control snapshot must receive the catalog at the step boundary') },
     cancel: () => {},

@@ -741,6 +741,7 @@ describe('sessions.prompt synchronous rejection', () => {
       status: 'idle',
       ctx,
       followup: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
+      continueFromSurface: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
       steer: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
     } as unknown as Agent)
     const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })

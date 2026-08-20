@@ -110,29 +110,31 @@ describe('MessageItem arms', () => {
     const rewriteAt = vi.fn()
     render(
       <UserMessageNodeView
-        node={{
-          key: 'user:1',
-          kind: 'user',
-          id: '1',
-          target: 'chat',
-          anchorSeq: 1,
-          location: { kind: 'session' },
-          visibility: 'visible',
-          data: {
+        {...({
+          node: {
+            key: 'user:1',
             kind: 'user',
-            seq: 1,
-            time: 1_000,
-            content: [{ type: 'text', text: 'hello bubble' }] as never,
-            source: null,
+            id: '1',
+            target: 'chat',
+            anchorSeq: 1,
+            location: { kind: 'session' },
+            visibility: 'visible',
+            data: {
+              kind: 'user',
+              seq: 1,
+              time: 1_000,
+              content: [{ type: 'text', text: 'hello bubble' }] as never,
+              source: null,
+            },
           },
-        }}
-        openFile={() => {}}
-        inspectCall={() => {}}
-        forkAt={() => {}}
-        rewriteAt={rewriteAt}
-        loadImage={() => Promise.reject(new Error('unused'))}
-        fileMentions={() => undefined}
-        t={t}
+          openFile: () => {},
+          inspectCall: () => {},
+          forkAt: () => {},
+          rewriteAt,
+          loadImage: () => Promise.reject(new Error('unused')),
+          fileMentions: () => undefined,
+          t,
+        } as unknown as ChatNodeViewProps<'user'>)}
       />,
     )
     expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
@@ -148,29 +150,31 @@ describe('MessageItem arms', () => {
     const rewriteAt = vi.fn()
     render(
       <UserMessageNodeView
-        node={{
-          key: 'user:3',
-          kind: 'user',
-          id: '3',
-          target: 'chat',
-          anchorSeq: 3,
-          location: { kind: 'session' },
-          visibility: 'visible',
-          data: {
+        {...({
+          node: {
+            key: 'user:3',
             kind: 'user',
-            seq: 3,
-            time: 3_000,
-            content: [{ type: 'text', text: 'keep me' }] as never,
-            source: null,
+            id: '3',
+            target: 'chat',
+            anchorSeq: 3,
+            location: { kind: 'session' },
+            visibility: 'visible',
+            data: {
+              kind: 'user',
+              seq: 3,
+              time: 3_000,
+              content: [{ type: 'text', text: 'keep me' }] as never,
+              source: null,
+            },
           },
-        }}
-        openFile={() => {}}
-        inspectCall={() => {}}
-        forkAt={() => {}}
-        rewriteAt={rewriteAt}
-        loadImage={() => Promise.reject(new Error('unused'))}
-        fileMentions={() => undefined}
-        t={t}
+          openFile: () => {},
+          inspectCall: () => {},
+          forkAt: () => {},
+          rewriteAt,
+          loadImage: () => Promise.reject(new Error('unused')),
+          fileMentions: () => undefined,
+          t,
+        } as unknown as ChatNodeViewProps<'user'>)}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '编辑消息' }))
@@ -193,30 +197,32 @@ describe('MessageItem arms', () => {
   it('steering bubbles keep copy only even when rewriteAt is supplied', () => {
     render(
       <UserMessageNodeView
-        node={{
-          key: 'steering:2',
-          kind: 'steering',
-          id: '2',
-          target: 'chat',
-          anchorSeq: 2,
-          location: { kind: 'session' },
-          visibility: 'visible',
-          data: {
+        {...({
+          node: {
+            key: 'steering:2',
             kind: 'steering',
-            messageId: 'steer-1' as never,
-            seq: 2,
-            time: 2_000,
-            content: [{ type: 'text', text: 'steer now' }] as never,
-            source: null,
+            id: '2',
+            target: 'chat',
+            anchorSeq: 2,
+            location: { kind: 'session' },
+            visibility: 'visible',
+            data: {
+              kind: 'steering',
+              messageId: 'steer-1' as never,
+              seq: 2,
+              time: 2_000,
+              content: [{ type: 'text', text: 'steer now' }] as never,
+              source: null,
+            },
           },
-        }}
-        openFile={() => {}}
-        inspectCall={() => {}}
-        forkAt={() => {}}
-        rewriteAt={() => {}}
-        loadImage={() => Promise.reject(new Error('unused'))}
-        fileMentions={() => undefined}
-        t={t}
+          openFile: () => {},
+          inspectCall: () => {},
+          forkAt: () => {},
+          rewriteAt: () => {},
+          loadImage: () => Promise.reject(new Error('unused')),
+          fileMentions: () => undefined,
+          t,
+        } as unknown as ChatNodeViewProps<'steering'>)}
       />,
     )
     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()

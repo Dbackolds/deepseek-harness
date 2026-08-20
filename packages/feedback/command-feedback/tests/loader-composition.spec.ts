@@ -40,6 +40,7 @@ function agent(ctx: Context): Agent {
     get status() { return status },
     send: () => {},
     followup: () => {},
+    continueFromSurface: () => {},
     steer: () => {},
     inject: () => {},
     cancel() { status = 'idle' },

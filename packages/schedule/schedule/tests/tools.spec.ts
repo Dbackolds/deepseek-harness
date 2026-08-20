@@ -36,6 +36,7 @@ function stubAgent(ctx: Context, id: string): Agent {
     runMaintenance: task => task(signal),
     cancel(_cause: AgentCancelCause) {},
     whenIdle: () => Promise.resolve(),
+    continueFromSurface() {},
     followup(_message: UserMessage) {},
     steer(_message: UserMessage) {},
     inject(_message: UserMessage) {},

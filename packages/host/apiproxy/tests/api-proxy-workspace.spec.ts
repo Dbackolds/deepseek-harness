@@ -49,6 +49,7 @@ function stubAgent(session: Session): Agent {
     ctx: new Context(),
     send: () => {},
     followup: () => {},
+    continueFromSurface: () => {},
     steer: () => ({ outcome: Promise.resolve({ status: 'rejected' as const }) }),
     inject: () => {},
     cancel() {},

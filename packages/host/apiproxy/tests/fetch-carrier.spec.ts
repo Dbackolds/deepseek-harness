@@ -99,6 +99,9 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async fork(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { sessionId: 's-fork' as never } } }
       },
+      async rewrite(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { accepted: true as const } } }
+      },
       async prompt(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { accepted: true as const } } }
       },

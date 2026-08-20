@@ -56,6 +56,7 @@ function scriptedApi(overrides: {
       rename: r => ok(r, { title: 'renamed', seq: 0 }),
       rehome: r => ok(r, { workspaceId: 'w' as never, path: '/proj', cwd: '/proj' }),
       fork: r => ok(r, { sessionId: sid('s-fork') }),
+      rewrite: r => ok(r, { accepted: true as const }),
       prompt: r => ok(r, { accepted: true as const }),
       attachment: r => ok(r, {
         attachment: { attachmentId: 'a' as never, mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
@@ -242,7 +243,7 @@ describe('unary round trip', () => {
   })
 
   it('routes session rewrite with its current-surface prompt through the wire', async () => {
-    let seen: RpcRequest<{ sessionId: SessionId; atSeq: number; content: { type: 'text'; text: string }[] }> | undefined
+    let seen: Parameters<ApiProxy['sessions']['rewrite']>[0] | undefined
     const api = scriptedApi({
       sessions: {
         rewrite: (request) => {

@@ -101,6 +101,7 @@ function sessionAgent(session: Session, id = 'agent'): Agent {
     ctx: new Context(),
     send: () => {},
     followup: () => {},
+    continueFromSurface: () => {},
     steer: () => {},
     inject: () => { throw new Error('tmux-context must append directly to the open step') },
     cancel() {},

@@ -537,6 +537,7 @@ describe('completion notices across scoped mounts', () => {
       ctx: agentScope.ctx,
       inject: () => {},
       followup: () => {},
+      continueFromSurface: () => {},
       steer,
       status: 'running' as const,
       session: { id: SessionId('sess-scoped'), header: { version: 0, id: SessionId('sess-scoped'), createdAt: 0 } },

@@ -88,6 +88,7 @@ async function harness(): Promise<RuntimeHarness> {
       order.push('whenIdle')
       return controls.idle.promise
     },
+    continueFromSurface() {},
     followup(message: UserMessage) {
       order.push('followup')
       controls.onFollowup?.()

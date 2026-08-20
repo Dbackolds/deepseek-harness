@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -452,7 +453,7 @@ describe('sessions.rewrite', () => {
     source.append('turn/start', { turn: 1 })
     source.append('user/message', createUserMessage({
       content: [
-        { type: 'image', attachment: { attachmentId: 'att-keep', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+        { type: 'image', attachment: { attachmentId: AttachmentId('att-keep'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
         { type: 'text', text: 'caption' },
       ],
       source: { kind: 'user' },
@@ -479,7 +480,7 @@ describe('sessions.rewrite', () => {
     expect(replacement?.type).toBe('user/message')
     if (replacement?.type !== 'user/message') return
     expect(replacement.data.content).toEqual([
-      { type: 'image', attachment: { attachmentId: 'att-keep', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+      { type: 'image', attachment: { attachmentId: AttachmentId('att-keep'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
       { type: 'text', text: 'new caption' },
     ])
     expect(replacement.data.source).toMatchObject({ kind: 'user', clientTimeZone: 'UTC' })
