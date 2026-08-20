@@ -33,7 +33,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`, `ctx.workflowEngine`, `ctx.subagents`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents every fresh round)` | `tool/call`, `tool/result`, `workflow and child session events during execution` | - | A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap. |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.tools`, `ctx.agents`, `ctx.skills` | `tool/call`, `tool/result`, `user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`, `session_event_search`, `session_event_trace`, `session_search`, `session_trace` | `ctx.tools`, `ctx.systemPrompt`, `ctx.sessionQuery`, `a calling Agent for workspace authority` | `tool/call`, `tool/result` | - | The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies. |
-| `@deepseek-ai/dsh-tool-session-control` | `session_control_search`, `session_control_send`, `session_control_stop` | `ctx.tools`, `ctx.sessionControl` | `tool/call`, `tool/result`, `live Agent inbox or cancel through ctx.sessionControl` | - | Thin adapters over ctx.sessionControl. Search lists every logical session with live status; stop cancels the current turn and keeps the inbox; send delivers one later message to a live Agent and refuses to resume a cold session. |
+| `@deepseek-ai/dsh-tool-session-control` | `session_control_archive`, `session_control_rehome`, `session_control_reorder`, `session_control_search`, `session_control_send`, `session_control_stop`, `session_control_unarchive`, `session_control_workspaces` | `ctx.tools`, `ctx.sessionControl`, `ctx.workspaceRegistry (library tools)` | `tool/call`, `tool/result`, `live Agent inbox or cancel through ctx.sessionControl`, `workspace archive set and membership through ctx.workspaceRegistry` | - | Search, stop, and send are thin adapters over ctx.sessionControl. Archive, unarchive, rehome, reorder, and workspace listing wait on ctx.workspaceRegistry (Web compositions mount it; CLI/TUI do not). Rehome prefers Host session.rehome when ctx.apiProxy is present. |
 | `@deepseek-ai/dsh-tool-subagent` | `subagent` | `ctx.tools`, `ctx.subagents`, `ctx.systemPrompt` | `tool/call`, `tool/result`, `child session events through the chosen provider` | `subagent`, `subagent_fork` | The registered tool name is the load-time `toolName` config (default `subagent`); the schema above is that default. The shipped compositions load this package once per subagent backend, so the model additionally sees `subagent_fork` bound to the fork backend. Each instance's description, `run_in_background` parameter, and system-prompt policy follow its own `backgroundMode` and `enableRunInBackground`, so the two shipped schemas are not identical: `subagent` is `continuable` and defaults omitted calls to background with automatic settlement delivery, while `subagent_fork` stays `one-shot` and defaults them to foreground — see `packages/bundle/base/cordis.patch.yml` and `examples/acp-agent/cordis.yml`. |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message` | `ctx.tools`, `ctx.subagents`, `ctx.agents and ctx.sessionProjections (list_agents only)` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The globally named control tools over continuable background subagents: provider-bound `tool-subagent` instances register distinct delegation tools, while this package registers `send_message` and `interrupt_agent` once, plus `list_agents` from its separately loaded `/list-agents` plugin (whose catalog rows use the sessionProjections and live Agent registries). |
 | `@deepseek-ai/dsh-tool-subagent-report` | `report` | `ctx.subagents`, `ctx.systemPrompt`, `a live continuable in-process child Agent` | `tool/call`, `tool/result`, `a user-role message in the direct parent session` | - | Registered per continuable in-process child rather than globally, so this schema is visible only inside such a child and survives its global `toolFilter`. The same contribution installs the child-scoped `tool:report` prompt section, which this catalog does not render. The parent-facing `send_message` tool is installed independently. |
@@ -1740,9 +1740,81 @@ The five read-only tools hide provider cursors and authorize every result from t
 
 ## `@deepseek-ai/dsh-tool-session-control`
 
+### `session_control_archive`
+
+Archive one conversation so it leaves every grouping surface. The session log and its workspace accounting slot stay. An already archived id is a success no-op.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    }
+  },
+  "required": [
+    "session_id"
+  ]
+}
+```
+
+Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_rehome`
+
+Move one conversation's effective home and sidebar group to an existing directory. Do not mkdir. Canonical No Repo is refused. An unregistered existing directory is registered. Cross-group moves use this tool; same-group order uses session_control_reorder.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    },
+    "path": {
+      "type": "string",
+      "description": "Absolute existing directory that becomes this conversation's home."
+    }
+  },
+  "required": [
+    "session_id",
+    "path"
+  ]
+}
+```
+
+Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_reorder`
+
+Move an accounted conversation inside its current workspace order. Omitted before_session_id appends. Does not change the working directory. Ungrouped conversations must be rehomed first.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The accounted session id to move."
+    },
+    "before_session_id": {
+      "type": "string",
+      "description": "Accounted neighbor to insert before. Omitted appends to the end of the group."
+    }
+  },
+  "required": [
+    "session_id"
+  ]
+}
+```
+
+Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
 ### `session_control_search`
 
-List every logical session with live driver status. Optional query matches session id, working directory, or title. Use this to find a conversation before stopping it or sending it a later message. Results are newest-first and do not search message bodies.
+List every logical session with live driver status. Optional query matches session id, working directory, or title. Use this to find a conversation before stopping it, sending it a later message, or changing its archive or group. Results are newest-first and do not search message bodies.
 
 ```json
 {
@@ -1817,7 +1889,41 @@ Stop the current turn of any logical session and keep queued inbox work. A known
 
 Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
 
-Thin adapters over ctx.sessionControl. Search lists every logical session with live status; stop cancels the current turn and keeps the inbox; send delivers one later message to a live Agent and refuses to resume a cold session.
+### `session_control_unarchive`
+
+Restore one archived conversation to its prior grouping slot. A known id that is not archived is a success no-op. This does not open the conversation.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    }
+  },
+  "required": [
+    "session_id"
+  ]
+}
+```
+
+Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_workspaces`
+
+List registered workspaces for conversation grouping: id, title, path, hidden flag, and accounted session ids with archived conversations omitted. Use this before rehoming or reordering a conversation.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+Search, stop, and send are thin adapters over ctx.sessionControl. Archive, unarchive, rehome, reorder, and workspace listing wait on ctx.workspaceRegistry (Web compositions mount it; CLI/TUI do not). Rehome prefers Host session.rehome when ctx.apiProxy is present.
 
 <a id="deepseek-aidsh-tool-subagent"></a>
 

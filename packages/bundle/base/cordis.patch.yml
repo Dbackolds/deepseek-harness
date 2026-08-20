@@ -132,7 +132,9 @@
 
     # Trusted in-process directory over every logical session: search with
     # live driver status, stop an attached turn, deliver a later message.
-    # It does not resume cold sessions or register a model-facing tool.
+    # Archive, unarchive, rehome, reorder, and workspace listing wait on
+    # ctx.workspaceRegistry from a later composition layer (Web). It does
+    # not resume cold send/stop.
     - id: session-control
       name: '@deepseek-ai/dsh-session-control'
 

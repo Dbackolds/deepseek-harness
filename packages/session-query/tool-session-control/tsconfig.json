@@ -11,6 +11,9 @@
     { "path": "../../core/session" },
     { "path": "../../core/tools" },
     { "path": "../session-control" },
+    { "path": "../../workspace/workspace" },
+    { "path": "../../sandbox/sandbox-policy" },
+    { "path": "../../util/home-paths" },
     { "path": "../../runtime-diagnostics/invariants" }
   ]
 }
