@@ -42,7 +42,6 @@ function stateClassOf(state: AutomationRuleView['state']): string {
 function localizeRunFailure(failure: string, t: AutomationPanelProps['t']): string {
   switch (failure) {
     case 'skipped_busy': return t('runNow.skipped')
-    case 'max_concurrent_runs': return t('runNow.maxConcurrent')
     case 'failed': return t('runNow.failed')
     case 'missing_session': return t('runNow.missingSession')
     default: return failure

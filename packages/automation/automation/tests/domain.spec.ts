@@ -102,7 +102,7 @@ async function harness(options: {
     })
   }
 
-  const fiber = await ctx.plugin(AutomationService, { maxConcurrentRuns: 2, minEverySeconds: MIN_EVERY_INTERVAL_SECONDS })
+  const fiber = await ctx.plugin(AutomationService, { minEverySeconds: MIN_EVERY_INTERVAL_SECONDS })
   return { ctx, created, agents, fiber, service: ctx.automation }
 }
 
@@ -223,6 +223,37 @@ describe('automation service', () => {
     const second = await service.fireDue(rule.id, Date.parse('2026-08-15T12:10:00.000Z'))
     expect(second.outcome).toBe('started')
     expect(created).toHaveLength(2)
+  })
+
+  it('starts independent rules even when other automation sessions are running', async () => {
+    const { service, created, agents } = await harness()
+    const first = await service.create({
+      name: 'first',
+      task: 'first',
+      workspaceId: WORKSPACE,
+      everySeconds: 300,
+    })
+    const second = await service.create({
+      name: 'second',
+      task: 'second',
+      workspaceId: WORKSPACE,
+      everySeconds: 300,
+    })
+    const third = await service.create({
+      name: 'third',
+      task: 'third',
+      workspaceId: WORKSPACE,
+      everySeconds: 300,
+    })
+    const now = Date.parse('2026-08-15T12:05:00.000Z')
+    expect((await service.fireDue(first.id, now)).outcome).toBe('started')
+    created[0]!.status = 'running'
+    agents.set(created[0]!.session.id, created[0]!)
+    expect((await service.fireDue(second.id, now)).outcome).toBe('started')
+    created[1]!.status = 'running'
+    agents.set(created[1]!.session.id, created[1]!)
+    expect((await service.fireDue(third.id, now)).outcome).toBe('started')
+    expect(created).toHaveLength(3)
   })
 
   it('pins a named permission preset on the new session', async () => {

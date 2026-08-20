@@ -93,7 +93,10 @@ interface AutomationRunRecord {
   readonly ruleId: AutomationRuleId
   readonly sessionId?: SessionId
   readonly startedAt: string
+  /** Instant the started Session left `running`, or the skip/fail instant. */
+  readonly endedAt?: string
   readonly outcome: AutomationRunOutcome
+  readonly source?: AutomationRunSource
   readonly errorCode?: string
 }
 ```
@@ -102,7 +105,7 @@ A fire writes one run (`started`, `skipped_busy`, `replaced`, or `failed`) and, 
 
 ## Live delivery
 
-The process-local owner derives its earliest timer from enabled rules and rereads the wall clock after every bounded wait. Cold Hosts do no work. Due rules occupy one Host-wide queue. `skip` waits for the previous Agent to leave `running`; `replace` cancels that Agent and opens the next Session immediately.
+The process-local owner derives its earliest timer from enabled rules and rereads the wall clock after every bounded wait. Cold Hosts do no work. Due rules occupy one Host-wide queue and each independent rule may start while other Automation Sessions are already running. `skip` waits for that rule's previous Agent to leave `running`; `replace` cancels that Agent and opens the next Session immediately.
 
 Session headers created by a fire carry `origin: 'automation'`.
 

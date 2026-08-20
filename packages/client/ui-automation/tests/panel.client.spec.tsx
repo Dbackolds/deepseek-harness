@@ -298,7 +298,6 @@ describe('AutomationPanel', () => {
 
   it.each([
     [{ outcome: 'skipped_busy' }, 'The previous session is still running, so this run was skipped.'],
-    [{ outcome: 'skipped_busy', errorCode: 'max_concurrent_runs' }, 'Too many automation sessions are already running.'],
     [{ outcome: 'failed' }, 'This fire failed.'],
   ] as const)('localizes run-now outcome %j', async (run, message) => {
     mount({ run, lastSession: false })

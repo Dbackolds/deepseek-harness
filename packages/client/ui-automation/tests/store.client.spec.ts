@@ -236,14 +236,7 @@ describe('AutomationStore', () => {
     expect(sessions.opened).toEqual([])
   })
 
-  it('maps a max-concurrent skip and a failed fire without opening a Session', async () => {
-    const maxed = api({
-      runNow: () => Promise.resolve(ok({
-        run: { id: 'run-1', outcome: 'skipped_busy', errorCode: 'max_concurrent_runs' },
-      })),
-    })
-    expect(await new AutomationStore(maxed.face, sessionsFace().face).runNow(rule().id))
-      .toBe('max_concurrent_runs')
+  it('maps a failed fire without opening a Session', async () => {
     const failed = api({
       runNow: () => Promise.resolve(ok({ run: { id: 'run-1', outcome: 'failed' } })),
     })
