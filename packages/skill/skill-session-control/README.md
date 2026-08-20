@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Bundled skill provider that contributes `dsh-session-control` to `ctx.skills`. The skill tells the model when and how to use the `session_control_*` tools to search every logical session, stop a turn, deliver a later message, rename a conversation, or archive, unarchive, and regroup conversations.
+Bundled skill provider that contributes `dsh-session-control` to `ctx.skills`. The skill tells the model when and how to use the `session_control_*` tools to search every logical session (archived rows included by default), stop a turn, deliver a later message, rename a conversation, or archive, unarchive, and regroup conversations.
 
 The shipped base composition mounts the plugin. It has no configuration. A user-owned skill of the same name still wins through ordinary registry precedence.
 

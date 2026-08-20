@@ -8,11 +8,19 @@ Source: [`packages/session-query/session-control/src/types.ts`](../../packages/s
 
 ## 目录行
 
-`SessionControlEntry` 是一个逻辑会话加上其实时驱动状态。`ready` 表示语料中存在该身份但没有在线 Agent；`search()` 从不恢复该身份。
+`SessionControlEntry` 是一个逻辑会话加上其实时驱动状态。`ready` 表示语料中存在该身份但没有在线 Agent；`search()` 从不恢复该身份。`archived` 是注册表级分组成员身份，未挂载 `ctx.workspaceRegistry` 时为 `false`。
 
 ```ts type-equiv
 /** Live driver activity for one logical session. */
 type SessionControlActivity = 'running' | 'idle' | 'ready'
+```
+
+```ts type-equiv
+/**
+ * How search treats registry-global archived membership.
+ * `all` includes archived rows, `only` keeps them, and `exclude` drops them.
+ */
+type SessionControlArchiveFilter = 'all' | 'only' | 'exclude'
 ```
 
 ```ts type-equiv
@@ -41,12 +49,17 @@ interface SessionControlEntry {
   live: boolean
   /** Whether the active persistence backend currently materializes the id. */
   persisted: boolean
+  /**
+   * Whether the id is in `ctx.workspaceRegistry.archivedSessionIds`.
+   * False when the registry is not mounted.
+   */
+  archived: boolean
 }
 ```
 
 ## 搜索、停止与投递
 
-`search()` 过滤 id、cwd 和折叠后的标题。`stop()` 取消在线轮次并保留收件箱。`send()` 向在线 Agent 投递一块文本，并拒绝拿走 resume handle。
+`search()` 过滤 id、cwd 和折叠后的标题。可选 `archive` 默认为 `all`，也可为 `only` 或 `exclude`；该过滤在 `limit` 之前生效。`stop()` 取消在线轮次并保留收件箱。`send()` 向在线 Agent 投递一块文本，并拒绝拿走 resume handle。
 
 ```ts type-equiv
 /** Search request over the complete logical corpus. */
@@ -55,6 +68,11 @@ interface SessionControlSearchRequest {
   query?: string
   /** Optional positive result cap; defaults to the service configuration. */
   limit?: number
+  /**
+   * How to treat registry-global archived membership. Defaults to `all`.
+   * The filter runs before `limit`.
+   */
+  archive?: SessionControlArchiveFilter
 }
 ```
 
@@ -129,7 +147,10 @@ Trusted directory, stop, and delivery operations over the logical session corpus
 ```ts cordis-catalog
 /**
  * Search every logical session and attach live driver status.
- * @param request - optional case-insensitive query and result cap.
+ * Optional `archive` defaults to `all` and includes archived rows from
+ * `ctx.workspaceRegistry` when that service is mounted. The filter runs
+ * before `limit`.
+ * @param request - optional case-insensitive query, result cap, and archive filter.
  * @param signal - optional cancellation for persistence listing and title reads.
  * @returns matching directory rows in newest-first corpus order.
  */

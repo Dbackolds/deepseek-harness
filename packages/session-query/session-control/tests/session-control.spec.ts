@@ -40,7 +40,13 @@ function createNamed(
   ctx: Context,
   id: string,
   title: string,
-  extra: { cwd?: string; origin?: 'subagent' | 'automation'; parentSession?: SessionId } = {},
+  extra: {
+    cwd?: string
+    origin?: 'subagent' | 'automation'
+    parentSession?: SessionId
+    createdAt?: number
+    agentPreset?: string
+  } = {},
 ): Session {
   const session = ctx.sessions.create(SessionId(id), { meta: extra })
   session.append('session/title', { title, messageSeqs: [], source: { kind: 'user' } })
@@ -76,7 +82,11 @@ describe('SessionControl', () => {
   it('lists every logical session with live driver status', async () => {
     const ctx = await harness()
     const live = createNamed(ctx, 'live', 'Live work', { cwd: '/proj' })
-    createNamed(ctx, 'cold', 'Cold archive', { cwd: '/other', origin: 'automation' })
+    createNamed(ctx, 'cold', 'Cold archive', {
+      cwd: '/other',
+      origin: 'automation',
+      parentSession: SessionId('live'),
+    })
     ctx.agents.register(stubAgent(live, 'running'))
 
     const rows = await ctx.sessionControl.search()
@@ -89,19 +99,25 @@ describe('SessionControl', () => {
       cwd: '/proj',
       live: true,
       persisted: false,
+      archived: false,
     })
     expect(byId['cold']).toMatchObject({
       title: 'Cold archive',
       activity: 'ready',
       origin: 'automation',
+      parentSessionId: SessionId('live'),
       live: true,
+      archived: false,
     })
+    const idle = createNamed(ctx, 'idle', 'Idle work')
+    ctx.agents.register(stubAgent(idle, 'idle'))
+    await expect(ctx.sessionControl.get(idle.id)).resolves.toMatchObject({ activity: 'idle' })
     await ctx.fiber.dispose()
   })
 
   it('filters by id, cwd, and title and honors the result cap', async () => {
     const ctx = await harness({ searchLimit: 1 })
-    createNamed(ctx, 'alpha', 'Design notes', { cwd: '/design' })
+    createNamed(ctx, 'alpha', 'Design notes', { cwd: '/design', agentPreset: 'web' })
     createNamed(ctx, 'beta', 'Build log', { cwd: '/build' })
 
     await expect(ctx.sessionControl.search({ query: 'design' })).resolves.toEqual([
@@ -128,8 +144,26 @@ describe('SessionControl', () => {
       sessionId: session.id,
       title: session.id,
       activity: 'ready',
+      archived: false,
     })
+    await expect(ctx.sessionControl.search({ query: 'untitled' })).resolves.toEqual([
+      expect.objectContaining({ sessionId: session.id, title: session.id }),
+    ])
     spy.mockRestore()
+    vi.spyOn(ctx.sessionQuery, 'readTitleSnapshots').mockResolvedValue([
+      {
+        sessionId: session.id,
+        status: 'fulfilled',
+        value: { session: session.header },
+      },
+    ])
+    await expect(ctx.sessionControl.get(session.id)).resolves.toMatchObject({
+      sessionId: session.id,
+      title: session.id,
+    })
+    await expect(ctx.sessionControl.search({ query: 'untitled' })).resolves.toEqual([
+      expect.objectContaining({ sessionId: session.id, title: session.id }),
+    ])
     await ctx.fiber.dispose()
   })
 
@@ -205,6 +239,13 @@ describe('SessionControl', () => {
     await expect(ctx.sessionControl.send({ sessionId: session.id, message: 'hi' })).rejects.toEqual(
       expectCode('SESSION_CONTROL_DELIVERY_FAILED'),
     )
+    agent.followup = vi.fn(() => {
+      throw 'plain-throw'
+    })
+    await expect(ctx.sessionControl.send({ sessionId: session.id, message: 'hi' })).rejects.toMatchObject({
+      code: 'SESSION_CONTROL_DELIVERY_FAILED',
+      message: expect.stringContaining('plain-throw'),
+    })
     await ctx.fiber.dispose()
   })
 
@@ -226,9 +267,136 @@ describe('SessionControl', () => {
     await ctx.fiber.dispose()
   })
 
+  it('stamps archived membership from an optional workspace registry', async () => {
+    const ctx = await harness()
+    createNamed(ctx, 'kept', 'Kept', { createdAt: 3 })
+    createNamed(ctx, 'gone', 'Gone', { createdAt: 2 })
+    ctx.provide('workspaceRegistry', { archivedSessionIds: [SessionId('gone')] })
+
+    const all = await ctx.sessionControl.search()
+    expect(all.map(row => [row.sessionId, row.archived])).toEqual([
+      ['kept', false],
+      ['gone', true],
+    ])
+    await expect(ctx.sessionControl.search({ archive: 'all' })).resolves.toEqual(all)
+    await expect(ctx.sessionControl.search({ archive: 'only' })).resolves.toEqual([
+      expect.objectContaining({ sessionId: SessionId('gone'), archived: true, title: 'Gone' }),
+    ])
+    await expect(ctx.sessionControl.search({ archive: 'exclude' })).resolves.toEqual([
+      expect.objectContaining({ sessionId: SessionId('kept'), archived: false }),
+    ])
+    await expect(ctx.sessionControl.get(SessionId('gone'))).resolves.toMatchObject({
+      sessionId: SessionId('gone'),
+      archived: true,
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('applies limit after the archive filter', async () => {
+    const ctx = await harness()
+    createNamed(ctx, 'newest', 'Newest', { createdAt: 3 })
+    createNamed(ctx, 'middle', 'Middle', { createdAt: 2 })
+    createNamed(ctx, 'oldest', 'Oldest', { createdAt: 1 })
+    ctx.provide('workspaceRegistry', { archivedSessionIds: [SessionId('oldest')] })
+
+    await expect(ctx.sessionControl.search({ limit: 1 })).resolves.toEqual([
+      expect.objectContaining({ sessionId: SessionId('newest'), archived: false }),
+    ])
+    await expect(ctx.sessionControl.search({ archive: 'only', limit: 1 })).resolves.toEqual([
+      expect.objectContaining({ sessionId: SessionId('oldest'), archived: true }),
+    ])
+    await ctx.fiber.dispose()
+  })
+
+  it('treats a missing registry as unarchived and an empty only-filter', async () => {
+    const ctx = await harness()
+    createNamed(ctx, 'live', 'Live')
+    await expect(ctx.sessionControl.search({ archive: 'only' })).resolves.toEqual([])
+    await expect(ctx.sessionControl.search({ archive: 'exclude' })).resolves.toEqual([
+      expect.objectContaining({ sessionId: SessionId('live'), archived: false }),
+    ])
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects an invalid archive filter', async () => {
+    const ctx = await harness()
+    await expect(ctx.sessionControl.search({ archive: 'hidden' as 'all' })).rejects.toEqual(
+      expectCode('SESSION_CONTROL_INVALID_REQUEST'),
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it('completes search under a live abort signal and surfaces a listing fault', async () => {
+    const ctx = await harness()
+    createNamed(ctx, 'live', 'Live')
+    await expect(ctx.sessionControl.search({}, new AbortController().signal)).resolves.toEqual([
+      expect.objectContaining({ sessionId: SessionId('live') }),
+    ])
+    vi.spyOn(ctx.sessionQuery, 'listSessions').mockRejectedValue(new Error('backend'))
+    await expect(ctx.sessionControl.search({}, new AbortController().signal)).rejects.toThrow('backend')
+    await ctx.fiber.dispose()
+  })
+
   it('rejects a cancelled search before listing', async () => {
     const ctx = await harness()
     const signal = AbortSignal.abort('stop')
+    await expect(ctx.sessionControl.search({}, signal)).rejects.toEqual(
+      expectCode('SESSION_CONTROL_CANCELLED'),
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects when cancellation wins a pending listing', async () => {
+    const ctx = await harness()
+    createNamed(ctx, 'live', 'Live')
+    const controller = new AbortController()
+    vi.spyOn(ctx.sessionQuery, 'listSessions').mockImplementation(() => new Promise((_resolve, reject) => {
+      controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true })
+    }))
+    const pending = ctx.sessionControl.search({}, controller.signal)
+    controller.abort('stop')
+    await expect(pending).rejects.toEqual(expectCode('SESSION_CONTROL_CANCELLED'))
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a listing that settles after abort', async () => {
+    const ctx = await harness()
+    let resolveList: (value: never[]) => void = () => {}
+    vi.spyOn(ctx.sessionQuery, 'listSessions').mockImplementation(
+      () => new Promise((resolve) => { resolveList = resolve }),
+    )
+    const controller = new AbortController()
+    const pending = ctx.sessionControl.search({}, controller.signal)
+    controller.abort('stop')
+    resolveList([])
+    await expect(pending).rejects.toEqual(expectCode('SESSION_CONTROL_CANCELLED'))
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a listing that fails after abort', async () => {
+    const ctx = await harness()
+    let rejectList: (reason: unknown) => void = () => {}
+    vi.spyOn(ctx.sessionQuery, 'listSessions').mockImplementation(
+      () => new Promise((_resolve, reject) => { rejectList = reject }),
+    )
+    const controller = new AbortController()
+    const pending = ctx.sessionControl.search({}, controller.signal)
+    controller.abort('stop')
+    rejectList(new Error('backend'))
+    await expect(pending).rejects.toEqual(expectCode('SESSION_CONTROL_CANCELLED'))
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects when abort is observed only inside settleWithCancellation', async () => {
+    const ctx = await harness()
+    createNamed(ctx, 'live', 'Live')
+    const signal = new AbortController().signal
+    let aborted = false
+    Object.defineProperty(signal, 'aborted', { get: () => aborted })
+    vi.spyOn(ctx.sessionQuery, 'listSessions').mockImplementation(async () => {
+      aborted = true
+      return []
+    })
     await expect(ctx.sessionControl.search({}, signal)).rejects.toEqual(
       expectCode('SESSION_CONTROL_CANCELLED'),
     )

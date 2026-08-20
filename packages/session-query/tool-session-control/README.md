@@ -8,7 +8,7 @@ The shipped base composition mounts the package. Load the bundled [`dsh-session-
 
 ## Tools
 
-- `session_control_search(query?, limit?)` lists newest-first directory rows with live status.
+- `session_control_search(query?, limit?, archive?)` lists newest-first directory rows with live status. `archive` is `all` (default, include archived), `only`, or `exclude`. Archived rows are marked.
 - `session_control_stop(session_id)` stops the current turn and keeps queued inbox work.
 - `session_control_send(session_id, message, mode?)` delivers one text block to a live Agent.
 - `session_control_rename(session_id, title)` pins a user-source title on any logical session. Empty titles fail. Subagent-owned sessions fail.
@@ -41,7 +41,7 @@ Prefix-stable while the tool definitions stay unchanged.
 ## Known Limitations and Deferred Work
 
 - `session_control_send` does not resume a cold session. A storage-only send fails instead of taking an `AgentHandle`.
-- Search does not inspect message bodies.
+- Search does not inspect message bodies. Archived rows stay in the directory by default; grouping tools still omit them.
 - Without Host `session.rehome`, `session_control_rehome` cannot resume a cold session, and a live session whose header origin is `subagent` fails.
 - Without Host `session.rename`, `session_control_rename` cannot resume a cold session.
 - These tools do not hide or show workspaces, and they do not open an unarchived session.

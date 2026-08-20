@@ -6,8 +6,8 @@ English | [中文](README.zh.md)
 
 ## Public API
 
-- `search(request?, signal?)` lists the live-preferred corpus from `ctx.sessionQuery.listSessions()`, attaches each row's latest title and live Agent status, and filters a case-insensitive substring against session id, cwd, and title. An empty query returns the newest-first corpus up to `limit`. Message bodies are not searched.
-- `get(sessionId, signal?)` returns one directory row. A missing identity fails with `SESSION_CONTROL_SESSION_NOT_FOUND`.
+- `search(request?, signal?)` lists the live-preferred corpus from `ctx.sessionQuery.listSessions()`, attaches each row's latest title, live Agent status, and registry-global `archived` bit when `ctx.workspaceRegistry` is mounted. It filters a case-insensitive substring against session id, cwd, and title. `archive` defaults to `all` and may be `only` or `exclude`; the filter runs before `limit`. Without the registry every row is `archived: false` and `only` is empty. An empty query returns the newest-first corpus up to `limit`. Message bodies are not searched.
+- `get(sessionId, signal?)` returns one directory row, including `archived`. A missing identity fails with `SESSION_CONTROL_SESSION_NOT_FOUND`.
 - `stop(sessionId, signal?)` cancels the live Agent's current turn with `keepInbox: true`. A known identity without a live Agent is an accepted no-op. The call never resumes a cold session.
 - `send(request, signal?)` delivers one non-empty text block through `followup()` (`queue`) or `steer()`. A live Agent is required. A known storage-only identity fails with `SESSION_CONTROL_RESUME_REQUIRED` instead of taking an `AgentHandle` the caller or subagent continuation manager must retain. An unknown identity fails with `SESSION_CONTROL_SESSION_NOT_FOUND`.
 
@@ -18,6 +18,8 @@ English | [中文](README.zh.md)
 | `running` | A live Agent has an active driver. |
 | `idle` | A live Agent is attached between turns. |
 | `ready` | The identity exists in the logical corpus and has no live Agent. |
+
+`archived` is independent of activity: a grouping hide, not a corpus deletion. It is `true` only while the id is in `ctx.workspaceRegistry.archivedSessionIds`.
 
 ## Configuration
 

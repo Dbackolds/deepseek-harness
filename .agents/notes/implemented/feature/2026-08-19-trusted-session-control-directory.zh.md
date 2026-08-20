@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-`@deepseek-ai/dsh-session-control` 以 `ctx.sessionControl` 发布可信进程内目录。`search()` 与 `get()` 从 `ctx.sessionQuery.listSessions()` 列出在线优先语料，为每行附加最新标题与在线 Agent 状态（`running` / `idle` / `ready`），并以不区分大小写的子串过滤会话 id、cwd 和标题。`stop()` 以 `keepInbox: true` 取消在线 Agent，并把没有驱动的已知身份视为被接受的空操作。`send()` 通过 `followup()` 或 `steer()` 投递一块非空文本，并记录来源 `{ kind: 'plugin', plugin: 'session-control' }`。
+`@deepseek-ai/dsh-session-control` 以 `ctx.sessionControl` 发布可信进程内目录。`search()` 与 `get()` 从 `ctx.sessionQuery.listSessions()` 列出在线优先语料，为每行附加最新标题、在线 Agent 状态（`running` / `idle` / `ready`），以及挂载 `ctx.workspaceRegistry` 时的注册表级 `archived` 位，并以不区分大小写的子串过滤会话 id、cwd 和标题。`search()` 的 `archive` 默认为 `all`，也可为 `only` 或 `exclude`；该过滤在 `limit` 之前生效。`stop()` 以 `keepInbox: true` 取消在线 Agent，并把没有驱动的已知身份视为被接受的空操作。`send()` 通过 `followup()` 或 `steer()` 投递一块非空文本，并记录来源 `{ kind: 'plugin', plugin: 'session-control' }`。
 
 该服务从不调用 `ctx.agents.resume()`。已知但仅存于存储的身份以 `SESSION_CONTROL_RESUME_REQUIRED` 失败；未知身份以 `SESSION_CONTROL_SESSION_NOT_FOUND` 失败。resume 返回的 `AgentHandle` 必须由 Host resolver 或 subagent continuation manager 持有，共享目录若丢弃该 handle 会从这些所有者手中抢走所有权。
 

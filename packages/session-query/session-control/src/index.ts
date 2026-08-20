@@ -18,6 +18,7 @@ import {
 } from './config.ts'
 import type {
   SessionControlActivity,
+  SessionControlArchiveFilter,
   SessionControlDeliveryMode,
   SessionControlEntry,
   SessionControlSearchRequest,
@@ -55,7 +56,10 @@ export class SessionControl extends Service {
 
   /**
    * Search every logical session and attach live driver status.
-   * @param request - optional case-insensitive query and result cap.
+   * Optional `archive` defaults to `all` and includes archived rows from
+   * `ctx.workspaceRegistry` when that service is mounted. The filter runs
+   * before `limit`.
+   * @param request - optional case-insensitive query, result cap, and archive filter.
    * @param signal - optional cancellation for persistence listing and title reads.
    * @returns matching directory rows in newest-first corpus order.
    */
@@ -70,10 +74,13 @@ export class SessionControl extends Service {
         'SESSION_CONTROL_INVALID_REQUEST',
       )
     }
+    const archive = resolveArchiveFilter(request.archive)
     assertNotCancelled(signal)
     const records = await settleWithCancellation(this.ctx.sessionQuery.listSessions(signal), signal)
+    const archivedIds = this.archivedIds()
+    const filtered = records.filter(record => matchesArchive(archivedIds.has(record.header.id), archive))
     const needle = request.query?.toLocaleLowerCase() ?? ''
-    const inspected = needle === '' ? records.slice(0, limit) : records
+    const inspected = needle === '' ? filtered.slice(0, limit) : filtered
     const observations = await settleWithCancellation(
       this.ctx.sessionQuery.readTitleSnapshots(inspected.map(record => record.header.id), signal),
       signal,
@@ -89,7 +96,8 @@ export class SessionControl extends Service {
       return record.header.id.toLocaleLowerCase().includes(needle)
         || record.header.cwd?.toLocaleLowerCase().includes(needle) === true
         || title.toLocaleLowerCase().includes(needle)
-    }).slice(0, limit).map(({ record, title }) => this.toEntry(record, title))
+    }).slice(0, limit).map(({ record, title }) =>
+      this.toEntry(record, title, archivedIds.has(record.header.id)))
   }
 
   /**
@@ -113,7 +121,7 @@ export class SessionControl extends Service {
     const title = observation.status === 'fulfilled'
       ? observation.value.title?.title ?? record.header.id
       : record.header.id
-    return this.toEntry(record, title)
+    return this.toEntry(record, title, this.archivedIds().has(record.header.id))
   }
 
   /**
@@ -211,7 +219,14 @@ export class SessionControl extends Service {
     return records[0]
   }
 
-  private toEntry(record: SessionRecord, title: string): SessionControlEntry {
+  private archivedIds(): ReadonlySet<SessionId> {
+    const registry = this.ctx.get('workspaceRegistry') as
+      | { archivedSessionIds?: readonly SessionId[] }
+      | undefined
+    return new Set(registry?.archivedSessionIds ?? [])
+  }
+
+  private toEntry(record: SessionRecord, title: string, archived: boolean): SessionControlEntry {
     const agent = this.ctx.agents.get(record.header.id)
     const activity: SessionControlActivity = agent === undefined
       ? 'ready'
@@ -227,8 +242,22 @@ export class SessionControl extends Service {
       activity,
       live: record.live,
       persisted: record.persisted,
+      archived,
     }
   }
+}
+
+function resolveArchiveFilter(archive: unknown): SessionControlArchiveFilter {
+  if (archive === undefined) return 'all'
+  if (archive === 'all' || archive === 'only' || archive === 'exclude') return archive
+  throw new SessionControlError(
+    'search archive must be all, only, or exclude',
+    'SESSION_CONTROL_INVALID_REQUEST',
+  )
+}
+
+function matchesArchive(archived: boolean, archive: SessionControlArchiveFilter): boolean {
+  return archive === 'all' || archived === (archive === 'only')
 }
 
 function assertNotCancelled(signal: AbortSignal | undefined): void {

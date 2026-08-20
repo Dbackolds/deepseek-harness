@@ -8,7 +8,7 @@
 
 ## 工具
 
-- `session_control_search(query?, limit?)` 按最新优先列出带实时状态的目录行。
+- `session_control_search(query?, limit?, archive?)` 按最新优先列出带实时状态的目录行。`archive` 为 `all`（默认，包含已归档）、`only` 或 `exclude`。已归档行带标记。
 - `session_control_stop(session_id)` 停止当前轮次并保留已排队的收件箱工作。
 - `session_control_send(session_id, message, mode?)` 向在线 Agent 投递一块文本。
 - `session_control_rename(session_id, title)` 给任意逻辑会话钉住用户来源标题。空标题会失败。subagent 所有的会话会失败。
@@ -41,7 +41,7 @@ Prefix-stable while the tool definitions stay unchanged.
 ## Known Limitations and Deferred Work
 
 - `session_control_send` 不恢复冷会话。对仅存于存储的身份发送会失败，而不是拿走 `AgentHandle`。
-- 搜索不检查消息正文。
+- 搜索不检查消息正文。已归档行默认仍出现在目录中；分组工具仍会省略它们。
 - 没有 Host `session.rehome` 时，`session_control_rehome` 不能恢复冷会话，且 header origin 为 `subagent` 的在线会话会失败。
 - 没有 Host `session.rename` 时，`session_control_rename` 不能恢复冷会话。
 - 这些工具不隐藏或显示工作区，也不会打开已取消归档的会话。

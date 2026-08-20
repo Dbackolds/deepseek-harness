@@ -6,7 +6,7 @@ These tools address ordinary sessions, forks, automation fires, and live subagen
 
 ## Tools
 
-- `session_control_search` — list sessions with live status. Optional `query` matches session id, working directory, or title. Optional `limit` caps the page.
+- `session_control_search` — list sessions with live status. Optional `query` matches session id, working directory, or title. Optional `limit` caps the page. Optional `archive` is `all` (default, include archived), `only`, or `exclude`. Archived rows are marked `archived`. Grouping surfaces still omit archived members. This tool does not search message bodies.
 - `session_control_stop` — stop the current turn and keep queued inbox work. A known session with no live driver is an accepted no-op.
 - `session_control_send` — deliver one non-empty text message. `mode` is `queue` (next turn, default) or `steer` (nearest step).
 - `session_control_rename` — rename any logical session and pin the title against automatic regeneration. Empty titles fail. Present while the session-title service is mounted (shipped base).
@@ -26,7 +26,7 @@ These tools address ordinary sessions, forks, automation fires, and live subagen
 
 ## Workflow
 
-1. Call `session_control_search` when the user asks about another conversation, wants work coordinated across sessions, or you need an id you do not already have.
+1. Call `session_control_search` when the user asks about another conversation, wants work coordinated across sessions, or you need an id you do not already have. Use `archive=only` to browse the archive library. After you have an id, read the log with a mounted session-read tool; do not invent a resume or body-read tool here.
 2. Prefer an `idle` or `running` row for `session_control_send`. Use `session_control_stop` first when the user asked to interrupt that session.
 3. If a send fails because the session is not live, report that the session must be resumed in the UI or by its owner. Do not invent a resume tool.
 4. For library work, use the library tools only when they appear in the catalog. List groups with `session_control_workspaces`, archive finished threads, unarchive one that should return, rehome to change groups, and reorder only inside the current group. Rename with `session_control_rename` when it appears (shipped base). If library tools are absent, search, stop, send, and rename still work.
@@ -40,3 +40,4 @@ These tools address ordinary sessions, forks, automation fires, and live subagen
 - Keep messages self-contained. The recipient does not see this conversation unless you include the needed context.
 - Stopping keeps queued work. Say so if the user asked to cancel everything.
 - Grouping is the workspace directory. Cross-group moves change the conversation home; same-group order does not.
+- Archive hides a conversation from grouping surfaces only. The session log stays readable.

@@ -12,7 +12,7 @@ Status: implemented
 
 `@deepseek-ai/dsh-skill-session-control` 是一个原生 Cordis 插件，会在 `ctx.skills` 上注册一个不可变的内置提供方。该提供方负责 `dsh-session-control` 的摘要和指令正文。`dsh-tool-skill` 仍是目录与 loader 渲染的唯一归属方。
 
-`@deepseek-ai/dsh-tool-session-control` 注册 `session_control_search`、`session_control_stop`、`session_control_send`、`session_control_rename`、`session_control_workspaces`、`session_control_archive`、`session_control_unarchive`、`session_control_rehome` 和 `session_control_reorder`。搜索、停止和发送仍是 `ctx.sessionControl` 上的薄适配器。改名等待 `ctx.sessionTitle`，并在存在 `ctx.apiProxy` 时优先走 Host `session.rename`。库管理工具调用 `ctx.workspaceRegistry`，改挂在存在 `ctx.apiProxy` 时走 Host `session.rehome`。已发布的 base 组合同时挂载该 skill 和这些工具。skill 告诉模型在跨会话协调或管理对话库前先加载这些指令，并使用这些工具而不是仅限父级的 `send_message`。
+`@deepseek-ai/dsh-tool-session-control` 注册 `session_control_search`、`session_control_stop`、`session_control_send`、`session_control_rename`、`session_control_workspaces`、`session_control_archive`、`session_control_unarchive`、`session_control_rehome` 和 `session_control_reorder`。搜索、停止和发送仍是 `ctx.sessionControl` 上的薄适配器。`session_control_search` 传递 `archive`（`all` / `only` / `exclude`，默认 `all`）并标记已归档行。改名等待 `ctx.sessionTitle`，并在存在 `ctx.apiProxy` 时优先走 Host `session.rename`。库管理工具调用 `ctx.workspaceRegistry`，改挂在存在 `ctx.apiProxy` 时走 Host `session.rehome`。已发布的 base 组合同时挂载该 skill 和这些工具。skill 告诉模型在跨会话协调或管理对话库前先加载这些指令，浏览归档历史时使用 `archive=only`，并使用这些工具而不是仅限父级的 `send_message`。
 
 对仅存于存储的身份发送仍会以服务的 resume-required 错误失败。发送、停止和搜索不调用 `ctx.agents.resume()`。经 Host 改挂或改名可以恢复冷会话，因为 Host resolver 会保留 `AgentHandle`。没有 Host 时，对仅存于存储的会话改挂或改名会失败，且 header origin 为 `subagent` 的在线会话会失败。
 
