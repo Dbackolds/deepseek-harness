@@ -427,7 +427,7 @@ describe('default transport seam', () => {
         script.dispatchEvent(new Event('load'))
       })
     })
-    const loader: ClientModuleLoader = new ClientModuleSystem({ modules: [row('dee')], staticModules: {} })
+    const loader: ClientModuleLoader = new ClientModuleSystem({ manifest: parseBootManifest({ rev: '0', entries: [row('dee')] }), staticModules: {}, registrationTarget: { mode: 'queue', pendingQueue: [], load() {}, create() { throw new Error('unused') } }, bootstrapModule: { id: MODULES_ID, exports: bootstrapExports } })
     const exports = await loader.import('dee', '', {})
     expect(attempts).toBe(3)
     expect((exports as { marker: string }).marker).toBe('retried')

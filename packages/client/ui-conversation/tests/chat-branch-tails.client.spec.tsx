@@ -1150,6 +1150,7 @@ describe('small branch tails', () => {
         time={time}
         blocks={[{ kind: 'text', text: 'settled answer' }]}
         streaming={false}
+        renderMessageImages={renderMessageImages}
       />,
     )
     expect(view.getByText('settled answer')).toBeTruthy()

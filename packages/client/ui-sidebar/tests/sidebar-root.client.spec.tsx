@@ -57,7 +57,6 @@ function mountShell({
 } = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
-  let automationOwner: SidebarAutomationOwnerProps | undefined
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
@@ -76,7 +75,6 @@ function mountShell({
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.automation') {
-          automationOwner = owner
           return <div data-testid="automation-seat" data-wide={owner.wide} />
         }
         if (key === 'sidebar.settings') {

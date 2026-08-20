@@ -314,7 +314,9 @@ describe('ModelsSection', () => {
       configured: true,
       removable: false,
       apiKeyEnv: 'X',
+      apiKeyEnvs: ['X'],
       credential,
+      credentials: {},
     })
     expect(needsSetup(row(undefined), false)).toBe(true)
     expect(needsSetup(row({ configured: true, writable: true }), false)).toBe(false)

@@ -7,6 +7,8 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { SettingsScopeBinder } from '@deepseek-ai/dsh-client-ui-settings/client'
+import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
+import { settingsSchema } from '../../ui-settings-models/tests/settings-schema.client.ts'
 import { apply, inject, SETTINGS_NS } from '../src/client/index.ts'
 import type { ReloadRowInjected } from '../src/client/ReloadRow.tsx'
 import { CLIENT_HMR_SETTINGS_NAMESPACE, ClientHmrSettingsSchema } from '../src/hmr-settings.ts'
@@ -54,7 +56,9 @@ async function bench(isLoopback = true) {
   ctx.provide('loader', { entries: () => [] } as never)
   ctx.provide('modules', { invalidate() {}, prefetch: async () => undefined } as never)
   new TestRemote(ctx)
-  await ctx.plugin(SettingsScopeBinder).await()
+  const connection = ctx.get('connection') as { api: never }
+  const mirror = new SettingsDescribeMirror(connection.api)
+  await ctx.plugin(SettingsScopeBinder, { mirror, schema: settingsSchema }).await()
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, describe, mutate,
   }
