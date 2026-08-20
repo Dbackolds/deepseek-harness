@@ -13,6 +13,9 @@ export interface ReadyUrl {
 
 const READY_LINE = /^dsh web: (http:\/\/127\.0\.0\.1:(\d+))(?:\s|$)/u
 
+/** Marker the modules node half injects into every index.html response. */
+export const BOOT_MANIFEST_MARKER = 'window.__DSH_BOOT__'
+
 /**
  * Extract the loopback URL from one Host log line.
  * @param line - one stdout or stderr line, with or without a trailing newline.
@@ -37,4 +40,15 @@ export function parseReadyChunk(chunk: string): ReadyUrl | undefined {
     if (ready !== undefined) return ready
   }
   return undefined
+}
+
+/**
+ * Whether an index.html body already carries the Host boot graph.
+ * Desktop must not load the loopback URL before this marker exists:
+ * the shell parses the graph before it can paint anything else.
+ * @param html - raw `/` response body.
+ * @returns true when the modules node half has injected the graph.
+ */
+export function indexHasBootManifest(html: string): boolean {
+  return html.includes(BOOT_MANIFEST_MARKER)
 }

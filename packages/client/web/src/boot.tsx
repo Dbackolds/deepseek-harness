@@ -8,17 +8,18 @@
  * and its client-half wrapper are shell-bundled and the kernel adopts its
  * plugin entry once cordis is up.
  *
- * AppWebEntry.run(), module face first, then plugin face: parse
- * `window.__DSH_BOOT__` into the two-view BootManifest (wire boundary)
- * → build the module system over the module-view rows → render the loading
- * page → prefetch every `immediately` row in parallel with mounting the
- * vendored cordis Loader (`internal` contract injection BEFORE any entry exists —
- * the bare-import fallback in tree.import must never run in a browser) →
- * await the prefetch tier, THEN adopt the modules entry and create one
- * loader entry per plugin-view row plus the shell-own app-shell assembly
- * entry → loader.await() + a full fiber sweep (all ACTIVE, else fail
- * listing who/what/which service) → flip the settled signal so AppRoot
- * switches to the real UI in one pass.
+ * AppWebEntry.run(), module face first, then plugin face: render the
+ * loading page → parse `window.__DSH_BOOT__` into the two-view BootManifest
+ * (wire boundary; a missing or malformed graph stays on that page) →
+ * build the module system over the module-view rows → prefetch every
+ * `immediately` row in parallel with mounting the vendored cordis Loader
+ * (`internal` contract injection BEFORE any entry exists — the bare-import
+ * fallback in tree.import must never run in a browser) → await the prefetch
+ * tier, THEN adopt the modules entry and create one loader entry per
+ * plugin-view row plus the shell-own app-shell assembly entry →
+ * loader.await() + a full fiber sweep (all ACTIVE, else fail listing
+ * who/what/which service) → flip the settled signal so AppRoot switches to
+ * the real UI in one pass.
  *
  * Entry creation waits for the whole immediately tier: materialization runs
  * synchronous cross-package require edges (e.g. locale → runtime/client) that
@@ -90,27 +91,11 @@ export class AppWebEntry {
   /**
    * Run the boot chain to settlement. Boot-chain failures resolve (not
    * reject): the loading page stays up and renders the failure report (the
-   * fail-loud surface the kernel owns). Rejects only when the boot manifest
-   * is missing or malformed — there is nothing to boot against.
+   * fail-loud surface the kernel owns), including a missing or malformed
+   * boot manifest.
    * @returns resolves once the UI settled or the failure report rendered.
    */
   async run(): Promise<void> {
-    this.manifest = parseBootManifest((globalThis as DshWindow).__DSH_BOOT__)
-
-    this.modules = new ClientModuleSystem({
-      modules: this.manifest.modules, staticModules: getStaticModules(), ...this.seams,
-    })
-    // The app-shell assembly is the only shell-own module: every other graph
-    // row is a plugin bundle arriving through fetch.
-    this.modules.registerStatic(APP_SHELL_ID, AppShell)
-    // Adoption handoff, supply side: register the modules
-    // package's own client half under its bare package name (= graph row id
-    // = entry name — a suffixed key would miss the statics branch and
-    // trigger a real fetch), and put the instance on the kernel slot the
-    // wrapper's apply reads to provide ctx.modules.
-    this.modules.registerStatic(MODULES_ID, ModulesClient)
-    ;(globalThis as DshWindow).__DSH_MODULES__ = this.modules
-
     this.root = createRoot(this.el)
     this.root.render(
       <AppRoot
@@ -125,6 +110,30 @@ export class AppWebEntry {
         }}
       />,
     )
+
+    try {
+      this.manifest = parseBootManifest((globalThis as DshWindow).__DSH_BOOT__)
+    } catch (reason) {
+      // A page without a valid manifest still has to paint the fail-loud
+      // report. Parsing before createRoot left #root empty.
+      console.error(reason)
+      this.error.set(reason instanceof Error ? reason.message : String(reason))
+      return
+    }
+
+    this.modules = new ClientModuleSystem({
+      modules: this.manifest.modules, staticModules: getStaticModules(), ...this.seams,
+    })
+    // The app-shell assembly is the only shell-own module: every other graph
+    // row is a plugin bundle arriving through fetch.
+    this.modules.registerStatic(APP_SHELL_ID, AppShell)
+    // Adoption handoff, supply side: register the modules
+    // package's own client half under its bare package name (= graph row id
+    // = entry name — a suffixed key would miss the statics branch and
+    // trigger a real fetch), and put the instance on the kernel slot the
+    // wrapper's apply reads to provide ctx.modules.
+    this.modules.registerStatic(MODULES_ID, ModulesClient)
+    ;(globalThis as DshWindow).__DSH_MODULES__ = this.modules
 
     // The immediately tier prefetches in parallel with Loader mounting;
     // runPluginBoot awaits it before creating entries (see module comment:

@@ -8,10 +8,13 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseReadyChunk, type ReadyUrl } from './ready.ts'
+import { indexHasBootManifest, parseReadyChunk, type ReadyUrl } from './ready.ts'
 
 /** How long the window waits for `dsh web: http://127.0.0.1:<port>`. */
 const HOST_READY_TIMEOUT_MS = 60_000
+
+/** How often the window re-reads `/` while waiting for `window.__DSH_BOOT__`. */
+const BOOT_MANIFEST_POLL_MS = 50
 
 /** One running Host and the loopback URL it announced. */
 export interface StartedHost {
@@ -129,7 +132,10 @@ export function resolveDshInvocation(from: string, rememberedNode?: string): Dsh
 }
 
 /**
- * Start `dsh web --port 0` and resolve when the Host prints its URL.
+ * Start `dsh web --port 0` and resolve when `/` carries `window.__DSH_BOOT__`.
+ * The readiness line means the HTTP server is listening; the modules row
+ * injects the boot graph later. Loading before that marker leaves the
+ * window on a blank page.
  * @param options - working directory and extra web flags.
  * @returns the child and the announced loopback URL.
  */
@@ -151,7 +157,7 @@ export async function startWebHost(options: {
     windowsHide: true,
   })
   const timeoutMs = options.timeoutMs ?? HOST_READY_TIMEOUT_MS
-  return await new Promise<StartedHost>((resolve, reject) => {
+  const ready = await new Promise<ReadyUrl>((resolve, reject) => {
     let settled = false
     const timer = setTimeout(() => {
       fail(new Error(`dsh desktop: timed out waiting for dsh web after ${String(timeoutMs)}ms`))
@@ -159,10 +165,10 @@ export async function startWebHost(options: {
     const onData = (chunk: Buffer): void => {
       const text = chunk.toString('utf8')
       process.stdout.write(text)
-      const ready = parseReadyChunk(text)
-      if (ready === undefined) return
+      const parsed = parseReadyChunk(text)
+      if (parsed === undefined) return
       settle()
-      resolve({ child, ready })
+      resolve(parsed)
     }
     if (child.stdout === null || child.stderr === null) {
       child.kill()
@@ -190,6 +196,32 @@ export async function startWebHost(options: {
     child.once('error', fail)
     child.once('exit', onExit)
   })
+  const remainingMs = Math.max(1_000, timeoutMs - 1_000)
+  await waitForBootManifest(ready.href, remainingMs)
+  return { child, ready }
+}
+
+/**
+ * Poll the Host index until the modules row has injected the boot graph.
+ * @param href - loopback origin printed on the readiness line.
+ * @param timeoutMs - remaining supervisor budget.
+ */
+export async function waitForBootManifest(href: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  let lastError: unknown
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(href, { redirect: 'follow' })
+      const html = await response.text()
+      if (response.ok && indexHasBootManifest(html)) return
+      lastError = new Error(`dsh desktop: ${href} returned HTTP ${String(response.status)} without a boot manifest`)
+    } catch (error) {
+      lastError = error
+    }
+    await new Promise(resolve => setTimeout(resolve, BOOT_MANIFEST_POLL_MS))
+  }
+  const detail = lastError instanceof Error ? lastError.message : String(lastError ?? 'no response')
+  throw new Error(`dsh desktop: timed out waiting for window.__DSH_BOOT__ at ${href}: ${detail}`)
 }
 
 /**
