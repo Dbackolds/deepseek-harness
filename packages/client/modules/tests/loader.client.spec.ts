@@ -10,7 +10,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  apply, createClientModuleSystem, parseBootManifest,
+  apply, ClientModuleSystem, createClientModuleSystem, parseBootManifest,
   type BootModuleRow, type ClientBundleRegistration, type ClientModuleCreateOptions,
   type ClientModuleLoader, type ClientModuleLoaderTarget, type DshWindow,
 } from '../src/client/index.ts'
