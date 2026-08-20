@@ -11,6 +11,7 @@
     { "path": "../../core/session" },
     { "path": "../../core/tools" },
     { "path": "../session-control" },
+    { "path": "../../session/session-title" },
     { "path": "../../workspace/workspace" },
     { "path": "../../sandbox/sandbox-policy" },
     { "path": "../../util/home-paths" },

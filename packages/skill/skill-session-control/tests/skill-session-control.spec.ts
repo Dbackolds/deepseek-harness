@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillSessionControl from '@deepseek-ai/dsh-skill-session-control'
 
-const DESCRIPTION = 'Search every session, read whether it is running, stop a turn, send a later message, or archive, unarchive, and regroup conversations. Use when the user asks about other sessions, wants the conversation library managed, or names a session to interrupt or continue.'
+const DESCRIPTION = 'Search every session, read whether it is running, stop a turn, send a later message, rename a conversation, or archive, unarchive, and regroup conversations. Use when the user asks about other sessions, wants the conversation library managed, or names a session to interrupt or continue.'
 
 describe('dsh-skill-session-control', () => {
   it('registers and disposes the bundled session-control skill', async () => {
@@ -30,6 +30,7 @@ describe('dsh-skill-session-control', () => {
     expect(loaded?.content).toContain('session_control_rehome')
     expect(loaded?.content).toContain('session_control_reorder')
     expect(loaded?.content).toContain('session_control_workspaces')
+    expect(loaded?.content).toContain('session_control_rename')
     expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: resourcePath })
 
     await fiber.dispose()

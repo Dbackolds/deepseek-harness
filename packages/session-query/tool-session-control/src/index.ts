@@ -1,6 +1,6 @@
 /**
- * Model-facing search, stop, send, and library adapters over
- * `ctx.sessionControl` and `ctx.workspaceRegistry`.
+ * Model-facing search, stop, send, rename, and library adapters over
+ * `ctx.sessionControl`, `ctx.sessionTitle`, and `ctx.workspaceRegistry`.
  *
  * @module @deepseek-ai/dsh-tool-session-control
  */
@@ -11,6 +11,7 @@ import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { setSessionHome } from '@deepseek-ai/dsh-sandbox-policy'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { SessionControlError } from '@deepseek-ai/dsh-session-control'
+import { SessionTitleInvalidError } from '@deepseek-ai/dsh-session-title'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { WorkspaceUnknownSessionError } from '@deepseek-ai/dsh-workspace'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
@@ -22,12 +23,16 @@ export const inject = ['tools', 'sessionControl']
 
 /**
  * Register the `session_control_*` tools.
- * Search, stop, and send always register. Library tools wait on
- * `workspaceRegistry`, which the Web composition mounts and CLI/TUI do not.
+ * Search, stop, and send always register. Rename waits on `sessionTitle`.
+ * Library tools wait on `workspaceRegistry`, which the Web composition mounts
+ * and CLI/TUI do not.
  * @param ctx - context carrying the tool registry and session-control service.
  */
 export function apply(ctx: Context): void {
   registerDirectoryTools(ctx)
+  ctx.inject(['sessionTitle'], (titleCtx) => {
+    registerRenameTool(titleCtx)
+  })
   ctx.inject(['workspaceRegistry'], (workspaceCtx) => {
     registerLibraryTools(workspaceCtx)
   })
@@ -170,6 +175,57 @@ function registerDirectoryTools(ctx: Context): void {
     },
   }))
 
+}
+
+/**
+ * Register rename. Waits on `sessionTitle`, which the base composition mounts.
+ * @param ctx - child context with `sessionTitle` injected.
+ */
+function registerRenameTool(ctx: Context): void {
+  ctx.tools.register(defineTool({
+    name: 'session_control_rename',
+    description:
+      'Rename any logical session and pin the title against automatic regeneration. '
+      + 'The same user-source session/title event the sidebar writes. Empty or '
+      + 'whitespace-only titles fail. Subagent-owned sessions fail. A cold session '
+      + 'is resumed by Host session.rename when available.',
+    parameters: {
+      session_id: {
+        type: 'string',
+        required: true,
+        description: 'The session id from session_control_search or another listing.',
+      },
+      title: {
+        type: 'string',
+        required: true,
+        description: 'New title. Visible characters required after normalization.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          sessionId: { type: 'string', required: true },
+          title: { type: 'string', required: true },
+          seq: { type: 'integer', required: true },
+        },
+      },
+      render: (_args, value) => [{
+        type: 'text',
+        text: 'renamed session ' + value.sessionId + ' to ' + value.title,
+      }],
+    },
+    async execute(args) {
+      const sessionId = SessionId(args.session_id)
+      try {
+        const value = await renameSession(ctx, sessionId, args.title)
+        return { sessionId: args.session_id, ...value }
+      } catch (error: unknown) {
+        throw formatToolError(error)
+      }
+    },
+  }))
 }
 
 /**
@@ -419,6 +475,15 @@ function registerLibraryTools(ctx: Context): void {
   }))
 }
 
+type HostRename = (request: {
+  rpcId: string
+  payload: { sessionId: SessionId; title: string }
+}) => Promise<{
+  result:
+    | { ok: true; value: { title: string; seq: number } }
+    | { ok: false; error: { message: string } }
+}>
+
 type HostRehome = (request: {
   rpcId: string
   payload: { sessionId: SessionId; path: string }
@@ -429,6 +494,17 @@ type HostRehome = (request: {
 }>
 
 /**
+ * Read Host `session.rename` when the API proxy is present.
+ * @param ctx - current plugin context.
+ * @returns the Host RPC, or undefined when the composition has no Host rename.
+ */
+function hostRename(ctx: Context): HostRename | undefined {
+  const api = ctx.get('apiProxy') as { sessions?: { rename?: HostRename } } | undefined
+  const rename = api?.sessions?.rename
+  return typeof rename === 'function' ? rename : undefined
+}
+
+/**
  * Read Host `session.rehome` when the API proxy is present.
  * @param ctx - current plugin context.
  * @returns the Host RPC, or undefined when the composition has no Host rehome.
@@ -437,6 +513,40 @@ function hostRehome(ctx: Context): HostRehome | undefined {
   const api = ctx.get('apiProxy') as { sessions?: { rehome?: HostRehome } } | undefined
   const rehome = api?.sessions?.rehome
   return typeof rehome === 'function' ? rehome : undefined
+}
+
+/**
+ * Rename one session through Host or a live sessionTitle fallback.
+ * @param ctx - rename-tool context with `sessionTitle` injected.
+ * @param sessionId - session to rename.
+ * @param title - raw title; the service normalizes it.
+ * @returns the accepted title and the session/title event seq.
+ */
+async function renameSession(
+  ctx: Context,
+  sessionId: SessionId,
+  title: string,
+): Promise<{ title: string; seq: number }> {
+  const host = hostRename(ctx)
+  if (host !== undefined) {
+    const response = await host({
+      rpcId: `session-control-rename-${sessionId}`,
+      payload: { sessionId, title },
+    })
+    if (!response.result.ok) throw new Error(response.result.error.message)
+    return { title: response.result.value.title, seq: response.result.value.seq }
+  }
+  const session = ctx.get('sessions')?.get(sessionId)
+  if (session === undefined) {
+    throw new Error(
+      `session "${sessionId}" is not live; Host session.rename is required to resume a cold conversation`,
+    )
+  }
+  if (session.header.origin === 'subagent') {
+    throw new Error(`session "${sessionId}" is owned by subagent routing`)
+  }
+  const snapshot = ctx.sessionTitle.rename(session, title)
+  return { title: snapshot.title, seq: snapshot.eventSeq }
 }
 
 /**
@@ -538,7 +648,11 @@ async function rehomeSession(
  * @returns an Error the tool runtime can materialize.
  */
 function formatToolError(error: unknown): Error {
-  if (error instanceof SessionControlError || error instanceof WorkspaceUnknownSessionError) {
+  if (
+    error instanceof SessionControlError
+    || error instanceof WorkspaceUnknownSessionError
+    || error instanceof SessionTitleInvalidError
+  ) {
     return new Error(error.message)
   }
   return error instanceof Error ? error : new Error(String(error))

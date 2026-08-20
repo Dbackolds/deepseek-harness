@@ -460,15 +460,16 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-session-control',
     dir: 'tool-session-control',
     source: 'packages/session-query/tool-session-control/src/index.ts',
-    requires: ['ctx.tools', 'ctx.sessionControl', 'ctx.workspaceRegistry (library tools)'],
-    writes: ['tool/call', 'tool/result', 'live Agent inbox or cancel through ctx.sessionControl', 'workspace archive set and membership through ctx.workspaceRegistry'],
+    requires: ['ctx.tools', 'ctx.sessionControl', 'ctx.sessionTitle (rename)', 'ctx.workspaceRegistry (library tools)'],
+    writes: ['tool/call', 'tool/result', 'live Agent inbox or cancel through ctx.sessionControl', 'session/title through ctx.sessionTitle or Host session.rename', 'workspace archive set and membership through ctx.workspaceRegistry'],
     async mount(ctx) {
       await ctx.plugin(SessionStore)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SqliteSessionQueryEngine, { path: ':memory:' })
       await ctx.plugin(SessionControl)
-      // Schema harvest only needs the service present so the optional
-      // workspace inject registers the library tools. Execution is untested here.
+      // Schema harvest only needs the services present so the optional
+      // injects register rename and the library tools. Execution is untested here.
+      ctx.provide('sessionTitle', { rename: () => ({ title: '', eventSeq: 0 }) } as never)
       ctx.provide('workspaceRegistry', {
         archivedSessionIds: [],
         hiddenWorkspaceIds: [],
@@ -477,7 +478,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(ToolSessionControl)
     },
     note:
-      'Search, stop, and send are thin adapters over ctx.sessionControl. Archive, unarchive, rehome, reorder, and workspace listing wait on ctx.workspaceRegistry (Web compositions mount it; CLI/TUI do not). Rehome prefers Host session.rehome when ctx.apiProxy is present.',
+      'Search, stop, and send are thin adapters over ctx.sessionControl. Rename waits on ctx.sessionTitle and prefers Host session.rename. Archive, unarchive, rehome, reorder, and workspace listing wait on ctx.workspaceRegistry (Web compositions mount it; CLI/TUI do not). Rehome prefers Host session.rehome when ctx.apiProxy is present.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent',

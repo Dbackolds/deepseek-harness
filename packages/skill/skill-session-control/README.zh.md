@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-内置 skill 提供方，向 `ctx.skills` 贡献 `dsh-session-control`。该 skill 告诉模型何时以及如何使用 `session_control_*` 工具，以搜索全部逻辑会话、停止一轮、投递后续消息，或归档、取消归档并改挂对话。
+内置 skill 提供方，向 `ctx.skills` 贡献 `dsh-session-control`。该 skill 告诉模型何时以及如何使用 `session_control_*` 工具，以搜索全部逻辑会话、停止一轮、投递后续消息、改名，或归档、取消归档并改挂对话。
 
 已发布的 base 组合挂载该插件。它没有配置。同名的用户 skill 仍通过普通注册表优先级胜出。
 

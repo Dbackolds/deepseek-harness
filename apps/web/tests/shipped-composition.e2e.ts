@@ -50,6 +50,7 @@ const EXPECTED_TOOLS = [
   'send_message',
   'session_control_archive',
   'session_control_rehome',
+  'session_control_rename',
   'session_control_reorder',
   'session_control_search',
   'session_control_send',

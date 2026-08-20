@@ -15,6 +15,7 @@ import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as ToolSessionControl from '@deepseek-ai/dsh-tool-session-control'
+import SessionTitle from '@deepseek-ai/dsh-session-title'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import { MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 
@@ -47,6 +48,16 @@ async function directoryHarness(): Promise<Context> {
   return ctx
 }
 
+async function titleHarness(): Promise<Context> {
+  const ctx = await directoryHarness()
+  await ctx.plugin(SessionTitle, {
+    fallbackMaxWords: 5,
+    fallbackMaxBytes: 40,
+    maxTitleBytes: 80,
+  })
+  return ctx
+}
+
 async function harness(): Promise<Context> {
   const ctx = await directoryHarness()
   await ctx.plugin(Storage)
@@ -55,6 +66,11 @@ async function harness(): Promise<Context> {
   ctx.storage.mount('domain', facility)
   ctx.provide('storageDomain', facility)
   ctx.provide('sessionPersistence', { list: () => Promise.resolve([]) } as never)
+  await ctx.plugin(SessionTitle, {
+    fallbackMaxWords: 5,
+    fallbackMaxBytes: 40,
+    maxTitleBytes: 80,
+  })
   await ctx.plugin(WorkspaceRegistry)
   return ctx
 }
@@ -116,11 +132,23 @@ describe('dsh-tool-session-control', () => {
     await ctx.fiber.dispose()
   })
 
+  it('registers rename once sessionTitle is present', async () => {
+    const ctx = await titleHarness()
+    expect(ctx.tools.schemas().map(schema => schema.name).sort()).toEqual([
+      'session_control_rename',
+      'session_control_search',
+      'session_control_send',
+      'session_control_stop',
+    ])
+    await ctx.fiber.dispose()
+  })
+
   it('registers library tools once workspaceRegistry is present', async () => {
     const ctx = await harness()
     expect(ctx.tools.schemas().map(schema => schema.name).sort()).toEqual([
       'session_control_archive',
       'session_control_rehome',
+      'session_control_rename',
       'session_control_reorder',
       'session_control_search',
       'session_control_send',
@@ -183,6 +211,83 @@ describe('dsh-tool-session-control', () => {
     const missingStop = await callTool(ctx, 'session_control_stop', { session_id: 'ghost' })
     expect(missingStop.isError).toBe(true)
     expect(text(missingStop)).toContain('was not found')
+    await ctx.fiber.dispose()
+  })
+
+  it('renames a live session and pins a user-source title', async () => {
+    const ctx = await titleHarness()
+    const session = ctx.sessions.create(SessionId('named'))
+    const renamed = await callTool(ctx, 'session_control_rename', {
+      session_id: 'named',
+      title: '  Library tidy  ',
+    })
+    expect(renamed.isError).toBe(false)
+    expect(renamed.value).toMatchObject({ sessionId: 'named', title: 'Library tidy' })
+    const event = session.events.findLast(item => item.type === 'session/title')
+    expect(event?.data).toMatchObject({ title: 'Library tidy', source: { kind: 'user' } })
+
+    const empty = await callTool(ctx, 'session_control_rename', {
+      session_id: 'named',
+      title: '   ',
+    })
+    expect(empty.isError).toBe(true)
+    expect(text(empty)).toContain('visible characters')
+
+    ctx.sessions.create(SessionId('child'), {
+      meta: { parentSession: SessionId('named'), origin: 'subagent' },
+    })
+    const child = await callTool(ctx, 'session_control_rename', {
+      session_id: 'child',
+      title: 'Child',
+    })
+    expect(child.isError).toBe(true)
+    expect(text(child)).toContain('owned by subagent routing')
+
+    const cold = await callTool(ctx, 'session_control_rename', {
+      session_id: 'ghost',
+      title: 'Gone',
+    })
+    expect(cold.isError).toBe(true)
+    expect(text(cold)).toContain('Host session.rename is required')
+    await ctx.fiber.dispose()
+  })
+
+  it('renames through Host when apiProxy is present', async () => {
+    const ctx = await titleHarness()
+    const rename = vi.fn(async (request: { payload: { sessionId: string; title: string } }) => ({
+      rpcId: 'rpc',
+      result: {
+        ok: true as const,
+        value: { title: request.payload.title.trim(), seq: 9 },
+      },
+    }))
+    ctx.provide('apiProxy', { sessions: { rename } } as never)
+    const result = await callTool(ctx, 'session_control_rename', {
+      session_id: 'moved',
+      title: 'Host title',
+    })
+    expect(result.isError).toBe(false)
+    expect(result.value).toEqual({ sessionId: 'moved', title: 'Host title', seq: 9 })
+    expect(rename).toHaveBeenCalledOnce()
+    await ctx.fiber.dispose()
+  })
+
+  it('surfaces a Host rename RPC error', async () => {
+    const ctx = await titleHarness()
+    ctx.provide('apiProxy', {
+      sessions: {
+        rename: async () => ({
+          rpcId: 'rpc',
+          result: { ok: false as const, error: { message: 'title-invalid: empty' } },
+        }),
+      },
+    } as never)
+    const failed = await callTool(ctx, 'session_control_rename', {
+      session_id: 'moved',
+      title: '   ',
+    })
+    expect(failed.isError).toBe(true)
+    expect(text(failed)).toContain('title-invalid')
     await ctx.fiber.dispose()
   })
 

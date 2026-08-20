@@ -12,9 +12,9 @@ Status: implemented
 
 `@deepseek-ai/dsh-skill-session-control` 是一个原生 Cordis 插件，会在 `ctx.skills` 上注册一个不可变的内置提供方。该提供方负责 `dsh-session-control` 的摘要和指令正文。`dsh-tool-skill` 仍是目录与 loader 渲染的唯一归属方。
 
-`@deepseek-ai/dsh-tool-session-control` 注册 `session_control_search`、`session_control_stop`、`session_control_send`、`session_control_workspaces`、`session_control_archive`、`session_control_unarchive`、`session_control_rehome` 和 `session_control_reorder`。搜索、停止和发送仍是 `ctx.sessionControl` 上的薄适配器。库管理工具调用 `ctx.workspaceRegistry`，改挂在存在 `ctx.apiProxy` 时走 Host `session.rehome`。已发布的 base 组合同时挂载该 skill 和这些工具。skill 告诉模型在跨会话协调或管理对话库前先加载这些指令，并使用这些工具而不是仅限父级的 `send_message`。
+`@deepseek-ai/dsh-tool-session-control` 注册 `session_control_search`、`session_control_stop`、`session_control_send`、`session_control_rename`、`session_control_workspaces`、`session_control_archive`、`session_control_unarchive`、`session_control_rehome` 和 `session_control_reorder`。搜索、停止和发送仍是 `ctx.sessionControl` 上的薄适配器。改名等待 `ctx.sessionTitle`，并在存在 `ctx.apiProxy` 时优先走 Host `session.rename`。库管理工具调用 `ctx.workspaceRegistry`，改挂在存在 `ctx.apiProxy` 时走 Host `session.rehome`。已发布的 base 组合同时挂载该 skill 和这些工具。skill 告诉模型在跨会话协调或管理对话库前先加载这些指令，并使用这些工具而不是仅限父级的 `send_message`。
 
-对仅存于存储的身份发送仍会以服务的 resume-required 错误失败。发送、停止和搜索不调用 `ctx.agents.resume()`。经 Host 改挂可以恢复冷会话，因为 Host resolver 会保留 `AgentHandle`。没有 Host 时，对仅存于存储的会话改挂会失败，且 header origin 为 `subagent` 的在线会话会失败。
+对仅存于存储的身份发送仍会以服务的 resume-required 错误失败。发送、停止和搜索不调用 `ctx.agents.resume()`。经 Host 改挂或改名可以恢复冷会话，因为 Host resolver 会保留 `AgentHandle`。没有 Host 时，对仅存于存储的会话改挂或改名会失败，且 header origin 为 `subagent` 的在线会话会失败。
 
 跨组移动会改对话家。同组调序走 `insertSessionBefore`，不改 cwd。`move_agent_to_root` 仍是 session-rehome 插件里当前会话的确认工具。
 
@@ -26,4 +26,4 @@ Status: implemented
 
 ## Consequences
 
-默认 Web 组合会公布 `dsh-session-control` 并暴露八个 `session_control_*` 工具。CLI 和 TUI 组合挂载同一插件但不挂载 `workspaceRegistry`，因此只暴露搜索、停止和发送。冷发送仍是由所有者持有的 Host 或 continuation-manager 操作。包测试钉住提供方生命周期和工具分发；生成的工具目录会收割 schema。归档逆向 RPC 记录在[会话归档](2026-07-31-session-archive-global-set.md)。
+默认 Web 组合会公布 `dsh-session-control` 并暴露九个 `session_control_*` 工具。CLI 和 TUI 组合挂载 `sessionTitle` 但不挂载 `workspaceRegistry`，因此暴露搜索、停止、发送和改名。冷发送仍是由所有者持有的 Host 或 continuation-manager 操作。包测试钉住提供方生命周期和工具分发；生成的工具目录会收割 schema。归档逆向 RPC 记录在[会话归档](2026-07-31-session-archive-global-set.md)。
