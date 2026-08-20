@@ -9,15 +9,16 @@
 }
 
 .userBand {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, min(525px, 82%));
+  justify-content: end;
+  align-items: start;
+  column-gap: 12px;
   width: 100%;
   min-width: 0;
 }
 
-/* Sit beside the first line of the 10px-padded 24px bubble, not the column edge. */
+/* Sit at the left of the bubble max-width track, not flush against a short bubble. */
 .userBand > time {
   padding-top: 12px;
 }
@@ -28,7 +29,6 @@
   align-items: flex-end;
   gap: 8px;
   min-width: 0;
-  max-width: min(525px, 82%);
 }
 .bubble {
   /* 525px cap inside the 736 column; percentage keeps narrow windows sane. */

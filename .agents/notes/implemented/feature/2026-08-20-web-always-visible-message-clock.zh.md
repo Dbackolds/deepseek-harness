@@ -10,7 +10,7 @@ Web 聊天已经保存每条消息的事件时间，但时钟藏在 IconActions 
 
 ## 决策
 
-每条用户、steering（中途引导）和 assistant 消息行都把事件时钟渲染为始终可见的 `<time>` 标签。`MessageClock` 通过 `formatMessageClock` 格式化 `node.time`，并直接坐在消息带上：右对齐的用户／steering 气泡把时钟紧挨在气泡左侧，assistant 叙述把它放在 markdown 正文右侧。同一公历日打印 `h:mm` 加上本地化上下午（`上午`／`下午`，`AM`／`PM`）；同年更早的日期前置 `clock.md` 日期模板；跨年前置 `clock.ymd`。`useCalendarDay` 仍在本地午夜后加宽标签。尚未落盘的 pending steering 没有持久事件时间，因此不挂时钟。
+每条用户、steering（中途引导）和 assistant 消息行都把事件时钟渲染为始终可见的 `<time>` 标签。`MessageClock` 通过 `formatMessageClock` 格式化 `node.time`，并直接坐在消息带上：右对齐的用户／steering 气泡把时钟放在气泡最大宽度轨道的左侧，使短气泡和长气泡共用同一时钟列，assistant 叙述把它放在 markdown 正文右侧。同一公历日打印 `h:mm` 加上本地化上下午（`上午`／`下午`，`AM`／`PM`）；同年更早的日期前置 `clock.md` 日期模板；跨年前置 `clock.ymd`。`useCalendarDay` 仍在本地午夜后加宽标签。尚未落盘的 pending steering 没有持久事件时间，因此不挂时钟。
 
 IconActions 行不再拥有时钟。已结算轮次的指标（`用时`、TTFT（首 token 延迟）、tok/s）仍留在该行，有值即可见。复制与分支仍是始终可见的图标控件。
 

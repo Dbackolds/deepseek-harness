@@ -7,7 +7,7 @@ import css from './MessageClock.module.css'
 
 /**
  * Compact date-aware clock on a message row. Assistant narration places it
- * after the body; a user bubble places it immediately before the bubble.
+ * after the body; a user bubble places it at the left of the bubble track.
  * @param props - Event time and the owning view's locale seat.
  * @returns The clock label, or null when the message has no event time.
  */

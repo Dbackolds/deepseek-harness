@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-web-always-visible-message-clock.md
-2026-08-20-web-always-visible-message-clock.md: 4068707bb513abf2ca8e53a2d12cabf406fb6f47
-2026-08-20-web-always-visible-message-clock.zh.md: d3ed6a5cb5d510a41ce9118072d1c2ddeefe6242
+2026-08-20-web-always-visible-message-clock.md: 2992e0fcf6167f866c6c94c5d991e0317d061f60
+2026-08-20-web-always-visible-message-clock.zh.md: 8699d0bd60b2111f5ff29c7f8b810ef67fa1ef2f

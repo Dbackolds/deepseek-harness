@@ -1,7 +1,7 @@
 // MessageItem: simple chat nodes — user and consumed-steering bubbles
-// (right-aligned, with a clock immediately left of the bubble, copy, and
-// same-session edit; branch lives only under assistant answers), pending
-// steering (copy only),
+// (right-aligned, with a clock at the left of the bubble max-width track,
+// copy, and same-session edit; branch lives only under assistant answers),
+// pending steering (copy only),
 // context injection, compaction marker, retry disclosure, and unknown-surface
 // JSON rows.
 
