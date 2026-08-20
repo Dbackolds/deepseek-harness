@@ -1,6 +1,7 @@
 // MessageItem: simple chat nodes — user and consumed-steering bubbles
-// (right-aligned, with a trailing clock, copy, and same-session edit;
-// branch lives only under assistant answers), pending steering (copy only),
+// (right-aligned, with a clock immediately left of the bubble, copy, and
+// same-session edit; branch lives only under assistant answers), pending
+// steering (copy only),
 // context injection, compaction marker, retry disclosure, and unknown-surface
 // JSON rows.
 
@@ -215,6 +216,7 @@ function UserStyleBubble({
   return (
     <div className={css.userRow} data-pending-steering={pending || undefined}>
       <div className={css.userBand}>
+        <MessageClock time={time} t={t} />
         <div className={css.userStack}>
           <ImageGallery images={images} load={imageLoader} align="end" labels={messageImageLabels(t)} />
           {editing && (
@@ -232,7 +234,6 @@ function UserStyleBubble({
             {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
           </div>}
         </div>
-        <MessageClock time={time} t={t} />
       </div>
       {actions?.(text)}
     </div>

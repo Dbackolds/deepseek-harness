@@ -99,6 +99,8 @@ describe('MessageItem arms', () => {
       />,
     )
     expect(screen.getByText('2:24 下午')).toBeTruthy()
+    const clock = document.querySelector('time')
+    expect(clock?.nextElementSibling?.textContent).toContain('hello bubble')
     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
     expect(screen.queryByRole('button', { name: '编辑消息' })).toBeNull()

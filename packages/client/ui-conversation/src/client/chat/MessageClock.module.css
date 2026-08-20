@@ -1,4 +1,4 @@
-/* Trailing clock on a message row: always visible, right-aligned, muted. */
+/* Always-visible muted clock on a message row. Placement is owned by the parent. */
 
 .clock {
   flex: none;

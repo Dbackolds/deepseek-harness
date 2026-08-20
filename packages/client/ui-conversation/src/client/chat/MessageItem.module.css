@@ -9,20 +9,17 @@
 }
 
 .userBand {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  column-gap: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 12px;
   width: 100%;
   min-width: 0;
 }
 
-.userBand > :first-child {
-  justify-self: end;
-}
-
+/* Sit beside the first line of the 10px-padded 24px bubble, not the column edge. */
 .userBand > time {
-  grid-column: 2;
+  padding-top: 12px;
 }
 
 .userStack {
