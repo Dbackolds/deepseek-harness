@@ -2,7 +2,7 @@
 /** GitBranchSeat: hide, list, checkout, and create against a driven store. */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { GitBranchSeat } from '../src/client/GitBranchSeat.tsx'
 import type { GitBranchSeatProps } from '../src/client/GitBranchSeat.tsx'

@@ -8,6 +8,8 @@ The child-scoped `tool:report` prompt section instructs the child to call `repor
 
 `reportDelivery` selects parent scheduling for every accepted report. `wakeup` (the default) wakes a parked parent with one ordinary later turn. A busy parent follows Host `subagent-delivery.reportBusy` at send time: `steer` (the default) admits the report at the nearest later step; `queue` opens a later turn. Quiet delivery still injects and never wakes. `quiet` uses `parent.inject()`, adding model-facing context without starting a parent model request: an idle parent's append completes before the call returns, while a report reaching an admitting or running parent stages for the next safe log position. Quiet remains deployment scheduling policy, so the model-facing schema cannot select or override it per call.
 
+`reportDelivery` selects parent scheduling for every accepted report. `next-step` (the default) uses `parent.steer()`: a running parent receives the report at its nearest safe step boundary, while an idle parent starts a turn. Reports accepted in sequence share the next-step FIFO, including the later manager-authored settlement notice, so the parent cannot observe settlement before an earlier report; reports waiting together enter one claimed batch. `quiet` uses `parent.inject()`, adding the same next-step context without waking a parked parent. This is deployment scheduling policy, so the model-facing schema cannot select or override it per call.
+
 Scope-local registration deliberately survives the child's global `toolFilter`, so a delegation allow-list cannot remove the only return channel. A deployment that requires a child with no return channel omits this package.
 
 The contribution body is exported as `installReportTool(childCtx, ctx, delivery)` so inspection consumers can install `report` and its guidance into a minted child scope, and returns the one disposer revoking both. The generated tool catalog uses that path because the global registry cannot expose a scope-local schema. Production composition still enters through `apply()`; the subagent seam's contribution registry remains private.
@@ -38,6 +40,8 @@ Prefix-stable within a child; neither the schema nor the section changes at runt
 
 One short acknowledgement per call in the reporting child. The reported content is additionally billed to the parent: quiet delivery adds it to the parent's next request; waking delivery on an idle parent is one later turn; a busy parent follows Host `subagent-delivery.reportBusy`.
 
+One short acknowledgement per call in the reporting child. The reported content is additionally billed to the parent: next-step delivery joins the next request in an open parent turn or starts a turn for an idle parent, while quiet delivery waits for another input to wake the parent.
+
 #### KV Cache effect
 
 Append-only in the child. In the parent, the framed report follows existing history and preserves the reusable prefix.
@@ -56,6 +60,8 @@ The child's complete `output` plus the one-line frame, uncapped by this package.
 
 Append-only; the report follows the parent's reusable request prefix. Quiet delivery does not start a request. Waking delivery on an idle parent starts one later turn; a busy parent follows Host `subagent-delivery.reportBusy`.
 
+Append-only; the report follows the parent's reusable request prefix. Next-step delivery wakes the parent and may extend its open turn, while quiet delivery does not wake it.
+
 ## Known Limitations and Deferred Work
 
 - **A parent whose host-owned disposal already started can still accept** — `AgentHandle.dispose()` cancels, awaits quiescence, and only then unwinds the scope and leaves the registry; it exposes no signal for "disposal started." A report accepted in that window is appended to the parent's transcript, but that parent will not act on it in this process. A continuation-manager-owned parent rejects forest teardown through the manager's admission boundary.
@@ -63,4 +69,4 @@ Append-only; the report follows the parent's reusable request prefix. Quiet deli
 - **A staged quiet report is not immediately reconstructable** — acceptance returns its stable `MessageId`, but the parent Session reconstructs the framed content only after pending context reaches its ordinary log boundary.
 - **Granting waits for the next Activation; revocation is immediate** — installing this package after a child becomes resident grants `report` and its guidance only on that child's next Activation, while removing the package revokes both from resident children immediately.
 - **Nested reporting reaches exactly one edge upward** — a grandchild reports to its direct child parent, never to the top-level coordinator, which must explicitly report a derived update later.
-- **No rate limiting** — the default `wakeup` mode can amplify model work when nested children report frequently; a deployment that accepts unread reports over that amplification selects `quiet`.
+- **No rate limiting** — the default `next-step` mode can amplify model work when nested children report frequently, although reports waiting together share one step; a deployment that accepts unread reports over that amplification selects `quiet`.

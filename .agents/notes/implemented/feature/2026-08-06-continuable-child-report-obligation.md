@@ -19,6 +19,8 @@ The return channel is an instruction the child receives, not a capability it may
 
 `reportDelivery` now defaults to `wakeup`. An accepted report wakes a parked parent with one ordinary later turn. A busy parent follows Host `subagent-delivery.reportBusy` at send time: `steer` (the default) admits the report at the nearest later step; `queue` opens a later turn. `quiet` remains available for deployments that prefer unread reports over turn amplification and still never wakes.
 
+`reportDelivery` defaults to `next-step`. An accepted report wakes a parked parent driver or joins a running parent's nearest step boundary, matching the instruction to report findings that change the parent's next action. `quiet` remains available for deployments that prefer unread reports over model-work amplification. The [report/settlement ordering decision](../bug-fix/2026-08-17-subagent-report-settlement-ordering.md) owns the scheduling rationale.
+
 ### Why the section and the description both exist
 
 They address different failure modes. The tool description is read when the model is already considering `report`; the prompt section is read when it is deciding whether it is finished. The obligation belongs at both points because the failure this fixes — a child that simply stops — happens at the second one.
@@ -33,7 +35,7 @@ That boundary is deliberate: prompt text can only reach a child that is still ru
 
 ### Snapshot coverage
 
-The assembled ACP `subagent-report` scenario now exercises the shipped default: the child reports, the parked parent takes one ordinary turn on that report, and a later prompt still reads the report back out of the durable log. Because the child's scope now composes a prompt the class pin cannot describe, the snapshot harness gained `pinsChildSystemPrompts`, the exact counterpart of the existing `pinsChildToolSchemas`: it moves one child fixture's prompt into `system-prompt.<n>.expected.md`, leaves every other request-header field to the class pin, requires the sidecar exactly when declared, and rejects a sidecar identical to that class pin so a redundant copy cannot drift.
+The assembled ACP `subagent-report` scenario exercises the shipped default: the child reports while the parent is in maintenance, the later settlement notice queues behind it, and the resumed parent claims the next-step report before next-turn settlement. Because the child's scope composes a prompt the class pin cannot describe, the snapshot harness has `pinsChildSystemPrompts`, the exact counterpart of `pinsChildToolSchemas`: it moves one child fixture's prompt into `system-prompt.<n>.expected.md`, leaves every other request-header field to the class pin, requires the sidecar exactly when declared, and rejects a sidecar identical to that class pin so a redundant copy cannot drift.
 
 ## Alternatives considered
 
@@ -48,13 +50,13 @@ The assembled ACP `subagent-report` scenario now exercises the shipped default: 
 ## Consequences
 
 - Every continuable in-process child with this package loaded carries one extra prompt section and a longer `report` description in every request; no other Agent's request changes.
-- The default deployment wakes the parent once per accepted report. A nested tree that reports frequently consumes extra parent turns; `quiet` is the documented escape.
+- The default deployment wakes the parent once per accepted report. A nested tree that reports frequently consumes extra parent requests, while reports waiting together share one step; `quiet` is the documented escape.
 - `installReportTool` requires `ctx.systemPrompt` in the child scope, so the package declares `systemPrompt` in `inject` and fails at load rather than at the next child materialization.
 - Unit coverage pins the new default, two load-bearing instruction phrases, the section's child-only scope against both the parent and a sibling, and rollback or revocation of both registrations.
 - Three assembled ACP scenarios with continuable children pin the complete instruction text through the new sidecar; a future change to any child-scoped section fails those scenarios instead of passing silently.
 
 ### Accepted risks
 
-Waking by default amplifies model work in deep trees. The deployment owns that through `reportDelivery`, and the amplification is bounded by one turn per accepted report.
+Next-step delivery by default amplifies model work in deep trees. The deployment owns that through `reportDelivery`; reports waiting together share one step, and one accepted report causes at most one wake.
 
 A child can still finish without reporting, and this change cannot detect it. Only the runtime's own [settlement account](2026-08-06-manager-owned-subagent-settlement-delivery.md) closes that case.

@@ -2,15 +2,10 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
-
-// The service reads its initial locale from the browser; these specs assert
-// the shipped Chinese copy, so they state the browser they assume.
-usePinnedBrowserLanguages('zh-CN')
 
 async function bench() {
   const ctx = new Context()
@@ -18,7 +13,7 @@ async function bench() {
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
     workspaceId: 'ws-new' as never,
     path: 'name' in input ? `/projects/${input.name}` : input.path,
-    title: 'new', folders: [], sessionIds: [], createdAt: '0', updatedAt: '0',
+    title: 'new', sessionIds: [], createdAt: '0', updatedAt: '0',
   }))
   const startSession = vi.fn()
   const rename = vi.fn(async () => ({}))
@@ -32,28 +27,22 @@ async function bench() {
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
-  const markUnread = vi.fn()
-  const openPath = vi.fn(async () => {})
-  const hide = vi.fn(async () => {})
-  const show = vi.fn(async () => {})
-  const addFolder = vi.fn(async () => ({
-    workspaceId: 'ws-new' as never, path: '/projects/new', folders: ['/extra'], title: 'new',
-    sessionIds: [], createdAt: '0', updatedAt: '0',
-  }))
-  const removeFolder = vi.fn(async () => ({
-    workspaceId: 'ws-new' as never, path: '/projects/new', folders: [], title: 'new',
-    sessionIds: [], createdAt: '0', updatedAt: '0',
-  }))
   ctx.provide('workspaces', {
-    create, startSession, rename, insertSessionBefore, addFolder, removeFolder, openPath, hide, show,
+    create, startSession, rename, insertSessionBefore,
   } as never)
-  ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork, markUnread } as never)
+  ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
+  ctx.provide('connection', {
+    hostDescription: { getSnapshot: () => undefined, subscribe: () => () => {} },
+  } as never)
   const locale = new LocaleRuntime(ctx)
+  // These specs assert the shipped Chinese copy. There is no jsdom `window`
+  // in this lane, so browser-language detection never runs and the locale
+  // comes from FALLBACK_LOCALE (en): state the asserted locale explicitly.
+  locale.setLocale('zh')
   ctx.provide('locale', locale)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, startSession, rename,
-    insertSessionBefore, open, clear, search, renameSession, binding, fork, markUnread, openPath,
-    hide, show,
+    insertSessionBefore, open, clear, search, renameSession, binding, fork,
   }
 }
 
@@ -67,7 +56,7 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 
 describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
-    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'locale'])
+    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'locale', 'connection'])
   })
 
   it('registers browser and pickers for declarations arriving before or after apply', async () => {
@@ -116,18 +105,8 @@ describe('ui-workspace apply', () => {
       expect(b.open).toHaveBeenCalledWith('forked')
     })
     expect(b.fork).toHaveBeenCalledWith({ sessionId: 'session', increaseTitle: true })
-    browser.markUnread('session' as never)
-    expect(b.markUnread).toHaveBeenCalledWith('session')
-    await browser.openPath('/projects/project')
-    expect(b.openPath).toHaveBeenCalledWith('/projects/project')
-    browser.openSplit('session' as never)
-    expect(b.open).toHaveBeenCalledWith('session')
     await browser.renameWorkspace('ws' as never, 'renamed')
     expect(b.rename).toHaveBeenCalledWith('ws', 'renamed')
-    await browser.hideWorkspace('ws' as never)
-    expect(b.hide).toHaveBeenCalledWith('ws')
-    await browser.showWorkspace('ws' as never)
-    expect(b.show).toHaveBeenCalledWith('ws')
     await browser.insertSessionBefore('ws' as never, 's1' as never, 's2' as never)
     expect(b.insertSessionBefore).toHaveBeenCalledWith('ws', 's1', 's2')
     await browser.createWorkspace({ path: '/tmp/browser-project' })
@@ -149,6 +128,7 @@ describe('ui-workspace apply', () => {
     const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
     expect(browser.hooks.directoryFlow.getSnapshot()).toBe(false)
+    expect(browser.hooks.hostDescription.getSnapshot()).toBeUndefined()
     expect(picker.hooks.directoryFlow.getSnapshot()).toBe(false)
     // A flow occupant flips exactly its own surface, and the source notifies.
     const notified = vi.fn()

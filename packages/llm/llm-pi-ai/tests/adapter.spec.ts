@@ -12,7 +12,7 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
-import { resolveProfiles } from '../src/config.ts'
+import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, resolveProfiles } from '../src/config.ts'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
@@ -217,6 +217,7 @@ describe('PiAiAdapter provider routing', () => {
         maxImagesPerMessage: 1,
         maxMessageImageBytes: 1,
         maxImagePixels: 1,
+        maxImageDimension: 2000,
         mediaTypes: ['image/png'],
       }
 
@@ -596,42 +597,44 @@ describe('provider profile lifecycle', () => {
     expect(server.requests[1]).not.toHaveProperty('reasoning_effort')
   })
 
-  it('sends the declared off mapping on openai-responses when no effort is selected', async () => {
+  it('keeps the system role on a declared route whose gateway rejects the developer one', async () => {
     vi.stubEnv('PI_TEST_KEY', 'test-key')
-    const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmPiAi, {
       providers: {
         'acme-gateway': {
           apiKeyEnv: 'PI_TEST_KEY',
-          api: 'openai-responses',
+          api: 'openai-completions',
           baseURL: `${server.url}/v1`,
-          models: [{
-            id: 'acme-think',
-            contextWindow: 65_536,
-            maxTokens: 4096,
-            reasoningEfforts: { off: 'none', high: 'high', xhigh: 'xhigh' },
-          }],
+          models: [
+            // pi-ai sends the system prompt as `developer` to a reasoning
+            // model whenever its URL detection says the endpoint is OpenAI —
+            // which is what an unrecognized private URL resolves to. Most
+            // OpenAI-compatible gateways reject that role.
+            { id: 'acme-think', reasoningEfforts: { off: null, high: 'high' }, compat: { supportsDeveloperRole: false } },
+            { id: 'acme-guess', reasoningEfforts: { off: null, high: 'high' } },
+          ],
         },
       },
     })
+    const roles = async (model: string): Promise<string[]> => {
+      await assemble(ctx, {
+        provider: 'acme-gateway',
+        model,
+        reasoningEffort: ReasoningEffortId('high'),
+        system: 'you are a harness',
+        messages: [],
+      })
+      const request = server.requests.at(-1) as { messages: { role: string }[] }
+      return request.messages.map(message => message.role)
+    }
 
-    const omitted = await assemble(ctx, {
-      provider: 'acme-gateway',
-      model: 'acme-think',
-      messages: [],
-    })
-    expect(omitted.finish.kind).toBe('error')
-    expect(server.requests[0]).toMatchObject({ reasoning: { effort: 'none' } })
-
-    await assemble(ctx, {
-      provider: 'acme-gateway',
-      model: 'acme-think',
-      reasoningEffort: ReasoningEffortId('xhigh'),
-      messages: [],
-    })
-    expect(server.requests[1]).toMatchObject({ reasoning: { effort: 'xhigh' } })
+    expect(await roles('acme-think')).toEqual(['system'])
+    // The switch is the only thing that changes it: the same route, same
+    // endpoint, same reasoning declaration still gets pi-ai's guess.
+    expect(await roles('acme-guess')).toEqual(['developer'])
   })
 
   it('sends a declared off value as the effort parameter instead of omitting it', async () => {
@@ -733,24 +736,8 @@ describe('provider profile lifecycle', () => {
     expect(server.requests).toHaveLength(0)
   })
 
-  it('uses a model-level credential when the selected model names one', async () => {
-    vi.stubEnv('ROUTE_KEY', 'route-key')
-    vi.stubEnv('MODEL_KEY', 'model-key')
-    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
-    const ctx = await harness(server.url, {
-      apiKeyEnv: 'ROUTE_KEY',
-      models: [
-        { id: 'deepseek-v4-flash' },
-        { id: 'deepseek-v4-pro', apiKeyEnv: 'MODEL_KEY' },
-      ],
-    })
-    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
-    await assemble(ctx, { model: 'deepseek-v4-pro', messages: [] })
-    expect(server.headers[0]?.authorization).toBe('Bearer route-key')
-    expect(server.headers[1]?.authorization).toBe('Bearer model-key')
-  })
-
   it('validates empty, underspecified, legacy-shaped, and explicitly blank profiles', () => {
+    expect(DEFAULT_MAX_REQUEST_IMAGE_BYTES).toBe(20 * 1024 * 1024)
     // Empty and omitted dicts are the dormant zero-route posture, not errors.
     expect(resolveProfiles({}).size).toBe(0)
     expect(resolveProfiles(undefined).size).toBe(0)
@@ -764,6 +751,11 @@ describe('provider profile lifecycle', () => {
     expect(() => resolveProfiles({ openai: { provider: 'openai' } as never })).toThrow(/moved to the providers dict key/)
     expect(() => resolveProfiles({ openai: { baseURL: '' } })).toThrow(/empty baseURL/)
     expect(() => resolveProfiles({ openai: { apiKeyEnv: 'not-a-var!' } })).toThrow(/must match/)
+    expect(() => resolveProfiles({ openai: { maxRequestImageBytes: 0 } })).toThrow(/maxRequestImageBytes/)
+    expect(resolveProfiles({ openai: {} }).get('openai')?.maxRequestImageBytes)
+      .toBe(DEFAULT_MAX_REQUEST_IMAGE_BYTES)
+    expect(resolveProfiles({ openai: { maxRequestImageBytes: 1024 } }).get('openai')?.maxRequestImageBytes)
+      .toBe(1024)
   })
 
   it.each(['maxRetries', 'maxRetryDelayMs'] as const)(
@@ -785,6 +777,9 @@ describe('provider profile lifecycle', () => {
       { streamIdleTimeoutMs: 0 },
       { streamIdleTimeoutMs: Number.NaN },
       { streamIdleTimeoutMs: MAX_TIMER_DELAY_MS + 1 },
+      { maxRequestImageBytes: 0 },
+      { maxRequestImageBytes: 1.5 },
+      { maxRequestImageBytes: Number.NaN },
     ]
     for (const entry of invalid) {
       const ctx = new Context()

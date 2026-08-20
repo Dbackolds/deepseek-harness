@@ -45,7 +45,6 @@ describe('SidebarRoot.module.css', () => {
     for (const selector of [
       '.railIn .iconButton',
       '.railIn .newSession',
-      '.railIn .automationArea',
       '.railIn .regionArea',
     ]) {
       expect(declarations(selector)?.get('animation')).toBe(animation)
@@ -65,14 +64,12 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
   })
 
-  it('pins the unread Completed badge on the whale with the success fill', () => {
-    expect(declarations('.completedBadge')?.get('position')).toBe('absolute')
-    expect(declarations('.completedBadge')?.get('background')).toBe('var(--dsw-alias-state-success-primary)')
-    expect(declarations('.completedBadge')?.get('border-radius')).toBe('999px')
-    expect(declarations('.completedBadge')?.get('top')).toBe('0')
-    expect(declarations('.brandMark')?.get('position')).toBe('relative')
-    expect(declarations('.railMark')?.get('position')).toBe('relative')
-    expect(declarations('.logoRow')?.get('overflow-x')).toBe('hidden')
-    expect(declarations('.collapsed .toggle:hover .completedBadge')?.get('display')).toBe('none')
+  it('keeps the slotted brand row at the full artwork height', () => {
+    expect(declarations('.brandIdentity')?.get('height')).toBe('24px')
+    expect(declarations('.brandName')?.get('height')).toBe('24px')
+    expect(declarations('.brandName')?.get('line-height')).toBe('24px')
+    expect(declarations('.brandName')?.get('font-size')).toBe('18px')
+    expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
+    expect(declarations('.fallbackBrandName')?.get('white-space')).toBe('nowrap')
   })
 })

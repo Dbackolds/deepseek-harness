@@ -1,125 +1,5 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`sidebar shell snapshots > pins the unread Completed count on the wordmark whale 1`] = `
-<div
-  data-slot="sidebar"
-  style="display: contents;"
->
-  <div
-    class="root quietBars"
-    style="width: 300px;"
-  >
-    <div
-      class="logoRow"
-    >
-      <button
-        aria-describedby="dsh-sidebar-completed-unread"
-        aria-label="新建会话"
-        class="brand wide"
-        type="button"
-      >
-        <span
-          class="brandMark"
-        >
-          <svg
-            aria-hidden="true"
-            data-content="951274b9"
-            fill="none"
-            height="24"
-            viewBox="0 0 182 24"
-            width="182"
-          />
-          <span
-            aria-hidden="true"
-            class="completedBadge"
-          >
-            2
-          </span>
-        </span>
-      </button>
-      <button
-        aria-label="收起侧边栏"
-        class="iconButton toggle"
-        type="button"
-      >
-        <svg
-          class="panelIcon"
-          data-content="35f95b0c"
-          fill="none"
-          height="16"
-          viewBox="0 0 16 16"
-          width="16"
-          xmlns="http://www.w3.org/2000/svg"
-        />
-      </button>
-      <span
-        aria-live="polite"
-        class="srOnly"
-        id="dsh-sidebar-completed-unread"
-        role="status"
-      >
-        2 个未读已完成任务
-      </span>
-    </div>
-    <button
-      aria-label="新建会话"
-      class="newSession"
-      type="button"
-    >
-      <svg
-        data-content="c0ce4dcc"
-        fill="none"
-        height="14"
-        viewBox="0 0 16 16"
-        width="14"
-        xmlns="http://www.w3.org/2000/svg"
-      />
-      <span
-        class="newSessionLabel wide"
-      >
-        新会话
-      </span>
-    </button>
-    <div
-      class="automationArea"
-    >
-      <div
-        data-slot="sidebar.automation"
-        style="display: contents;"
-      />
-    </div>
-    <div
-      class="regionArea"
-    >
-      <div
-        data-slot="sidebar.workspaces"
-        style="display: contents;"
-      />
-    </div>
-    <div
-      class="footArea"
-    >
-      <div
-        class="footerActions"
-      >
-        <div
-          data-slot="sidebar.footer.action"
-          style="display: contents;"
-        />
-      </div>
-      <div
-        class="settingsArea"
-      >
-        <div
-          data-slot="sidebar.settings"
-          style="display: contents;"
-        />
-      </div>
-    </div>
-  </div>
-</div>
-`;
-
 exports[`sidebar shell snapshots > renders the collapsed rail after the crossfade settles, in place 1`] = `
 <div
   data-slot="sidebar"
@@ -138,17 +18,22 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
         type="button"
       >
         <span
+          aria-hidden="true"
           class="railMark"
         >
-          <svg
-            aria-hidden="true"
-            class="railFish"
-            data-content="965fe321"
-            fill="none"
-            height="17.6580310880829"
-            viewBox="0 0 23.16 17.04"
-            width="24"
-          />
+          <div
+            data-slot="sidebar.brand.mark"
+            style="display: contents;"
+          >
+            <svg
+              aria-hidden="true"
+              data-content="965fe321"
+              fill="none"
+              height="17.6580310880829"
+              viewBox="0 0 23.16 17.04"
+              width="24"
+            />
+          </div>
         </span>
         <svg
           class="panelIcon"
@@ -175,14 +60,6 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
         xmlns="http://www.w3.org/2000/svg"
       />
     </button>
-    <div
-      class="automationArea"
-    >
-      <div
-        data-slot="sidebar.automation"
-        style="display: contents;"
-      />
-    </div>
     <div
       class="regionArea"
     >
@@ -233,16 +110,45 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
         type="button"
       >
         <span
-          class="brandMark"
+          aria-hidden="true"
+          class="brandIdentity"
         >
-          <svg
-            aria-hidden="true"
-            data-content="951274b9"
-            fill="none"
-            height="24"
-            viewBox="0 0 182 24"
-            width="182"
-          />
+          <span
+            class="brandMark"
+          >
+            <div
+              data-slot="sidebar.brand.mark"
+              style="display: contents;"
+            >
+              <svg
+                aria-hidden="true"
+                data-content="965fe321"
+                fill="none"
+                height="17.6580310880829"
+                viewBox="0 0 23.16 17.04"
+                width="24"
+              />
+            </div>
+          </span>
+          <span
+            class="brandName"
+          >
+            <div
+              data-slot="sidebar.brand.name"
+              style="display: contents;"
+            >
+              <span
+                class="fallbackBrandName"
+              >
+                DSH Local Build
+              </span>
+              <span
+                class="buildRevision"
+              >
+                abc1234
+              </span>
+            </div>
+          </span>
         </span>
       </button>
       <button
@@ -280,14 +186,6 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
         New Session
       </span>
     </button>
-    <div
-      class="automationArea"
-    >
-      <div
-        data-slot="sidebar.automation"
-        style="display: contents;"
-      />
-    </div>
     <div
       class="regionArea"
     >
@@ -338,16 +236,45 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
         type="button"
       >
         <span
-          class="brandMark"
+          aria-hidden="true"
+          class="brandIdentity"
         >
-          <svg
-            aria-hidden="true"
-            data-content="951274b9"
-            fill="none"
-            height="24"
-            viewBox="0 0 182 24"
-            width="182"
-          />
+          <span
+            class="brandMark"
+          >
+            <div
+              data-slot="sidebar.brand.mark"
+              style="display: contents;"
+            >
+              <svg
+                aria-hidden="true"
+                data-content="965fe321"
+                fill="none"
+                height="17.6580310880829"
+                viewBox="0 0 23.16 17.04"
+                width="24"
+              />
+            </div>
+          </span>
+          <span
+            class="brandName"
+          >
+            <div
+              data-slot="sidebar.brand.name"
+              style="display: contents;"
+            >
+              <span
+                class="fallbackBrandName"
+              >
+                DSH Local Build
+              </span>
+              <span
+                class="buildRevision"
+              >
+                abc1234
+              </span>
+            </div>
+          </span>
         </span>
       </button>
       <button
@@ -385,14 +312,6 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
         新会话
       </span>
     </button>
-    <div
-      class="automationArea"
-    >
-      <div
-        data-slot="sidebar.automation"
-        style="display: contents;"
-      />
-    </div>
     <div
       class="regionArea"
     >

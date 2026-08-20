@@ -1,76 +1,48 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ReactNode } from 'react'
 import type {
-  SidebarAutomationOwnerProps, SidebarFooterActionOwnerProps, SidebarRootComponentProps,
-  SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
+  SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
+  SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
 import { en } from '../src/client/locales.ts'
 
 // English-dictionary translate stub: the shell renders the same copy the
 // assertions below query by accessible name.
-const t: SidebarRootComponentProps['t'] = (key, params) => {
-  const template = (en as Record<string, string>)[key] ?? key
-  if (params === undefined) return template
-  let text = template
-  for (const [name, value] of Object.entries(params)) {
-    text = text.replaceAll('{' + name + '}', String(value))
-  }
-  return text
-}
+const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllEnvs()
   vi.useRealTimers()
-  vi.unstubAllGlobals()
 })
 
-const neverWorkspaces = (() => { throw new Error('shell must not read workspaces') }) as never
+// The shell never reads the global hooks itself, but they ride the standard
+// props share; stub them as never-called functions.
+const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
 
-function sessionsHook(completedIds: readonly string[] = []): SidebarRootComponentProps['useSessions'] {
-  const byId = Object.fromEntries(completedIds.map(id => [id, { completed: true }])) as SessionListState['byId']
-  return select => select({
-    ids: completedIds as SessionListState['ids'],
-    byId,
-    current: undefined,
-    phase: 'ready',
-    subagentsByParent: {},
-    jobsBySession: {},
-    currentAddress: undefined,
-  })
-}
-
-function mountShell({
-  collapsed = false,
-  width = 300,
-  completedIds = [],
-}: {
-  collapsed?: boolean
-  width?: number
-  completedIds?: readonly string[]
-} = {}) {
+function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
-  let automationOwner: SidebarAutomationOwnerProps | undefined
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
-  let current = { collapsed, width, completedIds }
+  const brandMark = <span data-testid="custom-brand-mark">M</span>
+  const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
+  let current = { collapsed, width }
   const root = () => (
     <SidebarRoot
       collapsed={current.collapsed} width={current.width}
-      useSessions={sessionsHook(current.completedIds)} useWorkspaces={neverWorkspaces}
+      useSessions={neverHook} useWorkspaces={neverHook}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
-        owner: SidebarAutomationOwnerProps | SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
+        owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
       ) => {
-        if (key === 'sidebar.automation') {
-          automationOwner = owner
-          return <div data-testid="automation-seat" data-wide={owner.wide} />
-        }
+        if (key === 'sidebar.brand.mark') return brandMark
+        if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.settings') {
           settingsOwner = owner
           return <div data-testid="settings-seat" data-wide={owner.wide} />
@@ -88,10 +60,6 @@ function mountShell({
   return {
     startSession,
     toggleSidebar,
-    automationOwner: () => {
-      if (automationOwner === undefined) throw new Error('automation owner not rendered')
-      return automationOwner
-    },
     regionOwner: () => {
       if (regionOwner === undefined) throw new Error('region owner not rendered')
       return regionOwner
@@ -114,6 +82,8 @@ function mountShell({
 describe('SidebarRoot shell', () => {
   it('routes New Session (capsule + wordmark) and the column toggle', () => {
     const b = mountShell()
+    expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
+    expect(screen.getByTestId('custom-brand-name')).toBeTruthy()
     // Expanded, both the wordmark and the capsule start a session.
     const starters = screen.getAllByRole('button', { name: 'New session' })
     expect(starters).toHaveLength(2)
@@ -123,10 +93,24 @@ describe('SidebarRoot shell', () => {
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 
+  it('renders generic brand fallbacks when no package fills the slots', () => {
+    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
+    const { container } = render(<SidebarRoot
+      collapsed={false} width={300}
+      useSessions={neverHook} useWorkspaces={neverHook}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
+        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+    />)
+
+    expect(screen.getByText('DSH Local Build')).toBeTruthy()
+    expect(screen.getByText('0123456')).toBeTruthy()
+    expect(container.querySelector('svg')).not.toBeNull()
+  })
+
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
     const b = mountShell()
     expect(b.regionOwner().wide).toBe(true)
-    expect(b.automationOwner().wide).toBe(true)
     // The settings seat rides the same wide flag (ui-settings renders the row).
     expect(b.settingsOwner().wide).toBe(true)
     expect(b.footerActionOwner().wide).toBe(true)

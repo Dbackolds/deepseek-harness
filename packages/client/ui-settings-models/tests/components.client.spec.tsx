@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@deepseek-ai/schemastery'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RpcResponse, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   ModelsSection, needsSetup, providerCopy, providerTargetLabel, removeProviderProfile,
@@ -14,9 +14,11 @@ import {
   DeepSeekModelsEditor, formatCapacity, modelDrafts, parseCapacity, validateDeepSeekModels,
 } from '../src/client/DeepSeekModelsEditor.tsx'
 import { apiKeyFailure } from '../src/client/apiKey.ts'
+import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { deriveKeyRef, ModelsSettingsStore } from '../src/client/store.ts'
 import type { ProviderRow } from '../src/client/store.ts'
 import { en } from '../src/client/locales.ts'
+import { settingsSchema } from './settings-schema.client.ts'
 
 afterEach(cleanup)
 
@@ -29,24 +31,6 @@ const deepSeekCopy = (template: string): string => providerCopy(template, DEEPSE
 /** Open one row's capacity disclosure (1-based, as the labels read). */
 function expandRow(position: number): void {
   fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} ${String(position)}`))
-}
-
-/**
- * Expand a first-run setup card by its display name. The form stays mounted
- * behind the disclosure, so a second call is a no-op once `open`.
- */
-function expandSetup(displayName: string): HTMLElement {
-  const card = screen.getByText(displayName).closest('li')
-  if (card === null) throw new Error(`${displayName} setup card missing`)
-  const details = card.querySelector('details')
-  if (details === null) throw new Error(`${displayName} setup disclosure missing`)
-  if (!details.open) {
-    const summary = details.querySelector('summary')
-    if (summary === null) throw new Error(`${displayName} setup summary missing`)
-    fireEvent.click(summary)
-    details.open = true
-  }
-  return card
 }
 
 /** The capacity inputs of every open row, in row order. */
@@ -132,8 +116,7 @@ function wireNamespaces(): SettingsNamespaceView[] {
     {
       ns: 'llm-pi-ai',
       schema: JSON.parse(JSON.stringify(PiAiConfig.toJSON())) as unknown,
-      value: { providers: { fac: { displayName: 'FAC', api: 'openai-completions', baseURL: 'https://new.fastaicode.top/v1' }, openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
-      base: { providers: { fac: { displayName: 'FAC', api: 'openai-completions', baseURL: 'https://new.fastaicode.top/v1' } } },
+      value: { providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
       user: { providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
       applies: 'live',
       secrets: [],
@@ -172,7 +155,6 @@ function scriptedFace(overrides: {
           { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], active: true },
           { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true },
           { provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'], active: false },
-          { provider: 'fac', displayName: 'FAC', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'fac'], active: true },
           { provider: 'zombie', displayName: 'zombie', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'zombie'], active: false },
           { provider: 'broken', displayName: 'broken', settingsNs: 'llm-pi-ai', settingsPath: ['nope', 'x'], active: false },
           { provider: 'plain', displayName: 'plain', settingsNs: 'llm-plain', settingsPath: ['profiles', 'plain'], active: false },
@@ -205,16 +187,18 @@ type WireFace = ConstructorParameters<typeof ModelsSettingsStore>[0]
 
 async function mountFace(scripted: ReturnType<typeof scriptedFace>) {
   const { face, update, replace, mutate, set, unset } = scripted
-  const controller = new ModelsSettingsStore(face as unknown as WireFace)
+  const mirror = new SettingsDescribeMirror(face as never)
+  const controller = new ModelsSettingsStore(face as unknown as WireFace, settingsSchema, mirror)
   await controller.load()
-  const injected: ModelsSectionInjected = {
+  const injected: ModelsSectionProps = {
     controller,
     useSnapshot: bindSnapshotSelector(controller.store),
     api: face as never,
+    schema: settingsSchema,
     t,
   }
   const view = render(<ModelsSection {...injected} />)
-  return { view, face, update, replace, mutate, set, unset, controller }
+  return { view, face, update, replace, mutate, set, unset, controller, mirror }
 }
 
 async function mountSection(overrides: Parameters<typeof scriptedFace>[0] = {}) {
@@ -252,37 +236,16 @@ describe('ModelsSection', () => {
     expect(document.body.textContent).toBe('')
   })
 
-  it('renders the unkeyed whole-section provider as a collapsed setup card in the first-run posture', async () => {
+  it('renders the unkeyed whole-section provider as an open setup card in the first-run posture', async () => {
     await mountFirstRun()
     // Nothing is reachable yet, and DeepSeek has no configured credential and
-    // no stored apiKey → setup card, collapsed until the title is expanded.
-    expect(screen.getByText('FAC')).toBeTruthy()
+    // no stored apiKey → setup card.
     expect(screen.getByText('DeepSeek')).toBeTruthy()
-    expect([...document.querySelectorAll('li details')].every(node => !(node as HTMLDetailsElement).open)).toBe(true)
-    expandSetup('DeepSeek')
-    expandSetup('FAC')
-    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(2)
+    expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
     expect(screen.getByText('openai')).toBeTruthy()
     expect(screen.queryByText('Active')).toBeNull()
     expect(screen.queryByText('Inactive')).toBeNull()
     expect(screen.getByText(en.add)).toBeTruthy()
-  })
-
-  it('keeps a typed key when the setup card is collapsed and expanded again', async () => {
-    await mountFirstRun()
-    const card = expandSetup('DeepSeek')
-    fireEvent.change(within(card).getByLabelText<HTMLInputElement>(en.keyInput), {
-      target: { value: 'sk-kept' },
-    })
-    const details = card.querySelector('details')
-    if (details === null) throw new Error('DeepSeek setup disclosure missing')
-    fireEvent.click(within(card).getByText('DeepSeek'))
-    details.open = false
-    expect(details.open).toBe(false)
-    expect(within(card).getByLabelText<HTMLInputElement>(en.keyInput).value).toBe('sk-kept')
-    fireEvent.click(within(card).getByText('DeepSeek'))
-    details.open = true
-    expect(within(card).getByLabelText<HTMLInputElement>(en.keyInput).value).toBe('sk-kept')
   })
 
   it('leaves the unkeyed provider a plain row once another provider is usable', async () => {
@@ -294,13 +257,9 @@ describe('ModelsSection', () => {
     expect(configured.getAttribute('title')).toBe(en.credentialConfigured)
     expect(configured.className).toContain('credentialDotConfigured')
     expect(configured.closest('li')?.textContent).toContain('openai')
-    const missing = screen.getAllByRole('img', { name: en.credentialMissing })
-    expect(missing.some(node => node.closest('li')?.textContent?.includes('DeepSeek'))).toBe(true)
+    const missing = screen.getByRole('img', { name: en.credentialMissing })
+    expect(missing.closest('li')?.textContent).toContain('DeepSeek')
     // The card is still one click away.
-    fireEvent.click(screen.getByRole('button', { name: providerCopy(en.editProvider, { provider: 'fac', displayName: 'FAC' }) }))
-    fireEvent.click(screen.getByText(en.customized))
-    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe('https://new.fastaicode.top/v1')
-    fireEvent.click(screen.getByText(en.cancel))
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
   })
@@ -310,12 +269,13 @@ describe('ModelsSection', () => {
     face.credentials.describe.mockImplementation((payload: { refs: string[] }) => Promise.resolve(ok({
       credentials: Object.fromEntries(payload.refs.map(ref => [ref, { configured: false, writable: true }])),
     })))
-    const controller = new ModelsSettingsStore(face as unknown as WireFace)
+    const controller = new ModelsSettingsStore(face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(face as never))
     await controller.load()
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
       api={face as never}
+      schema={settingsSchema}
       t={t}
     />)
 
@@ -332,13 +292,14 @@ describe('ModelsSection', () => {
     face.credentials.describe.mockImplementation((payload: { refs: string[] }) => Promise.resolve(ok({
       credentials: Object.fromEntries(payload.refs.map(ref => [ref, { configured: true, writable: true }])),
     })))
-    const controller = new ModelsSettingsStore(face as unknown as WireFace)
+    const controller = new ModelsSettingsStore(face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(face as never))
     await controller.load()
     cleanup()
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
       api={face as never}
+      schema={settingsSchema}
       t={t}
     />)
     // Now a row with an Edit button, not an open card.
@@ -353,16 +314,12 @@ describe('ModelsSection', () => {
       configured: true,
       removable: false,
       apiKeyEnv: 'X',
-      apiKeyEnvs: ['X'],
       credential,
-      credentials: credential === undefined ? {} : { X: credential },
     })
     expect(needsSetup(row(undefined), false)).toBe(true)
     expect(needsSetup(row({ configured: true, writable: true }), false)).toBe(false)
-    const nested = { ...row(undefined), entry: { ...entry, settingsPath: ['providers', 'x'] }, removable: true }
+    const nested = { ...row(undefined), entry: { ...entry, settingsPath: ['providers', 'x'] } }
     expect(needsSetup(nested, false)).toBe(false)
-    const compositionOwned = { ...row(undefined), entry: { ...entry, provider: 'fac', settingsPath: ['providers', 'fac'] } }
-    expect(needsSetup(compositionOwned, false)).toBe(true)
     // A user who can already reach some provider is not in the first-run
     // posture, so nothing on the page opens itself.
     expect(needsSetup(row(undefined), true)).toBe(false)
@@ -391,13 +348,14 @@ describe('ModelsSection', () => {
 
   it('stores a typed key write-only from the setup card without touching settings', async () => {
     const { set, update, face } = await mountFirstRun()
-    const deepSeekCard = expandSetup('DeepSeek')
-    const key = within(deepSeekCard).getByLabelText<HTMLInputElement>(en.keyInput)
+    const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: '  sk-live  ' } })
-    fireEvent.click(within(deepSeekCard).getByText(en.apply))
+    fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledWith({ ref: 'DEEPSEEK_API_KEY', value: 'sk-live' }) })
     expect(update).not.toHaveBeenCalled()
-    await waitFor(() => { expect(face.settings.describe.mock.calls.length).toBeGreaterThan(1) })
+    // The saved key re-loads the join; the settings answer rides the shared
+    // mirror, so the reload shows as a directory read rather than a describe.
+    await waitFor(() => { expect(face.llm.providers.mock.calls.length).toBeGreaterThan(1) })
     expect((await screen.findByRole('status')).textContent).toBe(
       providerCopy(en.savedProvider, { provider: 'deepseek-official', displayName: 'DeepSeek' }),
     )
@@ -612,6 +570,7 @@ describe('ModelsSection', () => {
       provider="deepseek-official"
       displayName="DeepSeek"
       namespace={overridden}
+      schema={settingsSchema}
       settingsPath={[]}
       api={face as never}
       t={t}
@@ -773,38 +732,6 @@ describe('ModelsSection', () => {
       .toBe(en.contextWindowPlaceholder)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 1`).placeholder)
       .toBe(en.maxTokensPlaceholder)
-    expect(screen.getByLabelText<HTMLTextAreaElement>(`${en.modelSystemPrompt} 1`).placeholder)
-      .toBe(en.modelSystemPromptPlaceholder)
-  })
-
-  it('writes a DeepSeek systemPrompt and drops an emptied one', async () => {
-    const { mutate } = await mountDeepSeekCard({
-      mutate: vi.fn(() => Promise.resolve(ok(wireNamespaces()[0]))),
-    })
-    fireEvent.click(screen.getByText(en.customized))
-    expandRow(1)
-    fireEvent.change(screen.getByLabelText(`${en.modelSystemPrompt} 1`), {
-      target: { value: 'You replace the assembled prompt.' },
-    })
-    fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
-    expect(mutate.mock.calls[0]?.[0]).toMatchObject({
-      ns: 'llm-deepseek',
-      ops: [{
-        op: 'set',
-        path: ['models'],
-        value: [
-          {
-            id: 'deepseek-v4-flash',
-            name: 'DeepSeek-V4-Flash',
-            description: 'Preserved hidden detail',
-            contextWindow: 1_000_000,
-            systemPrompt: 'You replace the assembled prompt.',
-          },
-          DEFAULT_DEEPSEEK_MODELS[1],
-        ],
-      }],
-    })
   })
 
   it('can empty and reset the model override, then clear optional fields without dropping hidden data', async () => {
@@ -873,6 +800,7 @@ describe('ModelsSection', () => {
       provider="deepseek-official"
       displayName="DeepSeek"
       namespace={bare}
+      schema={settingsSchema}
       settingsPath={[]}
       api={face as never}
       t={t}
@@ -975,7 +903,7 @@ describe('ModelsSection', () => {
     const set = vi.fn()
       .mockResolvedValueOnce(fail('credential store unavailable', 'credential-rejected'))
       .mockResolvedValueOnce(ok({}))
-    const { face, controller } = await mountSection({ mutate, set })
+    const { face, controller, mirror } = await mountSection({ mutate, set })
     fireEvent.click(screen.getByText(en.add))
     await screen.findByLabelText(en.provider)
     fireEvent.change(screen.getByLabelText<HTMLInputElement>(en.keyInput), { target: { value: 'sk-ant' } })
@@ -987,7 +915,12 @@ describe('ModelsSection', () => {
       hasDocument: false,
       namespaces: wireNamespaces().map(namespace => namespace.ns === 'llm-pi-ai' ? afterSettings : namespace),
     }))
-    await act(async () => { await controller.load() })
+    // The refreshed settings answer reaches the page through the mirror's own
+    // refresh (the document commit's invalidation in production).
+    await act(async () => {
+      await mirror.load()
+      await controller.load()
+    })
     expect(controller.store.getSnapshot().namespaces.get('llm-pi-ai')?.revision).toBe(1)
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledTimes(2) })
@@ -1030,18 +963,17 @@ describe('ModelsSection', () => {
     const unhandled = vi.fn()
     process.on('unhandledRejection', unhandled)
     try {
-      const controller = new ModelsSettingsStore(face as unknown as WireFace)
+      const controller = new ModelsSettingsStore(face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(face as never))
       await controller.load()
       render(<ModelsSection
         controller={controller}
         useSnapshot={bindSnapshotSelector(controller.store)}
         api={face as never}
+        schema={settingsSchema}
         t={t}
       />)
-      await screen.findByText('DeepSeek')
-      expandSetup('DeepSeek')
-      const keys = await screen.findAllByLabelText<HTMLInputElement>(en.keyInput)
-      expect(keys.some(input => input.placeholder === en.keyPlaceholder)).toBe(true)
+      const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+      expect(key.placeholder).toBe(en.keyPlaceholder)
       await new Promise(resolve => setTimeout(resolve, 10))
       expect(unhandled).not.toHaveBeenCalled()
     } finally {
@@ -1079,10 +1011,9 @@ describe('ModelsSection', () => {
     await mountFirstRun({
       set: vi.fn(() => Promise.resolve(fail('credentials: DEEPSEEK_API_KEY is shadowed by the read-only environment', 'credential-rejected'))),
     })
-    const deepSeekCard = expandSetup('DeepSeek')
-    const key = within(deepSeekCard).getByLabelText<HTMLInputElement>(en.keyInput)
+    const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: 'sk-live' } })
-    fireEvent.click(within(deepSeekCard).getByText(en.apply))
+    fireEvent.click(screen.getByText(en.apply))
     await screen.findByText(/shadowed by the read-only environment/)
     expect(screen.queryByRole('status')).toBeNull()
   })
@@ -1170,12 +1101,14 @@ describe('ModelsSection', () => {
   it('renders the load failure with a retry control', async () => {
     const face = scriptedFace()
     face.face.llm.providers = vi.fn(() => Promise.resolve(fail('directory down', 'internal'))) as never
-    const controller = new ModelsSettingsStore(face.face as unknown as WireFace)
+    const controller = new ModelsSettingsStore(
+      face.face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(face.face as never))
     await controller.load()
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
       api={face.face as never}
+      schema={settingsSchema}
       t={t}
     />)
     expect(screen.getByText(/directory down/)).toBeTruthy()
@@ -1190,13 +1123,14 @@ describe('ModelsSection', () => {
       hasDocument: false,
       namespaces: wireNamespaces(),
     })))
-    const controller = new ModelsSettingsStore(face as unknown as WireFace)
+    const controller = new ModelsSettingsStore(face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(face as never))
     await controller.load()
     cleanup()
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
       api={face as never}
+      schema={settingsSchema}
       t={t}
     />)
     expect(screen.getByText(en.readOnly)).toBeTruthy()
@@ -1231,37 +1165,33 @@ describe('ModelsSection', () => {
     // The regression: the setup card shared the row/add/declare close handler,
     // so cancelling it discarded the add card's draft while staying open itself.
     await mountFirstRun()
-    expandSetup('DeepSeek')
-    expandSetup('FAC')
-    expect(screen.getAllByLabelText(en.keyInput).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
     fireEvent.click(screen.getByText(en.add))
     await screen.findByLabelText(en.provider)
-    const openKeys = screen.getAllByLabelText(en.keyInput).length
-    expect(openKeys).toBeGreaterThan(2)
+    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(2)
 
-    // The first setup card sits above the add block.
+    // The setup card is the first one on the page, above the add block.
     fireEvent.click(screen.getAllByText(en.cancel)[0] as HTMLElement)
     // The add card kept its draft…
     expect(screen.getByLabelText(en.provider)).toBeTruthy()
-    // …and that setup card collapsed to an ordinary row.
-    expect(screen.getAllByLabelText(en.keyInput).length).toBe(openKeys - 1)
+    // …and DeepSeek collapsed to an ordinary row carrying the missing-key dot.
+    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
     expect(screen.getAllByRole('img', { name: en.credentialMissing })
       .some(dot => dot.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
     // Its card reopens through Edit, which closes the add card as any row does.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
-    const deepSeekEditor = screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }).closest('li')
-    if (deepSeekEditor === null) throw new Error('DeepSeek card missing')
-    expect(within(deepSeekEditor).getByLabelText(en.keyInput)).toBeTruthy()
+    expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
     expect(screen.queryByLabelText(en.provider)).toBeNull()
   })
 
   it('loads on first render of an idle controller', async () => {
     const { face } = scriptedFace()
-    const controller = new ModelsSettingsStore(face as unknown as WireFace)
+    const controller = new ModelsSettingsStore(face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(face as never))
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
       api={face as never}
+      schema={settingsSchema}
       t={t}
     />)
     await screen.findByText('DeepSeek')
