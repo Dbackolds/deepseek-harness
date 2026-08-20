@@ -10,11 +10,10 @@ English | [中文](README.zh.md)
 - id: automation
   name: '@deepseek-ai/dsh-automation'
   config:
-    maxConcurrentRuns: 2
     minEverySeconds: 300
 ```
 
-`maxConcurrentRuns` and `minEverySeconds` are process-level bounds, not per-rule settings. Missing `storageDomain`, `agents`, `sessions`, `workspaceRegistry`, or `agentDefaultModel` leaves the plugin pending.
+`minEverySeconds` is a process-level bound, not a per-rule setting. Independent due rules fire in the same batch even when other Automation Sessions are already running. Missing `storageDomain`, `agents`, `sessions`, `workspaceRegistry`, or `agentDefaultModel` leaves the plugin pending.
 
 ## Service contract
 

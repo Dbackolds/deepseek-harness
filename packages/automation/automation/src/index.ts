@@ -83,7 +83,7 @@ declare module '@deepseek-ai/cordis' {
 
 /** Plugin config: process-level fire bounds. */
 export interface Config {
-  maxConcurrentRuns: number
+  /** Minimum `everySeconds` a create/update request may store. */
   minEverySeconds: number
 }
 /**
@@ -105,7 +105,6 @@ export function AutomationRunId(id: string): AutomationRunId {
   return id as AutomationRunId
 }
 export const Config = z.object({
-  maxConcurrentRuns: z.number().default(2).min(1),
   minEverySeconds: z.number().default(MIN_EVERY_INTERVAL_SECONDS).min(MIN_EVERY_INTERVAL_SECONDS),
 })
 /** Substitutable wall clock and id mint for tests. */
@@ -127,7 +126,6 @@ export class AutomationService extends Service {
   private state?: AutomationDomainState
   private operationTail: Promise<void> = Promise.resolve()
   private runtime?: AutomationRuntime
-  private firing = 0
   constructor(ctx: Context, public readonly config: Config) {
     super(ctx, 'automation')
   }
@@ -357,21 +355,6 @@ export class AutomationService extends Service {
         })
       }
     }
-    if (this.liveRunCount() >= this.config.maxConcurrentRuns) {
-      const skipped = await this.writeRun({
-        ruleId: id,
-        startedAt: formatUtcInstant(now),
-        endedAt: formatUtcInstant(now),
-        outcome: 'skipped_busy',
-        source: options.source,
-        errorCode: 'max_concurrent_runs',
-      })
-      if (options.advance && (rule.selector.kind === 'every' || rule.selector.kind === 'local-clock')) {
-        await this.advanceAfterFire(rule, now)
-      }
-      return publishedRun(skipped)
-    }
-    this.firing += 1
     try {
       const agent = await this.openSession(rule)
       const run = await this.writeRun({
@@ -422,9 +405,6 @@ export class AutomationService extends Service {
       if (error instanceof AutomationInputError)
         throw error
       throw new AutomationInputError('internal_error', `automation fire for '${id}' failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
-    }
-    finally {
-      this.firing -= 1
     }
   }
   private async openSession(rule: StoredAutomationRule) {
@@ -527,16 +507,6 @@ export class AutomationService extends Service {
       return undefined
     const agent = this.ctx.agents.get(sessionId)
     return agent?.status === 'running' ? agent : undefined
-  }
-  private liveRunCount() {
-    let count = this.firing
-    for (const [, record] of this.requireRuns().entries()) {
-      if (record.outcome !== 'started' || record.sessionId === undefined)
-        continue
-      if (this.busyAgent(record.sessionId) !== undefined)
-        count += 1
-    }
-    return count
   }
   private async writeRun(record: Omit<StoredAutomationRun, 'id'> & { id?: AutomationRunId }) {
     const id = record.id ?? AutomationRunId(`run-${internals.uuid()}`)

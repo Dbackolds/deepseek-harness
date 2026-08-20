@@ -14,7 +14,7 @@ Status: implemented
 
 `ctx.automation` 在 `automation` storage domain 里拥有 Host 级规则表。存活的 Web Host 从 enabled 规则武装定时器，开火时创建 `origin: 'automation'` 的 Session，固定可选 permission preset，追加仅日志的 `automation/start`，把 task 作为插件来源的 user message 入队，并在 `ctx.sessionTitle` 存在时用规则名命名该 Session。
 
-选择器是 `after`、`at`、`every`（≥ 300 秒，只取最近一次）和 `local-clock`（`HH:mm` 加可选 ISO 星期与显式 IANA 时区）。没有 Cron 求值器。`onOverlap` 是逐条规则的 `skip` | `replace`，只看该规则上一次 `started` Session：忙表示 live Agent 且 `status === 'running'`。`skip` 记录 `skipped_busy`；`replace` 用 `{ kind: 'automation', ruleId }` 取消并立即打开新 Session。
+选择器是 `after`、`at`、`every`（≥ 300 秒，只取最近一次）和 `local-clock`（`HH:mm` 加可选 ISO 星期与显式 IANA 时区）。没有 Cron 求值器。`onOverlap` 是逐条规则的 `skip` | `replace`，只看该规则上一次 `started` Session：忙表示 live Agent 且 `status === 'running'`。`skip` 记录 `skipped_busy`；`replace` 用 `{ kind: 'automation', ruleId }` 取消并立即打开新 Session。独立到期规则即使已有其他 Automation Session 在跑也会开火；Host 范围的并发开火上限已[移除](../simplification/2026-08-21-drop-automation-max-concurrent-runs.md)。
 
 tool、Host RPC 和 Web 侧栏面板是同一服务的 Consumer。本记录交付服务、持久表、origin/cancel-cause 扩展、模型 tool、Host RPC 和包测试。[Web Automation 侧栏](2026-08-15-web-automation-sidebar.md) 在该接口上占据 New Session 下方的 `sidebar.automation`。
 

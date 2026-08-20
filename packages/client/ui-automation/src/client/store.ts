@@ -247,7 +247,7 @@ export class AutomationStore {
           const opened = await this.openRunSession(previousId)
           return opened ?? 'skipped_busy'
         }
-        return run.errorCode === 'max_concurrent_runs' ? 'max_concurrent_runs' : 'skipped_busy'
+        return 'skipped_busy'
       }
       if (run.outcome === 'failed') return 'failed'
     } catch (error) {

@@ -93,7 +93,10 @@ interface AutomationRunRecord {
   readonly ruleId: AutomationRuleId
   readonly sessionId?: SessionId
   readonly startedAt: string
+  /** Instant the started Session left `running`, or the skip/fail instant. */
+  readonly endedAt?: string
   readonly outcome: AutomationRunOutcome
+  readonly source?: AutomationRunSource
   readonly errorCode?: string
 }
 ```
@@ -102,7 +105,7 @@ interface AutomationRunRecord {
 
 ## 实时投递
 
-进程内 owner 从 enabled 规则推导最早定时器，每次有界等待后重读墙钟。冷 Host 不做任何事。到期规则占用一条 Host 范围队列。`skip` 等待上一个 Agent 离开 `running`；`replace` 取消该 Agent 并立即打开下一条 Session。
+进程内 owner 从 enabled 规则推导最早定时器，每次有界等待后重读墙钟。冷 Host 不做任何事。到期规则占用一条 Host 范围队列，且每条独立规则即使已有其他 Automation Session 在跑也可以开火。`skip` 等待该规则上一个 Agent 离开 `running`；`replace` 取消该 Agent 并立即打开下一条 Session。
 
 开火创建的 Session header 带 `origin: 'automation'`。
 

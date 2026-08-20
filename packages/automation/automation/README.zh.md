@@ -10,11 +10,10 @@
 - id: automation
   name: '@deepseek-ai/dsh-automation'
   config:
-    maxConcurrentRuns: 2
     minEverySeconds: 300
 ```
 
-`maxConcurrentRuns` 和 `minEverySeconds` 是进程级上限，不是逐条规则设置。缺少 `storageDomain`、`agents`、`sessions`、`workspaceRegistry` 或 `agentDefaultModel` 时插件保持 pending。
+`minEverySeconds` 是进程级上限，不是逐条规则设置。独立到期规则即使已有其他 Automation Session 在跑，也会在同一批次开火。缺少 `storageDomain`、`agents`、`sessions`、`workspaceRegistry` 或 `agentDefaultModel` 时插件保持 pending。
 
 ## 服务约定
 
