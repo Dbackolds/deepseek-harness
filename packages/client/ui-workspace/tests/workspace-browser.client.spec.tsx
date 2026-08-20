@@ -71,6 +71,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     open: vi.fn(),
     openPath: vi.fn(async () => {}),
     markUnread: vi.fn(async () => {}),
+    openSplit: vi.fn(),
     searchSessions: vi.fn(async () => ({ items: [], hasMore: false })),
     searchResultLimit: 20,
     renameSession: vi.fn(async () => {}),

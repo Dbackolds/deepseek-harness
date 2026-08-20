@@ -345,7 +345,7 @@ describe('workspace browser rows', () => {
     try {
       const group: GroupNode = {
         key: 'project', workspaceId: wid('project'), cwd: '/projects/project', folders: ['/libs/shared'], createdAt: 0, label: 'Project',
-        folders: [], sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+        sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
       }
       render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
