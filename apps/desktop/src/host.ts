@@ -12,6 +12,10 @@ import { parseReadyChunk, type ReadyUrl } from './ready.ts'
 
 /** How long the window waits for `dsh web: http://127.0.0.1:<port>`. */
 const HOST_READY_TIMEOUT_MS = 60_000
+/** How long the window waits after that line for `/plugins` to answer. */
+const PLUGIN_ROUTE_TIMEOUT_MS = 15_000
+/** Client bundle probed so the window does not load a Host that still 404s plugins. */
+const PLUGIN_PROBE_PATH = '/plugins/%40deepseek-ai/dsh-client-modules/client.js'
 
 /** One running Host and the loopback URL it announced. */
 export interface StartedHost {
@@ -126,6 +130,40 @@ export function resolveDshInvocation(from: string, rememberedNode?: string): Dsh
     return { command: node, args: ['--import', 'tsx/esm', source] }
   }
   throw new Error('dsh desktop: apps/cli is missing; run pnpm run build from the repository root')
+}
+
+/**
+ * Wait until the Host serves a client plugin bundle.
+ * The readiness line only means the HTTP server bound; later rows still
+ * register `/plugins`. Loading the GUI before that 404s the first scripts.
+ * @param href - loopback origin printed by `dsh web`.
+ * @param options - timeout and fetch hook for tests.
+ */
+export async function waitForPluginRoute(
+  href: string,
+  options: {
+    timeoutMs?: number
+    fetchImpl?: (url: string, init: { method: 'GET' }) => Promise<{ ok: boolean }>
+  } = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? PLUGIN_ROUTE_TIMEOUT_MS
+  const fetchImpl = options.fetchImpl ?? ((url, init) => fetch(url, init))
+  const url = `${href.replace(/\/$/u, '')}${PLUGIN_PROBE_PATH}`
+  const deadline = Date.now() + timeoutMs
+  let lastError: Error | undefined
+  while (Date.now() < deadline) {
+    try {
+      // `/plugins` answers GET. A HEAD probe would 405 forever and leave the
+      // window on the blank loading page after the timeout.
+      const response = await fetchImpl(url, { method: 'GET' })
+      if (response.ok) return
+      lastError = new Error(`dsh desktop: plugin route ${url} returned a non-OK status`)
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+    }
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+  throw lastError ?? new Error(`dsh desktop: timed out waiting for plugin route at ${url}`)
 }
 
 /**

@@ -18,7 +18,7 @@ const win = globalThis as DshWindow
 type Factory = ClientPluginHandoff['factory']
 
 afterEach(() => {
-  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   delete win.__ModuleLoader__
   for (const el of document.querySelectorAll('style, script')) el.remove()
 })
@@ -301,5 +301,26 @@ describe('default transport seam', () => {
       'bundle script /plugins/dee/client.js?rev=0 failed to load',
     )
     expect([...document.querySelectorAll('script')]).toEqual([])
+  })
+
+  it('retries a first-scan script miss then registers the factory', async () => {
+    let attempts = 0
+    vi.spyOn(document.head, 'append').mockImplementation((...nodes) => {
+      const script = nodes[0]
+      if (!(script instanceof HTMLScriptElement)) throw new Error('expected script node')
+      attempts += 1
+      queueMicrotask(() => {
+        if (attempts < 3) {
+          script.dispatchEvent(new Event('error'))
+          return
+        }
+        win.__ModuleLoader__?.load({ id: 'dee', factory: () => ({ marker: 'retried' }) })
+        script.dispatchEvent(new Event('load'))
+      })
+    })
+    const loader: ClientModuleLoader = new ClientModuleSystem({ modules: [row('dee')], staticModules: {} })
+    const exports = await loader.import('dee', '', {})
+    expect(attempts).toBe(3)
+    expect((exports as { marker: string }).marker).toBe('retried')
   })
 })

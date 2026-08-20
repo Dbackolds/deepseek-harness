@@ -146,11 +146,16 @@ function shortHash(input: string | Buffer): string {
   return createHash('sha1').update(input).digest('hex').slice(0, 12)
 }
 
+/** Encode a scoped package name so `/plugins/@scope/name` is a legal script URL. */
+function pluginBundlePath(id: string, suffix: '/client.js' | '/client.js.map'): string {
+  return `/plugins/${id.split('/').map(encodeURIComponent).join('/')}${suffix}`
+}
+
 /** Graph row for one bundle rev (url carries the rev as its cache-busting query). */
 function graphRow(id: string, rev: string, injectEdges: string[] | undefined, immediately: boolean): WebBootEntry {
   return {
     id,
-    url: `/plugins/${id}/client.js?rev=${rev}`,
+    url: `${pluginBundlePath(id, '/client.js')}?rev=${rev}`,
     rev,
     ...(injectEdges !== undefined ? { inject: injectEdges } : {}),
     ...(immediately ? { immediately: true } : {}),

@@ -37,6 +37,7 @@ describe('titlebar chrome (windows variant)', () => {
     expect(script).not.toContain('createElement(\"style\")')
     expect(script).not.toContain(titlebarStyles('windows'))
     expect(loadingPage('windows')).toContain('正在启动 DeepSeek Harness')
+    expect(loadingPage('windows')).toContain('html,body{height:100%')
     expect(loadingPage('windows')).toContain(titlebarMarkup('windows'))
     expect(loadingPage('windows')).toContain(titlebarStyles('windows'))
   })

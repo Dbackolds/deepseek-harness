@@ -18,7 +18,7 @@ pnpm desktop
 pnpm dsh desktop
 ```
 
-窗口在 Electron 进程一存在时就启动 `dsh web --port 0`，让 Host 启动与 Chromium 就绪重叠。HTTP 服务器一打印 `dsh web: http://127.0.0.1:<port>` 就加载该 loopback URL；后续 Host 行在浏览器引导内核等待客户端插件期间继续挂载。关闭窗口会停止 Host。Windows 使用系统标题按钮 overlay 完成最小化、最大化和关闭。任务栏与窗口图标是与 Web favicon 相同的 DeepSeek 鲸鱼标识。Windows 首次启动会把带该图标与 AppUserModelID 的 `DeepSeek Harness.lnk` 写入开始菜单；请固定该快捷方式，而不是裸的 `electron.exe` 进程。
+窗口在 Electron 进程一存在时就启动 `dsh web --port 0`，让 Host 启动与 Chromium 就绪重叠。它先等待 `dsh web: http://127.0.0.1:<port>`，再等待 `/plugins` 能提供客户端 bundle，然后才加载该 loopback URL，这样第一批插件脚本不会在后续 Host 行仍在挂载时拿到 404。关闭窗口会停止 Host。Windows 使用系统标题按钮 overlay 完成最小化、最大化和关闭。任务栏与窗口图标是与 Web favicon 相同的 DeepSeek 鲸鱼标识。Windows 首次启动会把带该图标与 AppUserModelID 的 `DeepSeek Harness.lnk` 写入开始菜单；请固定该快捷方式，而不是裸的 `electron.exe` 进程。
 
 macOS 上窗口使用 `titleBarStyle: hiddenInset`：原生红绿灯按钮位于标题栏左侧预留区域，标准应用菜单（Edit、Window 各 role 及 Quit）提供常规 Cmd 快捷键。关闭窗口后进程保留在 dock；点击 dock 图标会重新打开窗口并重启 Host。预留条是空白拖拽区：`insertCSS` 在 `dom-ready` 安装 `-webkit-app-region: drag`，拖拽节点用绝对定位块提供命中盒。Web GUI 报告新的未读已完成提醒时，隔离 preload 发送 `dsh-desktop:notify-completed`，主进程调用 `app.dock.bounce('informational')`。应用处于前台时 Electron 返回 `-1`，因此已聚焦窗口不会跳动。
 
