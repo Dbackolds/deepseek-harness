@@ -257,6 +257,23 @@ export class TestWorkspaces implements IWorkspaces {
   }
 
   /**
+   * Unarchive a session (recorded). The default drops the id from the list
+   * state's archive set and does not open a session.
+   * @param sessionId - session to unarchive.
+   */
+  async unarchiveSession(sessionId: SessionId): Promise<void> {
+    this.calls.push({ method: 'unarchiveSession', args: [sessionId] })
+    const stub = this.stubs.get('unarchiveSession')
+    if (stub !== undefined) {
+      await (stub(sessionId) as Promise<void>)
+      return
+    }
+    await this.update((draft) => {
+      draft.archivedSessionIds = draft.archivedSessionIds.filter(id => id !== sessionId)
+    })
+  }
+
+  /**
    * Hide a Workspace (recorded). The default mirrors the production face:
    * the id joins the list state's hidden set.
    * @param workspaceId - Workspace to hide.

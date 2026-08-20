@@ -460,17 +460,25 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-session-control',
     dir: 'tool-session-control',
     source: 'packages/session-query/tool-session-control/src/index.ts',
-    requires: ['ctx.tools', 'ctx.sessionControl'],
-    writes: ['tool/call', 'tool/result', 'live Agent inbox or cancel through ctx.sessionControl'],
+    requires: ['ctx.tools', 'ctx.sessionControl', 'ctx.sessionTitle (rename)', 'ctx.workspaceRegistry (library tools)'],
+    writes: ['tool/call', 'tool/result', 'live Agent inbox or cancel through ctx.sessionControl', 'session/title through ctx.sessionTitle or Host session.rename', 'workspace archive set and membership through ctx.workspaceRegistry'],
     async mount(ctx) {
       await ctx.plugin(SessionStore)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SqliteSessionQueryEngine, { path: ':memory:' })
       await ctx.plugin(SessionControl)
+      // Schema harvest only needs the services present so the optional
+      // injects register rename and the library tools. Execution is untested here.
+      ctx.provide('sessionTitle', { rename: () => ({ title: '', eventSeq: 0 }) } as never)
+      ctx.provide('workspaceRegistry', {
+        archivedSessionIds: [],
+        hiddenWorkspaceIds: [],
+        list: () => [],
+      } as never)
       await ctx.plugin(ToolSessionControl)
     },
     note:
-      'Thin adapters over ctx.sessionControl. Search lists every logical session with live status; stop cancels the current turn and keeps the inbox; send delivers one later message to a live Agent and refuses to resume a cold session.',
+      'Search, stop, and send are thin adapters over ctx.sessionControl. Rename waits on ctx.sessionTitle and prefers Host session.rename. Archive, unarchive, rehome, reorder, and workspace listing wait on ctx.workspaceRegistry (Web compositions mount it; CLI/TUI do not). Rehome prefers Host session.rehome when ctx.apiProxy is present.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent',

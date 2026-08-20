@@ -17,7 +17,9 @@ import z from '@deepseek-ai/schemastery'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type { ApiProxy } from './api/index.ts'
-import { createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES } from './api-proxy.ts'
+import {
+  createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES, ensureNoRepoWorkspace,
+} from './api-proxy.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
   type SessionLogCompressionLevel,
@@ -64,8 +66,8 @@ export interface Config {
 
 /**
  * The API gateway service: implements the ApiProxy contract over the composed
- * host context and provides it as `ctx.apiProxy`. The Host cwd is the default
- * project directory.
+ * host context and provides it as `ctx.apiProxy`. Activation registers the
+ * No Repo workspace when `$DSH_HOME/no-repo` is unowned.
  */
 export class ApiProxyService extends Service implements ApiProxy {
   static inject = [
@@ -129,6 +131,15 @@ export class ApiProxyService extends Service implements ApiProxy {
     // createApiProxy returns closures (no `this` capture), so the bind is
     // behavior-neutral.
     this.respond = api.respond.bind(api)
+  }
+
+  /**
+   * Register the No Repo workspace before the first `workspace.list`, so the
+   * sidebar can target it without waiting for an omitted-project create.
+   * @returns settlement after the directory exists and an unowned path is registered.
+   */
+  protected async [Service.init](): Promise<void> {
+    await ensureNoRepoWorkspace(this.ctx)
   }
 }
 

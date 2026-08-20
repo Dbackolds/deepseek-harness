@@ -39,6 +39,7 @@ import {
 import {
   workspaceAddFolderRequestSchema,
   workspaceArchiveSessionRequestSchema,
+  workspaceUnarchiveSessionRequestSchema,
   workspaceCreateRequestSchema,
   workspaceDeleteRequestSchema,
   workspaceHideRequestSchema,
@@ -138,6 +139,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'workspace.insertBefore': { schema: workspaceInsertBeforeRequestSchema, invoke: (api, r) => api.workspace.insertBefore(r) },
   'workspace.insertSessionBefore': { schema: workspaceInsertSessionBeforeRequestSchema, invoke: (api, r) => api.workspace.insertSessionBefore(r) },
   'workspace.archiveSession': { schema: workspaceArchiveSessionRequestSchema, invoke: (api, r) => api.workspace.archiveSession(r) },
+  'workspace.unarchiveSession': { schema: workspaceUnarchiveSessionRequestSchema, invoke: (api, r) => api.workspace.unarchiveSession(r) },
   'workspace.hide': { schema: workspaceHideRequestSchema, invoke: (api, r) => api.workspace.hide(r) },
   'workspace.show': { schema: workspaceShowRequestSchema, invoke: (api, r) => api.workspace.show(r) },
   'workspace.addFolder': { schema: workspaceAddFolderRequestSchema, invoke: (api, r) => api.workspace.addFolder(r) },

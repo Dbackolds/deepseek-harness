@@ -1104,6 +1104,30 @@ function workspaceView(workspace: Workspace): WorkspaceView {
   }
 }
 
+/**
+ * Canonical No Repo directory under the Harness home; created if missing.
+ * @returns the realpath of `$DSH_HOME/no-repo`.
+ */
+export async function ensureNoRepoDirectory(): Promise<string> {
+  const path = dshHomePath('no-repo')
+  await mkdir(path, { recursive: true })
+  return await realpath(path)
+}
+
+/**
+ * Register `$DSH_HOME/no-repo` as the No Repo workspace when that path is
+ * unowned. A hidden owner stays hidden so Hide survives later boots.
+ * @param ctx - Host context whose workspace registry is already active.
+ * @returns the canonical No Repo directory.
+ */
+export async function ensureNoRepoWorkspace(ctx: Context): Promise<string> {
+  const canonical = await ensureNoRepoDirectory()
+  if (await ctx.workspaceRegistry.resolveByPath(canonical) === undefined) {
+    await ctx.workspaceRegistry.create(canonical, 'No Repo')
+  }
+  return canonical
+}
+
 /** Wire projection of the durable record carried by `domain/changed`. */
 function changedWorkspaceView(workspaceId: string, value: unknown): WorkspaceView {
   const record: WorkspaceRecord = workspaceRecord.parse(value)
@@ -1728,13 +1752,6 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return agent
   }
 
-  /** Canonical No Repo directory; created on first use. */
-  async function ensureNoRepoDirectory(): Promise<string> {
-    const path = dshHomePath('no-repo')
-    await mkdir(path, { recursive: true })
-    return await realpath(path)
-  }
-
   /** Resolve or create one path while holding the Host's workspace-create chain. */
   function ensureWorkspace(path: string, title?: string): Promise<{ workspace: Workspace; created: boolean }> {
     const operation = workspaceCreationChain.then(async () => {
@@ -2283,8 +2300,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
         if (workspace === undefined && request.payload.cwd === undefined) {
           try {
-            const ensured = await ensureWorkspace(cwd, 'No Repo')
-            workspace = ensured.workspace
+            await ensureNoRepoWorkspace(ctx)
+            workspace = await ctx.workspaceRegistry.resolveByPath(cwd)
+            if (workspace === undefined) {
+              throw new Error(`No Repo workspace missing after registration at "${cwd}"`)
+            }
           } catch (error: unknown) {
             return err(request, {
               code: 'workspace-attach-failed',
@@ -3218,6 +3238,21 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         } catch (error: unknown) {
           // Only the registry's unknown-session rejection is the business
           // code; storage/durability failures propagate as internal errors.
+          if (!(error instanceof WorkspaceUnknownSessionError)) throw error
+          return err(request, {
+            code: 'session-not-found',
+            message: error.message,
+            details: { sessionId },
+          })
+        }
+        return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
+      },
+
+      async unarchiveSession(request) {
+        const { sessionId } = request.payload
+        try {
+          await ctx.workspaceRegistry.unarchiveSession(sessionId)
+        } catch (error: unknown) {
           if (!(error instanceof WorkspaceUnknownSessionError)) throw error
           return err(request, {
             code: 'session-not-found',

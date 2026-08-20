@@ -311,6 +311,17 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
+   * Unarchive a session from the registry-global set. Grouping surfaces
+   * restore the prior accounting slot. Does not open the session or change
+   * the current selection.
+   * @param sessionId - session to unarchive.
+   */
+  async unarchiveSession(sessionId: SessionId): Promise<void> {
+    const result = await this.manager.unarchiveSession(sessionId)
+    if (!result.ok) throw new Error(`session unarchive failed: ${result.error.code}: ${result.error.message}`)
+  }
+
+  /**
    * Hide a Workspace in the registry-global set. Membership and the current
    * Session stay; grouping surfaces fold the row into Hidden.
    * @param workspaceId - Workspace to hide.

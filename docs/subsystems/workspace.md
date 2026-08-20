@@ -248,6 +248,19 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
 archiveSession(sessionId: SessionId): Promise<void>
 
 /**
+ * Unarchive one session durably: drop it from the archive set and keep
+ * remaining ids in relative order. Accounting and the session log stay
+ * put, so grouping surfaces restore the prior slot. An id already in the
+ * set is removed without a live/persisted re-check. A known id that is
+ * not archived resolves without writing. An unknown id throws
+ * {@link WorkspaceUnknownSessionError}. Persistence listing failures
+ * propagate as themselves.
+ * @param sessionId - The session to unarchive.
+ * @returns resolution after durability.
+ */
+unarchiveSession(sessionId: SessionId): Promise<void>
+
+/**
  * Hide one registered workspace durably. Unknown ids are an idempotent
  * no-op returning false (Host maps that to workspace-not-found). An
  * already-hidden id succeeds without writing.

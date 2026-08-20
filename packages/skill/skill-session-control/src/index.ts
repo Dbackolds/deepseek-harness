@@ -21,7 +21,7 @@ const RESOURCE_BASE = {
   path: fileURLToPath(new URL('../assets/', import.meta.url)),
 } as const
 const INVOCATION = { modelInvocable: true, userInvocable: true } as const
-const DESCRIPTION = 'Search every session, read whether it is running, stop a turn, or send a later message to another conversation. Use when the user asks about other sessions, wants work coordinated across conversations, or names a session to interrupt or continue.'
+const DESCRIPTION = 'Search every session, read whether it is running, stop a turn, send a later message, rename a conversation, or archive, unarchive, and regroup conversations. Use when the user asks about other sessions, wants the conversation library managed, or names a session to interrupt or continue.'
 const CANDIDATE: SkillCandidate = {
   name: 'dsh-session-control',
   description: DESCRIPTION,

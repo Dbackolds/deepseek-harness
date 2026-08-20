@@ -35,7 +35,7 @@
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`、`ctx.workflowEngine`、`ctx.subagents`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents every fresh round)` | `tool/call`、`tool/result`、`workflow and child session events during execution` | - | 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。 |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.tools`、`ctx.agents`、`ctx.skills` | `tool/call`、`tool/result`、`user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`、`session_event_search`、`session_event_trace`、`session_search`、`session_trace` | `ctx.tools`、`ctx.systemPrompt`、`ctx.sessionQuery`、`a calling Agent for workspace authority` | `tool/call`、`tool/result` | - | 这 5 个只读工具会隐藏提供方游标，并根据不可变的调用 agent 会话为每个结果授权。该包需要选择启用；需要强制截止时间或限制行内输出的组合还会挂载通用超时或 spill 策略。 |
-| `@deepseek-ai/dsh-tool-session-control` | `session_control_search`、`session_control_send`、`session_control_stop` | `ctx.tools`、`ctx.sessionControl` | `tool/call`、`tool/result`、`live Agent inbox or cancel through ctx.sessionControl` | - | `ctx.sessionControl` 上的薄适配器。搜索会列出全部逻辑会话及其实时状态；停止会取消当前轮次并保留收件箱；发送会向在线 Agent 投递一条后续消息，并拒绝恢复冷会话。 |
+| `@deepseek-ai/dsh-tool-session-control` | `session_control_archive`、`session_control_rehome`、`session_control_rename`、`session_control_reorder`、`session_control_search`、`session_control_send`、`session_control_stop`、`session_control_unarchive`、`session_control_workspaces` | `ctx.tools`、`ctx.sessionControl`、`ctx.sessionTitle (rename)`、`ctx.workspaceRegistry (library tools)` | `tool/call`、`tool/result`、`live Agent inbox or cancel through ctx.sessionControl`、`session/title through ctx.sessionTitle or Host session.rename`、`workspace archive set and membership through ctx.workspaceRegistry` | - | 搜索、停止和发送是 `ctx.sessionControl` 上的薄适配器。改名等待 `ctx.sessionTitle`，并优先走 Host `session.rename`。归档、取消归档、改挂、调序和工作区列表等待 `ctx.workspaceRegistry`（Web 组合会挂载；CLI/TUI 不会）。改挂在存在 `ctx.apiProxy` 时优先走 Host `session.rehome`。 |
 | `@deepseek-ai/dsh-tool-subagent` | `subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 注册的工具名称取决于加载时 `toolName` 配置（默认为 `subagent`）；上述 schema 对应默认值。随产品发布的组合会为每个 subagent 后端加载一次该包，因此模型还会看到绑定到 fork 后端的 `subagent_fork`。每个实例的描述、`run_in_background` 参数与 system prompt 策略取决于它自己的 `backgroundMode` 和 `enableRunInBackground`，因此两个随附 schema 并不相同：`subagent` 为 `continuable`，省略参数时默认后台运行，并由 runtime 自动投递结束结果；`subagent_fork` 保持 `one-shot`，省略参数时默认前台运行。详见 `packages/bundle/base/cordis.patch.yml` 和 `examples/acp-agent/cordis.yml`。 |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message` | `ctx.tools`、`ctx.subagents`、`ctx.agents and ctx.sessionProjections (list_agents only)` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 这些是控制可继续后台 subagent 的全局命名工具：绑定提供方的 `tool-subagent` 实例注册不同的委派工具；本包注册一次 `send_message` 和 `interrupt_agent`，另由 `list_agents` 通过单独加载的 `/list-agents` 插件提供，其目录行使用 sessionProjections 和实时 Agent 注册表。 |
 | `@deepseek-ai/dsh-tool-subagent-report` | `report` | `ctx.subagents`、`ctx.systemPrompt`、`a live continuable in-process child Agent` | `tool/call`、`tool/result`、`a user-role message in the direct parent session` | - | 按可继续的进程内子级注册，而非全局注册，因此该 schema 仅在这种子级内部可见，并且不受其全局 `toolFilter` 影响。同一份贡献还会安装子级作用域的 `tool:report` 系统提示词 section，本目录不渲染该 section。面向父级的 `send_message` 工具单独安装。 |
@@ -1744,9 +1744,107 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ## `@deepseek-ai/dsh-tool-session-control`
 
+### `session_control_archive`
+
+归档一个对话，使其离开所有分组视图。会话日志和 workspace 记账席位保留。已归档的 id 是成功且不写入的空操作。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    }
+  },
+  "required": [
+    "session_id"
+  ]
+}
+```
+
+来源：[`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_rehome`
+
+把一个对话的有效家和侧栏分组迁到已存在目录。不要 mkdir。规范 No Repo 目录会被拒绝。未注册的已存在目录会先注册。跨组移动用这个工具；同组顺序用 session_control_reorder。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    },
+    "path": {
+      "type": "string",
+      "description": "Absolute existing directory that becomes this conversation's home."
+    }
+  },
+  "required": [
+    "session_id",
+    "path"
+  ]
+}
+```
+
+来源：[`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_rename`
+
+重命名任意逻辑会话，并把标题钉住以免被自动生成覆盖。与侧栏写入的用户来源 session/title 事件相同。空标题或纯空白标题会失败。subagent 所有的会话会失败。冷会话在可用时由 Host session.rename 恢复。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    },
+    "title": {
+      "type": "string",
+      "description": "New title. Visible characters required after normalization."
+    }
+  },
+  "required": [
+    "session_id",
+    "title"
+  ]
+}
+```
+
+来源：[`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_reorder`
+
+在当前 workspace 顺序内移动一个已记账对话。省略 before_session_id 则追加到末尾。不改工作目录。未分组对话必须先改挂。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The accounted session id to move."
+    },
+    "before_session_id": {
+      "type": "string",
+      "description": "Accounted neighbor to insert before. Omitted appends to the end of the group."
+    }
+  },
+  "required": [
+    "session_id"
+  ]
+}
+```
+
+来源：[`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
 ### `session_control_search`
 
-列出全部逻辑会话及其实时驱动状态。可选 query 匹配会话 id、工作目录或标题。在停止某个会话或向其发送后续消息前，用它查找对话。结果按最新优先，且不搜索消息正文。
+列出全部逻辑会话及其实时驱动状态。可选 query 匹配会话 id、工作目录或标题。在停止某个会话、向其发送后续消息，或改变其归档/分组前，用它查找对话。结果按最新优先，且不搜索消息正文。
 
 ```json
 {
@@ -1821,7 +1919,41 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 来源：[`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
 
-`ctx.sessionControl` 上的薄适配器。搜索会列出全部逻辑会话及其实时状态；停止会取消当前轮次并保留收件箱；发送会向在线 Agent 投递一条后续消息，并拒绝恢复冷会话。
+### `session_control_unarchive`
+
+把一个已归档对话恢复到原先的分组席位。已知且未归档的 id 是成功且不写入的空操作。这不会打开该对话。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session id from session_control_search or another listing."
+    }
+  },
+  "required": [
+    "session_id"
+  ]
+}
+```
+
+来源：[`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+### `session_control_workspaces`
+
+列出用于对话分组的已注册 workspace：id、标题、路径、隐藏标志，以及已记账会话 id（省略已归档对话）。在改挂或调序前先调用它。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/session-query/tool-session-control/src/index.ts`](../packages/session-query/tool-session-control/src/index.ts)
+
+搜索、停止和发送是 `ctx.sessionControl` 上的薄适配器。归档、取消归档、改挂、调序和工作区列表等待 `ctx.workspaceRegistry`（Web 组合会挂载；CLI/TUI 不会）。改挂在存在 `ctx.apiProxy` 时优先走 Host `session.rehome`。
 
 <a id="deepseek-aidsh-tool-subagent"></a>
 
