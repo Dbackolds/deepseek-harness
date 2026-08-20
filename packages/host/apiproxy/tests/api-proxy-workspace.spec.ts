@@ -17,6 +17,7 @@ import type { HostFrame, WorkspaceId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { RpcRequest, RpcResponse } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { ensureNoRepoWorkspace } from '../src/api-proxy.ts'
 import { MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 
 let nextRpc = 1
@@ -729,6 +730,38 @@ describe('workspace.addFolder', () => {
       ok: false,
       error: { code: 'workspace-folder-conflict' },
     })
+  })
+})
+
+describe('ensureNoRepoWorkspace', () => {
+  it('registers No Repo before any omitted-project create', async () => {
+    const { api, ctx } = await harness()
+    const { dshHomePath } = await import('@deepseek-ai/dsh-home-paths')
+    const noRepo = dshHomePath('no-repo')
+    expect(expectOk(await api.workspace.list(request({}))).items.find(item => item.path === noRepo))
+      .toBeUndefined()
+    expect(await ensureNoRepoWorkspace(ctx)).toBe(noRepo)
+    const listed = expectOk(await api.workspace.list(request({})))
+    const row = listed.items.find(item => item.path === noRepo)
+    expect(row?.title).toBe('No Repo')
+    expect(row?.sessionIds).toEqual([])
+    expect(listed.hiddenWorkspaceIds).toEqual([])
+    expect(await ensureNoRepoWorkspace(ctx)).toBe(noRepo)
+    expect(expectOk(await api.workspace.list(request({}))).items.filter(item => item.path === noRepo))
+      .toHaveLength(1)
+  })
+
+  it('does not show a hidden No Repo on a later boot registration', async () => {
+    const { api, ctx } = await harness()
+    const { dshHomePath } = await import('@deepseek-ai/dsh-home-paths')
+    const noRepo = dshHomePath('no-repo')
+    await ensureNoRepoWorkspace(ctx)
+    const row = expectOk(await api.workspace.list(request({}))).items.find(item => item.path === noRepo)
+    expect(row).toBeDefined()
+    expectOk(await api.workspace.hide(request({ workspaceId: row!.workspaceId })))
+    await ensureNoRepoWorkspace(ctx)
+    expect(expectOk(await api.workspace.list(request({}))).hiddenWorkspaceIds).toEqual([row!.workspaceId])
+    expect(ctx.workspaceRegistry.hiddenWorkspaceIds).toEqual([row!.workspaceId])
   })
 })
 
