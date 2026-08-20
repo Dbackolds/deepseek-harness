@@ -9,8 +9,13 @@ import type {
   ClientModuleSystemOptions, ClientPluginHandoff, DshWindow,
 } from './manifest.ts'
 
-/** Default bundle-load hook: same-origin external classic script. */
-const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, reject) => {
+/** How many times a first-scan script may miss a Host that is still mounting `/plugins`. */
+const BUNDLE_LOAD_ATTEMPTS = 8
+/** Base delay between script-load retries, in milliseconds. */
+const BUNDLE_LOAD_RETRY_MS = 40
+
+/** One classic-script fetch. A 404 or network miss is a script `error`, not `load`. */
+const loadScriptOnce = (url: string): Promise<void> => new Promise((resolve, reject) => {
   const el = document.createElement('script')
   el.async = true
   el.src = url
@@ -24,6 +29,22 @@ const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, 
   }, { once: true })
   document.head.append(el)
 })
+
+/** Default bundle-load hook: same-origin external classic script, retried while the Host finishes mounting. */
+const defaultLoadBundle = async (url: string): Promise<void> => {
+  let lastError: Error | undefined
+  for (let attempt = 0; attempt < BUNDLE_LOAD_ATTEMPTS; attempt += 1) {
+    try {
+      await loadScriptOnce(url)
+      return
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      if (attempt + 1 === BUNDLE_LOAD_ATTEMPTS) break
+      await new Promise(resolve => setTimeout(resolve, BUNDLE_LOAD_RETRY_MS * (attempt + 1)))
+    }
+  }
+  throw lastError ?? new Error(`client-modules: bundle script ${url} failed to load`)
+}
 
 /**
  * A plugin bundle IS its package's client half: `<id>/client` (the exports

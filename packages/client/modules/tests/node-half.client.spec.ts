@@ -80,7 +80,9 @@ describe('client bundle activation', () => {
     })
     mkdirSync(dirname(clientPath), { recursive: true })
     writeFileSync(clientPath, 'module.exports = {}\n')
-    expect(construct([currentName]).graph().entries.map(entry => entry.id)).toEqual([currentName])
+    const graph = construct([currentName]).graph()
+    expect(graph.entries.map(entry => entry.id)).toEqual([currentName])
+    expect(graph.entries[0]?.url).toMatch(/^\/plugins\/%40fixture\/current-client-field\/client\.js\?rev=[0-9a-f]{12}$/u)
   })
 
   it('groups missing bundles under one source-build instruction with a package/path list', () => {
@@ -148,5 +150,36 @@ describe('client bundle activation', () => {
       'cache-control': 'no-cache',
     })
     expect(body).toBe(map)
+  })
+
+  it('serves a scoped bundle from a percent-encoded script URL', async () => {
+    const packageName = '@fixture/encoded-scope'
+    const clientPath = writePackage(packageName)
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = { marker: "encoded" }\n')
+    const { service, route } = constructWithRoute([packageName])
+    expect(service.graph().entries[0]?.url).toMatch(
+      /^\/plugins\/%40fixture\/encoded-scope\/client\.js\?rev=[0-9a-f]{12}$/u,
+    )
+    let status = 0
+    let body = ''
+    const response = {
+      writeHead(nextStatus: number) {
+        status = nextStatus
+        return response
+      },
+      end(chunk?: Uint8Array) {
+        body = chunk === undefined ? '' : Buffer.from(chunk).toString('utf8')
+        return response
+      },
+    } as unknown as ServerResponse
+
+    await route.handler({
+      method: 'GET',
+      url: '/plugins/%40fixture/encoded-scope/client.js?rev=probe',
+    } as IncomingMessage, response)
+
+    expect(status).toBe(200)
+    expect(body).toContain('encoded')
   })
 })

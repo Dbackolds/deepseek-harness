@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bounceDockForCompleted } from './dock-attention.ts'
-import { startWebHost, stopWebHost, type StartedHost } from './host.ts'
+import { startWebHost, stopWebHost, waitForPluginRoute, type StartedHost } from './host.ts'
 import { APP_USER_MODEL_ID, desktopIconPath } from './icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from './shortcut.ts'
 import {
@@ -229,6 +229,7 @@ async function presentWindow(launch: HostLaunch): Promise<void> {
   window.show()
   try {
     host = await launch.ready
+    await waitForPluginRoute(host.ready.href)
     rememberLaunch(launch.cwd, host.child.spawnfile)
     fenceNavigation(window, host.ready.href)
     await window.loadURL(host.ready.href)
