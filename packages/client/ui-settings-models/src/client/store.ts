@@ -274,6 +274,7 @@ export class ModelsSettingsStore {
         apiKeyEnv: apiKeyEnvs[0],
         apiKeyEnvs,
         credential: undefined,
+        credentials: {},
       }
     })
     const refs = [...new Set(rows.flatMap(row => [...row.apiKeyEnvs]))]

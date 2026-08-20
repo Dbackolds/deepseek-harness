@@ -40,7 +40,7 @@
       "path": "../../../vendor/schemastery"
     },
     {
-      "path": "../web-react"
+      "path": "../ui-renderer"
     },
     {
       "path": "../../runtime-diagnostics/invariants"

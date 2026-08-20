@@ -1575,6 +1575,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   }, {
     workspaceId: wid('fx-ws-home'),
     path: `${FIXTURE_HOME}/Documents/project`,
+    folders: [],
     title: 'project',
     sessionIds: [],
     createdAt: fixtureEpoch,

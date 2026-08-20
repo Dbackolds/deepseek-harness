@@ -27,6 +27,6 @@
     { "path": "../ui-primitives" },
     { "path": "../ui-settings" },
     { "path": "../ui-slots" },
-    { "path": "../web-react" }
+    { "path": "../ui-renderer" }
   ]
 }
