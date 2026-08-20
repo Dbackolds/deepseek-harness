@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-marketplace-host-row-owns-rpc.md
+2026-08-19-marketplace-host-row-owns-rpc.md: ac2d5ee12d830452845786ab876b06a792b66343
+2026-08-19-marketplace-host-row-owns-rpc.zh.md: ad4097d4e69d8bff8c50974e64458c890e8071c2

@@ -66,6 +66,14 @@ describe('AppRoot', () => {
     expect(queryByTestId('real-ui')).toBeNull()
   })
 
+  it('renders a missing-manifest report on the same fail-loud page', () => {
+    const { error, getByText, queryByTestId } = mount()
+    act(() => { error.set('client-modules: window.__DSH_BOOT__ is missing or not an object') })
+    expect(getByText('Failed to load plugins')).toBeTruthy()
+    expect(getByText('client-modules: window.__DSH_BOOT__ is missing or not an object')).toBeTruthy()
+    expect(queryByTestId('real-ui')).toBeNull()
+  })
+
   it('flipping settled switches to the real UI in one pass', () => {
     const { settled, getByTestId, queryByText, counts } = mount()
     act(() => { settled.set(true) })

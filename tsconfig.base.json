@@ -212,6 +212,7 @@
       "@deepseek-ai/dsh-client-ui-skill": ["./packages/client/ui-skill/src"],
       "@deepseek-ai/dsh-client-ui-subagent": ["./packages/client/ui-subagent/src"],
       "@deepseek-ai/dsh-client-ui-settings-plugin-marketplace": ["./packages/client/ui-settings-plugin-marketplace/src"],
+      "@deepseek-ai/dsh-client-ui-settings-plugin-marketplace/host": ["./packages/client/ui-settings-plugin-marketplace/src/host/index.ts"],
       "@deepseek-ai/dsh-client-ui-settings-plugins": ["./packages/client/ui-settings-plugins/src"],
       "@deepseek-ai/dsh-client-ui-settings-system-prompts": ["./packages/client/ui-settings-system-prompts/src"],
       "@deepseek-ai/dsh-client-ui-jobs": ["./packages/client/ui-jobs/src"],
