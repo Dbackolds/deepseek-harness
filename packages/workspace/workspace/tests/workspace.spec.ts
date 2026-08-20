@@ -969,7 +969,7 @@ describe('registry-global session archive', () => {
     expect(result.registry.archivedSessionIds).toEqual(['stray', 'live-only'])
 
     await expect(result.registry.archiveSession(SessionId('ghost')))
-      .rejects.toThrow(/cannot archive session 'ghost'/)
+      .rejects.toThrow(/unknown session 'ghost'/)
     expect(storedState(result.pool).archivedSessionIds).toEqual(['stray', 'live-only'])
   })
 
@@ -1002,6 +1002,57 @@ describe('registry-global session archive', () => {
     )
     const upgraded = await harness({ pool: legacy })
     expect(upgraded.registry.archivedSessionIds).toEqual([])
+  })
+
+  it('unarchives in remaining order, no-ops a known live id, and leaves accounting untouched', async () => {
+    const dir = await makeDir('unarchive-home')
+    const result = await harness({
+      sessions: [header('kept', dir, 100), header('gone', dir, 200), header('middle', dir, 150)],
+    })
+    const workspace = result.registry.list()[0]!
+    await result.registry.archiveSession(SessionId('gone'))
+    await result.registry.archiveSession(SessionId('middle'))
+    await result.registry.archiveSession(SessionId('kept'))
+    expect(result.registry.archivedSessionIds).toEqual(['gone', 'middle', 'kept'])
+    const changesAfterArchive = result.changes.filter(change => change.table === '').length
+
+    await result.registry.unarchiveSession(SessionId('middle'))
+    expect(result.registry.archivedSessionIds).toEqual(['gone', 'kept'])
+    expect(workspace.sessionIds).toEqual(expect.arrayContaining(['gone', 'middle', 'kept']))
+    expect(storedState(result.pool).archivedSessionIds).toEqual(['gone', 'kept'])
+
+    await result.registry.unarchiveSession(SessionId('middle'))
+    expect(result.registry.archivedSessionIds).toEqual(['gone', 'kept'])
+    expect(result.changes.filter(change => change.table === '').length)
+      .toBe(changesAfterArchive + 1)
+  })
+
+  it('rejects an unknown unarchive id without writing and still propagates a listing fault', async () => {
+    const dir = await makeDir('unarchive-unknown')
+    const result = await harness({ sessions: [header('kept', dir, 100)] })
+    await result.registry.archiveSession(SessionId('kept'))
+
+    await expect(result.registry.unarchiveSession(SessionId('ghost')))
+      .rejects.toThrow(/unknown session 'ghost'/)
+    expect(storedState(result.pool).archivedSessionIds).toEqual(['kept'])
+
+    result.list.mockRejectedValueOnce(new Error('persistence backend down'))
+    await expect(result.registry.unarchiveSession(SessionId('unlisted')))
+      .rejects.toThrow(/persistence backend down/)
+    expect(storedState(result.pool).archivedSessionIds).toEqual(['kept'])
+  })
+
+  it('restores the unarchived set across restarts', async () => {
+    const dir = await makeDir('unarchive-restart')
+    const pool = new MemoryMediaPool()
+    const first = await harness({ pool, sessions: [header('s1', dir, 100), header('s2', dir, 200)] })
+    await first.registry.archiveSession(SessionId('s1'))
+    await first.registry.archiveSession(SessionId('s2'))
+    await first.registry.unarchiveSession(SessionId('s1'))
+    await first.fiber.dispose()
+
+    const second = await harness({ pool, sessions: [header('s1', dir, 100), header('s2', dir, 200)] })
+    expect(second.registry.archivedSessionIds).toEqual(['s2'])
   })
 })
 

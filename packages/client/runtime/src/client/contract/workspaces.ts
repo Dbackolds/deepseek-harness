@@ -93,6 +93,13 @@ export interface IWorkspaces {
    */
   archiveSession(sessionId: SessionId): Promise<void>
   /**
+   * Unarchive a session from the registry-global set. Grouping surfaces
+   * restore the prior accounting slot. Does not open the session or change
+   * the current selection.
+   * @param sessionId - session to unarchive.
+   */
+  unarchiveSession(sessionId: SessionId): Promise<void>
+  /**
    * Hide a Workspace in the registry-global set. Membership and the current
    * Session stay put; grouping surfaces fold the row into Hidden.
    * @param workspaceId - Workspace to hide.

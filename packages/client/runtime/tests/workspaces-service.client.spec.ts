@@ -538,6 +538,46 @@ describe('WorkspaceRuntime', () => {
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-open'])
   })
 
+  it('unarchives a session, installs the set, and neither opens nor clears the current selection', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        { sessionId: sid('s-open'), updatedAt: 2, running: false, blank: false },
+        { sessionId: sid('s-idle'), updatedAt: 1, running: false, blank: false },
+      ],
+    }) as never)
+    await sessions.refresh()
+    sessions.open(sid('s-open'))
+    api.onWorkspaceArchiveSession = () => Promise.resolve(ok({ archivedSessionIds: [sid('s-idle')] }))
+    await workspaces.archiveSession(sid('s-idle'))
+    expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-idle'])
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+
+    api.onWorkspaceUnarchiveSession = () => Promise.resolve(ok({ archivedSessionIds: [] }))
+    await expect(workspaces.unarchiveSession(sid('s-idle'))).resolves.toBeUndefined()
+    expect(api.callsOf('workspace.unarchiveSession')).toEqual([{ sessionId: 's-idle' }])
+    expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+    expect(sessions.list.getSnapshot().ids).toEqual(['s-open', 's-idle'])
+
+    api.onWorkspaceArchiveSession = () => Promise.resolve(ok({ archivedSessionIds: [sid('s-open')] }))
+    await workspaces.archiveSession(sid('s-open'))
+    expect(sessions.list.getSnapshot().current).toBeUndefined()
+    api.onWorkspaceUnarchiveSession = () => Promise.resolve(ok({ archivedSessionIds: [] }))
+    await workspaces.unarchiveSession(sid('s-open'))
+    expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
+    expect(sessions.list.getSnapshot().current).toBeUndefined()
+
+    api.onWorkspaceUnarchiveSession = () => Promise.resolve(err({
+      code: 'session-not-found', message: 'no session ghost', details: { sessionId: sid('ghost') },
+    }))
+    await expect(workspaces.unarchiveSession(sid('ghost'))).rejects.toThrow(/session-not-found/)
+    expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
+  })
+
   it('clears a current archived by a remote frame and shields the set from a stale in-flight baseline', async () => {
     const ctx = new Context()
     const api = new FakeApiClient()

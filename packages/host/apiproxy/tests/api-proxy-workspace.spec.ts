@@ -569,6 +569,45 @@ describe('Host Workspace increments', () => {
     abort.abort()
   })
 
+  it('unarchives a session from the global set, streams the set once, and no-ops a known live id', async () => {
+    const { api, root } = await harness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'unarchive-home') }))).workspace
+    const first = SessionId('session-to-unarchive')
+    const second = SessionId('session-stays-archived')
+    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId: first })))
+    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId: second })))
+    expectOk(await api.workspace.archiveSession(request({ sessionId: first })))
+    expectOk(await api.workspace.archiveSession(request({ sessionId: second })))
+
+    const abort = new AbortController()
+    const stream: AsyncIterator<RpcRequest<HostFrame>> =
+      api.events.host(request({}), abort.signal)[Symbol.asyncIterator]()
+    const changed = nextHostFrame(stream)
+    expect(expectOk(await api.workspace.unarchiveSession(request({ sessionId: first }))).archivedSessionIds)
+      .toEqual([second])
+    expect(await changed).toMatchObject({
+      payload: { type: 'host/archived-sessions-changed', archivedSessionIds: [second] },
+    })
+
+    const listed = expectOk(await api.workspace.list(request({})))
+    expect(listed.archivedSessionIds).toEqual([second])
+    expect(listed.items[0]?.sessionIds).toEqual(expect.arrayContaining([first, second]))
+
+    const after = nextHostFrame(stream)
+    expect(expectOk(await api.workspace.unarchiveSession(request({ sessionId: first }))).archivedSessionIds)
+      .toEqual([second])
+    const otherSession = SessionId('session-after-unarchive')
+    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId: otherSession })))
+    expect((await after).payload.type).not.toBe('host/archived-sessions-changed')
+
+    const missing = await api.workspace.unarchiveSession(request({ sessionId: SessionId('session-ghost') }))
+    expect(missing.result).toMatchObject({
+      ok: false,
+      error: { code: 'session-not-found', details: { sessionId: 'session-ghost' } },
+    })
+    abort.abort()
+  })
+
   it('hides a workspace into the global set, keeps its accounting, and streams the set once', async () => {
     const { api, root } = await harness()
     const first = expectOk(await api.workspace.create(request({ path: stageDir(root, 'hide-first') }))).workspace

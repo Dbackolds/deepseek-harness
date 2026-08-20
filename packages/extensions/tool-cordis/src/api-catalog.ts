@@ -2256,6 +2256,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'resolution after durability.',
       },
       {
+        signature: 'unarchiveSession(sessionId: SessionId): Promise<void>',
+        description: 'Unarchive one session durably: drop it from the archive set and keep remaining ids in relative order. Accounting and the session log stay put, so grouping surfaces restore the prior slot. An id already in the set is removed without a live/persisted re-check. A known id that is not archived resolves without writing. An unknown id throws WorkspaceUnknownSessionError. Persistence listing failures propagate as themselves.',
+        parameters: [{ name: 'sessionId', description: 'The session to unarchive.' }],
+        returns: 'resolution after durability.',
+      },
+      {
         signature: 'async resolveByPath(path: string): Promise<Workspace | undefined>',
         description: 'Resolve by canonical directory path without creating or mutating a workspace. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
         parameters: [{ name: 'path', description: 'Existing directory path in any spelling.' }],
