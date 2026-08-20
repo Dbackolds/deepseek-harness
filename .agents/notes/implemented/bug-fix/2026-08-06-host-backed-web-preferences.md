@@ -20,7 +20,7 @@ The owning Host halves register three schemas: optional `locale.preference` (`zh
 
 User changes update the live service synchronously and queue a `settings.mutate` path operation through `scope.set`. The scope serializes gestures, sends the latest known namespace revision as `expectedRevision`, records every successful revision, and lets only the latest write settlement republish live state. A rejected or failed latest write reloads Host state. Disposal rejects new work, skips queued operations, suppresses publication by the in-flight operation, and waits for that operation to settle before the plugin reaches quiescence.
 
-Remote browsers cannot call the loopback-only configuration API, so their preferences remain process-local. Dynamic third-party theme ids remain in-process extensions outside the built-in Host schema; removing one resets the live registry without replacing the last durable built-in preference.
+A `--trusted-host` browser calls the same settings RPCs as loopback, so its preferences write `$DSH_HOME/settings.yaml`. An undeclared remote page cannot call those RPCs, so its preferences remain process-local. Native `settings.openDocument` and the credential plane stay loopback-only. Dynamic third-party theme ids remain in-process extensions outside the built-in Host schema; removing one resets the live registry without replacing the last durable built-in preference.
 
 ## Alternatives considered
 
@@ -38,8 +38,8 @@ Remote browsers cannot call the loopback-only configuration API, so their prefer
 
 ## Consequences
 
-Appearance, Language, busy-Enter, and client-plugin auto-reload choices follow the DSH user home across reloads, ports, and loopback origins. Direct edits to `settings.yaml` converge through the existing invalidation stream, while legacy `dsh.theme`, `dsh.locale`, and `dsh.conversation.busyEnter` entries are neither read nor written.
+Appearance, Language, busy-Enter, client-plugin auto-reload, and product-wide retry-policy choices follow the DSH user home across reloads, ports, loopback origins, and `--trusted-host` pages. Direct edits to `settings.yaml` converge through the existing invalidation stream, while legacy `dsh.theme`, `dsh.locale`, and `dsh.conversation.busyEnter` entries are neither read nor written.
 
 Boot may briefly show the domain default before the background read settles. A transient read failure keeps that default or the last good in-process value; reconnect retries. A write rejection can visibly restore the durable preference after the immediate local change.
 
-Focused unit coverage pins schema registration, listener-before-read ordering, nonblocking activation, schema-validated section acceptance, revisioned ordered writes, stale-response containment, failure recovery, disposal quiescence, and remote memory mode. The namespace-granular scope also carries multi-field sections, so later configuration surfaces can ride the same lifecycle instead of hand-rolling describe/mutate synchronization. The keyless Web settings scenario writes those Host-backed preferences through the UI, verifies the YAML document and empty legacy storage, reloads, and boots another Host on a distinct port against the same DSH home.
+Focused unit coverage pins schema registration, listener-before-read ordering, nonblocking activation, schema-validated section acceptance, revisioned ordered writes, stale-response containment, failure recovery, disposal quiescence, and Host persistence from a non-loopback trusted-host page. The namespace-granular scope also carries multi-field sections, so later configuration surfaces can ride the same lifecycle instead of hand-rolling describe/mutate synchronization. The keyless Web settings scenario writes those Host-backed preferences through the UI, including unlimited retries from a trusted-host page, verifies the YAML document and empty legacy storage, reloads, and boots another Host on a distinct port against the same DSH home.

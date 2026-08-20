@@ -451,6 +451,43 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('persists unlimited retries from a trusted-host browser across reload', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-unlimited-retries'))
+    const remote = await launchWebScaffold({
+      harnessHome: scaffold.harnessHome,
+      remoteAuthority: 'remote.localhost',
+    })
+    const remotePage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    const remoteTripwire = watchConsole(remotePage)
+    try {
+      await remotePage.goto(remote.baseUrl, { waitUntil: 'load' })
+      await remotePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await remotePage.getByRole('button', { name: '设置', exact: true }).click()
+      const dialog = remotePage.getByRole('dialog', { name: '设置' })
+      await dialog.waitFor({ timeout: 10_000 })
+      const unlimited = dialog.getByRole('switch', { name: '无限' })
+      await unlimited.waitFor({ timeout: 10_000 })
+      expect(await unlimited.getAttribute('aria-checked')).toBe('false')
+      await unlimited.click()
+      await expect.poll(() => unlimited.getAttribute('aria-checked'), { timeout: 5_000 }).toBe('true')
+      await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
+        .toMatch(/llm-default-policy:\n\s+unlimited: true/)
+      await remotePage.keyboard.press('Escape')
+
+      const warningStart = remoteTripwire.warnings.length
+      await remotePage.reload({ waitUntil: 'load' })
+      await remotePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      acknowledgeReloadConnectionLoss(remoteTripwire, warningStart)
+      await remotePage.getByRole('button', { name: '设置', exact: true }).click()
+      const reloaded = remotePage.getByRole('dialog', { name: '设置' })
+      await expect.poll(() => reloaded.getByRole('switch', { name: '无限' }).getAttribute('aria-checked'), { timeout: 5_000 }).toBe('true')
+      expect(remoteTripwire.pageErrors).toEqual([])
+    } finally {
+      await remotePage.close()
+      await remote.close()
+    }
+  }, 90_000)
+
   it('persists the settings language across reload and a distinct port', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-language'))
     await page.getByRole('button', { name: '设置', exact: true }).click()

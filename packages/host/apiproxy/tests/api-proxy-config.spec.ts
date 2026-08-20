@@ -324,7 +324,7 @@ describe('settings domain', () => {
   it('serves every registered namespace, including one this repository never named', async () => {
     // Registering IS the exposure: a plugin distributed outside this
     // repository configures itself from the browser without a change here.
-    // The plane stays loopback-only and secret-redacted, and which surface
+    // The plane stays secret-redacted, and which surface
     // renders a namespace is the browser's decision, not this proxy's.
     const ctx = await harness()
     ctx.settings.register(NS, AdapterConfig)
