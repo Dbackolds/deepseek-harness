@@ -161,16 +161,15 @@ describe('connection node half', () => {
     await dispose()
   })
 
-  it('pins privileged methods to loopback even for a declared trusted authority', async () => {
+  it('pins native, credential, and open-document methods to loopback even for a declared trusted authority', async () => {
     const { routes, dispose } = await mounted({ trustedHosts: ['harness.example'] })
-    // The privileged set: native dialogs plus the whole settings/credential
-    // configuration plane, reads included, plus the one method that makes the
-    // host fetch a caller-chosen URL. The same declared authority reaches
-    // ordinary reads (carrier-level 404 from the empty proxy proves the fence
-    // passed), but each privileged method stays loopback-only and 403s.
+    // Native dialogs, credentials, opening the Host settings file, and the
+    // Host-as-fetcher stay loopback-only. Settings describe/update/replace/
+    // mutate ride the same declared authority as ordinary /api reads, because
+    // a trusted-host browser is the operator's settings surface.
     for (const method of [
       'host.pickDirectory', 'host.openPath',
-      'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
+      'settings.openDocument',
       'credentials.describe', 'credentials.set', 'credentials.unset',
       'llm.discoverModels',
       // A composition names the plugins a session runs: reading one is
@@ -185,6 +184,14 @@ describe('connection node half', () => {
       )
       expect(denied.state.status).toBe(403)
       expect(denied.state.body).toBe('forbidden')
+    }
+    for (const method of ['settings.describe', 'settings.update', 'settings.replace', 'settings.mutate']) {
+      const allowed = fakeResponse()
+      await routes[0]!.handler(
+        fakeRequest({ host: 'harness.example' }, `${API_PATH}/${method}`),
+        allowed.response,
+      )
+      expect([method, allowed.state.status]).toEqual([method, 404])
     }
     const read = fakeResponse()
     await routes[0]!.handler(fakeRequest({ host: 'harness.example' }), read.response)
@@ -453,7 +460,7 @@ describe('connection node half over a real HTTP server', () => {
     })
   }
 
-  it('answers a declared LAN authority with 403 on every configuration method, over real HTTP', async () => {
+  it('answers a declared LAN authority with 403 on native, credential, and open-document methods, over real HTTP', async () => {
     // The fence's input is a real IncomingMessage parsed by Node from the
     // wire, not a hand-assembled object: the Host header a LAN browser sends
     // is exactly what decides loopback-only here, so the boundary is asserted
@@ -464,7 +471,7 @@ describe('connection node half over a real HTTP server', () => {
       // Reads are as privileged as writes: describe returns the exposed
       // configuration, and credentials.describe probes arbitrary env-var names.
       for (const method of [
-        'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
+        'settings.openDocument',
         'credentials.describe', 'credentials.set', 'credentials.unset',
         'host.pickDirectory', 'host.openPath',
         // Carries a draft credential and turns the host into a fetcher for a
@@ -473,6 +480,9 @@ describe('connection node half over a real HTTP server', () => {
         'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
       ]) {
         expect([method, await call(port, method, 'harness.example')]).toEqual([method, 403])
+      }
+      for (const method of ['settings.describe', 'settings.update', 'settings.replace', 'settings.mutate']) {
+        expect([method, await call(port, method, 'harness.example')]).toEqual([method, 404])
       }
       // The model catalog stays reachable for the same authority: a LAN
       // client's model picker needs it, and it carries no key or endpoint

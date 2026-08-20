@@ -128,7 +128,7 @@ export function SkillsSection({ list, t }: SkillsSectionProps): ReactNode {
                       aria-controls={detailId}
                       aria-label={`${skill.name}, ${origin}`}
                       onClick={() => {
-                        setExpanded(current => current === skill.name ? null : skill.name)
+                        setExpanded((current: string | null) => current === skill.name ? null : skill.name)
                       }}
                     >
                       <span className={css.headText}>

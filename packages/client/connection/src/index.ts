@@ -67,26 +67,22 @@ export const Config: z<ConnectionConfig> = z.object({
 })
 
 /**
- * Methods gated to loopback even on a trusted-host deployment. Native dialogs
- * act on the host machine; the settings and credential domains mutate the
- * user's configuration and secret store, and READING them is equally
- * privileged — `settings.describe` returns every exposed namespace's
- * configuration and `credentials.describe` reports whether an arbitrary
- * environment-variable name is configured and where from, which is
- * reconnaissance no anonymous caller should have. `trustedHosts` is a
- * DNS-rebinding fence, explicitly not authentication, so the whole
- * configuration plane stays loopback-same-origin until a real authentication
- * layer exists. `llm.discoverModels` belongs to that plane on both counts: it
- * carries a draft credential, and it makes the HOST issue a GET to a URL the
- * caller chose and reports back the status or the parsed body — an anonymous
- * LAN caller would have a probe for whatever the host can reach and the
- * browser cannot.
+ * Methods that stay loopback even after `--trusted-host` admits the rest of
+ * `/api`. Native dialogs act on the host machine. Credential describe/set
+ * reports or writes secret-store facts. `settings.openDocument` hands a Host
+ * path to a native editor. `llm.discoverModels` carries a draft credential
+ * and makes the Host GET a caller-chosen URL. `trustedHosts` is a
+ * DNS-rebinding fence, not authentication, so these stay loopback until a
+ * real authentication layer exists.
  *
- * The model catalog (`llm.providers`, `llm.models`) is deliberately NOT here:
- * it carries provider ids, display names, and model lists — no endpoints,
- * keys, or key state — and a LAN client's model picker legitimately needs it.
+ * Settings describe/update/replace/mutate are deliberately NOT here: a
+ * trusted-host browser is the same operator as loopback, and the General
+ * settings rows persist only through that plane. The model catalog
+ * (`llm.providers`, `llm.models`) stays out for the same reason a LAN
+ * client's model picker needs it: ids, display names, and model lists, no
+ * endpoints or key state.
  */
-const PRIVILEGED_METHODS = new Set([
+const LOOPBACK_ONLY_METHODS = new Set([
   // A preset composition names the plugins a session runs, so reading one is
   // reconnaissance; copy and remove rearrange what the deployment offers, and
   // openDocument drives the host desktop — all more than the roster beside
@@ -107,11 +103,7 @@ const PRIVILEGED_METHODS = new Set([
   'agentPreset.remove',
   'host.pickDirectory',
   'host.openPath',
-  'settings.describe',
   'settings.openDocument',
-  'settings.update',
-  'settings.replace',
-  'settings.mutate',
   'credentials.describe',
   'credentials.set',
   'credentials.unset',
@@ -122,8 +114,7 @@ const PRIVILEGED_METHODS = new Set([
  * Mounts the API gateway under the browser transport prefix. Every request on
  * the prefix passes the browser-trust fence first (DNS-rebinding and
  * cross-site defense — [api-request-trust](./api-request-trust.ts));
- * privileged methods additionally pass it with an empty trust list, which
- * pins them to loopback.
+ * loopback-only methods additionally pass it with an empty trust list.
  * @param ctx - Host plugin context.
  * @param config - resolved plugin config (schema defaults applied).
  */
@@ -143,7 +134,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
         ? pathname.slice(API_PATH.length + 1)
         : undefined
       if (method !== undefined
-        && PRIVILEGED_METHODS.has(method)
+        && LOOPBACK_ONLY_METHODS.has(method)
         && !isTrustedApiRequest(request, [])) {
         return new Response('forbidden', { status: 403 })
       }

@@ -61,7 +61,12 @@ export const inject: string[] = []
 export interface ConnectionHandle {
   /** Shared api client (fixture or real, decided at boot from the page URL). */
   readonly api: IApiClient
-  /** Whether the current page authority is loopback; non-browser contexts default to true. */
+  /**
+   * Whether the current page authority is loopback; non-browser contexts
+   * default to true. Native dialogs and credential writes stay on this
+   * predicate. Durable settings follow the Host settings RPCs, which a
+   * trusted-host browser may call even when this is false.
+   */
   readonly isLoopback: boolean
   /** Generation-scoped Host facts, including native path-open capability. */
   readonly hostDescription: HostDescriptionSource

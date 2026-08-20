@@ -21,10 +21,29 @@ async function bench(isLoopback = true) {
   // The plugins inject `remote`; forwarded events reach them through the
   // same `$dispatch` handoff the connection sink makes.
   new TestRemote(ctx)
-  // The apply path only captures the wire face; no call leaves this fake
-  // until a section actually loads.
-  ctx.provide('connection', { api: {}, isLoopback } as never)
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale }
+  const describe = vi.fn(() => Promise.resolve({
+    rpcId: 'models-describe' as never,
+    result: {
+      ok: true as const,
+      value: {
+        writable: true,
+        hasDocument: true,
+        namespaces: [{
+          ns: 'ui-onboarding',
+          schema: {},
+          value: {},
+          applies: 'live' as const,
+          secrets: [],
+          revision: 0,
+        }],
+      },
+    },
+  }))
+  ctx.provide('connection', {
+    api: { settings: { describe, mutate: vi.fn() } },
+    isLoopback,
+  } as never)
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, describe }
 }
 
 function declare(slots: SlotRegistry): () => void {
@@ -134,7 +153,7 @@ describe('ui-settings-models apply', () => {
     expect(() => b.locale.register('settings.models', 'en', {})).not.toThrow()
   })
 
-  it('keeps remote-browser acknowledgement in process memory', async () => {
+  it('loads welcome acknowledgement from Host settings off-loopback', async () => {
     const b = await bench(false)
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
@@ -145,6 +164,7 @@ describe('ui-settings-models apply', () => {
     )()
 
     await injected.controller.load()
+    expect(b.describe).toHaveBeenCalledOnce()
     expect(injected.controller.store.getSnapshot()).toEqual({
       status: 'ready', acknowledged: false, error: null,
     })
@@ -156,7 +176,7 @@ describe('pushed invalidations', () => {
     const b = await bench()
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    // The fake wire face has no methods: a fetch attempt would throw.
+    // The page never loaded, so invalidations must not call settings.describe.
     b.ctx.remote.$dispatch('settings/document-updated', ['llm-pi-ai', 1])
     b.ctx.remote.$dispatch('credentials/updated', ['OPENAI_API_KEY'])
     b.ctx.remote.$dispatch('llm/adapters-updated', [])

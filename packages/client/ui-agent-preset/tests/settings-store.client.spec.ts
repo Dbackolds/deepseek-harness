@@ -66,7 +66,7 @@ describe('the agent-preset settings controller', () => {
 
     await controller.load()
 
-    // `settings.describe` is loopback-only and reports a read-only provider;
+    // `settings.describe` reports a read-only provider;
     // offering a control whose write answers `settings-rejected` would promise
     // a switch the host refuses.
     expect(controller.store.getSnapshot().writable).toBe(false)
