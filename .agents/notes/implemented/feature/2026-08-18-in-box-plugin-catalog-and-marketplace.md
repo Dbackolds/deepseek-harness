@@ -13,7 +13,7 @@ Discover depended on a public GitHub raw URL in `StarPivotNet/dsh-plugin-catalog
 The web profile ships both halves:
 
 - [`dsh-host-plugin-catalog`](../../../packages/host/plugin-catalog/README.md) serves the pinned StarPivot `catalog.json` on the named Host route `/plugin-catalog/catalog.json`.
-- [`dsh-client-ui-settings-plugin-marketplace`](../../../packages/client/ui-settings-plugin-marketplace/README.md) is the former public marketplace, now an in-box dual-face package. Its default catalog URL is that Host path. The Host half still accepts extra http(s) catalog URLs.
+- [`dsh-client-ui-settings-plugin-marketplace`](../../../packages/client/ui-settings-plugin-marketplace/README.md) is the former public marketplace, now an in-box dual-face package. The Host row imports `./host`; the package entry is an empty Host `apply` for the browser row so both Loader rows do not register `/plugin-marketplace`. Its default catalog URL is that Host path. The Host half still accepts extra http(s) catalog URLs.
 
 The shipped Plugins settings row still yields to this marketplace through [`pluginMarketplaceUi`](../architecture/2026-08-16-plugins-settings-marketplace-yield.md). The inventory tab stays disabled while the marketplace owns the page.
 

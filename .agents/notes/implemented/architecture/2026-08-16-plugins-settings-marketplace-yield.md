@@ -14,7 +14,7 @@ The shipped Plugins nav row registers at `priority: 1`. A marketplace that occup
 
 `dsh-app-boot` also exports the profile mutation helpers the marketplace Host half imports (`packageExportsBundle`, `reconcileProfilePlugins`, `runProfilePnpm`, `readProfilePatches`, `writeProfilePatches`) and a profile boot publishes `ctx.profile` through `provideProfile`. Those helpers are the same files `dsh plugin` mutates.
 
-The web profile mounts the marketplace Host and browser rows plus [`dsh-host-plugin-catalog`](../../../packages/host/plugin-catalog/README.md), which serves the shipped StarPivot listing at `/plugin-catalog/catalog.json`. Discover's default catalog URL is that path.
+The web profile mounts the marketplace Host row as `@deepseek-ai/dsh-client-ui-settings-plugin-marketplace/host` and the browser row as the package entry, plus [`dsh-host-plugin-catalog`](../../../packages/host/plugin-catalog/README.md), which serves the shipped StarPivot listing at `/plugin-catalog/catalog.json`. Discover's default catalog URL is that path.
 
 ## Alternatives considered
 

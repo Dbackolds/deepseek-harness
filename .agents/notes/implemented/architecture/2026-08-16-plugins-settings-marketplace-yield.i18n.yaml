@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-16-plugins-settings-marketplace-yield.md
-2026-08-16-plugins-settings-marketplace-yield.md: f5f363a2b47ed491770348321ee12833e22d2e7b
-2026-08-16-plugins-settings-marketplace-yield.zh.md: bacacfd22c14abaa89e4c57ba31be54f75813ef0
+2026-08-16-plugins-settings-marketplace-yield.md: 10b0c6405b0ffaa996fc2679277a1efac69fb13e
+2026-08-16-plugins-settings-marketplace-yield.zh.md: a7d0a9bccff06f2682be7179e52448a58d613df8

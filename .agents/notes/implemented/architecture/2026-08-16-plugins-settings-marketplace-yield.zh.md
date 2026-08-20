@@ -14,7 +14,7 @@ Status: implemented
 
 `dsh-app-boot` 也导出市场 Host 半侧会导入的 profile 变更 helper（`packageExportsBundle`、`reconcileProfilePlugins`、`runProfilePnpm`、`readProfilePatches`、`writeProfilePatches`），profile 启动通过 `provideProfile` 发布 `ctx.profile`。这些 helper 改的就是 `dsh plugin` 改的那批文件。
 
-web profile 会挂载市场的 Host 与浏览器行，以及 [`dsh-host-plugin-catalog`](../../../packages/host/plugin-catalog/README.md)；后者在 `/plugin-catalog/catalog.json` 提供随附的 StarPivot 清单。发现页的默认目录 URL 就是这条路径。
+web profile 会把市场 Host 行挂为 `@deepseek-ai/dsh-client-ui-settings-plugin-marketplace/host`、把浏览器行挂为包入口，以及 [`dsh-host-plugin-catalog`](../../../packages/host/plugin-catalog/README.md)；后者在 `/plugin-catalog/catalog.json` 提供随附的 StarPivot 清单。发现页的默认目录 URL 就是这条路径。
 
 ## Alternatives considered
 

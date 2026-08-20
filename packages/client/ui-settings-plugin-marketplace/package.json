@@ -18,6 +18,10 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./host": {
+      "types": "./lib/types/host/index.d.ts",
+      "default": "./lib/host.js"
+    },
     "./invariant": {
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"
@@ -93,6 +97,7 @@
   },
   "files": [
     "lib/index.js",
+    "lib/host.js",
     "lib/invariant.js",
     "lib/client.js",
     "lib/reboot-watchdog.js",
