@@ -518,6 +518,9 @@ async function rehomeSession(
       `session "${sessionId}" is not live; Host session.rehome is required to resume a cold conversation`,
     )
   }
+  if (session.header.origin === 'subagent') {
+    throw new Error(`session "${sessionId}" is owned by subagent routing`)
+  }
   const target = await ctx.workspaceRegistry.create(canonical)
   setSessionHome(session, canonical)
   for (const workspace of ctx.workspaceRegistry.list()) {

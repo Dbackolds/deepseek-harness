@@ -17,7 +17,7 @@
 - `session_control_rehome(session_id, path)` 把一个会话的家和侧栏分组迁到已存在目录。规范 No Repo 目录会被拒绝。未注册的已存在目录会先注册。
 - `session_control_reorder(session_id, before_session_id?)` 在当前工作区内移动一个已记账会话。未分组会话会失败。
 
-`session_control_rehome` 在存在 `ctx.apiProxy` 时优先走 Host `session.rehome`，以便恢复冷会话。没有 Host 时，只有在线会话能回退到 `workspaceRegistry.create` 加 `setSessionHome`。
+`session_control_rehome` 在存在 `ctx.apiProxy` 时优先走 Host `session.rehome`，以便恢复冷会话。没有 Host 时，只有非 subagent 的在线会话能回退到 `workspaceRegistry.create` 加 `setSessionHome`。header origin 为 `subagent` 的会话在该回退路径上会失败。
 
 ## Model Experience
 
@@ -39,6 +39,6 @@ Prefix-stable while the tool definitions stay unchanged.
 
 - `session_control_send` 不恢复冷会话。对仅存于存储的身份发送会失败，而不是拿走 `AgentHandle`。
 - 搜索不检查消息正文。
-- 没有 Host `session.rehome` 时，`session_control_rehome` 不能恢复冷会话。
+- 没有 Host `session.rehome` 时，`session_control_rehome` 不能恢复冷会话，且 header origin 为 `subagent` 的在线会话会失败。
 - 这些工具不隐藏或显示工作区，也不会打开已取消归档的会话。
 - 库管理工具等待 `ctx.workspaceRegistry`。CLI 和 TUI 组合不挂载它，因此只暴露搜索、停止和发送。

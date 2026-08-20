@@ -17,7 +17,7 @@ The shipped base composition mounts the package. Load the bundled [`dsh-session-
 - `session_control_rehome(session_id, path)` moves one session's home and sidebar group to an existing directory. Canonical No Repo is refused. An unregistered existing directory is registered.
 - `session_control_reorder(session_id, before_session_id?)` moves an accounted session inside its current workspace. Ungrouped sessions fail.
 
-`session_control_rehome` prefers Host `session.rehome` when `ctx.apiProxy` is present so a cold session can resume. Without Host, only a live session can fall back to `workspaceRegistry.create` plus `setSessionHome`.
+`session_control_rehome` prefers Host `session.rehome` when `ctx.apiProxy` is present so a cold session can resume. Without Host, only a live non-subagent session can fall back to `workspaceRegistry.create` plus `setSessionHome`. A session whose header origin is `subagent` fails on that fallback.
 
 ## Model Experience
 
@@ -39,6 +39,6 @@ Prefix-stable while the tool definitions stay unchanged.
 
 - `session_control_send` does not resume a cold session. A storage-only send fails instead of taking an `AgentHandle`.
 - Search does not inspect message bodies.
-- Without Host `session.rehome`, `session_control_rehome` cannot resume a cold session.
+- Without Host `session.rehome`, `session_control_rehome` cannot resume a cold session, and a live session whose header origin is `subagent` fails.
 - These tools do not hide or show workspaces, and they do not open an unarchived session.
 - Library tools wait on `ctx.workspaceRegistry`. CLI and TUI compositions do not mount it, so they expose only search, stop, and send.

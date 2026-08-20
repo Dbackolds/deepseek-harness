@@ -373,6 +373,26 @@ describe('dsh-tool-session-control', () => {
     await ctx.fiber.dispose()
   })
 
+  it('refuses a live subagent session on the Host-absent rehome fallback', async () => {
+    const ctx = await harness()
+    const dir = await makeDir('child-home')
+    ctx.sessions.create(SessionId('child'), {
+      meta: {
+        cwd: dir,
+        parentSession: SessionId('parent'),
+        origin: 'subagent',
+      },
+    })
+    const refused = await callTool(ctx, 'session_control_rehome', {
+      session_id: 'child',
+      path: dir,
+    })
+    expect(refused.isError).toBe(true)
+    expect(text(refused)).toContain('owned by subagent routing')
+    expect(ctx.workspaceRegistry.list().some(workspace => workspace.sessionIds.includes(SessionId('child')))).toBe(false)
+    await ctx.fiber.dispose()
+  })
+
   it('falls back to live rehome when Host is present without a rehome RPC', async () => {
     process.env.DSH_HOME = await makeRoot()
     const ctx = await harness()

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-bundled-session-control-skill.md
-2026-08-19-bundled-session-control-skill.md: edc0022daa37c078171dd05d3ff796393c0593a7
-2026-08-19-bundled-session-control-skill.zh.md: 1428ee8cfc06877c2ad284ad01ed9349f8ec9316
+2026-08-19-bundled-session-control-skill.md: 281b0e036e0a63ddbf9553a2aa436be104daf5d6
+2026-08-19-bundled-session-control-skill.zh.md: 18ad0aa184352b791ca67a02b396d07c4a312847

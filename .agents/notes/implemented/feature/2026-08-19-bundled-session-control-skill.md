@@ -14,7 +14,7 @@ English | [中文](2026-08-19-bundled-session-control-skill.zh.md)
 
 `@deepseek-ai/dsh-tool-session-control` registers `session_control_search`, `session_control_stop`, `session_control_send`, `session_control_workspaces`, `session_control_archive`, `session_control_unarchive`, `session_control_rehome`, and `session_control_reorder`. Search, stop, and send stay thin adapters over `ctx.sessionControl`. Library tools call `ctx.workspaceRegistry` and, for rehome, Host `session.rehome` when `ctx.apiProxy` is present. The shipped base composition mounts both the skill and the tools. The skill tells the model to load those instructions before coordinating across sessions or managing the conversation library, and to use these tools instead of parent-only `send_message`.
 
-A storage-only send still fails with the service's resume-required error. Send, stop, and search do not call `ctx.agents.resume()`. Rehome through Host may resume a cold session because the Host resolver keeps the `AgentHandle`. Without Host, rehome of a storage-only session fails.
+A storage-only send still fails with the service's resume-required error. Send, stop, and search do not call `ctx.agents.resume()`. Rehome through Host may resume a cold session because the Host resolver keeps the `AgentHandle`. Without Host, rehome of a storage-only session fails, and a live session whose header origin is `subagent` fails.
 
 Cross-group moves change the conversation home. Same-group order uses `insertSessionBefore` and does not change cwd. `move_agent_to_root` remains the current-session confirmation tool in the session-rehome plugin.
 
