@@ -693,6 +693,28 @@ describe('workspace.addFolder', () => {
 })
 
 describe('session.create omitted project', () => {
+  it('does not show a hidden Workspace when creating a session into it', async () => {
+    const { api, root } = await harness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'stay-hidden') }))).workspace
+    expectOk(await api.workspace.hide(request({ workspaceId: workspace.workspaceId })))
+    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId })))
+    expect(expectOk(await api.workspace.list(request({}))).hiddenWorkspaceIds).toEqual([workspace.workspaceId])
+  })
+
+  it('does not show a hidden No Repo when attaching an omitted-project session', async () => {
+    const { api, ctx } = await harness()
+    const { dshHomePath } = await import('@deepseek-ai/dsh-home-paths')
+    const noRepo = dshHomePath('no-repo')
+    expectOk(await api.sessions.create(request({})))
+    const listed = expectOk(await api.workspace.list(request({})))
+    const row = listed.items.find(item => item.path === noRepo)
+    expect(row).toBeDefined()
+    expectOk(await api.workspace.hide(request({ workspaceId: row!.workspaceId })))
+    expectOk(await api.sessions.create(request({})))
+    expect(expectOk(await api.workspace.list(request({}))).hiddenWorkspaceIds).toEqual([row!.workspaceId])
+    expect(ctx.workspaceRegistry.hiddenWorkspaceIds).toEqual([row!.workspaceId])
+  })
+
   it('lands in No Repo and attaches there', async () => {
     const { api, ctx } = await harness()
     const created = expectOk(await api.sessions.create(request({})))

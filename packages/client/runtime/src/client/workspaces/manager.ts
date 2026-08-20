@@ -142,7 +142,15 @@ export class WorkspaceManager {
     const completion = workspace.materialize()
     if (completion === undefined) throw new Error('a local Workspace must be materializable')
     const result = await completion
-    if (result.ok) this.upsert(result.value.workspace, workspace)
+    if (result.ok) {
+      this.upsert(result.value.workspace, workspace)
+      // Same-path create Shows a hidden owner in place. Hide/show install the
+      // unary set; create has no set field, so drop that id locally instead of
+      // waiting for host/hidden-workspaces-changed.
+      if (this.hiddenWorkspaceIds.includes(result.value.workspace.workspaceId)) {
+        this.installHidden(this.hiddenWorkspaceIds.filter(id => id !== result.value.workspace.workspaceId))
+      }
+    }
     return result
   }
 

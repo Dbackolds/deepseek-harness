@@ -77,6 +77,24 @@ describe('WorkspaceManager', () => {
     })
   })
 
+  it('drops a hidden id from the unary same-path create echo', async () => {
+    const api = new FakeApiClient()
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('alpha')] as never[],
+      hiddenWorkspaceIds: [wid('alpha')],
+    }))
+    const manager = new WorkspaceManager(api)
+    await manager.refresh()
+    expect(manager.getSnapshot().hiddenWorkspaceIds).toEqual(['alpha'])
+    api.onWorkspaceCreate = () => Promise.resolve(ok({
+      workspace: workspace('alpha'),
+      created: false,
+    }))
+    await expect(manager.create({ path: '/w/alpha' })).resolves.toMatchObject({ ok: true })
+    expect(manager.getSnapshot().hiddenWorkspaceIds).toEqual([])
+    expect(manager.getSnapshot().items.map(item => item.workspaceId)).toEqual(['alpha'])
+  })
+
   it('reorders optimistically while newer Host frames outrank unary echoes and failures roll back', async () => {
     const api = new FakeApiClient()
     api.onWorkspaceList = () => Promise.resolve(ok({

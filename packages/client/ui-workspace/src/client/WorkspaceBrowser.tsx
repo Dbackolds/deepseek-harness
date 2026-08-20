@@ -480,14 +480,10 @@ function SessionTree({
       sessions: group.sessions.filter(session => !pinned.has(session.id)),
     }))
   }, [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount, pinnedSessionIds, hiddenWorkspaceIds])
-  const hiddenGroups = useMemo(() => {
-    const pinned = new Set(pinnedSessionIds)
-    return deriveHiddenGroups(list, orderedWorkspaces, archivedSessionIds, { expandedGroups }, hiddenWorkspaceIds)
-      .map(group => ({
-        ...group,
-        sessions: group.sessions.filter(session => !pinned.has(session.id)),
-      }))
-  }, [list, orderedWorkspaces, archivedSessionIds, expandedGroups, pinnedSessionIds, hiddenWorkspaceIds])
+  const hiddenGroups = useMemo(
+    () => deriveHiddenGroups(list, orderedWorkspaces, archivedSessionIds, { expandedGroups }, hiddenWorkspaceIds),
+    [list, orderedWorkspaces, archivedSessionIds, expandedGroups, hiddenWorkspaceIds],
+  )
   const pinnedRows = useMemo(() => {
     const byId = new Map(deriveFlat(list, archivedSessionIds, hiddenOwnedSessionIds).map(session => [session.id as string, session]))
     return pinnedSessionIds.flatMap((id) => {

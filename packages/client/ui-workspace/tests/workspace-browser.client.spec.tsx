@@ -1254,6 +1254,23 @@ describe('WorkspaceBrowser', () => {
     expect(showWorkspace).toHaveBeenCalledWith(wid('hidden'))
   })
 
+  it('keeps a pinned Session visible under Hidden after its Workspace is hidden', () => {
+    const sessions = sessionState([summary('hidden-s', 1)])
+    const b = mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState(
+        [workspace('hidden', ['hidden-s'], 'Hidden Home')],
+        [],
+        [wid('hidden')],
+      )),
+    })
+    act(() => { b.store.actions.pinSession('hidden-s') })
+    expect(screen.queryByText('置顶')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '已隐藏' }))
+    fireEvent.click(screen.getByText('Hidden Home'))
+    expect(screen.getByText('hidden-s')).toBeTruthy()
+  })
+
   it('omits hidden-workspace sessions from the flat list and Pinned while search still matches', async () => {
     const sessions = sessionState([summary('alpha-s', 2), summary('hidden-s', 1)])
     const b = mount({

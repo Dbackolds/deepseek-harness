@@ -209,7 +209,7 @@ export class FakeApiClient implements IApiClient {
   onWorkspaceList: (payload: unknown) => Promise<RpcResponse<{
     items: never[]
     archivedSessionIds?: never[]
-    hiddenWorkspaceIds?: never[]
+    hiddenWorkspaceIds?: WorkspaceId[]
   }>> =
     () => Promise.resolve(ok({ items: [] }))
   onWorkspaceCreate: (payload: unknown) => Promise<RpcResponse<{ workspace: WorkspaceView; created: boolean }>> =
@@ -251,7 +251,7 @@ export class FakeApiClient implements IApiClient {
           ok: true as const,
           value: {
             archivedSessionIds: [] as never[],
-            hiddenWorkspaceIds: [] as never[],
+            hiddenWorkspaceIds: [] as WorkspaceId[],
             ...response.result.value,
           },
         },
