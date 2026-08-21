@@ -7,7 +7,7 @@
  * A workspace that is not a Git checkout hides the chip.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import {
@@ -25,7 +25,7 @@ export interface GitBranchSeatInjected {
     /** Seat snapshot bound by the renderer as useGitBranchSeat. */
     gitBranchSeat: SnapshotStore<GitBranchSeatState>
   }
-  /** Read the current session overlay when the chip first renders. */
+  /** Reload the current overlay from the host (apply-side also calls this on identity change). */
   load: () => Promise<void>
   /** Check one existing branch out for the current session. */
   checkout: (branch: string) => Promise<void>
@@ -45,18 +45,12 @@ export type GitBranchSeatProps =
  * @returns the chip, or null when the current workspace is not a Git checkout.
  */
 export function GitBranchSeat({
-  useWorkspaces, load, checkout, createBranch, useGitBranchSeat, t,
+  checkout, createBranch, useGitBranchSeat, t,
 }: GitBranchSeatProps) {
   const state = useGitBranchSeat(snapshot => snapshot)
-  const recentWorkspaceId = useWorkspaces(s => s.recentWorkspaceId)
-  const workspaceCount = useWorkspaces(s => s.items.length)
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState('')
-
-  useEffect(() => {
-    void load()
-  }, [load, recentWorkspaceId, workspaceCount])
 
   if (state.unavailable || state.view === null) return null
   const view = state.view

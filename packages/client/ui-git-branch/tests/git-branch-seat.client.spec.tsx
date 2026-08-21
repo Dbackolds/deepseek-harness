@@ -157,4 +157,31 @@ describe('GitBranchSeat', () => {
     fireEvent.click(screen.getByText('origin/dev'))
     expect(actions.checkout).toHaveBeenCalledWith('origin/dev')
   })
+
+  it('marks the current remote-tracking checkout in the menu', () => {
+    renderSeat({
+      view: {
+        currentBranch: 'origin/dev',
+        detached: false,
+        worktreePath: '/repo',
+        isolated: false,
+        dirtyCount: 0,
+        unpushedCount: 0,
+        branches: [
+          { name: 'main', current: false, remote: false },
+          { name: 'origin/dev', current: true, remote: true },
+        ],
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /origin\/dev/ }))
+    expect(screen.getByRole('menu')).toBeTruthy()
+  })
+
+  it('closes the menu without selecting a branch', () => {
+    renderSeat()
+    fireEvent.click(screen.getByRole('button', { name: /main/ }))
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
 })

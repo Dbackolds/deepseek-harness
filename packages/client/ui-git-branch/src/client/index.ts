@@ -53,8 +53,9 @@ export function apply(ctx: ClientContext): void {
       createBranch: (branch: string) => seat.createBranch(branch),
     })
     scope.effect(() => {
-      const stopSessions = scope.sessions.list.subscribe(() => { void seat.load() })
-      const stopWorkspaces = scope.workspaces.list.subscribe(() => { void seat.load() })
+      const stopSessions = scope.sessions.list.subscribe(() => { void seat.sync() })
+      const stopWorkspaces = scope.workspaces.list.subscribe(() => { void seat.sync() })
+      void seat.sync()
       const chip = scope.slots.inject(
         'conversation.hero.branch',
         () => scope.slots.register({

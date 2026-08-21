@@ -28,6 +28,7 @@ import { canonicalPath, type SandboxExecutionPolicy, type SandboxMode } from '@d
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
+import { setGitDescribeCacheMs } from './git-worktree.ts'
 import { effectiveSandboxMode } from './session-mode.ts'
 import { sessionWorkingDirectory } from './session-worktree.ts'
 
@@ -38,8 +39,8 @@ export {
 } from './session-worktree.ts'
 export {
   checkoutSessionBranch, createSessionBranch, describeSessionGit, discoverRepoRoot,
-  GitWorktreeError, isValidBranchName,
-  type GitBranchEntry, type SessionGitState,
+  GitWorktreeError, invalidateGitDescribeCache, isValidBranchName, setGitDescribeCacheMs,
+  type DescribeSessionGitOptions, type GitBranchEntry, type SessionGitState,
 } from './git-worktree.ts'
 
 /** Resolve filesystem identity before lexical normalization can erase symlink-sensitive components. */
@@ -150,6 +151,11 @@ export interface Config {
    * `process.cwd()`). Normal agent calls use their session cwd instead.
    */
   workspaceRoot?: string
+  /**
+   * Milliseconds to reuse a successful `git.describe` snapshot for the same
+   * worktree path. Default 500. `0` disables the cache.
+   */
+  gitDescribeCacheMs?: number
 }
 
 /** Inputs that select the sandbox policy for one capability call. */
@@ -173,6 +179,7 @@ export class SandboxPolicyService extends Service {
     // No schema default: process.cwd() is resolved in the constructor so the
     // stored root is always absolute regardless of how it was supplied.
     workspaceRoot: z.string(),
+    gitDescribeCacheMs: z.number().step(1).min(0).default(500),
   })
 
   /** The deployment default mode — the fallback beneath a session override. */
@@ -186,6 +193,7 @@ export class SandboxPolicyService extends Service {
     // the process cwd is real branching, resolved absolute either way.
     this.defaultMode = config.mode as SandboxMode
     this.workspaceRoot = resolveWorkspaceRoot(config.workspaceRoot ?? process.cwd())
+    setGitDescribeCacheMs(config.gitDescribeCacheMs as number)
 
     ctx.inject(['systemPrompt'], (scope: Context) => {
       scope.systemPrompt.context({

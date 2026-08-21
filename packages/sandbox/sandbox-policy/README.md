@@ -12,6 +12,7 @@ Filesystem tools, one-shot bash commands, and terminal sessions may enforce the 
 
 - `mode` — the deployment default `SandboxMode` (`read-only` / `workspace-write` / `danger-full-access`), validated at load. Default `read-only` (fail-safe).
 - `workspaceRoot` — the fallback directory `workspace-write` may write under for agentless calls or sessions without a cwd. Default `process.cwd()`, resolved to its absolute filesystem identity either way. A normal agent call uses its session header's immutable `cwd` instead.
+- `gitDescribeCacheMs` — milliseconds to reuse a successful `git.describe` snapshot for the same worktree path. Default `500`. `0` disables the cache. Checkout and createBranch always return a fresh snapshot.
 
 ## API
 

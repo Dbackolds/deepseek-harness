@@ -3,12 +3,17 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import {
   checkoutSessionBranch, createSessionBranch, describeSessionGit, discoverRepoRoot,
-  GitWorktreeError, isValidBranchName,
+  GitWorktreeError, invalidateGitDescribeCache, isValidBranchName, setGitDescribeCacheMs,
 } from '../src/git-worktree.ts'
+
+afterEach(() => {
+  setGitDescribeCacheMs(0)
+  invalidateGitDescribeCache()
+})
 
 function git(cwd: string, args: string[]): void {
   execFileSync('git', args, { cwd, stdio: 'ignore', windowsHide: true })
@@ -135,5 +140,46 @@ describe('git-worktree manager', () => {
     expect(checked.currentBranch).toBe('origin/topic')
     expect(checked.isolated).toBe(true)
     expect(checked.branches.some(branch => branch.name === 'topic' && !branch.remote)).toBe(false)
+  })
+
+  it('reuses a successful describe within the TTL and refreshes after expiry or invalidate', async () => {
+    const { cwd, session } = repo()
+    const first = await describeSessionGit(cwd, session, { ttlMs: 500, now: 1_000 })
+    expect(first.dirtyCount).toBe(0)
+    writeFileSync(join(cwd, 'dirty.txt'), 'x\n')
+    const cached = await describeSessionGit(cwd, session, { ttlMs: 500, now: 1_100 })
+    expect(cached.dirtyCount).toBe(0)
+    const expired = await describeSessionGit(cwd, session, { ttlMs: 500, now: 1_600 })
+    expect(expired.dirtyCount).toBe(1)
+    writeFileSync(join(cwd, 'dirty-two.txt'), 'y\n')
+    const disabled = await describeSessionGit(cwd, session, { ttlMs: 0, now: 1_601 })
+    expect(disabled.dirtyCount).toBe(2)
+    await describeSessionGit(cwd, session, { ttlMs: 500, now: 2_000 })
+    writeFileSync(join(cwd, 'dirty-three.txt'), 'z\n')
+    invalidateGitDescribeCache(cwd)
+    const afterInvalidate = await describeSessionGit(cwd, session, { ttlMs: 500, now: 2_100 })
+    expect(afterInvalidate.dirtyCount).toBe(3)
+  })
+
+  it('keys the cache by overlay branch as well as worktree path', async () => {
+    const { cwd, session } = repo()
+    await describeSessionGit(cwd, session, { ttlMs: 500, now: 1_000 })
+    writeFileSync(join(cwd, 'dirty.txt'), 'x\n')
+    const isolated = await createSessionBranch('ws-1', cwd, session, 'feature')
+    expect(isolated.dirtyCount).toBe(0)
+    const stillIsolated = await describeSessionGit(cwd, session, { ttlMs: 500, now: 1_100 })
+    expect(stillIsolated.currentBranch).toBe('feature')
+    expect(stillIsolated.dirtyCount).toBe(0)
+  })
+
+  it('returns a fresh snapshot after checkout even when a TTL is configured', async () => {
+    const { cwd, session } = repo()
+    setGitDescribeCacheMs(500)
+    await describeSessionGit(cwd, session)
+    writeFileSync(join(cwd, 'dirty.txt'), 'x\n')
+    const created = await createSessionBranch('ws-1', cwd, session, 'feature')
+    expect(created.currentBranch).toBe('feature')
+    expect(created.isolated).toBe(true)
+    expect(created.dirtyCount).toBe(0)
   })
 })

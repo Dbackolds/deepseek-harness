@@ -1,9 +1,10 @@
 /**
  * Hero branch-chip controller: the overlay the CURRENT session uses.
  *
- * The chip loads when a session with a workspace checkout is current,
+ * The chip loads when the current session id or workspace id changes,
  * then checkout / createBranch write the host overlay. Each session
  * keeps its own worktree; switching sessions reloads that session state.
+ * Session-list streaming (titles, jobs, subagent activity) does not reload.
  */
 
 import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
@@ -37,10 +38,19 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function describeKey(sessionId: SessionId | undefined, workspaceId: string | undefined): string {
+  return `${sessionId ?? ''}\0${workspaceId ?? ''}`
+}
+
 /** Loads and switches the current session Git overlay. */
 export class GitBranchSeatController {
   /** Chip snapshot the renderer subscribes to. */
   readonly store: SnapshotStore<GitBranchSeatState> = createSnapshotStore(INITIAL)
+
+  private generation = 0
+  private lastIdentity: string | undefined
+  private inflight: { key: string; promise: Promise<void> } | undefined
+  private abort: AbortController | undefined
 
   constructor(
     private readonly api: Pick<IApiClient, 'git'>,
@@ -55,21 +65,61 @@ export class GitBranchSeatController {
   }
 
   /**
+   * Load when the current session id or workspace id changed.
+   * Title, jobs, and other session-list publications with the same identity are no-ops.
+   * @returns once a needed describe settles, or immediately when identity is unchanged.
+   */
+  async sync(): Promise<void> {
+    const key = describeKey(this.currentSessionId(), this.currentWorkspaceId())
+    if (key === this.lastIdentity) return
+    await this.load()
+  }
+
+  /**
    * Read the current session overlay from the host.
-   * @returns once the snapshot reflects the host.
+   * Same session/workspace identity coalesces onto one in-flight describe.
+   * A newer identity aborts the older describe so a stale reply cannot clobber.
+   * @returns once the snapshot reflects the host, or immediately when coalesced.
    */
   async load(): Promise<void> {
     const sessionId = this.currentSessionId()
     const workspaceId = this.currentWorkspaceId()
+    const key = describeKey(sessionId, workspaceId)
+    this.lastIdentity = key
     if (sessionId === undefined && workspaceId === undefined) {
+      this.abort?.abort()
+      this.abort = undefined
+      this.inflight = undefined
+      this.generation += 1
       this.store.set(INITIAL)
       return
     }
+    if (this.inflight?.key === key) return this.inflight.promise
+    this.abort?.abort()
+    const abort = new AbortController()
+    this.abort = abort
+    const generation = ++this.generation
+    const promise = this.describe(sessionId, workspaceId, abort.signal, generation)
+    this.inflight = { key, promise }
+    try {
+      await promise
+    } finally {
+      if (this.inflight?.promise === promise) this.inflight = undefined
+    }
+  }
+
+  private async describe(
+    sessionId: SessionId | undefined,
+    workspaceId: string | undefined,
+    signal: AbortSignal,
+    generation: number,
+  ): Promise<void> {
     try {
       const response = await this.api.git.describe({
         ...sessionId === undefined ? {} : { sessionId },
         ...workspaceId === undefined ? {} : { workspaceId },
-      })
+      }, signal)
+      if (generation !== this.generation) return
       if (!response.result.ok) {
         const unavailable = response.result.error.code === 'git-not-a-repository'
         this.set({
@@ -87,6 +137,7 @@ export class GitBranchSeatController {
         error: null,
       })
     } catch (error) {
+      if (generation !== this.generation) return
       this.set({ sessionId: sessionId ?? '', error: messageOf(error) })
     }
   }

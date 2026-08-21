@@ -61,6 +61,50 @@ export class GitWorktreeError extends Error {
 
 const INVALID_BRANCH = /[\s~^:?*[\\]|]|@{|\.\.|\/\/|^\.|\.$|\/$|^\/|^-|^@$/
 
+/** Successful describe snapshots keyed by worktree path and overlay branch. */
+const describeCache = new Map<string, { at: number; value: SessionGitState }>()
+/** Process-wide TTL used when a describe call does not pass `ttlMs`. Tests keep this 0. */
+let describeCacheTtlMs = 0
+
+/**
+ * Options for {@link describeSessionGit}.
+ */
+export interface DescribeSessionGitOptions {
+  /** Cache TTL in milliseconds. `0` disables. Defaults to {@link setGitDescribeCacheMs}. */
+  ttlMs?: number
+  /** Clock for TTL comparisons; tests inject this. */
+  now?: number
+}
+
+/**
+ * Set the process-wide describe cache TTL. The sandbox-policy plugin applies its
+ * `gitDescribeCacheMs` config here. Direct tests leave the default `0` (disabled).
+ * @param ttlMs - milliseconds to reuse a successful snapshot; `0` disables.
+ */
+export function setGitDescribeCacheMs(ttlMs: number): void {
+  describeCacheTtlMs = ttlMs
+}
+
+/**
+ * Drop cached describe snapshots. Checkout and createBranch call this so the
+ * returned snapshot cannot show a pre-switch dirty or unpushed count.
+ * @param path - when set, drop entries whose worktree path matches; otherwise drop all.
+ */
+export function invalidateGitDescribeCache(path?: string): void {
+  if (path === undefined) {
+    describeCache.clear()
+    return
+  }
+  const resolved = resolve(path)
+  for (const key of describeCache.keys()) {
+    if (key === resolved || key.startsWith(`${resolved}\0`)) describeCache.delete(key)
+  }
+}
+
+function describeCacheKey(worktreePath: string, overlayBranch: string | undefined): string {
+  return overlayBranch === undefined ? worktreePath : `${worktreePath}\0${overlayBranch}`
+}
+
 /**
  * Whether a caller-supplied branch name is a legal Git ref name for this picker.
  * @param name - proposed branch name.
@@ -273,22 +317,31 @@ async function pathExists(path: string): Promise<boolean> {
  * Build the picker snapshot for one session against its workspace checkout.
  * @param workspacePath - workspace primary directory (header cwd).
  * @param session - live session whose overlay is folded.
+ * @param options - cache TTL and optional clock.
  * @returns repository state, or throws not-a-repository.
  */
 export async function describeSessionGit(
   workspacePath: string,
   session?: Pick<Session, 'events'>,
+  options?: DescribeSessionGitOptions,
 ): Promise<SessionGitState> {
+  const overlay = session === undefined ? undefined : effectiveWorktree(session.events)
+  const worktreePath = resolve(overlay?.path ?? workspacePath)
+  const ttlMs = options?.ttlMs ?? describeCacheTtlMs
+  const now = options?.now ?? Date.now()
+  const cacheKey = describeCacheKey(worktreePath, overlay?.branch)
+  if (ttlMs > 0) {
+    const hit = describeCache.get(cacheKey)
+    if (hit !== undefined && now - hit.at < ttlMs) return hit.value
+  }
   const repoRoot = await discoverRepoRoot(workspacePath)
   const workspaceBranch = await currentBranchOf(workspacePath)
-  const overlay = session === undefined ? undefined : effectiveWorktree(session.events)
-  const worktreePath = overlay?.path ?? workspacePath
   const checkoutBranch = workspaceBranch ?? await currentBranchOf(worktreePath)
   const currentBranch = overlay?.branch
     ?? checkoutBranch
     ?? (await detachedCheckoutLabel(worktreePath))
     ?? 'HEAD'
-  return {
+  const value: SessionGitState = {
     repoRoot,
     workspaceBranch,
     currentBranch,
@@ -299,6 +352,8 @@ export async function describeSessionGit(
     unpushedCount: await unpushedCommitCount(worktreePath),
     branches: await listBranches(repoRoot),
   }
+  if (ttlMs > 0) describeCache.set(cacheKey, { at: now, value })
+  return value
 }
 
 /**
@@ -383,7 +438,8 @@ export async function checkoutSessionBranch(
       await removeWorktree(repoRoot, overlay.path)
     }
     setSessionWorktree(session, { path: workspacePath, branch })
-    return describeSessionGit(workspacePath, session)
+    invalidateGitDescribeCache(workspacePath)
+    return describeSessionGit(workspacePath, session, { ttlMs: 0 })
   }
 
   await ensureLocalBranch(repoRoot, branch)
@@ -405,7 +461,9 @@ export async function checkoutSessionBranch(
     await addWorktree(repoRoot, target, branch)
   }
   setSessionWorktree(session, { path: target, branch })
-  return describeSessionGit(workspacePath, session)
+  invalidateGitDescribeCache(target)
+  invalidateGitDescribeCache(workspacePath)
+  return describeSessionGit(workspacePath, session, { ttlMs: 0 })
 }
 
 /**

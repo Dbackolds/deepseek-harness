@@ -18,7 +18,18 @@ function heroOccupied(ctx: Context): boolean {
   return ctx.slots.entries('conversation.hero.branch').length > 0
 }
 
-async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugin']> }> {
+async function bench(options: {
+  describe?: () => Promise<unknown>
+  current?: string
+  workspaces?: { items: { workspaceId: string; sessionIds: string[] }[]; recentWorkspaceId?: string }
+} = {}): Promise<{
+  ctx: Context
+  fiber: ReturnType<Context['plugin']>
+  notifySessions: () => void
+  notifyWorkspaces: () => void
+  setCurrent: (sessionId: string | undefined) => void
+  setWorkspaces: (next: { items: { workspaceId: string; sessionIds: string[] }[]; recentWorkspaceId?: string }) => void
+}> {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   ctx.slots.register({
@@ -27,28 +38,35 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
       'conversation.hero.branch': { kind: 'single', scope: 'root' },
     },
   } as never, () => null)
-  const listeners = new Set<() => void>()
+  const sessionListeners = new Set<() => void>()
+  const workspaceListeners = new Set<() => void>()
+  let current: string | undefined = options.current
+  let workspaces = options.workspaces ?? ({ items: [{ workspaceId: 'ws-1', sessionIds: [] }], recentWorkspaceId: 'ws-1' })
   ctx.provide('sessions', {
     list: {
-      getSnapshot: () => ({ current: undefined }),
+      getSnapshot: () => ({ current }),
       subscribe: (listener: () => void) => {
-        listeners.add(listener)
+        sessionListeners.add(listener)
         listener()
-        return () => { listeners.delete(listener) }
+        return () => { sessionListeners.delete(listener) }
       },
     },
   })
   ctx.provide('workspaces', {
     list: {
-      getSnapshot: () => ({ items: [{ workspaceId: 'ws-1', sessionIds: [] }], recentWorkspaceId: 'ws-1' }),
-      subscribe: () => () => {},
+      getSnapshot: () => workspaces,
+      subscribe: (listener: () => void) => {
+        workspaceListeners.add(listener)
+        listener()
+        return () => { workspaceListeners.delete(listener) }
+      },
     },
   })
   ctx.provide('conversation', {})
   ctx.provide('connection', {
     api: {
       git: {
-        describe: () => Promise.resolve({ rpcId: 'r', result: { ok: false, error: { code: 'git-not-a-repository', message: 'no', details: {} } } }),
+        describe: options.describe ?? (() => Promise.resolve({ rpcId: 'r', result: { ok: false, error: { code: 'git-not-a-repository', message: 'no', details: {} } } })),
         checkout: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: {} } }),
         createBranch: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: {} } }),
       },
@@ -60,7 +78,14 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  return { ctx, fiber }
+  return {
+    ctx,
+    fiber,
+    notifySessions: () => { for (const listener of sessionListeners) listener() },
+    notifyWorkspaces: () => { for (const listener of workspaceListeners) listener() },
+    setCurrent: (sessionId) => { current = sessionId },
+    setWorkspaces: (next) => { workspaces = next },
+  }
 }
 
 describe('ui-git-branch browser half', () => {
@@ -83,8 +108,83 @@ describe('ui-git-branch browser half', () => {
     expect(heroOccupied(ctx)).toBe(false)
   })
 
+  it('describes once for repeated session-list publishes of the same identity', async () => {
+    let describes = 0
+    const { notifySessions, setCurrent, fiber } = await bench({
+      describe: () => {
+        describes += 1
+        return Promise.resolve({ rpcId: 'r', result: { ok: false, error: { code: 'git-not-a-repository', message: 'no', details: {} } } })
+      },
+    })
+    await Promise.resolve()
+    const afterMount = describes
+    notifySessions()
+    notifySessions()
+    notifySessions()
+    await Promise.resolve()
+    expect(describes).toBe(afterMount)
+    setCurrent('s1')
+    notifySessions()
+    await Promise.resolve()
+    expect(describes).toBe(afterMount + 1)
+    await fiber.dispose()
+  })
+
+  it('describes the workspace that owns the current session', async () => {
+    let payload: unknown
+    const { fiber } = await bench({
+      current: 's1',
+      workspaces: {
+        items: [
+          { workspaceId: 'ws-other', sessionIds: [] },
+          { workspaceId: 'ws-owned', sessionIds: ['s1'] },
+        ],
+        recentWorkspaceId: 'ws-other',
+      },
+      describe: () => {
+        payload = 'hit'
+        return Promise.resolve({ rpcId: 'r', result: { ok: false, error: { code: 'git-not-a-repository', message: 'no', details: {} } } })
+      },
+    })
+    await Promise.resolve()
+    expect(payload).toBe('hit')
+    await fiber.dispose()
+  })
+
+  it('describes again when the workspace identity changes', async () => {
+    let describes = 0
+    const { notifyWorkspaces, setWorkspaces, fiber } = await bench({
+      describe: () => {
+        describes += 1
+        return Promise.resolve({ rpcId: 'r', result: { ok: false, error: { code: 'git-not-a-repository', message: 'no', details: {} } } })
+      },
+    })
+    await Promise.resolve()
+    const afterMount = describes
+    setWorkspaces({ items: [{ workspaceId: 'ws-2', sessionIds: [] }], recentWorkspaceId: 'ws-2' })
+    notifyWorkspaces()
+    await Promise.resolve()
+    expect(describes).toBe(afterMount + 1)
+    await fiber.dispose()
+  })
+
+  it('falls back to the first workspace when recentWorkspaceId is absent', async () => {
+    let describes = 0
+    const { fiber } = await bench({
+      workspaces: { items: [{ workspaceId: 'ws-first', sessionIds: [] }] },
+      describe: () => {
+        describes += 1
+        return Promise.resolve({ rpcId: 'r', result: { ok: false, error: { code: 'git-not-a-repository', message: 'no', details: {} } } })
+      },
+    })
+    await Promise.resolve()
+    expect(describes).toBeGreaterThan(0)
+    await fiber.dispose()
+  })
+
   it('registers both dictionaries under its own namespace and releases them with the fiber', async () => {
     const { ctx, fiber } = await bench()
+    ctx.locale.setLocale('zh')
     const translate = ctx.locale.bind(NS)
     expect(translate('seat.hint')).toBe(zh['seat.hint'])
     ctx.locale.setLocale('en')

@@ -12,6 +12,7 @@
 
 - `mode`：部署默认 `SandboxMode`（`read-only`／`workspace-write`／`danger-full-access`），加载时验证。默认为 `read-only`（故障安全）。
 - `workspaceRoot`：无 agent（智能体）的调用或没有 cwd 的会话在 `workspace-write` 下可写入的回退目录。默认为 `process.cwd()`；无论显式配置还是采用默认值，都会解析为其绝对文件系统标识。普通 agent 调用改用其会话头中不可变的 `cwd`。
+- `gitDescribeCacheMs`：同一 worktree 路径复用成功 `git.describe` 快照的毫秒数。默认 `500`。`0` 关闭缓存。checkout 和 createBranch 始终返回新快照。
 
 ## 接口
 

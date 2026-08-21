@@ -7,17 +7,26 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SandboxPolicyService, {
-  SANDBOX_MODES, effectiveSandboxMode, renderWorkspaceFoldersContext, sessionSearchRoots,
-  setSandboxMode, setSessionWorktree,
+  SANDBOX_MODES, effectiveSandboxMode, invalidateGitDescribeCache, renderWorkspaceFoldersContext,
+  sessionSearchRoots, setGitDescribeCacheMs, setSandboxMode, setSessionWorktree,
 } from '@deepseek-ai/dsh-sandbox-policy'
 import SystemPrompt, { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 
-async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}) {
+afterEach(() => {
+  setGitDescribeCacheMs(0)
+  invalidateGitDescribeCache()
+})
+
+async function mounted(config: {
+  mode?: 'read-only' | 'workspace-write' | 'danger-full-access'
+  workspaceRoot?: string
+  gitDescribeCacheMs?: number
+} = {}) {
   const ctx = new Context()
   await ctx.plugin(SandboxPolicyService, config)
   return ctx
@@ -65,6 +74,33 @@ describe('SandboxPolicyService', () => {
     const ctx = await mounted({ mode: 'workspace-write', workspaceRoot: '/ws/../ws/./sub' })
     expect(ctx.sandboxPolicy.defaultMode).toBe('workspace-write')
     expect(ctx.sandboxPolicy.workspaceRoot).toBe(resolve('/ws/../ws/./sub'))
+  })
+
+  it('rejects a negative git.describe cache TTL', async () => {
+    const ctx = new Context()
+    await expect(ctx.plugin(SandboxPolicyService, { gitDescribeCacheMs: -1 }))
+      .rejects.toThrow(/gitDescribeCacheMs/)
+  })
+
+  it('applies the default git.describe cache TTL from plugin config', async () => {
+    const { execFileSync } = await import('node:child_process')
+    const { mkdtempSync, realpathSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { describeSessionGit } = await import('../src/git-worktree.ts')
+    await mounted()
+    const cwd = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-git-ttl-')))
+    execFileSync('git', ['init', '-b', 'main'], { cwd, stdio: 'ignore' })
+    execFileSync('git', ['config', 'user.email', 'dev@example.com'], { cwd, stdio: 'ignore' })
+    execFileSync('git', ['config', 'user.name', 'dev'], { cwd, stdio: 'ignore' })
+    writeFileSync(join(cwd, 'README.md'), 'hello\n')
+    execFileSync('git', ['add', '.'], { cwd, stdio: 'ignore' })
+    execFileSync('git', ['commit', '-m', 'init'], { cwd, stdio: 'ignore' })
+    const first = await describeSessionGit(cwd)
+    expect(first.dirtyCount).toBe(0)
+    writeFileSync(join(cwd, 'dirty.txt'), 'x\n')
+    const cached = await describeSessionGit(cwd)
+    expect(cached.dirtyCount).toBe(0)
   })
 
   it('resolves the deployment policy for an agentless call', async () => {
