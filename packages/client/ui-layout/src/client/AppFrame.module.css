@@ -5,8 +5,11 @@
   height: 100%;
   overflow: hidden;
   background: var(--dsw-alias-bg-base);
-  /* Collapse/expand animates the tracks on the deepsuite sider curve
-     (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
+}
+
+/* Only the user-driven sidebar collapse/expand eases. Session switches that
+   snap details would otherwise animate the whole grid and flash the page. */
+.frame[data-sidebar-motion] {
   transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
@@ -17,7 +20,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .frame {
+  .frame[data-sidebar-motion] {
     transition: none;
   }
 }
@@ -60,8 +63,11 @@
   cursor: col-resize;
   z-index: 2;
   touch-action: none;
-  /* Rides the same curve as the tracks so the pill stays on the moving
-     border during collapse/expand; paused while dragging (frame rule). */
+}
+
+/* Rides the same curve as the tracks so the pill stays on the moving
+   border during collapse/expand; paused while dragging (frame rule). */
+.frame[data-sidebar-motion] .handle {
   transition: left var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
@@ -70,7 +76,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .handle {
+  .frame[data-sidebar-motion] .handle {
     transition: none;
   }
 }

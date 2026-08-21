@@ -335,6 +335,23 @@ describe('Menu', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('portal mode keeps the placed left/top across a later React render', () => {
+    const { rerender } = render(
+      <Menu portal open anchor={<span>trigger</span>} items={items} onSelect={() => {}} onClose={() => {}} />)
+    const menu = screen.getByRole('menu')
+    const left = menu.style.left
+    const top = menu.style.top
+    expect(left).not.toBe('')
+    expect(top).not.toBe('')
+    expect(menu.hasAttribute('data-placed')).toBe(true)
+    rerender(
+      <Menu portal open anchor={<span>trigger</span>} items={[...items, { id: 'c', label: 'Gamma' }]} onSelect={() => {}} onClose={() => {}} />)
+    const again = screen.getByRole('menu')
+    expect(again.style.left).toBe(left)
+    expect(again.style.top).toBe(top)
+    expect(again.hasAttribute('data-placed')).toBe(true)
+  })
+
   it('portal mode resolves align=end / side=top to clamped left/top coordinates', () => {
     render(
       <Menu portal open align="end" side="top" anchor={<span>trigger</span>} items={items} onSelect={() => {}} onClose={() => {}} />)

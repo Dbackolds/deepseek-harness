@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest'
-import { asReloadStatus, hostGenerationAfterLoss, progressFromStatus, storedRebootNonce } from '../../src/client/reload-status.ts'
+import { asReloadStatus, hostGenerationAfterLoss, progressFromStatus, statusFromMarketplaceSettings, storedRebootNonce } from '../../src/client/reload-status.ts'
 
 function assert(cond: unknown, message: string): void {
   if (!cond) throw new Error(message)
@@ -29,6 +29,25 @@ assert(hostGenerationAfterLoss({ seenHost: true, lostHost: true, up: true }).rel
 assert(storedRebootNonce(null) === undefined, 'missing storage is not a settled reboot')
 assert(storedRebootNonce('1') === undefined, 'legacy boolean flag is leftover, not a nonce')
 assert(storedRebootNonce('7') === 7, 'numeric nonce settles the card')
+assert(statusFromMarketplaceSettings(undefined) === undefined, 'missing settings section is idle')
+assert(statusFromMarketplaceSettings({
+  reloadNonce: 4,
+  rebootNonce: 2,
+  reloadClientIds: ['@deepseek-ai/dsh-client-ui-conversation'],
+  reloadNames: ['include:agent-presets:persona'],
+  reloadProgress: {
+    phase: 'done',
+    current: '',
+    index: 29,
+    total: 29,
+    ok: 29,
+    failed: 0,
+    message: '重载完成, 成功重载 29 个插件',
+  },
+})?.nonce === 4, 'maps settings nonce')
+assert(statusFromMarketplaceSettings({
+  reloadProgress: { phase: 'running', current: 'ui-conversation', index: 1, total: 2, ok: 0, failed: 0, message: '正在重载' },
+})?.phase === 'running', 'maps running progress')
 
 
 describe('reload-status', () => {

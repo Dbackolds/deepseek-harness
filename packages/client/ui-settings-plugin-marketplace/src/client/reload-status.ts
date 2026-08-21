@@ -14,6 +14,33 @@ export interface ReloadStatus {
   readonly rebootNonce: number
 }
 
+/** Map the marketplace settings section onto the live reload/reboot snapshot. */
+export function statusFromMarketplaceSettings(section: {
+  reloadNonce?: unknown
+  rebootNonce?: unknown
+  reloadClientIds?: unknown
+  reloadNames?: unknown
+  reloadProgress?: unknown
+} | undefined): ReloadStatus | undefined {
+  if (section === undefined) return undefined
+  const progress = section.reloadProgress !== null && typeof section.reloadProgress === 'object'
+    ? section.reloadProgress as Record<string, unknown>
+    : {}
+  return asReloadStatus({
+    phase: typeof progress.phase === 'string' ? progress.phase : 'idle',
+    current: progress.current,
+    index: progress.index,
+    total: progress.total,
+    ok: progress.ok,
+    failed: progress.failed,
+    message: progress.message,
+    nonce: section.reloadNonce,
+    clientIds: section.reloadClientIds,
+    names: section.reloadNames,
+    rebootNonce: section.rebootNonce,
+  })
+}
+
 export function asReloadStatus(value: unknown): ReloadStatus | undefined {
   if (value === null || typeof value !== 'object') return undefined
   const row = value as Partial<ReloadStatus>

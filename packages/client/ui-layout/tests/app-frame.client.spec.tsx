@@ -272,6 +272,21 @@ describe('AppFrame', () => {
     expect(tracks(frame)).toEqual([280, 360])
   })
 
+  it('eases only the sidebar track, not a session-driven details snap', () => {
+    const { frame, instance, rerenderFrame } = mountFrame()
+    expect(frame.hasAttribute('data-sidebar-motion')).toBe(false)
+    act(() => { instance.actions.openDetails() })
+    expect(frame.hasAttribute('data-sidebar-motion')).toBe(false)
+    selectedSession.current = 's-next' as SessionId
+    act(() => { rerenderFrame() })
+    expect(tracks(frame)).toEqual([280, 0])
+    expect(frame.hasAttribute('data-sidebar-motion')).toBe(false)
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.hasAttribute('data-sidebar-motion')).toBe(true)
+    act(() => { vi.advanceTimersByTime(320) })
+    expect(frame.hasAttribute('data-sidebar-motion')).toBe(false)
+  })
+
   it('drag handles disappear for collapsed columns', () => {
     const { frame, instance } = mountFrame()
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)

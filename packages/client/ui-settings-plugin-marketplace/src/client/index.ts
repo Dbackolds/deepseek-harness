@@ -18,7 +18,7 @@ import { ReloadProgressToast } from './ReloadProgressToast.tsx'
 import { reloadMarketplacePage, type MarketplacePageReloadHost } from './reload-page.ts'
 import {
   asReloadStatus, progressFromStatus, sameReloadStatus,
-  storedRebootNonce, type ReloadStatus,
+  statusFromMarketplaceSettings, storedRebootNonce, type ReloadStatus,
 } from './reload-status.ts'
 import { en, zh } from './locales.ts'
 import './slot-contract.ts'
@@ -54,6 +54,19 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   const catalogScope = ctx.settingsScope.bind<{
     catalogUrls: string[]
+    reloadNonce?: number
+    rebootNonce?: number
+    reloadClientIds?: string[]
+    reloadNames?: string[]
+    reloadProgress?: {
+      phase?: 'idle' | 'running' | 'done'
+      current?: string
+      index?: number
+      total?: number
+      ok?: number
+      failed?: number
+      message?: string
+    }
   }>({
     namespace: 'plugin-marketplace',
   })
@@ -129,6 +142,9 @@ export function apply(ctx: ClientContext): void {
       console.error('plugin-marketplace: page reload failed', error)
     })
   }
+  const adoptFromSettings = (): void => {
+    adoptStatus(statusFromMarketplaceSettings(catalogScope.getSnapshot().value), true)
+  }
   const pollReload = async (): Promise<void> => {
     try { adoptStatus(asReloadStatus(await callMarketplace('reloadStatus')), true) }
     catch { /* keep last known status */ }
@@ -144,10 +160,12 @@ export function apply(ctx: ClientContext): void {
     ctx.effect(() => () => { offHost() }, 'plugin-marketplace: reboot page refresh')
   }
   renderToast()
+  adoptFromSettings()
+  const offReload = catalogScope.subscribe(adoptFromSettings)
+  // Catch a reboot/reload that landed before this fiber subscribed.
   void pollReload()
-  const timer = window.setInterval(() => { void pollReload() }, 400)
   ctx.effect(() => () => {
-    window.clearInterval(timer)
+    offReload()
     root.unmount()
     host.remove()
   }, 'plugin-marketplace: reload toast')

@@ -151,6 +151,21 @@ export function AppFrame({
   // Track-level transitions pause for the whole gesture: eased tracks would
   // detach the column edge from the pointer (AppFrame.module.css).
   const [dragging, setDragging] = useState(false)
+  // Session switches snap the details track; animating that looks like a
+  // page flash. Only the user-driven sidebar collapse/expand should ease.
+  const lastSidebarRef = useRef(cols.sidebar)
+  const [sidebarMotion, setSidebarMotion] = useState(false)
+  useLayoutEffect(() => {
+    if (lastSidebarRef.current === cols.sidebar) return
+    lastSidebarRef.current = cols.sidebar
+    if (dragging) {
+      setSidebarMotion(false)
+      return
+    }
+    setSidebarMotion(true)
+    const timer = window.setTimeout(() => { setSidebarMotion(false) }, 320)
+    return () => { window.clearTimeout(timer) }
+  }, [cols.sidebar, dragging])
   const onDragEnd = useCallback(() => { setDragging(false) }, [])
   const onSidebarStart = useCallback(() => { sidebarBase.current = colsRef.current.sidebar; setDragging(true) }, [])
   const onDetailsStart = useCallback(() => { detailsBase.current = colsRef.current.details; setDragging(true) }, [])
@@ -169,6 +184,7 @@ export function AppFrame({
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-details-collapsed={cols.details === 0 || undefined}
       data-dragging={dragging || undefined}
+      data-sidebar-motion={sidebarMotion || undefined}
     >
       <div className={css.sidebarCol}>
         {/* Render-site slot call with live concession output: a closed

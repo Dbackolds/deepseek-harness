@@ -246,7 +246,7 @@ export function ChatView({
     el.scrollTop = el.scrollHeight
     observedTopRef.current = el.scrollTop
     atBottomRef.current = true
-    setAtBottom(true)
+    setAtBottom(current => current ? current : true)
     chatScroll.save(null)
   }
 
@@ -334,7 +334,7 @@ export function ChatView({
       return
     }
     atBottomRef.current = isAtBottom
-    setAtBottom(isAtBottom)
+    setAtBottom(current => current === isAtBottom ? current : isAtBottom)
     const position = isAtBottom ? null : scrollPosition(local, el)
     if (isAtBottom) {
       anchorRef.current = null

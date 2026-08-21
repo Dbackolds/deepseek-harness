@@ -47,6 +47,15 @@
   z-index: 1100;
 }
 
+/* Hidden at a fixed origin so offsetWidth/offsetHeight are real before the
+   layout effect writes left/top onto the node. `data-placed` is a DOM flag
+   React never owns, so a later render cannot hide the card again. */
+.portal:not([data-placed]) {
+  visibility: hidden;
+  left: 0;
+  top: 0;
+}
+
 /* Open above the anchor (empty-state workspace chip: figma 122:9481). */
 .sideTop {
   top: auto;

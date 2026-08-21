@@ -9,7 +9,7 @@
 // internally past that; submenu-bearing menus are exempt (see .scrollable).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { IconCheckOutline16 } from './icons/index.tsx'
@@ -52,9 +52,6 @@ function isSeparator(entry: MenuEntry): entry is MenuSeparator {
 function isLabel(entry: MenuEntry): entry is MenuLabel {
   return 'type' in entry && entry.type === 'label'
 }
-
-/** Unplaced portal list: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real. */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
 /**
  * Render an anchored dropdown menu.
@@ -108,7 +105,6 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   const rootRef = useRef<HTMLSpanElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null)
-  const [fixedPos, setFixedPos] = useState<CSSProperties | null>(null)
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(onClose)
 
   // Portal mode: fixed-position the list from the anchor rect before paint;
@@ -117,8 +113,8 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   // runs before the parent's, so a wrapper the host positions in its own
   // effect measures stale here — the host callback owns the truth instead.
   useLayoutEffect(() => {
-    if (!open || !portal) { setFixedPos(null); return }
-    const place = () => {
+    if (!open || !portal) return
+    const place = (): boolean => {
       let r: DOMRect | null
       if (getAnchorRect !== undefined) {
         r = getAnchorRect()
@@ -126,7 +122,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
         /* v8 ignore next 2 -- the ref is attached before the layout effect runs and the listeners die with it. */
         r = rootRef.current?.getBoundingClientRect() ?? null
       }
-      if (r === null) return
+      if (r === null) return false
       const MARGIN = 12
       const vw = window.innerWidth
       const vh = window.innerHeight
@@ -150,17 +146,25 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       if (lw > 0) x = Math.min(Math.max(x, MARGIN), vw - lw - MARGIN)
       if (lh > 0) y = Math.min(Math.max(y, MARGIN), vh - lh - MARGIN)
 
-      setFixedPos({ left: x, top: y })
+      if (listEl !== null) {
+        listEl.dataset.placed = ''
+        listEl.style.left = `${String(x)}px`
+        listEl.style.top = `${String(y)}px`
+      }
+      return true
     }
     // First run measures the hidden pre-render (same commit as `open`), so
     // end/top alignment and clamping use real dimensions before anything
-    // paints — no visible jump from a zero-size first guess.
+    // paints — no visible jump from a zero-size first guess. Later moves
+    // write the node directly so a React re-render cannot snap the card
+    // back to the hidden origin.
     place()
-    window.addEventListener('scroll', place, true)
-    window.addEventListener('resize', place)
+    const onScrollOrResize = (): void => { place() }
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
     return () => {
-      window.removeEventListener('scroll', place, true)
-      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
     }
   }, [open, portal, align, side, getAnchorRect])
 
@@ -258,15 +262,13 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
     )
   }
 
-  // Portal lists render hidden until placed: the placement effect measures
-  // this pre-render in the same commit, so the first painted frame is
-  // already at the final position (with getAnchorRect returning null the
-  // list simply stays hidden).
-  const list = open && (
+  // Portal lists start at the hidden measure origin. The layout effect
+  // writes the real left/top on the node in the same commit; keep that
+  // style off React so a later render cannot flash the card back to 0,0.
+  const list = open && (!portal || getAnchorRect === undefined || getAnchorRect() !== null) && (
     <div
       ref={listRef}
       className={clsx(css.list, dense && css.denseList, compact && css.compactList, scrollable && css.scrollable, portal && css.portal, side === 'top' && !portal && css.sideTop, align === 'end' && !portal && css.alignEnd)}
-      style={portal ? fixedPos ?? MEASURE_STYLE : undefined}
       role="menu"
       // React portals bubble synthetic events through the REACT tree: without
       // this stop, an item click re-fires the anchor row's own onClick
