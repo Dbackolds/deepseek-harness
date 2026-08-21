@@ -421,9 +421,9 @@ describe('workspace browser rows', () => {
     }
   })
 
-  it('ungrouped bucket renders no workspace menu', () => {
+  it('Chat bucket renders no workspace menu even when No Repo backs it', () => {
     const group: GroupNode = {
-      key: '', workspaceId: undefined, cwd: undefined, folders: [], createdAt: undefined, label: 'Ungrouped',
+      key: '', workspaceId: undefined, cwd: undefined, folders: [], createdAt: undefined, label: 'Chat',
       sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
     }
     render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)

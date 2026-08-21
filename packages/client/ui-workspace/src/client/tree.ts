@@ -1,6 +1,7 @@
 /**
  * Derives the workspace browser tree from Host Workspace order and membership.
- * Unassigned Sessions trail under Ungrouped; blank Sessions stay hidden
+ * The Host No Repo workspace is the trailing Chat group; other unassigned
+ * Sessions trail under that same Chat bucket. Blank Sessions stay hidden
  * until the first accepted prompt.
  */
 import {
@@ -9,14 +10,29 @@ import {
   type WorkspaceId, type WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 
-/** Group key for Sessions outside every Workspace. */
+/** Group key for Sessions outside every project Workspace (Chat / No Repo). */
 export const UNGROUPED_KEY = ''
 
 /** Browser-local expansion account for the trailing Hidden section. */
 export const HIDDEN_SECTION_KEY = '__hidden__'
 
-/** Display label for the ungrouped bucket row. */
-export const UNGROUPED_LABEL = 'Ungrouped'
+/** Display label for the Chat bucket row (English dictionary source). */
+export const UNGROUPED_LABEL = 'Chat'
+
+/**
+ * True when a Workspace is the Host No Repo home used for chats that have
+ * no project folder. Title match is the Host registration name; path match
+ * covers a renamed No Repo whose directory is still `$DSH_HOME/no-repo`.
+ * @param workspace - Host Workspace row.
+ * @returns whether this Workspace is the Chat bucket.
+ */
+export function isNoRepoWorkspace(
+  workspace: Pick<WorkspaceView, 'title' | 'path'>,
+): boolean {
+  return workspace.title === 'No Repo'
+    || workspace.path.endsWith('/no-repo')
+    || workspace.path.endsWith('\no-repo')
+}
 
 /** One top-level session row in a group or the flat list. */
 export interface SessionNode {
@@ -48,12 +64,12 @@ export type SessionOrderBy = 'manual' | 'updated'
 export interface GroupNode {
   /** Group key: the workspace id or {@link UNGROUPED_KEY}. */
   key: string
-  /** Backing Workspace id; absent only for the ungrouped bucket. */
+  /** Backing Workspace id; absent only for Chat when No Repo is unregistered. */
   workspaceId: WorkspaceId | undefined
   cwd: string | undefined
-  /** Additional workspace folders; empty for the ungrouped bucket. */
+  /** Additional workspace folders; empty for the Chat bucket. */
   folders: readonly string[]
-  /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
+  /** Workspace creation time (epoch ms); absent only for Chat without No Repo. */
   createdAt: number | undefined
   label: string
   /** Total visible sessions in the group. */
@@ -107,9 +123,9 @@ interface Group {
 
 /**
  * Directory display label: basename of the path (both separators accepted).
- * Ungrouped-bucket fallback for surfaces without a workspace title.
- * @param cwd - directory path, or undefined for the ungrouped bucket.
- * @returns basename, the raw cwd when it has no basename, or the ungrouped label.
+ * Chat-bucket fallback for surfaces without a workspace title.
+ * @param cwd - directory path, or undefined for the Chat bucket.
+ * @returns basename, the raw cwd when it has no basename, or the Chat label.
  */
 export function workspaceLabel(cwd: string | undefined): string {
   if (cwd === undefined || cwd === '') return UNGROUPED_LABEL
@@ -184,11 +200,13 @@ function orderedUngrouped(members: readonly SessionSummary[], stored: readonly s
 }
 
 /**
- * Group Sessions by Host Workspace: one group per entity in stable Host
- * order, with members resolved from sessionIds in their stored order. Sessions
- * outside every Workspace trail in the browser-local Ungrouped order, which
- * falls back to recency before that order is initialized. Hidden Workspaces
- * stay accounted so their Sessions never spill into Ungrouped.
+ * Group Sessions by Host Workspace: one group per project Workspace in
+ * stable Host order, with members resolved from sessionIds in their stored
+ * order. The Host No Repo workspace is omitted from that list and merged
+ * into the trailing Chat bucket with any Session outside every project
+ * Workspace. Chat order is the browser-local Ungrouped account, which falls
+ * back to recency before that order is initialized. Hidden project
+ * Workspaces stay accounted so their Sessions never spill into Chat.
  */
 function groupByWorkspace(
   list: SessionListState,
@@ -198,6 +216,8 @@ function groupByWorkspace(
 ): Group[] {
   const groups: Group[] = []
   const accounted = new Set<SessionId>()
+  let chatWorkspace: WorkspaceView | undefined
+  const chatMembers: SessionSummary[] = []
   for (const workspace of workspaces) {
     const members: SessionSummary[] = []
     for (const id of workspace.sessionIds) {
@@ -206,6 +226,11 @@ function groupByWorkspace(
       accounted.add(id)
       if (!sessionVisible(summary, archived)) continue
       members.push(summary)
+    }
+    if (isNoRepoWorkspace(workspace)) {
+      chatWorkspace = workspace
+      chatMembers.push(...members)
+      continue
     }
     groups.push(buildGroup(
       workspace.workspaceId, workspace.workspaceId, workspace.path, workspace.folders,
@@ -216,18 +241,17 @@ function groupByWorkspace(
     .map(id => list.byId[id])
     .filter((s): s is SessionSummary =>
       s !== undefined && !accounted.has(s.id) && sessionVisible(s, archived))
-  if (stray.length > 0) {
-    groups.push(buildGroup(
-      UNGROUPED_KEY,
-      undefined,
-      undefined,
-      [],
-      undefined,
-      UNGROUPED_LABEL,
-      ungroupedOrder === undefined ? stray : orderedUngrouped(stray, ungroupedOrder),
-      ungroupedOrder === undefined ? 'recency' : 'account',
-    ))
-  }
+  const chatSessions = [...chatMembers, ...stray]
+  groups.push(buildGroup(
+    UNGROUPED_KEY,
+    chatWorkspace?.workspaceId,
+    chatWorkspace?.path,
+    chatWorkspace?.folders ?? [],
+    chatWorkspace === undefined ? undefined : Date.parse(chatWorkspace.createdAt),
+    UNGROUPED_LABEL,
+    ungroupedOrder === undefined ? chatSessions : orderedUngrouped(chatSessions, ungroupedOrder),
+    ungroupedOrder === undefined ? 'recency' : 'account',
+  ))
   return groups
 }
 
@@ -346,9 +370,11 @@ export function partitionSessionActivity(sessions: readonly SessionNode[]): read
  * @param archivedSessionIds - registry-global archive set.
  * @param view - local expansion arrays.
  * @param hiddenWorkspaceIds - registry-global hidden Workspace set. Hidden
- * rows stay out of the main grouped list; callers that need Hidden-section
- * rows pass those ids into {@link deriveHiddenGroups}.
- * @returns group sections in render order (visible Workspaces, then Ungrouped).
+ * project Workspaces stay out of the main grouped list; callers that need
+ * Hidden-section rows pass those ids into {@link deriveHiddenGroups}. A
+ * hidden No Repo still occupies the trailing Chat bucket so chats remain
+ * reachable without a project Workspace.
+ * @returns group sections in render order (visible project Workspaces, then Chat).
  */
 export function deriveGroups(
   list: SessionListState,
@@ -361,13 +387,15 @@ export function deriveGroups(
   const hidden = new Set(hiddenWorkspaceIds)
   const expandedGroups = new Set(view.expandedGroups)
   const descendants = indexSubagentDescendants(list.byId)
+  const owner = list.current === undefined
+    ? undefined
+    : workspaces.find(w => w.sessionIds.includes(list.current as SessionId))
   const currentGroup = list.current === undefined
     ? undefined
-    : (workspaces.find(w => w.sessionIds.includes(list.current as SessionId))?.workspaceId as string | undefined)
-        ?? UNGROUPED_KEY
+    : (owner !== undefined && !isNoRepoWorkspace(owner) ? owner.workspaceId as string : UNGROUPED_KEY)
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)) {
-    if (g.workspaceId !== undefined && hidden.has(g.workspaceId)) continue
+    if (g.key !== UNGROUPED_KEY && g.workspaceId !== undefined && hidden.has(g.workspaceId)) continue
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,
@@ -413,7 +441,7 @@ export function deriveHiddenGroups(
     : (workspaces.find(w => w.sessionIds.includes(list.current as SessionId))?.workspaceId as string | undefined)
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, undefined)) {
-    if (g.workspaceId === undefined || !hidden.has(g.workspaceId)) continue
+    if (g.key === UNGROUPED_KEY || g.workspaceId === undefined || !hidden.has(g.workspaceId)) continue
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,
@@ -438,8 +466,8 @@ export function deriveHiddenGroups(
  * (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot.
  * @param archivedSessionIds - registry-global archive set.
- * @param hiddenSessionIds - Sessions whose owning Workspace is hidden (omit
- * from the flat list and Pinned; Ungrouped rows have no owner and stay).
+ * @param hiddenSessionIds - Sessions whose owning project Workspace is hidden
+ * (omit from the flat list and Pinned; Chat / No Repo rows stay).
  * @returns flat rows in render order.
  */
 export function deriveFlat(
@@ -496,8 +524,9 @@ export function deriveSearchResults(
 
   const workspaceBySession = new Map<SessionId, string>()
   for (const workspace of workspaces) {
+    const title = isNoRepoWorkspace(workspace) ? UNGROUPED_LABEL : workspace.title
     for (const sessionId of workspace.sessionIds) {
-      if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, workspace.title)
+      if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, title)
     }
   }
   const labelOf = (summary: SessionSummary): string =>

@@ -116,7 +116,7 @@ describe('WorkspaceBrowser', () => {
           version: '0', cwd: '/tmp', attachedSessions: 0, home: '/home/u', canOpenPath: false,
         }),
       })
-      fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
+      fireEvent.pointerEnter(screen.getByText('Project').closest('[role="treeitem"]')!.parentElement as HTMLElement)
       act(() => { vi.advanceTimersByTime(500) })
       expect(screen.getByText('~/Documents/project')).toBeTruthy()
     } finally {
@@ -416,18 +416,35 @@ describe('WorkspaceBrowser', () => {
     expect(startSession).toHaveBeenCalledWith(wid('alpha'))
   })
 
-  it('auto-expands the Ungrouped bucket for a loose current session; its header has no menu and its ＋ is inert', () => {
+  it('auto-expands Chat for a loose current session; its header has no menu and its ＋ starts a No Repo session', () => {
     const startSession = vi.fn()
+    const noRepo = {
+      ...workspace('no-repo', []),
+      title: 'No Repo',
+      path: '/root/.dsh/no-repo',
+    }
     mount({
       useSessions: hook(sessionState([summary('loose', 1)], { current: sid('loose') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', []), noRepo])),
+      startSession,
+    })
+    expect(screen.getByText('loose')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '工作区“聊天”的操作' })).toBeNull()
+    expect(screen.queryByText('No Repo')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '在“聊天”中新建会话' }))
+    expect(startSession).toHaveBeenCalledWith(wid('no-repo'))
+  })
+
+  it('starts an unscoped Chat session when No Repo is not listed', () => {
+    const startSession = vi.fn()
+    mount({
+      useSessions: hook(sessionState([])),
       useWorkspaces: hook(workspaceState([workspace('alpha', [])])),
       startSession,
     })
-    // The loose session's group is UNGROUPED_KEY: expanded by the effect.
-    expect(screen.getByText('loose')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '工作区“未分组”的操作' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '在“未分组”中新建会话' }))
-    expect(startSession).not.toHaveBeenCalled()
+    expect(screen.getByText('聊天')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '在“聊天”中新建会话' }))
+    expect(startSession).toHaveBeenCalledWith(undefined)
   })
 
   it('keeps an already-expanded group when the selection moves within it', () => {
@@ -462,6 +479,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('新会话')).toBeNull()
     expect(screen.queryByText('alpha-blank')).toBeNull()
     expect(screen.queryByText('beta-blank')).toBeNull()
+    expect(screen.getByText('聊天')).toBeTruthy()
 
     rerender(b, { useSessions: hook({ ...sessions, current: staleBlank.id }) })
     expect(screen.queryByText('新会话')).toBeNull()
@@ -763,11 +781,12 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
-  it('shows the no-sessions empty state in both modes and resolves an empty search', async () => {
+  it('keeps Chat in grouped mode, shows the no-sessions empty state in flat mode, and resolves an empty search', async () => {
     vi.useFakeTimers()
     try {
       const b = mount()
-      expect(screen.getByText('暂无会话')).toBeTruthy()
+      expect(screen.getByText('聊天')).toBeTruthy()
+      expect(screen.queryByText('暂无会话')).toBeNull()
       b.store.actions.setGroupBy('flat')
       rerender(b, {})
       expect(screen.getByText('暂无会话')).toBeTruthy()
@@ -968,7 +987,7 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([])),
       insertSessionBefore,
     })
-    fireEvent.click(screen.getByText('未分组'))
+    fireEvent.click(screen.getByText('聊天'))
 
     const dragAfter = (sourceTitle: string, targetTitle: string): void => {
       const source = screen.getByText(sourceTitle).closest('[role="treeitem"]') as HTMLElement
@@ -1183,7 +1202,7 @@ describe('WorkspaceBrowser', () => {
     const dialog = screen.getByRole('dialog', { name: '删除工作区' })
     expect(dialog.textContent).toContain('将把“Alpha”从工作区列表中移除')
     expect(dialog.textContent).toContain('文件夹与会话记录会保留')
-    expect(dialog.textContent).toContain('其会话将显示在“未分组”下')
+    expect(dialog.textContent).toContain('其会话将显示在“聊天”下')
 
     const confirm = screen.getByRole<HTMLButtonElement>('button', { name: '删除工作区' })
     fireEvent.click(confirm)

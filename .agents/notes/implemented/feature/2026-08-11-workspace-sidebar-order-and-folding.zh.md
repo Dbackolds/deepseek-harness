@@ -20,9 +20,9 @@ Workspace 注册表持有持久 `workspaceIds` 顺序，并提供采用 DOM `ins
 
 ### Session 折叠与视图顺序
 
-每个 Workspace 持久化一项浏览器本地打开状态：关闭表示零条 Session 行，打开表示全部进行中 Session，空闲 Session 在点展开其余之前仍最多五条。存在更多空闲 Session 时，**展开其余**只在当前挂载期间显示剩余空闲行；关闭整个 Workspace 会清除此临时展开，因此重新打开时恢复为五条空闲行。进行中行永不进入该溢出；进行中／空闲拆分由[侧边栏进行中会话不再套状态文件夹](2026-08-19-sidebar-live-idle-without-status-folders.zh.md)负责。只有在用户尚未为该 Workspace 存储明确状态时，当前 Session 所在分组才会自动打开。从 Workspace 行创建 Session 时会在启动 Session 前打开目标分组，使状态传播完成后新行保持可见。就绪的 Workspace 基线发生变化后，浏览器会移除基线中不存在 id 的展开状态、顺序和已观察时间戳记录，同时保留 Ungrouped、单列表和已隐藏区记账。隐藏的 Workspace 仍留在 Host 顺序和会话账本上；分组列表把它们折入末尾的已隐藏区（[隐藏 Workspace](2026-08-20-workspace-hide.zh.md)）。
+每个 Workspace 持久化一项浏览器本地打开状态：关闭表示零条 Session 行，打开表示全部进行中 Session，空闲 Session 在点展开其余之前仍最多五条。存在更多空闲 Session 时，**展开其余**只在当前挂载期间显示剩余空闲行；关闭整个 Workspace 会清除此临时展开，因此重新打开时恢复为五条空闲行。进行中行永不进入该溢出；进行中／空闲拆分由[侧边栏进行中会话不再套状态文件夹](2026-08-19-sidebar-live-idle-without-status-folders.zh.md)负责。只有在用户尚未为该 Workspace 存储明确状态时，当前 Session 所在分组才会自动打开。从 Workspace 行创建 Session 时会在启动 Session 前打开目标分组，使状态传播完成后新行保持可见。就绪的 Workspace 基线发生变化后，浏览器会移除基线中不存在 id 的展开状态、顺序和已观察时间戳记录，同时保留 Chat、单列表和已隐藏区记账。Chat 始终作为分组列表末尾的分组存在（[侧边栏聊天分组](2026-08-21-sidebar-chat-bucket.zh.md)）。隐藏的 Workspace 仍留在 Host 顺序和会话账本上；分组列表把它们折入末尾的已隐藏区（[隐藏 Workspace](2026-08-20-workspace-hide.zh.md)）。
 
-组合视图菜单在分组和单列表呈现中都提供**手动排序**和**最近更新**，每个记账各自持有一份浏览器本地持久顺序。真实 Workspace 从 `WorkspaceView.sessionIds` 初始化；Ungrouped 和跨 Workspace 的单列表从最近更新时间顺序初始化，且没有 Host Session 记账。进入最近更新时会执行一次完整的时间排序；后续 user prompt 或 steer 会将对应 Session 置顶一次，拖拽仍可编辑所得顺序。返回手动排序会保留当前顺序，只停用后续活动置顶。真实 Workspace 在手动模式下的拖拽还会写入 Host Session 记账，而 Ungrouped 和单列表的拖拽与活动置顶保留在浏览器本地。单列表没有父级层次，因此不显示空的左侧状态槽；存在可见状态时仍保留该槽。
+组合视图菜单在分组和单列表呈现中都提供**手动排序**和**最近更新**，每个记账各自持有一份浏览器本地持久顺序。真实项目 Workspace 从 `WorkspaceView.sessionIds` 初始化；Chat 和跨 Workspace 的单列表从最近更新时间顺序初始化。已注册 No Repo 时，Chat 会写入该 Host 记账。进入最近更新时会执行一次完整的时间排序；后续 user prompt 或 steer 会将对应 Session 置顶一次，拖拽仍可编辑所得顺序。返回手动排序会保留当前顺序，只停用后续活动置顶。真实 Workspace 在手动模式下的拖拽还会写入 Host Session 记账，而没有 No Repo 的 Chat 和单列表的拖拽与活动置顶保留在浏览器本地。单列表没有父级层次，因此不显示空的左侧状态槽；存在可见状态时仍保留该槽。
 
 创建“新会话”并选中空白 Session 时，浏览器会在其分组记账和单列表记账中各置顶一次。这次明确的创建置顶不会推进 `updatedAt`；后续拖拽把空白 Session 当作普通 Session，首条提示词落地也不会撤销手动模式下的拖拽。
 
@@ -48,7 +48,7 @@ Workspace 命中测试使用完整渲染分组区段，包括可见 Session 行�
 
 ## 后果
 
-- Workspace 顺序通过 Host 持久并共享；分组方式、打开状态、每个记账的 Session 视图顺序和查询状态仍是浏览器本地呈现偏好。Ungrouped 和单列表支持相同的拖拽与置顶规则，但因没有单一 Workspace 记账，其顺序只保存在浏览器本地。
+- Workspace 顺序通过 Host 持久并共享；分组方式、打开状态、每个记账的 Session 视图顺序和查询状态仍是浏览器本地呈现偏好。Chat 和单列表支持相同的拖拽与置顶规则；已注册 No Repo 时 Chat 写入该 Host 记账，否则顺序只保存在浏览器本地。
 - 最近更新模式会在进入时执行完整时间排序，随后保持手动调整，直到 user prompt 或 steer 推进某条 Session 并将其置顶。返回手动排序会保留所有当前位置。
 - 打开 Workspace 不会隐藏进行中行；未执行明确的**展开其余**手势时，空闲 Session 最多显示五条；关闭分组只重置这项临时空闲折叠。
 - 新选中的空白“新会话”行会在分组和单列表顺序中各置顶一次，之后遵循与其他 Session 相同的拖拽和活动规则。

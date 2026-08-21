@@ -21,8 +21,8 @@ import type {
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
 import type { SessionActivityBucket, SessionListCluster, SessionNode, SessionOrderBy } from './tree.ts'
 import {
-  BADGED_ACTIVITY_BUCKETS, deriveFlat, deriveGroups, deriveHiddenGroups, deriveSearchResults, partitionLiveIdle,
-  partitionSessionActivity, sessionActivityBucket, HIDDEN_SECTION_KEY, UNGROUPED_KEY,
+  BADGED_ACTIVITY_BUCKETS, deriveFlat, deriveGroups, deriveHiddenGroups, deriveSearchResults, isNoRepoWorkspace,
+  partitionLiveIdle, partitionSessionActivity, sessionActivityBucket, HIDDEN_SECTION_KEY, UNGROUPED_KEY,
 } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY, type SessionActivityLayout } from './stores.ts'
@@ -401,18 +401,30 @@ function SessionTree({
   const previousOrderBy = useRef(orderBy)
   const nativeDragActive = drag !== null || workspaceDrag !== null
   useNativeDragAcceptance(nativeDragActive)
+  const currentOwner = current === undefined
+    ? undefined
+    : workspaces.find(w => w.sessionIds.includes(current))
   const currentGroup = current === undefined
     ? undefined
-    : (workspaces.find(w => w.sessionIds.includes(current))?.workspaceId as string | undefined)
-      ?? UNGROUPED_KEY
+    : (currentOwner !== undefined && !isNoRepoWorkspace(currentOwner)
+      ? currentOwner.workspaceId as string
+      : UNGROUPED_KEY)
   const hiddenWorkspaceSet = useMemo(() => new Set(hiddenWorkspaceIds), [hiddenWorkspaceIds])
   const hiddenOwnedSessionIds = useMemo(
-    () => workspaces.flatMap(workspace => hiddenWorkspaceSet.has(workspace.workspaceId) ? [...workspace.sessionIds] : []),
+    () => workspaces.flatMap(workspace =>
+      hiddenWorkspaceSet.has(workspace.workspaceId) && !isNoRepoWorkspace(workspace)
+        ? [...workspace.sessionIds]
+        : []),
     [hiddenWorkspaceSet, workspaces],
   )
   const visibleWorkspaces = useMemo(
-    () => workspaces.filter(workspace => !hiddenWorkspaceSet.has(workspace.workspaceId)),
+    () => workspaces.filter(workspace =>
+      !hiddenWorkspaceSet.has(workspace.workspaceId) && !isNoRepoWorkspace(workspace)),
     [hiddenWorkspaceSet, workspaces],
+  )
+  const chatWorkspace = useMemo(
+    () => workspaces.find(workspace => isNoRepoWorkspace(workspace)),
+    [workspaces],
   )
   useEffect(() => {
     if (current === undefined || currentGroup === undefined || Object.hasOwn(groupExpansion, currentGroup)) return
@@ -429,7 +441,9 @@ function SessionTree({
     [groupExpansion],
   )
   const ungroupedSessionIds = useMemo(() => {
-    const accounted = new Set(workspaces.flatMap(workspace => workspace.sessionIds))
+    const accounted = new Set(
+      workspaces.flatMap(workspace => isNoRepoWorkspace(workspace) ? [] : workspace.sessionIds),
+    )
     return list.ids.filter(id => list.byId[id] !== undefined && !accounted.has(id))
   }, [list, workspaces])
   useEffect(() => {
@@ -437,10 +451,12 @@ function SessionTree({
     const switchedToUpdated = previousOrderBy.current !== 'updated' && orderBy === 'updated'
     previousOrderBy.current = orderBy
     const accounts = [
-      ...workspaces.map(workspace => ({
-        key: workspace.workspaceId as string,
-        sessionIds: workspace.sessionIds.filter(id => list.byId[id] !== undefined),
-      })),
+      ...workspaces
+        .filter(workspace => !isNoRepoWorkspace(workspace))
+        .map(workspace => ({
+          key: workspace.workspaceId as string,
+          sessionIds: workspace.sessionIds.filter(id => list.byId[id] !== undefined),
+        })),
       { key: UNGROUPED_KEY, sessionIds: ungroupedSessionIds },
     ]
     for (const { key, sessionIds } of accounts) {
@@ -511,6 +527,9 @@ function SessionTree({
       ? neighbors.length
       : neighbors.findIndex(session => session.id === anchor)
     if (sourceIndex !== -1 && (anchorIndex === sourceIndex || anchorIndex === sourceIndex + 1)) return
+    const hostAccountId = activeDrag.accountKey === UNGROUPED_KEY
+      ? chatWorkspace?.workspaceId
+      : activeDrag.accountKey as WorkspaceId
     const accountSessionIds = activeDrag.accountKey === UNGROUPED_KEY
       ? orderedUngroupedSessionIds
       : orderedWorkspaces.find(workspace => workspace.workspaceId === activeDrag.accountKey)?.sessionIds
@@ -524,8 +543,8 @@ function SessionTree({
       : nextOrder.indexOf(anchor)
     nextOrder.splice(insertAt === -1 ? nextOrder.length : insertAt, 0, activeDrag.sessionId)
     setSessionOrder(activeDrag.accountKey, nextOrder.map(id => id as string))
-    if (orderBy === 'updated' || activeDrag.accountKey === UNGROUPED_KEY) return
-    insertSessionBefore(activeDrag.accountKey as WorkspaceId, activeDrag.sessionId, anchor).catch((reason: unknown) => {
+    if (orderBy === 'updated' || hostAccountId === undefined) return
+    insertSessionBefore(hostAccountId, activeDrag.sessionId, anchor).catch((reason: unknown) => {
       console.warn('session reorder rejected:', reason)
     })
   }
@@ -549,7 +568,8 @@ function SessionTree({
       console.warn('workspace reorder rejected:', reason)
     })
   }
-  const workspaceDropAtListStart = groups[0]?.workspaceId !== undefined
+  const workspaceDropAtListStart = groups[0]?.key !== UNGROUPED_KEY
+    && groups[0]?.workspaceId !== undefined
     && workspaceDrag?.over?.id === groups[0].workspaceId
     && workspaceDrag.over.half === 'before'
 
@@ -605,9 +625,6 @@ function SessionTree({
             </div>
           </div>
         )}
-        {groups.length === 0 && hiddenGroups.length === 0 && (
-          <div className={css.empty}>{t('empty.none')}</div>
-        )}
         {groups.map((group) => {
           const workspaceId = group.workspaceId
           const clusters = partitionLiveIdle(group.sessions)
@@ -618,10 +635,12 @@ function SessionTree({
           const inlineVisible = [...clusters.live, ...visibleIdle]
           const folderSections = partitionSessionActivity(group.sessions)
             .filter(section => section.bucket !== 'pinned' && section.sessions.length > 0)
-          const workspaceMarker = workspaceId !== undefined && workspaceDrag?.over?.id === workspaceId
+          const workspaceMarker = group.key !== UNGROUPED_KEY
+            && workspaceId !== undefined
+            && workspaceDrag?.over?.id === workspaceId
             ? workspaceDrag.over.half
             : null
-          const workspaceDragProps = workspaceId === undefined ? undefined : {
+          const workspaceDragProps = group.key === UNGROUPED_KEY || workspaceId === undefined ? undefined : {
             start: () => {
               workspaceDropCommitted.current = false
               setWorkspaceDrag({ workspaceId, over: null })
@@ -635,14 +654,14 @@ function SessionTree({
               workspaceDropCommitted.current = false
             },
           }
-          const hoverWorkspace = workspaceId === undefined
+          const hoverWorkspace = group.key === UNGROUPED_KEY || workspaceId === undefined
             ? undefined
             : (half: 'before' | 'after') => {
               setWorkspaceDrag(active => active === null
                 ? active
                 : { ...active, over: { id: workspaceId, half } })
             }
-          const dropWorkspace = workspaceId === undefined
+          const dropWorkspace = group.key === UNGROUPED_KEY || workspaceId === undefined
             ? undefined
             : (half: 'before' | 'after') => {
               if (workspaceDrag === null) return
@@ -684,13 +703,11 @@ function SessionTree({
                   setGroupExpanded(group.key, !group.expanded)
                 }}
                 onCreate={() => {
-                  if (group.workspaceId !== undefined) {
-                    setGroupExpanded(group.key, true)
-                    startSession(group.workspaceId)
-                  }
+                  setGroupExpanded(group.key, true)
+                  startSession(group.key === UNGROUPED_KEY ? chatWorkspace?.workspaceId : group.workspaceId)
                 }}
-                drag={workspaceDragProps}
-                actions={group.workspaceId === undefined
+                drag={group.key === UNGROUPED_KEY ? undefined : workspaceDragProps}
+                actions={group.key === UNGROUPED_KEY || group.workspaceId === undefined
                   ? undefined
                   : {
                     rename: () => {

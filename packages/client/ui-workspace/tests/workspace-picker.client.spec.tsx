@@ -129,6 +129,17 @@ describe('WorkspacePicker', () => {
     expect(screen.queryByRole('menuitem', { name: 'Hidden Home' })).toBeNull()
   })
 
+  it('omits No Repo from the picker list', () => {
+    mount([
+      workspace('alpha', 'Alpha'),
+      { ...workspace('no-repo', 'No Repo'), path: '/root/.dsh/no-repo' },
+    ])
+    expect(screen.getByRole('menuitem', { name: 'Alpha' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'No Repo' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Chat' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: '聊天' })).toBeNull()
+  })
+
   it('lists same-title Workspaces separately and forwards the selected id', () => {
     const b = mount([workspace('alpha', 'Shared'), workspace('beta', 'Shared')])
     const entries = screen.getAllByRole('menuitem', { name: 'Shared' })

@@ -6,7 +6,7 @@
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'group.ungrouped': '未分组',
+  'group.ungrouped': '聊天',
   'session.new': '新会话',
   'section.workspaces': '工作区',
   'section.sessions': '会话',
@@ -57,7 +57,7 @@ export const zh = {
   'menu.removeFolder': '移除文件夹',
   'folders.extra': '+{n}',
   'folderError.addTitle': '无法添加文件夹',
-  'delete.desc': '将把“{name}”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“未分组”下。',
+  'delete.desc': '将把“{name}”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“聊天”下。',
   'delete.pending': '正在删除工作区…',
   'menu.fork': '分叉会话',
   'menu.archiveSession': '归档会话',
@@ -103,7 +103,7 @@ export type WorkspaceKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
-  'group.ungrouped': 'Ungrouped',
+  'group.ungrouped': 'Chat',
   'session.new': 'New Session',
   'section.workspaces': 'Workspaces',
   'section.sessions': 'Sessions',
@@ -154,7 +154,7 @@ export const en = {
   'menu.removeFolder': 'Remove folder',
   'folders.extra': '+{n}',
   'folderError.addTitle': 'Couldn’t add folder',
-  'delete.desc': 'This removes “{name}” from the workspace list. The folder and session logs will be kept. Its sessions will appear under Ungrouped.',
+  'delete.desc': 'This removes “{name}” from the workspace list. The folder and session logs will be kept. Its sessions will appear under Chat.',
   'delete.pending': 'Deleting workspace…',
   'menu.fork': 'Fork session',
   'menu.archiveSession': 'Archive session',

@@ -6,13 +6,13 @@ English | [中文](2026-08-20-workspace-hide.zh.md)
 
 ## Problem
 
-The sidebar's only Workspace cleanup is registration deletion. That action drops the durable `sessionIds` account, so the group's Sessions immediately appear under Ungrouped, including the current Session. Users who want a shorter list therefore scatter conversations they still own. Session archive already hides rows without detaching accounts; Workspace has no matching display set.
+The sidebar's only Workspace cleanup is registration deletion. That action drops the durable `sessionIds` account, so the group's Sessions immediately appear under Chat, including the current Session. Users who want a shorter list therefore scatter conversations they still own. Session archive already hides rows without detaching accounts; Workspace has no matching display set.
 
 ## Decision
 
-`workspace.delete` remains registration deletion. `WorkspaceDomainState.hiddenWorkspaceIds` is a Host-durable hidden-Workspace set layered over registry order, matching the archive-set pattern: hide and show never rewrite `workspaceIds` or `sessionIds`. The Web grouped list moves hidden Workspaces into a trailing Hidden section; Ungrouped, the flat list, and Pinned omit those Sessions. Show, or same-path `workspace.create`, restores the group at its prior durable index.
+`workspace.delete` remains registration deletion. `WorkspaceDomainState.hiddenWorkspaceIds` is a Host-durable hidden-Workspace set layered over registry order, matching the archive-set pattern: hide and show never rewrite `workspaceIds` or `sessionIds`. The Web grouped list moves hidden project Workspaces into a trailing Hidden section; Chat, the flat list, and Pinned omit those Sessions. Hide does not fold Chat / No Repo into Hidden ([Sidebar Chat Bucket](2026-08-21-sidebar-chat-bucket.md)). Show, or same-path `workspace.create`, restores the group at its prior durable index.
 
-Product contract: Hide workspace is the primary sidebar cleanup; Delete remains registration deletion that spills Sessions to Ungrouped.
+Product contract: Hide workspace is the primary sidebar cleanup; Delete remains registration deletion that spills Sessions to Chat.
 
 ### Durable set
 
@@ -37,13 +37,13 @@ Unary hide/show install the returned set without waiting for the stream echo. A 
 Implicit New Session / cold-start targeting, after an explicit id:
 
 1. current Session's Workspace, hidden or not
-2. visible No Repo
-3. most recent visible Workspace
+2. visible No Repo (Chat)
+3. most recent visible project Workspace
 4. New Session view / picker
 
 ### Sidebar
 
-Hide is the primary Workspace-row action and commits without a Modal. Delete stays the confirmed danger action whose copy still names Ungrouped spill. The Hidden section is last in the grouped tree, default collapsed, with browser-local expansion key `__hidden__` that `retainAccountKeys` keeps. Expanding the section lists hidden Workspaces in durable `workspaceIds` order; expanding one Workspace lists its Sessions. That row's menu is Show plus Delete; rename and folder edits stay on visible rows.
+Hide is the primary Workspace-row action and commits without a Modal. Delete stays the confirmed danger action whose copy still names Chat spill. The Hidden section is last in the grouped tree, default collapsed, with browser-local expansion key `__hidden__` that `retainAccountKeys` keeps. Expanding the section lists hidden Workspaces in durable `workspaceIds` order; expanding one Workspace lists its Sessions. That row's menu is Show plus Delete; rename and folder edits stay on visible rows.
 
 Pinned ids of Sessions in a hidden Workspace remain in the browser pin store and drop out of the Pinned section until Show.
 
@@ -61,8 +61,8 @@ Pinned ids of Sessions in a hidden Workspace remain in the browser pin store and
 
 ## Consequences
 
-- Hide keeps the Workspace row, order entry, and `sessionIds`; those Sessions are absent from Ungrouped, the flat list, and Pinned.
-- Delete still unregisters and spills remaining Sessions to Ungrouped; directory and logs remain.
+- Hide keeps the Workspace row, order entry, and `sessionIds`; those Sessions are absent from Chat, the flat list, and Pinned.
+- Delete still unregisters and spills remaining Sessions to Chat; directory and logs remain.
 - A current Session in a hidden Workspace stays selected; the composer is not the no-workspace inert state.
 - Hidden section is last and default collapsed; Show and same-path create restore the prior durable index.
 - Picker omits hidden Workspaces; search can open a hidden-Workspace Session without Showing the Workspace.

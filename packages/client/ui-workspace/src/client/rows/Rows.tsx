@@ -190,7 +190,7 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * Project (workspace) header row: folder + title;
  * hover reveals the chevron and create button, a right-click on a real
  * Workspace opens a separate context menu at the pointer, and dwelling on a real
- * Workspace shows its hover card (the ungrouped bucket has none).
+ * Workspace shows its hover card (Chat has none).
  * `containsCurrent` arrives on the node (derivation fact, no renderer scan).
  * @param props.group - derived group node.
  * @param props.onToggle - expand/collapse the group.
@@ -204,7 +204,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   group: GroupNode
   onToggle: () => void
   onCreate: () => void
-  /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
+  /** Real-Workspace actions; absent for Chat (no menu shown). */
   actions?: WorkspaceRowActions | undefined
   /** Present only for real Workspace rows in the grouped view. */
   drag?: WorkspaceRowDragProps | undefined
@@ -213,8 +213,9 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   t: RowTranslate
 }) {
   const row = group
-  // The ungrouped bucket has no workspace title: its label is dictionary copy.
-  const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
+  // Chat has no project title: its label is dictionary copy even when No Repo
+  // backs the bucket (Host title stays "No Repo").
+  const label = row.key === '' ? t('group.ungrouped') : row.label
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState<DOMRect | null>(null)
@@ -328,8 +329,8 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
       </span>
     </div>
   )
-  // The ungrouped bucket has no backing Workspace: no card to show.
-  if (row.createdAt === undefined) return ownRow
+  // Chat is not a project Workspace: no hover card, even when No Repo backs it.
+  if (row.key === '' || row.createdAt === undefined) return ownRow
   return (
     <HoverCard
       anchor={ownRow}

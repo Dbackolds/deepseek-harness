@@ -18,6 +18,7 @@ import type {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
+import { isNoRepoWorkspace } from './tree.ts'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
@@ -84,7 +85,8 @@ export function WorkspacePickFlow({
 }: WorkspacePickFlowProps) {
   const workspaceSnapshot = useWorkspaces(state => state)
   const hidden = new Set(workspaceSnapshot.hiddenWorkspaceIds)
-  const workspaces = workspaceSnapshot.items.filter(workspace => !hidden.has(workspace.workspaceId))
+  const workspaces = workspaceSnapshot.items.filter(workspace =>
+    !hidden.has(workspace.workspaceId) && !isNoRepoWorkspace(workspace))
   const getAnchorRect = useCallback(
     () => anchorRef?.current?.getBoundingClientRect() ?? null,
     [anchorRef],
