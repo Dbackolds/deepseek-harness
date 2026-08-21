@@ -149,10 +149,12 @@
 }
 
 
-/* Project leading slot: folder by default, expand arrow on row hover. */
+/* Project leading slot: folder by default, expand arrow on row hover.
+ * Chat is not a folder: the expand arrow stays visible. */
 .projectRow .chevron { display: none; }
 .projectRow:hover .chevron { display: inline-flex; }
 .projectRow:hover .folder { display: none; }
+.chatRow .chevron { display: inline-flex; }
 
 /* Expand arrow (filled triangle): points right closed, rotates to point down open. */
 .arrow {

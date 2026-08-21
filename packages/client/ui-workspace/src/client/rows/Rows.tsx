@@ -190,7 +190,7 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * Project (workspace) header row: folder + title;
  * hover reveals the chevron and create button, a right-click on a real
  * Workspace opens a separate context menu at the pointer, and dwelling on a real
- * Workspace shows its hover card (Chat has none).
+ * Workspace shows its hover card. Chat has no folder glyph and no hover card.
  * `containsCurrent` arrives on the node (derivation fact, no renderer scan).
  * @param props.group - derived group node.
  * @param props.onToggle - expand/collapse the group.
@@ -241,7 +241,11 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
     ]
   const ownRow = (
     <div
-      className={clsx(css.projectRow, (menuOpen || contextMenu !== null) && css.menuOpen)}
+      className={clsx(
+        css.projectRow,
+        row.key === '' && css.chatRow,
+        (menuOpen || contextMenu !== null) && css.menuOpen,
+      )}
       role="treeitem"
       aria-expanded={row.expanded}
       onClick={onToggle}
@@ -262,10 +266,12 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
         }}
       onDragEnd={drag?.end}
     >
-      <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
-        {row.expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
-      </span>
-      <span className={clsx(css.slot, css.chevron)}>
+      {row.key !== '' && (
+        <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
+          {row.expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
+        </span>
+      )}
+      <span className={clsx(css.slot, css.chevron, row.key === '' && active && css.folderActive)}>
         <IconTriangleRightFill14 className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
       </span>
       <span className={css.projectText}>

@@ -430,6 +430,9 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('button', { name: /工作区/ })).toBeNull()
     expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(false)
     expect(screen.queryByRole('menu')).toBeNull()
+    const row = screen.getByRole('treeitem')
+    expect(row.querySelector('path[d^="M5.05582"]')).toBeNull()
+    expect(row.querySelector('svg[width="14"]')).toBeTruthy()
   })
 
   it('blank New Session rows carry no menu, no time label, and no hover-card time', () => {
