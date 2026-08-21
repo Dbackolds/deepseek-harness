@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-13-shared-modal-product-onboarding.md
 2026-08-13-shared-modal-product-onboarding.md: 68fd6febf8e814b8ba53cdd14740885c461a2d57
-2026-08-13-shared-modal-product-onboarding.zh.md: 7b66eed19fab334e5247bb078a423ce711b6ced7
+2026-08-13-shared-modal-product-onboarding.zh.md: cf708f3c1d7d49e6fe40b53534a15d39a3c506ea

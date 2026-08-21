@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-hmr",
-  "description": "Client-plugin reload driver: Host-backed autoReload setting, SSE rebuilt/reload frames, and a General settings row for manual reload",
-  "version": "0.1.0-rc.8",
+  "description": "Client-plugin reload driver: Host-backed autoReload setting, SSE rebuilt/reload frames, a General settings row for manual reload, and Loader fiber swap through the vendored entry",
+  "version": "0.1.1-rc.2",
   "publishConfig": {
     "access": "public"
   },

@@ -16,7 +16,7 @@ Status: implemented
 
 **欢迎声明复用既有持久化字段。** 完整文案与版本由 `onboarding-copy.ts` 持有。回环客户端通过既有 settings API 比较和写入 `ui-onboarding.welcomeNoticeVersion`，且只有点击「继续」才确认当前版本。远程客户端继续使用既有的进程内回退，因为该 settings namespace 仅限回环访问。不改变 Host schema、API Proxy 允许列表或持久化实现。
 
-**API 密钥在 Models 页填写。** [移除首次启动凭据弹窗](../simplification/2026-08-15-remove-first-run-api-key-dialog.md) 删除了 DeepSeek 官方的 `settings.onboarding` 步骤。缺失密钥表现为 Models 设置卡片或缺失密钥行，而不是产品接管。
+**API 密钥在 Models 页填写。** [移除首次启动凭据弹窗](../simplification/2026-08-15-remove-first-run-api-key-dialog.zh.md) 删除了 DeepSeek 官方的 `settings.onboarding` 步骤。缺失密钥表现为 Models 设置卡片或缺失密钥行，而不是产品接管。
 
 ## 曾考虑的替代方案
 
@@ -28,4 +28,4 @@ Status: implemented
 
 ## 后果
 
-新的回环 profile 会看到指定的内测声明。确认仍按版本写入 `settings.yaml`。已就绪或无法修复的部署在加载判定期间不会渲染任何引导框架。Models 包同时持有产品引导展示与提供方配置；README 和浏览器覆盖明确记录了这项扩展后的职责。本决策在历史上的[全屏内测声明移除](../simplification/2026-08-13-remove-first-run-beta-notice.md)之后恢复简洁的测试阶段声明，但不会恢复那份声明中的遥测文案或接管式布局。后续的[凭据弹窗移除](../simplification/2026-08-15-remove-first-run-api-key-dialog.md)使这份声明成为唯一已发布的首启步骤。
+新的回环 profile 会看到指定的内测声明。确认仍按版本写入 `settings.yaml`。已就绪或无法修复的部署在加载判定期间不会渲染任何引导框架。Models 包同时持有产品引导展示与提供方配置；README 和浏览器覆盖明确记录了这项扩展后的职责。本决策在历史上的[全屏内测声明移除](../simplification/2026-08-13-remove-first-run-beta-notice.zh.md)之后恢复简洁的测试阶段声明，但不会恢复那份声明中的遥测文案或接管式布局。后续的[凭据弹窗移除](../simplification/2026-08-15-remove-first-run-api-key-dialog.zh.md)使这份声明成为唯一已发布的首启步骤。

@@ -24,6 +24,18 @@
       "path": "../../llm/llm-default-policy"
     },
     {
+      "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/home-paths"
+    },
+    {
       "path": "../../credentials/credentials"
     },
     {
