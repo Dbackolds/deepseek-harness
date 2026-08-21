@@ -7,7 +7,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell } from 'electron'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { bounceDockForCompleted } from './dock-attention.ts'
+import { applyCompletedDockIcon } from './dock-attention.ts'
 import { startWebHost, stopWebHost, waitForPluginRoute, type StartedHost } from './host.ts'
 import { APP_USER_MODEL_ID, desktopIconPath } from './icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from './shortcut.ts'
@@ -236,7 +236,7 @@ async function presentWindow(launch: HostLaunch): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(
-      loadingPage(TITLEBAR_VARIANT).replace('正在启动 DeepSeek Harness…', message),
+      loadingPage(TITLEBAR_VARIANT, message),
     )}`)
   }
 }
@@ -245,8 +245,18 @@ const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
-  ipcMain.on('dsh-desktop:notify-completed', () => {
-    bounceDockForCompleted(IS_MAC ? app.dock : undefined)
+  const dockIconPng = readFileSync(desktopIconPath())
+  let previousCompletedUnread = 0
+  ipcMain.on('dsh-desktop:set-completed-unread', (_event, count: unknown) => {
+    const next = typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
+    applyCompletedDockIcon(
+      IS_MAC ? app.dock : undefined,
+      IS_MAC ? (png) => { app.dock?.setIcon(nativeImage.createFromBuffer(png)) } : undefined,
+      dockIconPng,
+      next,
+      previousCompletedUnread,
+    )
+    previousCompletedUnread = next
   })
   app.name = WINDOW_TITLE
   installApplicationMenu()

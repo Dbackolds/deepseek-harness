@@ -22,7 +22,7 @@ The Electron shell drew a Windows-style title bar on every platform and had no a
 
 ## Consequences
 
-Windows behavior is unchanged: the caption overlay, whale icon, and Start-menu shortcut work exactly as before. On macOS the traffic lights are native, the title reserves space for them, and menu-driven shortcuts work in the Web GUI. `window.dshDesktop` IPC stays installed on both variants for the drag-region double-click. A newly unread Completed reminder also uses that preload: macOS bounces the dock as described in [Sidebar Completed badge and macOS dock bounce](2026-08-20-sidebar-completed-badge-and-dock-bounce.md).
+Windows behavior is unchanged: the caption overlay, whale icon, and Start-menu shortcut work exactly as before. On macOS the traffic lights are native, the title reserves space for them, and menu-driven shortcuts work in the Web GUI. `window.dshDesktop` IPC stays installed on both variants for the drag-region double-click. A newly unread Completed reminder also uses that preload: macOS badges and bounces the dock as described in [macOS dock Completed badge and bounce](2026-08-20-sidebar-completed-badge-and-dock-bounce.md).
 
 ## Testing
 

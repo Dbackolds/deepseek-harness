@@ -11,9 +11,9 @@
  * control under New Session is `sidebar.automation`. The shell hands them
  * the wide flag (plus an expand request callback for the browser).
  *
- * The wordmark whale (expanded) and rail fish (collapsed) carry a green count
- * of unread Completed reminders from `useSessions`. A rising count asks the
- * desktop Host, when present, to bounce the macOS dock icon.
+ * The shell also counts unread Completed reminders from `useSessions` and
+ * forwards that count to the desktop Host, when present, so macOS can badge
+ * and bounce the dock icon.
  *
  * The column also owns whether the scroll regions nested in it draw a
  * scrollbar at all: the shell tracks the pointer and rebinds ui-theme's
@@ -26,8 +26,8 @@ import {
   FishLogo, IconNewChatOutline16, IconPanelLeftOutline16, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SidebarRootComponentProps } from './contract/slots.ts'
-import { unreadCompletedBadgeLabel, unreadCompletedCount } from './completed-badge.ts'
-import { notifyDesktopCompletedAttention } from './desktop-attention.ts'
+import { unreadCompletedCount } from './completed-badge.ts'
+import { setDesktopCompletedUnread } from './desktop-attention.ts'
 import css from './SidebarRoot.module.css'
 
 /** Wide-content unmount delay; matches the 150ms wide-content fade-out. */
@@ -56,21 +56,10 @@ export function SidebarRoot({
   renderSlot,
 }: SidebarRootComponentProps) {
   const unreadCompleted = useSessions(state => unreadCompletedCount(state.byId))
-  const previousUnread = useRef(unreadCompleted)
   useEffect(() => {
-    if (unreadCompleted > previousUnread.current) notifyDesktopCompletedAttention()
-    previousUnread.current = unreadCompleted
+    setDesktopCompletedUnread(unreadCompleted)
   }, [unreadCompleted])
-  const badge = unreadCompleted > 0
-    ? (
-      <span className={css.completedBadge} aria-hidden="true">
-        {unreadCompletedBadgeLabel(unreadCompleted)}
-      </span>
-    )
-    : null
-  const badgeAria = unreadCompleted > 0
-    ? t('completed.unread.aria', { n: unreadCompleted })
-    : undefined
+
   // Wide content stays mounted while the collapse animates (fading via
   // .collapsed .wide), unmounts at settle, and remounts right away on expand.
   const [settled, setSettled] = useState(collapsed)
@@ -157,13 +146,11 @@ export function SidebarRoot({
             type="button"
             className={clsx(css.brand, css.wide)}
             aria-label={t('session.new.label')}
-            {...badgeAria === undefined ? {} : { 'aria-describedby': 'dsh-sidebar-completed-unread' }}
             onClick={() => { startSession() }}
           >
             <span className={css.brandIdentity} aria-hidden="true">
               <span className={css.brandMark}>
                 {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <FishLogo size={24} /> })}
-                {badge}
               </span>
               <span className={css.brandName}>
                 {renderSlot('sidebar.brand.name', {}, {
@@ -187,26 +174,17 @@ export function SidebarRoot({
             type="button"
             className={clsx(css.iconButton, css.toggle)}
             aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
-            {...!wide && badgeAria !== undefined
-              ? { 'aria-describedby': 'dsh-sidebar-completed-unread' }
-              : {}}
             onClick={() => { toggleSidebar() }}
           >
             {!wide && (
               <span className={css.railMark} aria-hidden="true">
                 {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <FishLogo size={24} /> })}
-                {badge}
               </span>
             )}
             {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
             <IconPanelLeftOutline16 className={css.panelIcon} size={wide ? 16 : 18} />
           </button>
         </Tooltip>
-        {badgeAria !== undefined && (
-          <span id="dsh-sidebar-completed-unread" className={css.srOnly} role="status" aria-live="polite">
-            {badgeAria}
-          </span>
-        )}
       </div>
 
       {/* Expanded, the button carries its own label — tooltip only on the rail. */}

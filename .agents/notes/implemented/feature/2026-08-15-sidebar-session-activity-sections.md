@@ -10,7 +10,7 @@ The sidebar already marks finished-unviewed, running, and idle Sessions with dot
 
 ## Decision
 
-Classification remains a pure function of the existing row bits: **Completed** (`completed` reminder, no live work), **Running** (pending interaction or own or descendant activity), **Abnormal** (crash/reload interruption, not running again), and **History** (every remaining idle Session). Leaving a finished Session consumes the reminder through `SessionManager`. **Group by status** (the default view option) renders those buckets as foldable headings. [Sidebar live work without status folders](2026-08-19-sidebar-live-idle-without-status-folders.md) owns the optional no-section layout. The brand whale in the sidebar shell shows the same Completed count; that badge and the macOS dock bounce live in [Sidebar Completed badge and macOS dock bounce](2026-08-20-sidebar-completed-badge-and-dock-bounce.md).
+Classification remains a pure function of the existing row bits: **Completed** (`completed` reminder, no live work), **Running** (pending interaction or own or descendant activity), **Abnormal** (crash/reload interruption, not running again), and **History** (every remaining idle Session). Leaving a finished Session consumes the reminder through `SessionManager`. **Group by status** (the default view option) renders those buckets as foldable headings. [Sidebar live work without status folders](2026-08-19-sidebar-live-idle-without-status-folders.md) owns the optional no-section layout. The macOS dock whale shows the same Completed count; that badge and bounce live in [macOS dock Completed badge and bounce](2026-08-20-sidebar-completed-badge-and-dock-bounce.md).
 
 ## Alternatives considered
 

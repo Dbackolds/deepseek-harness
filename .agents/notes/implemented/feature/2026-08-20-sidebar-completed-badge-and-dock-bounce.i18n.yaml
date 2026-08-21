@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-sidebar-completed-badge-and-dock-bounce.md
-2026-08-20-sidebar-completed-badge-and-dock-bounce.md: fe6589e762a0984bbebc4c401aa16ae01e2aaabc
-2026-08-20-sidebar-completed-badge-and-dock-bounce.zh.md: af4f7fd80b47d584bf5c03ab13f2c6fea7eb67dd
+2026-08-20-sidebar-completed-badge-and-dock-bounce.md: d93f1fd8df3e5014547c39fe64e73b3e1fee3815
+2026-08-20-sidebar-completed-badge-and-dock-bounce.zh.md: 7f8e378aaefb7a2819096eb9da79adf3ed8dddaf

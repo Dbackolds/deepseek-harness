@@ -12,15 +12,7 @@ import { en } from '../src/client/locales.ts'
 
 // English-dictionary translate stub: the shell renders the same copy the
 // assertions below query by accessible name.
-const t: SidebarRootComponentProps['t'] = (key, params) => {
-  const template = (en as Record<string, string>)[key] ?? key
-  if (params === undefined) return template
-  let text = template
-  for (const [name, value] of Object.entries(params)) {
-    text = text.replaceAll('{' + name + '}', String(value))
-  }
-  return text
-}
+const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
 
 afterEach(() => {
   cleanup()
@@ -174,57 +166,29 @@ describe('SidebarRoot shell', () => {
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
   })
 
-  it('pins a green unread Completed count on the wordmark whale', () => {
+  it('does not draw an in-page Completed count on the wordmark', () => {
     mountShell({ completedIds: ['a', 'b'] })
-    expect(screen.getByText('2')).toBeTruthy()
-    expect(screen.getByText('2 unread completed tasks')).toBeTruthy()
+    expect(screen.queryByText('2')).toBeNull()
   })
 
-  it('keeps the unread count on the rail fish after collapse settles', () => {
-    vi.useFakeTimers()
-    const b = mountShell({ completedIds: ['a'] })
-    b.rerender({ collapsed: true })
-    vi.advanceTimersByTime(200)
-    b.rerender({})
-    expect(screen.getByText('1')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
-  })
-
-  it('collapses a three-digit unread count to 99+', () => {
-    const ids = Array.from({ length: 100 }, (_, i) => 's' + String(i))
-    mountShell({ completedIds: ids })
-    expect(screen.getByText('99+')).toBeTruthy()
-    expect(screen.getByText('100 unread completed tasks')).toBeTruthy()
-  })
-
-  it('does not ask the desktop Host to bounce for reminders already present at mount', () => {
-    const notifyCompleted = vi.fn()
-    vi.stubGlobal('dshDesktop', { notifyCompleted })
-    mountShell({ completedIds: ['done-1'] })
-    expect(notifyCompleted).not.toHaveBeenCalled()
-  })
-
-  it('asks the desktop Host to bounce when a new Completed reminder arrives', () => {
-    const notifyCompleted = vi.fn()
-    vi.stubGlobal('dshDesktop', { notifyCompleted })
+  it('publishes the unread Completed count to the desktop Host', () => {
+    const setCompletedUnread = vi.fn()
+    vi.stubGlobal('dshDesktop', { setCompletedUnread })
     const b = mountShell()
-    expect(notifyCompleted).not.toHaveBeenCalled()
+    expect(setCompletedUnread).toHaveBeenCalledWith(0)
     b.rerender({ completedIds: ['done-1'] })
-    expect(notifyCompleted).toHaveBeenCalledOnce()
-    b.rerender({ completedIds: ['done-1'] })
-    expect(notifyCompleted).toHaveBeenCalledOnce()
+    expect(setCompletedUnread).toHaveBeenCalledWith(1)
     b.rerender({ completedIds: ['done-1', 'done-2'] })
-    expect(notifyCompleted).toHaveBeenCalledTimes(2)
+    expect(setCompletedUnread).toHaveBeenCalledWith(2)
     b.rerender({ completedIds: [] })
-    expect(notifyCompleted).toHaveBeenCalledTimes(2)
+    expect(setCompletedUnread).toHaveBeenCalledWith(0)
   })
 
-  it('keeps the in-page badge when the desktop Host rejects the bounce', () => {
+  it('keeps the shell when the desktop Host rejects the dock update', () => {
     vi.stubGlobal('dshDesktop', {
-      notifyCompleted: () => { throw new Error('dock unavailable') },
+      setCompletedUnread: () => { throw new Error('dock unavailable') },
     })
-    const b = mountShell()
-    expect(() => { b.rerender({ completedIds: ['done-1'] }) }).not.toThrow()
-    expect(screen.getByText('1')).toBeTruthy()
+    expect(() => { mountShell({ completedIds: ['done-1'] }) }).not.toThrow()
+    expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(2)
   })
 })
