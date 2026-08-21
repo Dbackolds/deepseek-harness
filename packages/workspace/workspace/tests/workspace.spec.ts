@@ -8,7 +8,7 @@ import type { StorageBackend } from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import type { DomainChanged } from '@deepseek-ai/dsh-storage-domain'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionHeader } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import WorkspaceRegistry, {
   WorkspaceId,
@@ -26,9 +26,18 @@ const header = (id: string, cwd?: string, createdAt = 0): SessionHeader => ({
   ...(cwd === undefined ? {} : { cwd }),
 })
 
+const overlay = (type: 'workspace/home' | 'git/worktree', path: string): SessionEvent => ({
+  type,
+  seq: 0,
+  time: 0,
+  data: type === 'git/worktree' ? { path, branch: 'main' } : { path },
+} as SessionEvent)
+
 interface HarnessOptions {
   pool?: MemoryMediaPool
   sessions?: SessionHeader[]
+  logs?: ReadonlyMap<SessionId, readonly SessionEvent[] | undefined>
+  inspect?: false | ((id: SessionId) => Promise<unknown>)
   liveSessions?: SessionHeader[]
   sessionStore?: boolean
   backend?: StorageBackend
@@ -45,10 +54,23 @@ async function harness(options: HarnessOptions = {}) {
   ctx.provide('storageDomain', facility)
 
   let listed = options.sessions ?? []
+  const logs = options.logs
   const list = vi.fn(async () => listed)
   const load = vi.fn(() => { throw new Error('event bodies must not be loaded') })
-  const inspect = vi.fn(() => { throw new Error('event bodies must not be inspected') })
-  ctx.provide('sessionPersistence', { list, load, inspect } as never)
+  const inspectImpl = options.inspect === undefined
+    ? async (id: SessionId) => {
+      if (logs === undefined || !logs.has(id)) throw new Error('event bodies must not be inspected')
+      const events = logs.get(id)
+      if (events === undefined) throw new Error(`inspect failed for '${id}'`)
+      const meta = listed.find(header => header.id === id)
+      if (meta === undefined) throw new Error(`unknown session '${id}'`)
+      return { meta, events }
+    }
+    : options.inspect
+  const inspect = inspectImpl === false ? undefined : vi.fn(inspectImpl)
+  ctx.provide('sessionPersistence', inspect === undefined
+    ? { list, load }
+    : { list, load, inspect } as never)
 
   if (options.sessionStore === true) {
     await ctx.plugin(SessionStore)
@@ -74,7 +96,7 @@ async function harness(options: HarnessOptions = {}) {
     initChanges,
     list,
     load,
-    inspect,
+    inspect: inspect ?? vi.fn(),
     setSessions: (headers: SessionHeader[]) => { listed = headers },
   }
 }
@@ -744,6 +766,19 @@ describe('Workspace session ordering', () => {
     expect(birthWorkspace.sessionIds).toEqual([])
   })
 
+  it('attaches a cold session whose persisted workspace/home differs from birth cwd', async () => {
+    const birth = await makeDir('cold-birth')
+    const home = await makeDir('cold-home')
+    const result = await harness({
+      sessions: [header('cold-moved', birth)],
+      logs: new Map([[SessionId('cold-moved'), [overlay('workspace/home', home)]]]),
+    })
+    const workspace = await result.registry.create(home)
+    await workspace.attachSession(SessionId('cold-moved'))
+    expect(workspace.sessionIds).toEqual(['cold-moved'])
+    expect(result.load).not.toHaveBeenCalled()
+  })
+
   it('decides detach/attach membership at domain write-chain slots', async () => {
     const dir = await makeDir('race')
     const result = await harness({ sessions: [header('s1', dir)] })
@@ -815,6 +850,152 @@ describe('header-validated membership projection', () => {
     await workspace.setTitle('pruned')
     expect(storedRecord(pool, id).sessionIds).toEqual(['good'])
     expect(workspace.sessionIds).not.toContain('cwd-only')
+    expect(result.load).not.toHaveBeenCalled()
+  })
+
+  it('keeps a cold rehomed session on the overlay workspace after restart', async () => {
+    const birth = await makeDir('rehome-birth')
+    const home = await makeDir('rehome-home')
+    const birthId = WorkspaceId('00000000-0000-4000-8000-000000000030')
+    const homeId = WorkspaceId('00000000-0000-4000-8000-000000000031')
+    const pool = storedPool(
+      [
+        [birthId, record(birth, [])],
+        [homeId, record(home, ['moved'])],
+      ],
+      { initialized: true, workspaceIds: [homeId, birthId] },
+    )
+    const result = await harness({
+      pool,
+      sessions: [header('moved', birth), header('stayed', birth)],
+      logs: new Map([[SessionId('moved'), [overlay('workspace/home', home)]]]),
+    })
+    expect(result.registry.get(homeId)!.sessionIds).toEqual(['moved'])
+    expect(result.registry.get(birthId)!.sessionIds).toEqual([])
+    expect(result.inspect).toHaveBeenCalledTimes(1)
+    expect(result.load).not.toHaveBeenCalled()
+
+    result.setSessions([header('moved', birth), header('stayed', birth), header('late', birth)])
+    await expect(result.registry.archiveSession(SessionId('unknown-late')))
+      .rejects.toThrow(/unknown session/)
+    expect(result.registry.get(homeId)!.sessionIds).toEqual(['moved'])
+    await result.registry.get(homeId)!.setTitle('still-home')
+    expect(storedRecord(pool, homeId).sessionIds).toEqual(['moved'])
+  })
+
+  it('keeps overlay membership when attaching an uncached persisted sibling', async () => {
+    const birth = await makeDir('attach-birth')
+    const home = await makeDir('attach-home')
+    const birthId = WorkspaceId('00000000-0000-4000-8000-000000000036')
+    const homeId = WorkspaceId('00000000-0000-4000-8000-000000000037')
+    const pool = storedPool(
+      [
+        [birthId, record(birth, [])],
+        [homeId, record(home, ['moved'])],
+      ],
+      { initialized: true, workspaceIds: [homeId, birthId] },
+    )
+    const result = await harness({
+      pool,
+      sessions: [header('moved', birth)],
+      logs: new Map([[SessionId('moved'), [overlay('workspace/home', home)]]]),
+    })
+    expect(result.registry.get(homeId)!.sessionIds).toEqual(['moved'])
+    result.setSessions([header('moved', birth), header('sibling', birth)])
+    await result.registry.get(birthId)!.attachSession(SessionId('sibling'))
+    expect(result.registry.get(homeId)!.sessionIds).toEqual(['moved'])
+    expect(result.registry.get(birthId)!.sessionIds).toEqual(['sibling'])
+  })
+
+  it('does not move membership for a git/worktree overlay', async () => {
+    const birth = await makeDir('wt-birth')
+    const worktree = await makeDir('wt-overlay')
+    const birthId = WorkspaceId('00000000-0000-4000-8000-000000000032')
+    const pool = storedPool(
+      [[birthId, record(birth, ['branched'])]],
+      { initialized: true, workspaceIds: [birthId] },
+    )
+    const result = await harness({
+      pool,
+      sessions: [header('branched', birth)],
+      logs: new Map([[SessionId('branched'), [overlay('git/worktree', worktree)]]]),
+    })
+    expect(result.registry.get(birthId)!.sessionIds).toEqual(['branched'])
+  })
+
+  it('filters an overlay mismatch without dropping a sibling membership', async () => {
+    const owned = await makeDir('inspect-owned')
+    const overlayHome = await makeDir('inspect-overlay')
+    const id = WorkspaceId('00000000-0000-4000-8000-000000000033')
+    const pool = storedPool(
+      [[id, record(owned, ['good', 'broken'])]],
+      { initialized: true, workspaceIds: [id] },
+    )
+    const result = await harness({
+      pool,
+      sessions: [header('good', owned), header('broken', owned)],
+      logs: new Map<SessionId, readonly SessionEvent[] | undefined>([
+        [SessionId('good'), []],
+        [SessionId('broken'), [overlay('workspace/home', overlayHome)]],
+      ]),
+    })
+    expect(result.registry.list()[0]!.sessionIds).toEqual(['good'])
+    expect(result.load).not.toHaveBeenCalled()
+  })
+
+  it('ignores an empty workspace/home path and keeps header cwd membership', async () => {
+    const owned = await makeDir('empty-home')
+    const id = WorkspaceId('00000000-0000-4000-8000-000000000034')
+    const pool = storedPool(
+      [[id, record(owned, ['kept'])]],
+      { initialized: true, workspaceIds: [id] },
+    )
+    const emptyHome = { type: 'workspace/home', seq: 0, time: 0, data: { path: '' } } as SessionEvent
+    const result = await harness({
+      pool,
+      sessions: [header('kept', owned)],
+      logs: new Map([[SessionId('kept'), [emptyHome]]]),
+    })
+    expect(result.registry.list()[0]!.sessionIds).toEqual(['kept'])
+  })
+
+  it('falls back to header cwd when inspect is absent or throws a non-Error', async () => {
+    const owned = await makeDir('inspect-fallback')
+    const id = WorkspaceId('00000000-0000-4000-8000-000000000035')
+    const missing = await harness({
+      pool: storedPool(
+        [[id, record(owned, ['plain'])]],
+        { initialized: true, workspaceIds: [id] },
+      ),
+      sessions: [header('plain', owned)],
+      inspect: false,
+    })
+    expect(missing.registry.list()[0]!.sessionIds).toEqual(['plain'])
+
+    const throwing = await harness({
+      pool: storedPool(
+        [[id, record(owned, ['plain'])]],
+        { initialized: true, workspaceIds: [id] },
+      ),
+      sessions: [header('plain', owned)],
+      inspect: async () => {
+        throw 'inspect-string-failure'
+      },
+    })
+    expect(throwing.registry.list()[0]!.sessionIds).toEqual(['plain'])
+
+    const overlayHome = await makeDir('inspect-error-home')
+    const erroring = await harness({
+      pool: storedPool(
+        [[id, record(overlayHome, ['moved'])]],
+        { initialized: true, workspaceIds: [id] },
+      ),
+      sessions: [header('moved', owned)],
+      inspect: async () => {
+        throw new Error('inspect-error-failure')
+      },
+    })
+    expect(erroring.registry.list()[0]!.sessionIds).toEqual([])
   })
 
   it('rejects duplicate candidate ownership, duplicate paths, and initialized order drift', async () => {

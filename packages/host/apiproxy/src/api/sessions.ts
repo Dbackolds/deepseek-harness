@@ -323,11 +323,12 @@ export interface SessionsApi {
 
   /**
    * Moves this session's effective home and workspace account to an existing
-   * directory without rewriting `SessionHeader.cwd`. Missing or non-directory
+   * directory without rewriting `SessionHeader.cwd`. After restart, grouping
+   * follows the last `workspace/home` overlay. Missing or non-directory
    * paths fail with `workspace-invalid-path`. The canonical No Repo directory
    * fails with `session-rehome-no-repo`. Session-backed subagents reject with
    * `agent-busy`. An unregistered directory is created as a workspace. Already
-   * at that home and accounted there is a success no-op.
+   * at that membership home and accounted there is a success no-op.
    */
   rehome(request: RpcRequest<{ sessionId: SessionId; path: string }>):
   Promise<RpcResponse<{ workspaceId: WorkspaceId; path: string; cwd: string }>>

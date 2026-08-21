@@ -30,7 +30,7 @@
 
 ## 逐会话存储
 
-运行时切换是在对应会话日志中追加的一条 `sandbox/mode` 事件。`effective = explicit grant ?? fold(events) ?? deployment default`，因此覆盖会通过回放跨重启保留，两个会话也绝不会看到彼此状态。出生 cwd 仍是持久化身份。活动工作区成员关系和工具 cwd 会 fold 最后一条 `workspace/home` 或 `git/worktree` overlay，因此会话可以换项目或停在不同分支上。这些事件仍只进入日志；在下一次请求前，归属方会将当前事实贡献给完整运行时上下文快照。
+运行时切换是在对应会话日志中追加的一条 `sandbox/mode` 事件。`effective = explicit grant ?? fold(events) ?? deployment default`，因此覆盖会通过回放跨重启保留，两个会话也绝不会看到彼此状态。出生 cwd 仍是持久化身份。工具 cwd 会 fold 最后一条 `workspace/home` 或 `git/worktree` overlay。工作区成员关系只 fold `workspace/home`，否则用 header cwd，因此分支 overlay 不会改侧栏分组。这些事件仍只进入日志；在下一次请求前，归属方会将当前事实贡献给完整运行时上下文快照。
 
 ## 模型体验
 

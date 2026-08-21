@@ -53,9 +53,9 @@ export interface Workspace {
    * Header-validated sessions in manually owned order: a new session is
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
-   * account is filtered synchronously: missing headers, invalid cwd values,
-   * and canonical cwd mismatches are never returned. A subsequent workspace
-   * mutation prunes those filtered candidates durably.
+   * account is filtered synchronously: missing headers, invalid homes, and
+   * canonical membership-home mismatches are never returned. A subsequent
+   * workspace mutation prunes those filtered candidates durably.
    */
   readonly sessionIds: readonly SessionId[]
 
@@ -71,9 +71,9 @@ export interface Workspace {
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
    * live or persisted
-   * effective home (live `workspace/home` or `git/worktree`, else header cwd)
+   * membership home (last `workspace/home`, else header cwd)
    * must resolve to an existing directory equal to {@link path};
-   * unknown ids, missing or invalid cwd values, and mismatches reject without
+   * unknown ids, missing or invalid homes, and mismatches reject without
    * writing.
    * @param sessionId - The session to record.
    * @returns resolution after durability.

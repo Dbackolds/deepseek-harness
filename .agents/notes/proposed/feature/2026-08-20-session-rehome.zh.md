@@ -2,17 +2,17 @@
 
 Status: proposed
 
-English | [2026-08-20-session-rehome.md](2026-08-20-session-rehome.md)
+[English](2026-08-20-session-rehome.md) | 中文
 
 ## Problem
 
 Web 对话在创建时通过不可变的 `SessionHeader.cwd` 绑定工作区。用户还不知道请求属于哪个项目时，必须先选工作区才能发送。agent 推断出目录后，同一条对话不能改侧边栏分组或执行根：`attachSession` 拒绝 cwd 不匹配，JSONL 身份是出生 cwd，AGENTS.md / skill / LSP 仍读 header。Cursor 的 Agents Window 用 No Repo 分组和同一条聊天上的 `move_agent_to_root` 解决对应起步。
 
-[Workspace UI 产品流](../../implemented/feature/2026-07-25-workspace-ui-product-flow.md) 把跨工作区移动会话和 Ungrouped 收编留在该流程之外。Git worktree overlay 已经把执行根和成员关系拆开，但只用于同仓库分支隔离，并且从不更新侧边栏账本。
+[Workspace UI 产品流](../../implemented/feature/2026-07-25-workspace-ui-product-flow.zh.md) 把跨工作区移动会话和 Ungrouped 收编留在该流程之外。Git worktree overlay 已经把执行根和成员关系拆开，但只用于同仓库分支隔离，并且从不更新侧边栏账本。
 
 ## Proposal
 
-出生 cwd 继续作为持久化身份。当前家记为一条仅日志的 `workspace/home { path }` 事件。成员关系、工具 cwd 和 Web 列表 `cwd` 跟随有效家。
+出生 cwd 继续作为持久化身份。当前家记为一条仅日志的 `workspace/home { path }` 事件。工具 cwd 和 Web 列表 `cwd` 跟随有效家。成员关系跟随最后一条 `workspace/home`，否则 header cwd。
 
 ### 有效家
 
@@ -20,7 +20,7 @@ Web 对话在创建时通过不可变的 `SessionHeader.cwd` 绑定工作区。�
 
 ### 成员关系
 
-`attachSession` 用会话的有效家校验工作区路径。注册表会话路径索引在活动会话 attach 或改挂后存储该家，而不是出生 cwd。冷历史引导仍按 header cwd 分组：改挂后从未再次打开的会话保持出生分组，直到打开。
+`attachSession` 用会话的成员家（最后一条 `workspace/home`，否则 header cwd）校验工作区路径。注册表会话路径索引存储该家，而不是出生 cwd。首次引导仍只按 header cwd 分组。已初始化标记写入后，已记账冷会话会 inspect `workspace/home`，因此改挂后的会话不必打开也能留在目标工作区。`git/worktree` 仍是同仓库 overlay，不改变成员关系。
 
 ### Host `session.rehome`
 
@@ -30,7 +30,7 @@ Web 对话在创建时通过不可变的 `SessionHeader.cwd` 绑定工作区。�
 2. 拒绝规范 No Repo 目录（`session-rehome-no-repo`）。
 3. 拒绝子 agent 拥有的会话（`agent-busy`）。
 4. 对已存在目录调用 `workspace.create(path)`（幂等）。
-5. 若有效家已等于该路径且工作区已记账，则成功且不追加事件。
+5. 若成员家（最后一条 `workspace/home`，否则 header cwd）已等于该路径且工作区已记账，则成功且不追加事件。匹配的 `git/worktree` overlay 不算这次无操作。
 6. 否则追加 `workspace/home`，从先前工作区账本 detach，attach 到目标。
 
 Host `session.create` 在没有 `workspaceId`/`cwd` 时使用 No Repo 目录并在那里 attach。`host.describe.cwd` 报告同一默认值，使 UI 默认项目与落地目录一致。
@@ -79,6 +79,6 @@ Git checkout 继续使用所属工作区的主路径作为仓库根；改挂后�
 
 ## Risks
 
-- 日志里有 `workspace/home` 但索引仍是 header cwd 的冷会话，在打开前会显示为 Ungrouped；可接受，因为改挂需要活动 agent。
+- 工作区注册表启动时 inspect 已记账冷日志会增加 I/O；单个 inspect 失败时回退到 header cwd，而不是中止启动。
 - 客户端列表先前把 `cwd` 当作不可变的只填空字段；替换它是分组所依赖的行为变化。
 - 本交付中 session-query 的同 cwd 授权仍使用出生 cwd，因此改挂后的会话不能列出在新目录出生的同伴。推迟，而不是悄悄扩大查询范围。

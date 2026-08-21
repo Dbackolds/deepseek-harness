@@ -825,6 +825,26 @@ describe('session.rehome', () => {
     expect(birthRow?.sessionIds ?? []).not.toContain(created.sessionId)
   })
 
+  it('writes workspace/home when a git/worktree overlay already matches the target', async () => {
+    const { api, ctx, root } = await harness()
+    const birth = stageDir(root, 'wt-birth')
+    const target = stageDir(root, 'wt-target')
+    const birthWorkspace = expectOk(await api.workspace.create(request({ path: birth }))).workspace
+    const created = expectOk(await api.sessions.create(request({ workspaceId: birthWorkspace.workspaceId })))
+    const session = ctx.sessions.get(created.sessionId)
+    expect(session).toBeDefined()
+    session!.append('git/worktree', { path: target, branch: 'feature' })
+    const moved = expectOk(await api.sessions.rehome(request({
+      sessionId: created.sessionId,
+      path: target,
+    })))
+    expect(moved.path).toBe(target)
+    expect(session?.events.some(event => event.type === 'workspace/home')).toBe(true)
+    const listed = expectOk(await api.workspace.list(request({})))
+    expect(listed.items.find(item => item.path === target)?.sessionIds).toContain(created.sessionId)
+    expect(listed.items.find(item => item.path === birth)?.sessionIds ?? []).not.toContain(created.sessionId)
+  })
+
   it('refuses the canonical No Repo directory', async () => {
     const { api, root } = await harness()
     const birth = stageDir(root, 'stay')

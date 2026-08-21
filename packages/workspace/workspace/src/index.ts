@@ -1,6 +1,6 @@
 /**
  * Workspace entity registry (`ctx.workspaceRegistry`): durable workspace records,
- * stable registry order, and header-validated session membership over the
+ * stable registry order, and membership-home session projection over the
  * domain data form.
  * @module @deepseek-ai/dsh-workspace
  */
@@ -9,13 +9,13 @@ import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
-import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { DomainGlobal, KvTable } from '@deepseek-ai/dsh-storage-domain'
-import { WorkspaceEntity } from './entity.ts'
+import { membershipHome, WorkspaceEntity } from './entity.ts'
 import type { WorkspaceEntityHost } from './entity.ts'
 
-export { WorkspaceMoveInvalidError } from './entity.ts'
+export { membershipHome, WorkspaceMoveInvalidError } from './entity.ts'
 import { realpathNormalize } from './paths.ts'
 import { workspaceDomainSpec } from './spec.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
@@ -85,9 +85,10 @@ const compareHeaders = (left: SessionHeader, right: SessionHeader): number =>
 
 /**
  * Durable workspace registry. Startup waits for `sessionPersistence`, builds
- * one canonical-cwd header index, and completes the one-time history
- * bootstrap before the service becomes active. The persistence dependency is
- * mandatory so an unavailable peer can never be mistaken for an empty
+ * one membership-home index (last `workspace/home`, else header cwd), and
+ * completes the one-time history bootstrap before the service becomes active.
+ * First-boot grouping still uses header cwd only. The persistence dependency
+ * is mandatory so an unavailable peer can never be mistaken for an empty
  * history and commit the initialized marker.
  */
 export class WorkspaceRegistry extends Service {
@@ -107,6 +108,11 @@ export class WorkspaceRegistry extends Service {
     sessionPath: id => this.sessionPaths.get(id),
     readSessionHeader: id => this.readSessionHeader(id),
     liveSessionEvents: id => this.ctx.get('sessions')?.get(id)?.events,
+    inspectSession: async (id) => {
+      const inspected = await this.inspectSession(id)
+      if (!inspected.ok || inspected.header === undefined) return undefined
+      return { header: inspected.header, events: inspected.events }
+    },
     rememberSessionPath: (id, path) => {
       this.sessionPaths.set(id, path)
       this.invalidSessionPaths.delete(id)
@@ -135,10 +141,10 @@ export class WorkspaceRegistry extends Service {
     this.validateStoredState(this.state)
     if (!this.state.initialized) {
       const headers = await this.ctx.sessionPersistence.list()
-      await this.replaceHeaderIndex(headers)
+      await this.replaceHeaderIndex(headers, { overlays: false })
       await this.bootstrap(headers)
     } else if (this.table.size > 0) {
-      await this.replaceHeaderIndex(await this.ctx.sessionPersistence.list())
+      await this.replaceHeaderIndex(await this.ctx.sessionPersistence.list(), { overlays: true })
     }
 
     await this.indexLiveSessions()
@@ -180,7 +186,7 @@ export class WorkspaceRegistry extends Service {
   /**
    * Synchronous workspace projection in durable registry order. Every
    * entity's `sessionIds` getter is already filtered by the startup/live
-   * canonical-cwd header index; this method performs no persistence reads.
+   * membership-home index; this method performs no persistence reads.
    * @returns a fresh ordered array of workspace entities.
    */
   list(): Workspace[] {
@@ -344,7 +350,7 @@ export class WorkspaceRegistry extends Service {
   private async sessionKnown(id: SessionId): Promise<boolean> {
     if (this.ctx.get('sessions')?.get(id) !== undefined) return true
     if (this.headers.has(id)) return true
-    await this.indexHeaders(await this.ctx.sessionPersistence.list())
+    await this.indexHeaders(await this.ctx.sessionPersistence.list(), { overlays: true })
     return this.headers.has(id)
   }
 
@@ -674,41 +680,88 @@ export class WorkspaceRegistry extends Service {
     }
   }
 
-  private async replaceHeaderIndex(headers: readonly SessionHeader[]): Promise<void> {
+  private async replaceHeaderIndex(
+    headers: readonly SessionHeader[],
+    options: { overlays: boolean },
+  ): Promise<void> {
     this.headers.clear()
     this.sessionPaths.clear()
     this.invalidSessionPaths.clear()
-    await this.indexHeaders(headers)
+    await this.indexHeaders(headers, options)
   }
 
-  private async indexHeaders(headers: readonly SessionHeader[]): Promise<void> {
-    for (const header of headers) await this.indexHeader(header)
+  private async indexHeaders(
+    headers: readonly SessionHeader[],
+    options: { overlays: boolean } = { overlays: false },
+  ): Promise<void> {
+    for (const header of headers) await this.indexHeader(header, options)
   }
 
-  private async indexHeader(header: SessionHeader): Promise<void> {
+  private async indexHeader(
+    header: SessionHeader,
+    options: { overlays: boolean } = { overlays: false },
+  ): Promise<void> {
     this.headers.set(header.id, header)
-    this.sessionPaths.delete(header.id)
-    if (header.cwd === undefined) {
-      this.invalidSessionPaths.set(header.id, 'header has no cwd')
+    const live = this.ctx.get('sessions')?.get(header.id)
+    let events: readonly SessionEvent[] | undefined = live?.events
+    if (options.overlays && events === undefined && this.accountedSessionIds().has(header.id)) {
+      const inspected = await this.inspectSession(header.id)
+      if (inspected.ok) events = inspected.events
+      else {
+        this.ctx.logger.warn(
+          `workspace ignored overlay for session '${header.id}': inspect failed: ${inspected.reason}`,
+        )
+      }
+    }
+    if (!options.overlays && events === undefined && this.sessionPaths.has(header.id)) return
+    const home = membershipHome(header.cwd, events)
+    if (home === undefined) {
+      this.sessionPaths.delete(header.id)
+      this.invalidSessionPaths.set(header.id, 'header has no home')
       return
     }
     try {
-      const path = await realpathNormalize(header.cwd)
+      const path = await realpathNormalize(home)
       if (!(await stat(path)).isDirectory()) {
-        this.invalidSessionPaths.set(header.id, `cwd '${header.cwd}' is not a directory`)
+        this.sessionPaths.delete(header.id)
+        this.invalidSessionPaths.set(header.id, `home '${home}' is not a directory`)
         return
       }
       this.sessionPaths.set(header.id, path)
       this.invalidSessionPaths.delete(header.id)
     } catch {
-      this.invalidSessionPaths.set(header.id, `cwd '${header.cwd}' does not resolve`)
+      this.sessionPaths.delete(header.id)
+      this.invalidSessionPaths.set(header.id, `home '${home}' does not resolve`)
+    }
+  }
+
+  private accountedSessionIds(): Set<SessionId> {
+    const accounted = new Set<SessionId>()
+    for (const [, record] of this.requireTable().entries()) {
+      for (const sessionId of record.sessionIds) accounted.add(sessionId)
+    }
+    return accounted
+  }
+
+  private async inspectSession(id: SessionId): Promise<
+    | { ok: true; header: SessionHeader; events: readonly SessionEvent[] }
+    | { ok: true; header?: undefined; events?: undefined }
+    | { ok: false; reason: string }
+  > {
+    const persistence = this.ctx.sessionPersistence
+    if (typeof persistence.inspect !== 'function') return { ok: true }
+    try {
+      const inspected = await persistence.inspect(id)
+      return { ok: true, header: inspected.meta, events: inspected.events }
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : String(error) }
     }
   }
 
   private async indexLiveSessions(): Promise<void> {
     const sessions = this.ctx.get('sessions')
     if (sessions === undefined) return
-    await this.indexHeaders(sessions.list().map(session => session.header))
+    await this.indexHeaders(sessions.list().map(session => session.header), { overlays: true })
   }
 
   private reportFilteredCandidates(): void {
@@ -719,7 +772,7 @@ export class WorkspaceRegistry extends Service {
         if (path === record.path) continue
         const reason = this.invalidSessionPaths.get(sessionId)
           ?? (this.headers.has(sessionId)
-            ? `canonical cwd '${path}' differs from workspace path '${record.path}'`
+            ? `canonical home '${path}' differs from workspace path '${record.path}'`
             : 'session header is missing')
         this.ctx.logger.warn(
           `workspace '${entity.id}' filtered session '${sessionId}' from membership: ${reason}`,
@@ -738,7 +791,7 @@ export class WorkspaceRegistry extends Service {
     if (cached !== undefined) return cached
 
     const headers = await this.ctx.sessionPersistence.list()
-    await this.indexHeaders(headers)
+    await this.indexHeaders(headers, { overlays: true })
     const header = this.headers.get(id)
     if (header === undefined) {
       throw new Error(`cannot validate session '${id}': session persistence holds no such session`)

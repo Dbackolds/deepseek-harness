@@ -3,7 +3,7 @@
  * A Git branch pick is one `git/worktree` event; a project rehome is one
  * `workspace/home` event. Tool cwd folds the later of those two by log
  * time, otherwise `SessionHeader.cwd`. Birth cwd stays the persistence
- * identity; membership follows the effective home after a live attach.
+ * identity; workspace membership follows last `workspace/home`, else header cwd.
  *
  * @module dsh-sandbox-policy/session-worktree
  */

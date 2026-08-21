@@ -8,7 +8,7 @@ Status: implemented
 
 [Domain KV storage 与 Workspace entity](../../proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)定义了 Workspace 的持久实体、路径规范和有序 Session 账本，但没有定义 Host 接线、历史数据初始化或 GUI 动线。GUI 同时呈现 Workspace 和 Session；用户进入 New Session 后必须能够立即输入，即使此时还没有 Host Session，甚至没有 Host Workspace。
 
-待创建 Workspace、待创建 Session、输入保留与 Host 实体发布必须具有明确所有者，并在 RPC completion 与 Host frame 以任意顺序到达时保持同一页面身份。若零态提前创建 Host Session，则无输入的页面状态会进入 Host 生命周期。历史 Session 又只有轻量 `SessionHeader.cwd` 可用于归组，初始化不能读取事件正文。
+待创建 Workspace、待创建 Session、输入保留与 Host 实体发布必须具有明确所有者，并在 RPC completion 与 Host frame 以任意顺序到达时保持同一页面身份。若零态提前创建 Host Session，则无输入的页面状态会进入 Host 生命周期。历史 Session 用 `SessionHeader.cwd` 做首次引导归组；已初始化标记写入后，已记账 Session 还会通过非变更性 inspect 折叠最后一条 `workspace/home`。
 
 ## Decision
 
@@ -28,9 +28,9 @@ Host 在 Workspace entity 上提供以下 GUI 接线：
 
 Host 流推送 Workspace 与 Session 增量，包括 `host/workspace-removed`；Client 重连后分别刷新 `workspace.list` 与 `session.list` 基线。删除注册记录的所有权与安全边界由 [Workspace 注册记录删除 Agent Note](2026-07-27-workspace-registration-deletion.zh.md)定义。
 
-Workspace 的 `sessionIds` 是有序候选索引。成员投影同时要求 id 位于索引且对应 `SessionHeader.cwd` canonical 后等于 Workspace path；SessionHeader 不增加 `workspaceId`。cwd 匹配但未入索引的 Session 保持 Ungrouped，索引命中但 header 缺失、cwd 无效或 cwd 不匹配的 id 被过滤。同一 Session 被两个 Workspace 索引占用属于损坏状态并明确报错。
+Workspace 的 `sessionIds` 是有序候选索引。成员投影同时要求 id 位于索引且对应规范成员家等于 Workspace path；SessionHeader 不增加 `workspaceId`。成员家是最后一条 `workspace/home`，否则为 `SessionHeader.cwd`。家路径匹配但未入索引的 Session 保持 Ungrouped，索引命中但 header 缺失、家路径无效或不匹配的 id 被过滤。同一 Session 被两个 Workspace 索引占用属于损坏状态并明确报错。
 
-Workspace domain 以 durable marker 区分「从未初始化」和「已初始化但为空」。marker 未设置时，注册表只调用 `SessionPersistence.list()` 读取 header 元数据，既不调用 `load` 或 `inspect`，也不读取历史数据或解析事件正文；有效 cwd 按 canonical path 分组，组内 Session 与 Workspace 组均按 header `createdAt` 降序初始化。Bootstrap 可重入，最后才写 marker；marker 写入后，绕过 `workspaceId` 的新 Session 不再被自动收编。
+Workspace domain 以 durable marker 区分「从未初始化」和「已初始化但为空」。marker 未设置时，注册表只调用 `SessionPersistence.list()` 读取 header 元数据，既不调用 `load` 或 `inspect`，也不读取历史数据或解析事件正文；有效 cwd 按 canonical path 分组，组内 Session 与 Workspace 组均按 header `createdAt` 降序初始化。Bootstrap 可重入，最后才写 marker；marker 写入后，绕过 `workspaceId` 的新 Session 不再被自动收编。已记账 Session 再按成员家投影：活动日志优先，否则非变更性 `inspect` 提供 `workspace/home`；不调用 `load`，单个 inspect 失败时回退到 header cwd。
 
 ### Client 对象模型
 
@@ -53,7 +53,7 @@ Session 自己持有首条输入并驱动一条内部流水线：必要时以预
 
 顶部 New Session、Workspace 行内加号和 Workspace picker 最终都调用同一 New Session 动作：显式 Workspace id 直接成为目标，未指定时先使用当前 Session 所属 Workspace，再使用最近 Workspace；没有真实 Workspace 时进入空白 New Session 页面。Workspace picker 的单一 Add workspace 动作（见[单一路径 Note](../simplification/2026-07-31-one-route-to-add-a-workspace.zh.md)；本决策做出时是 Use an existing folder 与按名称创建两个动作）会在用户确认目录时立即创建真实 Workspace，再将前端 Session 的目标改为该 Workspace；即使用户不发送消息，显式创建的空 Workspace 也保留。
 
-新建 Workspace 的显示名取自其所在目录。不同 canonical path 可以拥有相同的 basename 派生显示名（见[身份决策](../bug-fix/2026-07-31-same-basename-workspace-adoption.zh.md)）；显式的重命名操作仍保留显示名重名检查。分别输入显示名和目录名仍不在此动线范围内。对话中途改挂（同一条对话、新的有效家和工作区账本，含 No Repo 起步）见[Session rehome](../../proposed/feature/2026-08-20-session-rehome.zh.md)。Ungrouped 历史会话的手动收编仍不在此动线范围内。
+新建 Workspace 的显示名取自其所在目录。不同 canonical path 可以拥有相同的 basename 派生显示名（见[身份决策](../bug-fix/2026-07-31-same-basename-workspace-adoption.zh.md)）；显式的重命名操作仍保留显示名重名检查。分别输入显示名和目录名仍不在此动线范围内。对话中途改挂（同一条对话、新的有效家和工作区账本，含 No Repo 起步）见[Session rehome](../../proposed/feature/2026-08-20-session-rehome.zh.md)；重启后的冷成员投影见[冷启动改挂成员投影](../bug-fix/2026-08-21-cold-rehome-membership-projection.zh.md)。Ungrouped 历史会话的手动收编仍不在此动线范围内。
 
 ### 首次发送与恢复
 
@@ -106,7 +106,7 @@ Sidebar 与 conversation empty hero 通过 slot 获得标准化动作：`startSe
 - 完全无 Workspace 的零态不写 Host 且允许输入；显式 Create Workspace 立即创建并显示空 Workspace。
 - 前端 Session 与 Workspace 在 materialize 前后保持对象身份，输入、错误、焦点和 sidebar 投影始终来自对象层。
 - 首发按 Workspace、Session、提示词顺序推进，各成功阶段不回滚，输入在提示词被接受前不丢失，创建重试使用同一 SessionId。
-- Workspace list 只读取 header 完成一次可重入 bootstrap；已初始化的空注册表重启不重复初始化，成员读取同时校验索引与 canonical cwd。
+- Workspace list 只读取 header 完成一次可重入 bootstrap；已初始化的空注册表重启不重复初始化，成员读取同时校验索引与规范成员家。
 - 初始默认目标只在两份基线 ready 后确定一次；Workspace 组不因 hydration 或 Session 活跃重排，显式 Workspace 拖拽顺序在重连后仍然保持。
 - 当前空白 Session 可显示为唯一的 New Session 行，同时不暴露其他可复用空白会话，也不显示 Session 数量。
 - UI 与 Host 会将 canonical path 不同但 basename 相同的目录接纳为独立 Workspace，而显式的重命名操作会拒绝重复显示名；cwd-only Session、无效历史 cwd 和未 attach Session 保持 Ungrouped。

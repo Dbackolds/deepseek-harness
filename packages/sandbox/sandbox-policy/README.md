@@ -30,7 +30,7 @@ The optional `./invariant` companion rejects a forged durable `sandbox/mode` eve
 
 ## The per-session store
 
-A runtime switch is one log-only `sandbox/mode` event on the session it applies to. `effective = explicit grant ?? fold(events) ?? deployment default`, so an override survives restart by replay and two sessions never see each other's state. Birth cwd stays the persistence identity. Live workspace membership and tool cwd fold the last `workspace/home` or `git/worktree` overlay so a session can move projects or sit on a different branch. The events stay log-only; before the next request, the owner contributes the current fact to the full runtime-context snapshot.
+A runtime switch is one log-only `sandbox/mode` event on the session it applies to. `effective = explicit grant ?? fold(events) ?? deployment default`, so an override survives restart by replay and two sessions never see each other's state. Birth cwd stays the persistence identity. Tool cwd folds the last `workspace/home` or `git/worktree` overlay. Workspace membership folds only `workspace/home`, else header cwd, so a branch overlay does not change the sidebar group. The events stay log-only; before the next request, the owner contributes the current fact to the full runtime-context snapshot.
 
 ## Model Experience
 

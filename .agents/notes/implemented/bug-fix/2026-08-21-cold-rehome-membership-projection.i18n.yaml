@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-cold-rehome-membership-projection.md
+2026-08-21-cold-rehome-membership-projection.md: 1f0172ac01a065c04019b7698f5e06fa5ecc97ce
+2026-08-21-cold-rehome-membership-projection.zh.md: 21e33c15fc7d449af7135c41b3cf4dba083bf0fe

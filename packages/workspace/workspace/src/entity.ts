@@ -39,10 +39,10 @@ export interface WorkspaceEntityHost {
   table(): KvTable<WorkspaceId, WorkspaceRecord>
 
   /**
-   * Read a session's canonical directory from the registry's header index.
+   * Read a session's canonical membership home from the registry index.
    * @param id - Session whose indexed path is requested.
    * @returns the canonical directory, or `undefined` when the header is
-   * missing or its cwd cannot identify an existing directory.
+   * missing or its membership home cannot identify an existing directory.
    */
   sessionPath(id: SessionId): string | undefined
 
@@ -56,15 +56,24 @@ export interface WorkspaceEntityHost {
 
   /**
    * Live session events when the session is attached in this process.
-   * Cold sessions return undefined so attach falls back to birth cwd.
+   * Cold attach inspects persistence when this is undefined.
    * @param id - Session whose live log is requested.
    */
   liveSessionEvents(id: SessionId): readonly SessionEvent[] | undefined
 
   /**
-   * Publish a successfully validated canonical cwd to the projection index.
+   * Persistently inspect one session without publishing it. Used for cold
+   * attach when no live log is present.
+   * @param id - Session whose stored log to inspect.
+   * @returns header and events when inspect succeeds; undefined when inspect
+   * is absent, the session is unknown, or inspect fails.
+   */
+  inspectSession(id: SessionId): Promise<{ header: SessionHeader; events: readonly SessionEvent[] } | undefined>
+
+  /**
+   * Publish a successfully validated canonical home to the projection index.
    * @param id - Validated session id.
-   * @param path - Canonical existing directory from the immutable header cwd.
+   * @param path - Canonical existing directory from the membership home.
    */
   rememberSessionPath(id: SessionId, path: string): void
 
@@ -132,7 +141,9 @@ export class WorkspaceEntity implements Workspace {
     // snapshot.
     if (!this.record.sessionIds.includes(sessionId)) {
       const header = await this.host.readSessionHeader(sessionId)
-      const home = effectiveSessionHome(header.cwd, this.host.liveSessionEvents(sessionId))
+      const liveEvents = this.host.liveSessionEvents(sessionId)
+      const inspected = liveEvents === undefined ? await this.host.inspectSession(sessionId) : undefined
+      const home = membershipHome(header.cwd, liveEvents ?? inspected?.events)
       if (home === undefined) {
         throw new Error(
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
@@ -277,12 +288,12 @@ export class WorkspaceEntity implements Workspace {
 }
 
 /**
- * Live effective home when the log carries a workspace/home or git/worktree
- * overlay; otherwise the immutable header cwd. Cold attach has no events.
+ * Workspace membership home: last `workspace/home` overlay, else header cwd.
+ * `git/worktree` is a same-repo overlay and does not change membership.
  * @param headerCwd - birth cwd from the session header.
- * @param events - live log, or undefined for a cold session.
+ * @param events - live or inspected log, or undefined when none is available.
  */
-export function effectiveSessionHome(
+export function membershipHome(
   headerCwd: string | undefined,
   events: readonly SessionEvent[] | undefined,
 ): string | undefined {
@@ -290,11 +301,11 @@ export function effectiveSessionHome(
     for (let index = events.length - 1; index >= 0; index -= 1) {
       const event = events[index]
       if (event === undefined) continue
-      const type = event.type as string
-      if (type === 'workspace/home' || type === 'git/worktree') {
-        const path = (event.data as { path?: unknown }).path
-        if (typeof path === 'string' && path.length > 0) return path
-      }
+      // workspace/home is declared on dsh-sandbox-policy; this package only
+      // reads the overlay without depending on that plugin.
+      if ((event.type as string) !== 'workspace/home') continue
+      const path = (event.data as { path?: unknown }).path
+      if (typeof path === 'string' && path.length > 0) return path
     }
   }
   return headerCwd

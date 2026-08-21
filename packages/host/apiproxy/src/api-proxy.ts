@@ -34,6 +34,7 @@ import {
   sessionWorkingDirectory, setSessionHome,
 } from '@deepseek-ai/dsh-sandbox-policy'
 import {
+  membershipHome,
   workspaceDomainState, workspaceRecord, WorkspaceId as brandWorkspaceId,
   WorkspaceMoveInvalidError, WorkspaceOrderInvalidError, WorkspaceUnknownSessionError,
 } from '@deepseek-ai/dsh-workspace'
@@ -2458,13 +2459,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { path },
           })
         }
-        const currentHome = sessionWorkingDirectory(session)
-        const alreadyHome = currentHome === canonical
+        const membership = membershipHome(session.header.cwd, session.events)
+        const alreadyMemberHome = membership === canonical
         const accounted = target.sessionIds.includes(sessionId)
-        if (alreadyHome && accounted) {
+        if (alreadyMemberHome && accounted) {
           return ok(request, { workspaceId: target.id, path: target.path, cwd: canonical })
         }
-        if (!alreadyHome) setSessionHome(session, canonical)
+        if (!alreadyMemberHome) setSessionHome(session, canonical)
         for (const workspace of ctx.workspaceRegistry.list()) {
           if (workspace.id !== target.id && workspace.sessionIds.includes(sessionId)) {
             await workspace.detachSession(sessionId)

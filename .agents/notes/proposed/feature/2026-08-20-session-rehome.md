@@ -12,7 +12,7 @@ The [Workspace UI product-flow](../../implemented/feature/2026-07-25-workspace-u
 
 ## Proposal
 
-Keep birth cwd as the persistence identity. Record the current home as one log-only `workspace/home { path }` event. Membership, tool cwd, and the Web list `cwd` follow the effective home.
+Keep birth cwd as the persistence identity. Record the current home as one log-only `workspace/home { path }` event. Tool cwd and the Web list `cwd` follow the effective home. Membership follows last `workspace/home`, else header cwd.
 
 ### Effective home
 
@@ -20,7 +20,7 @@ Keep birth cwd as the persistence identity. Record the current home as one log-o
 
 ### Membership
 
-`attachSession` validates the live or persisted session's effective home against the workspace path. The registry session-path index stores that home, not the birth cwd, once a live session is attached or after rehome. Bootstrap of cold history still groups by header cwd: sessions that have never been live since rehome keep birth grouping until opened.
+`attachSession` validates the live or persisted session's membership home (last `workspace/home`, else header cwd) against the workspace path. The registry session-path index stores that home, not the birth cwd. First-boot grouping still uses header cwd only. After the initialized marker, accounted cold sessions inspect `workspace/home` so a rehomed session stays in its target workspace without being opened. `git/worktree` remains a same-repo overlay and does not change membership.
 
 ### Host `session.rehome`
 
@@ -30,7 +30,7 @@ Keep birth cwd as the persistence identity. Record the current home as one log-o
 2. Refuses the canonical No Repo directory (`session-rehome-no-repo`).
 3. Refuses subagent-owned sessions (`agent-busy`).
 4. `workspace.create(path)` for an existing directory (idempotent).
-5. If the session's effective home already equals that path and the workspace already accounts it, returns success without appending.
+5. If the session's membership home (last `workspace/home`, else header cwd) already equals that path and the workspace already accounts it, returns success without appending. A matching `git/worktree` overlay is not this no-op.
 6. Otherwise appends `workspace/home`, detaches from any previous workspace account, attaches to the target.
 
 Host `session.create` without `workspaceId`/`cwd` uses the No Repo directory and attaches there. `host.describe.cwd` reports the same default so the UI default project matches.
@@ -79,6 +79,6 @@ Git checkout continues to use the owning workspace's primary path as the repo ro
 
 ## Risks
 
-- Cold sessions with a `workspace/home` in the log but a header-cwd index will look Ungrouped until opened; acceptable because rehome requires a live agent.
+- Inspecting accounted cold logs at workspace-registry start costs I/O; one inspect failure falls back to header cwd instead of aborting startup.
 - Client list previously treated `cwd` as immutable fill-only; replacing it is a behavior change that grouping depends on.
 - Session-query same-cwd authorization stays on birth cwd in this delivery, so a rehomed session cannot list peers that were born in the new directory. Deferred, not silent expansion of query scope.
