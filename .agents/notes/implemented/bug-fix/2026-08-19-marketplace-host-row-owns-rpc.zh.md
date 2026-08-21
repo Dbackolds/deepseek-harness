@@ -20,7 +20,7 @@ web 组合包为内置市场挂了两行 Loader：Host 的 `plugin-marketplace` 
 
 ## 后果
 
-已经打出 `lib/index.js` 的检出在没有这次拆分前仍会失败。Host 行说明符是已发布导出；把旧包入口名复制到 `plugin-marketplace` 的 overlay 仍会冲突。
+已经打出 `lib/index.js` 的检出在没有这次拆分前仍会失败。Host 行说明符是已发布导出；把旧包入口名复制到 `plugin-marketplace` 的 overlay 仍会冲突。web 组合包名册保留两行：`plugin-marketplace` 指向 `./host`，`ui-settings-plugin-marketplace` 指向包入口。浏览器行不是第二个 RPC 所有者。删掉它之后，设置 → 插件会停在普通配置卡片上，因为 `pluginMarketplaceUi` 从未挂载。
 
 ## 测试
 
