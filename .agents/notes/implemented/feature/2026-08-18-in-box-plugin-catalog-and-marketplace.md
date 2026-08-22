@@ -25,4 +25,4 @@ The shipped Plugins settings row still yields to this marketplace through [`plug
 
 ## Consequences
 
-A new web profile opens Discover against the shipped listing without GitHub. Operators can still add remote catalogs. Listing edits are source changes to `packages/host/plugin-catalog/catalog.json`.
+A new web profile opens Discover against the shipped listing without GitHub. Operators can still add remote catalogs. Listing edits are source changes to `packages/host/plugin-catalog/catalog.json`. The pin currently lists the same eighteen protocol-v1 rows as `StarPivotNet/dsh-plugin-catalog`, including the ten `@starpivot/dsh-*` share copies published from `StarPivotNet/dsh-plugins-public`.

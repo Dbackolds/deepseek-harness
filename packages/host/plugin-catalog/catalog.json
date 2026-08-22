@@ -13,57 +13,156 @@
     },
     {
       "name": "@dsh-plugin/dsh-auxiliary",
-      "version": "0.4.2",
+      "version": "0.5.1",
       "title": "Auxiliary models",
       "description": "Dedicated model routes for image analysis and context compaction.",
       "homepage": "https://github.com/dsh-plugins/dsh-auxiliary",
       "kind": "bundle",
-      "updatedAt": "2026-08-16T04:10:50.168Z"
+      "updatedAt": "2026-08-21T06:08:10.008Z"
     },
     {
       "name": "@dsh-plugin/dsh-thought-buddy",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "title": "Thought buddy",
       "description": "A GrokBot-style animated avatar in front of the Deep diving status line.",
       "homepage": "https://github.com/dsh-plugins/dsh-thought-buddy",
       "kind": "bundle",
-      "updatedAt": "2026-08-15T20:15:33.346Z"
+      "updatedAt": "2026-08-19T07:44:52.585Z"
     },
     {
       "name": "dsh-find-plugin",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "title": "Find plugins",
       "description": "Search the GitHub dsh-plugin topic from inside the agent.",
       "homepage": "https://github.com/awesome-dsh-plugin/dsh-find-plugin",
       "kind": "bundle",
-      "updatedAt": "2026-08-14T13:18:06.053Z"
+      "updatedAt": "2026-08-19T05:25:07.551Z"
     },
     {
       "name": "dsh-mnemon",
-      "version": "0.2.8",
+      "version": "0.2.15",
       "title": "Mnemon memory",
       "description": "Local three-tier memory with a sidebar workbench. Requires the Mnemon CLI on the machine.",
       "homepage": "https://github.com/omdsh-dev/dsh-mnemon",
       "kind": "bundle",
-      "updatedAt": "2026-08-17T13:39:24.086Z"
+      "updatedAt": "2026-08-21T13:17:57.620Z"
     },
     {
       "name": "@starpivot/dsh-session-import",
-      "version": "0.1.1",
+      "version": "0.1.15",
       "title": "Session import",
-      "description": "Import Cursor, Codex, and Claude Code conversations and skills from a Settings page.",
+      "description": "Import Cursor, Codex, Claude Code, Grok Build, and ZCode conversations, plus skills, memory files, and automations.",
       "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/session-import",
       "kind": "bundle",
-      "updatedAt": "2026-08-17T00:52:40.158Z"
+      "updatedAt": "2026-08-18T18:55:34.483Z"
     },
     {
       "name": "@starpivot/dsh-better-sidebar",
-      "version": "0.13.2",
+      "version": "0.13.5",
       "title": "Better sidebar",
       "description": "A VS Code-like right sidebar with explorer, editor, terminal, Git, and browser. Refresh sits in the top-right cluster only while the sidebar is open.",
       "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/better-sidebar",
       "kind": "bundle",
-      "updatedAt": "2026-08-17T16:10:00.000Z"
+      "updatedAt": "2026-08-18T06:01:24.448Z"
+    },
+    {
+      "name": "@starpivot/dsh-enter-newline",
+      "version": "0.2.0",
+      "title": "Enter newline",
+      "description": "Composer Enter sends or inserts a newline, selectable in General Settings.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/enter-newline",
+      "kind": "bundle",
+      "updatedAt": "2026-08-21T20:56:52.667Z"
+    },
+    {
+      "name": "@starpivot/dsh-skill-router",
+      "version": "0.1.0",
+      "title": "Skill router",
+      "description": "Two-level skill catalog routing: show routers and standalone skills, keep routed sub-skills loadable by name.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/skill-router",
+      "kind": "bundle",
+      "updatedAt": "2026-08-21T20:56:55.226Z"
+    },
+    {
+      "name": "@starpivot/dsh-model-capabilities",
+      "version": "0.1.1",
+      "title": "Model capabilities",
+      "description": "Fill missing llm-pi-ai model capability fields from overrides, pi-ai catalogs, and models.dev.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/model-capabilities",
+      "kind": "bundle",
+      "updatedAt": "2026-08-22T16:11:10.139Z"
+    },
+    {
+      "name": "@starpivot/dsh-blank-session-gc",
+      "version": "0.1.0",
+      "title": "Blank session GC",
+      "description": "Keep at most one unused blank conversation and delete the rest from workspace accounts and JSONL logs.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/blank-session-gc",
+      "kind": "bundle",
+      "updatedAt": "2026-08-21T20:56:59.943Z"
+    },
+    {
+      "name": "@starpivot/dsh-busy-enter-steer",
+      "version": "0.1.0",
+      "title": "Busy Enter steer",
+      "description": "Seed busy-state Enter to steer when the user has not chosen queue or steer.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/busy-enter-steer",
+      "kind": "bundle",
+      "updatedAt": "2026-08-21T20:57:02.659Z"
+    },
+    {
+      "name": "@starpivot/dsh-agent-teams",
+      "version": "0.2.1",
+      "title": "AgentTeams",
+      "description": "Durable multi-agent team orchestration with a task DAG and read-only role isolation.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/agent-teams",
+      "kind": "bundle",
+      "updatedAt": "2026-08-22T16:12:44.352Z"
+    },
+    {
+      "name": "@starpivot/dsh-file-drop",
+      "version": "0.1.1",
+      "title": "File drop",
+      "description": "Drop any non-image file into the composer as a path. Files over 256KB insert a brief summary only.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/file-drop",
+      "kind": "bundle",
+      "updatedAt": "2026-08-22T06:43:21.070Z"
+    },
+    {
+      "name": "@starpivot/dsh-session-rehome",
+      "version": "0.2.0",
+      "title": "Session rehome",
+      "description": "Rehome the current conversation onto an existing project directory, with ask or auto mode.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/session-rehome",
+      "kind": "bundle",
+      "updatedAt": "2026-08-22T16:11:14.034Z"
+    },
+    {
+      "name": "@starpivot/dsh-restart-continue",
+      "version": "0.1.0",
+      "title": "Restart continue",
+      "description": "After a host restart, cold-resume user root conversations interrupted in the last 24 hours.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/restart-continue",
+      "kind": "bundle",
+      "updatedAt": "2026-08-22T16:11:18.048Z"
+    },
+    {
+      "name": "@starpivot/dsh-session-title",
+      "version": "0.1.0",
+      "title": "Session title",
+      "description": "Settings for the auto-title prompt and an optional title model.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/session-title",
+      "kind": "bundle",
+      "updatedAt": "2026-08-22T16:11:22.720Z"
+    },
+    {
+      "name": "@starpivot/dsh-kanban",
+      "version": "0.3.0",
+      "title": "Kanban",
+      "description": "Sidebar task board over existing conversations, with host-persisted columns.",
+      "homepage": "https://github.com/StarPivotNet/dsh-plugins-public/tree/main/packages/kanban",
+      "kind": "bundle",
+      "updatedAt": "2026-08-22T16:12:23.072Z"
     }
   ]
 }

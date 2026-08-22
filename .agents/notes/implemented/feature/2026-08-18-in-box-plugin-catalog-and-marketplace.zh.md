@@ -15,7 +15,7 @@ web profile 同时交付两半：
 - [`dsh-host-plugin-catalog`](../../../packages/host/plugin-catalog/README.md) 在具名 Host 路由 `/plugin-catalog/catalog.json` 上提供已 pin 的 StarPivot `catalog.json`。
 - [`dsh-client-ui-settings-plugin-marketplace`](../../../packages/client/ui-settings-plugin-marketplace/README.md) 是原先的公开市场，现在是随安装内置的双面包。Host 行导入 `./host`；包入口是空的 Host `apply`，供浏览器行使用，避免两行都注册 `/plugin-marketplace`。它的默认目录 URL 就是这条 Host 路径。Host 半侧仍接受额外的 http(s) 目录 URL。
 
-随附的插件设置行仍通过 [`pluginMarketplaceUi`](../architecture/2026-08-16-plugins-settings-marketplace-yield.md) 向该市场让位。市场占用该页期间，清单标签页保持禁用。
+随附的插件设置行仍通过 [`pluginMarketplaceUi`](../architecture/2026-08-16-plugins-settings-marketplace-yield.zh.md) 向该市场让位。市场占用该页期间，清单标签页保持禁用。
 
 ## Alternatives considered
 
@@ -25,4 +25,4 @@ web profile 同时交付两半：
 
 ## Consequences
 
-新的 web profile 打开发现页时使用随附清单，不必访问 GitHub。运营者仍可添加远程目录。清单编辑是对 `packages/host/plugin-catalog/catalog.json` 的源码变更。
+新的 web profile 打开发现页时使用随附清单，不必访问 GitHub。运营者仍可添加远程目录。清单编辑是对 `packages/host/plugin-catalog/catalog.json` 的源码变更。当前 pin 与 `StarPivotNet/dsh-plugin-catalog` 同为协议第 1 版的十八行，含从 `StarPivotNet/dsh-plugins-public` 发布的十个 `@starpivot/dsh-*` 分享拷贝。
