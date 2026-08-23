@@ -41,7 +41,8 @@ describe('StarPivot container image', () => {
     expect(dockerfile).toContain('Do not start from an official')
     expect(dockerfile).toContain('ARG DSH_CLIENT_COMMIT_HASH')
     expect(dockerfile).toContain('test -n "$DSH_CLIENT_COMMIT_HASH"')
-    expect(dockerfile).toContain('scripts/docker/restore-vendored-host.ts --deployed /out/dsh')
+    expect(dockerfile).toContain('node scripts/docker/restore-vendored-host.ts --deployed /out/dsh')
+    expect(dockerfile).not.toContain('pnpm exec tsx scripts/docker/restore-vendored-host.ts')
     expect(dockerfile.indexOf('--patch')).toBeLessThan(dockerfile.indexOf('--no-open'))
     expect(dockerfile).toContain('/etc/dsh/webserver.cordis.yml')
 

@@ -29,7 +29,7 @@ RUN test -n "$DSH_CLIENT_COMMIT_HASH" \
     --config.auto-install-peers=true \
     --config.link-workspace-packages=true \
     /out/dsh \
-  && pnpm exec tsx scripts/docker/restore-vendored-host.ts --deployed /out/dsh
+  && node scripts/docker/restore-vendored-host.ts --deployed /out/dsh
 
 FROM node:24-bookworm-slim AS runtime
 

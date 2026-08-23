@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-23-starpivot-container-image.md
-2026-08-23-starpivot-container-image.md: 0ac9a98bbea4cde25bfd60d091109c4ca3810d67
-2026-08-23-starpivot-container-image.zh.md: ecc5ddb9025e3bd4956f7424787f0d59f622e462
+2026-08-23-starpivot-container-image.md: 3a71d8236431451475dc4ba12f1445640cbf0daf
+2026-08-23-starpivot-container-image.zh.md: 3b357327465937a652e7b729b75ec34da5d11e22
