@@ -7,7 +7,7 @@
 ## 运行
 
 ```sh
-docker compose -f docker/compose.yml up --build
+DSH_CLIENT_COMMIT_HASH=$(git rev-parse HEAD) docker compose -f docker/compose.yml up --build
 ```
 
 进程在容器内监听 `0.0.0.0:3080`。把宿主机 3080 端口发布出去。把工作区挂到 `/workspace`，并把 `$DSH_HOME` 持久化到 `/var/lib/dsh`。
@@ -23,6 +23,6 @@ docker run --rm -p 3080:3080 -v "$PWD:/workspace" ghcr.io/starpivotnet/deepseek-
 
 ## 发布
 
-`Release (docker)`（`.github/workflows/release-docker.yml`）构建 [Dockerfile](Dockerfile) 并推送 GHCR 标签。`desktop-v*` 或 `docker-v*` 标签，或 `publish=true` 的手动触发，会发布 `sha-<12>`、`<desktop 版本>`、git 标签名和 `latest`。该 job 在结束前会拉取版本标签并运行 `dsh --version`。
+`Release (docker)`（`.github/workflows/release-docker.yml`）构建 [Dockerfile](Dockerfile) 并推送 GHCR 标签。`desktop-v*` 或 `docker-v*` 标签，或 `publish=true` 的手动触发，会发布 `sha-<12>`、`<desktop 版本>`、git 标签名和 `latest`。该 job 把 `github.sha` 作为 `DSH_CLIENT_COMMIT_HASH` 传入，因为 `.dockerignore` 排除了 `.git`。该 job 在结束前会拉取版本标签并运行 `dsh --version`。
 
 不要从 `npx @deepseek-ai/dsh` 或其他仓库的 dsh 镜像启动本镜像。只要 master 或桌面版发布前进，就从本 checkout 重新构建。

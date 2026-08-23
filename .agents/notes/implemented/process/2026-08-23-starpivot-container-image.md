@@ -14,7 +14,7 @@ The CLI rejects `--host 0.0.0.0`, so a container that only forwarded that flag w
 
 The StarPivot container image is a fifth release sequence, independent of npm `dsh`, vendor, Landlock, and desktop.
 
-[docker/Dockerfile](../../../../docker/Dockerfile) is a two-stage build of this checkout: `pnpm install --frozen-lockfile`, `pnpm run build`, then `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` into `/opt/dsh`. The runtime image does not start from an official or third-party dsh image.
+[docker/Dockerfile](../../../../docker/Dockerfile) is a two-stage build of this checkout: `pnpm install --frozen-lockfile`, `pnpm run build`, then `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` into `/opt/dsh`. The runtime image does not start from an official or third-party dsh image. `.dockerignore` excludes `.git`, so `pnpm run build` cannot `git rev-parse HEAD`. The Dockerfile requires build-arg `DSH_CLIENT_COMMIT_HASH`; `Release (docker)` passes `github.sha`.
 
 [docker/webserver.cordis.yml](../../../../docker/webserver.cordis.yml) is a launcher `--patch` that replaces the `webserver` row config with `host: 0.0.0.0` and keeps `port: !!js ctx.webStartup.port ?? 3080`. The entrypoint is `dsh web --patch /etc/dsh/webserver.cordis.yml --no-open`; `--port` remains an app argument.
 
@@ -30,6 +30,8 @@ The StarPivot container image is a fifth release sequence, independent of npm `d
 
 **A sixth `docker-v*` sequence that never shares `desktop-v*`.** Rejected as the default path. Desktop and container both ship this checkout's Host; sharing `desktop-v*` keeps one version line. `docker-v*` remains available when a container-only rebuild is required.
 
+**Copy `.git` into the build context so `git rev-parse HEAD` works.** Rejected: the context would carry history the image does not need. The client build already accepts `DSH_CLIENT_COMMIT_HASH`, which is the source commit.
+
 ## Consequences
 
 A desktop or docker tag rebuilds GHCR from this checkout. Official npm and third-party images stay unused for StarPivot deployments.
@@ -43,4 +45,4 @@ What this costs:
 
 ## Testing
 
-`scripts/docker/image.spec.ts` pins the overlay bind host, the launcher `--patch` / app `--port` split, the Dockerfile deploy of this checkout, the GHCR name, and the workflow tag triggers. `Release (docker)` is the executed build-and-publish path.
+`scripts/docker/image.spec.ts` pins the overlay bind host, the launcher `--patch` / app `--port` split, the Dockerfile deploy of this checkout, the required `DSH_CLIENT_COMMIT_HASH` build-arg, the GHCR name, and the workflow tag triggers. `Release (docker)` is the executed build-and-publish path.

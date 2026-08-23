@@ -15,7 +15,12 @@ RUN apt-get update \
   && corepack enable
 
 COPY . .
-RUN corepack prepare pnpm@11.7.0 --activate \
+# .dockerignore excludes .git, so the image cannot git-rev-parse HEAD.
+# The workflow must pass the source commit as DSH_CLIENT_COMMIT_HASH.
+ARG DSH_CLIENT_COMMIT_HASH
+ENV DSH_CLIENT_COMMIT_HASH=${DSH_CLIENT_COMMIT_HASH}
+RUN test -n "$DSH_CLIENT_COMMIT_HASH" \
+  && corepack prepare pnpm@11.7.0 --activate \
   && pnpm install --frozen-lockfile \
   && pnpm run build \
   && mkdir -p /out \
