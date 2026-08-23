@@ -70,6 +70,14 @@ describe('titlebar chrome (mac variant)', () => {
     expect(loadingPage('mac')).toContain(titlebarStyles('mac'))
   })
 
+  it('shows an escaped Host error instead of the starting copy', () => {
+    const page = loadingPage('windows', 'spawn node ENOENT <script>alert(1)</script>')
+    expect(page).toContain('spawn node ENOENT &lt;script&gt;alert(1)&lt;/script&gt;')
+    expect(page).not.toContain('正在启动 DeepSeek Harness')
+    expect(page).not.toContain('<script>alert(1)</script>')
+    expect(loadingPage('mac', '')).toContain('正在启动 DeepSeek Harness')
+  })
+
   it('maps platforms to variants', () => {
     expect(titlebarVariantForPlatform('darwin')).toBe('mac')
     expect(titlebarVariantForPlatform('win32')).toBe('windows')

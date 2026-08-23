@@ -114,17 +114,35 @@ export function titlebarInjectScript(variant: TitlebarVariant): string {
 }
 
 /**
+ * Escape Host error text before it is interpolated into the loading page.
+ * @param text raw error message from the main process.
+ * @returns HTML-safe text.
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+/**
  * Self-contained loading page shown until the Host prints its URL.
  * @param variant platform variant controlling the drag-region inset.
+ * @param message Host launch failure text; omitted while the Host is starting.
  * @returns a complete HTML document.
  */
-export function loadingPage(variant: TitlebarVariant): string {
+export function loadingPage(variant: TitlebarVariant, message?: string): string {
+  const body = message === undefined || message === ''
+    ? '正在启动 DeepSeek Harness…'
+    : escapeHtml(message)
   return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/>'
     + `<title>DeepSeek Harness</title><style>${titlebarStyles(variant)}`
     + 'html,body{height:100%;margin:0;background:#151517;color:#ececf1;'
     + 'font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;}'
     + '.dsh-desktop-loading{display:flex;align-items:center;justify-content:center;'
     + 'min-height:calc(100vh - var(--dsh-desktop-titlebar));padding:24px;text-align:center;opacity:.72;}</style></head><body>'
-    + `${titlebarMarkup(variant)}<div class="dsh-desktop-loading">正在启动 DeepSeek Harness…</div>`
+    + `${titlebarMarkup(variant)}<div class="dsh-desktop-loading">${body}</div>`
     + `<script>${titlebarScript()}</script></body></html>`
 }
