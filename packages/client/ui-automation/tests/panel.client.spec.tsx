@@ -220,6 +220,18 @@ describe('AutomationPanel', () => {
     expect(screen.getByRole('button', { name: 'Create scheduled task' })).toBeTruthy()
   })
 
+  it('refetches the Host list each time the page opens', async () => {
+    const { calls } = mount({ items: [] })
+    fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
+    await waitFor(() => { expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy() })
+    expect(calls.filter(call => call.name === 'list')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Automation' })).toBeNull() })
+    fireEvent.click(screen.getByRole('button', { name: 'Automation' }))
+    await waitFor(() => { expect(screen.getByRole('region', { name: 'Automation' })).toBeTruthy() })
+    expect(calls.filter(call => call.name === 'list')).toHaveLength(2)
+  })
+
   it('closes the page from the header close control', async () => {
     mount({ items: [] })
     fireEvent.click(screen.getByRole('button', { name: 'Automation' }))

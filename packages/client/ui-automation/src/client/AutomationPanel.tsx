@@ -3,7 +3,7 @@
  * The Host remains the fact source; this file owns only the create draft.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Button, IconClockOutline16, IconCloseOutline16, IconPlayOutline16, IconPlusOutline16,
   IconRefreshOutline16, IconTrashOutline16, IconWarningOutline16, Input, Modal, Tooltip,
@@ -136,11 +136,14 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
   const state = useAutomation(snapshot => snapshot)
   const keepAwake = useKeepAwake(value => value)
   const workspaces = useWorkspaces(snapshot => snapshot.items)
+  const wasOpen = useRef(false)
 
   useEffect(() => {
-    if (!state.pageOpen || state.status !== 'idle') return
+    const opened = state.pageOpen && !wasOpen.current
+    wasOpen.current = state.pageOpen
+    if (!opened) return
     void load()
-  }, [state.pageOpen, state.status, load])
+  }, [state.pageOpen, load])
 
   useEffect(() => {
     if (!state.pageOpen) return
