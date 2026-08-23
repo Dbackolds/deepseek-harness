@@ -1069,7 +1069,7 @@ create, edit, pause, and resume require direct-human root authority; complete an
 
 ### `automation_create`
 
-Create one Host Automation rule that opens a NEW session at a future time and submits task. Use this when the user asks to run work later or on a repeating wall-clock schedule. Do not use session-local reminders. Pass exactly one of after_seconds, at, every_seconds, or local_clock. Unattended writes or commands need permission_preset danger-full-access; omitted permission keeps the user default. on_overlap skip waits if the previous run is still running; replace stops that run and starts a new session. Execution rejects non-human and Automation-sourced turns.
+Create one Host Automation rule that opens a NEW session at a future time and submits task. Infer this intent when the user asks to create an automation, a scheduled task, a repeating job, or to run work later or daily/weekly, in any language and without requiring the words Host Automation. Do not start the work in this session and do not use session-local reminders, goals, jobs, or workflows for that request. Pass exactly one of after_seconds, at, every_seconds, or local_clock. Unattended writes or commands need permission_preset danger-full-access; omitted permission keeps the user default. on_overlap skip waits if the previous run is still running; replace stops that run and starts a new session. Execution rejects non-human and Automation-sourced turns.
 
 ```json
 {

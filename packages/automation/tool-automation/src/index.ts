@@ -1,8 +1,11 @@
 /**
  * Model-facing Host Automation tools over `ctx.automation`.
+ * Usage policy ships as the `tool:automation` prompt section so ordinary-language
+ * create requests call `automation_create` instead of starting the work here.
  * @module @deepseek-ai/dsh-tool-automation
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { AutomationInputError, AutomationRuleId } from '@deepseek-ai/dsh-automation'
 import type { AtInput, CreateAutomationRuleRequest, LocalClockInput, UpdateAutomationRuleRequest } from '@deepseek-ai/dsh-automation'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
@@ -10,15 +13,23 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { automationToolExecution, requireDirectHuman } from './authority.ts'
 export const name = 'tool-automation'
-export const inject = ['agents', 'automation', 'tools', 'workspaceRegistry']
+export const inject = ['agents', 'automation', 'systemPrompt', 'tools', 'workspaceRegistry']
 const LIST_DESCRIPTION = 'List every Host Automation rule: name, next fire time, enabled state, overlap policy, and workspace. '
     + 'Call this before updating or deleting a rule.'
 const CREATE_DESCRIPTION = 'Create one Host Automation rule that opens a NEW session at a future time and submits task. '
-    + 'Use this when the user asks to run work later or on a repeating wall-clock schedule. '
-    + 'Do not use session-local reminders. Pass exactly one of after_seconds, at, every_seconds, or local_clock. '
-    + 'Unattended writes or commands need permission_preset danger-full-access; omitted permission keeps the user default. '
-    + 'on_overlap skip waits if the previous run is still running; replace stops that run and starts a new session. '
+    + 'Infer this intent when the user asks to create an automation, a scheduled task, a repeating job, or to run work later '
+    + 'or daily/weekly, in any language and without requiring the words Host Automation. Do not start the work in this session '
+    + 'and do not use session-local reminders, goals, jobs, or workflows for that request. Pass exactly one of after_seconds, at, '
+    + 'every_seconds, or local_clock. Unattended writes or commands need permission_preset danger-full-access; omitted permission '
+    + 'keeps the user default. on_overlap skip waits if the previous run is still running; replace stops that run and starts a new session. '
     + 'Execution rejects non-human and Automation-sourced turns.'
+const GUIDANCE = 'Use Host Automation tools when the user asks to create, list, change, pause, or delete a scheduled '
+    + 'automation or timed task that should run later or on a repeating wall-clock schedule, in any language and without '
+    + 'requiring the words Host Automation. automation_create may infer that intent from a direct human request. Do not start '
+    + 'the requested work in this session, and do not use session-local reminders, goals, jobs, or workflows for that request. '
+    + 'Write task as the complete prompt the future session should execute. Choose exactly one selector: after_seconds, at, '
+    + 'every_seconds, or local_clock. Daily or weekly local times use local_clock with the request time zone from time context. '
+    + 'Unattended writes or commands need permission_preset danger-full-access. Call automation_list before updating or deleting a rule.'
 const UPDATE_DESCRIPTION = 'Update one Host Automation rule by id. Changing the schedule still requires exactly one selector field. '
     + 'Call automation_list first. Execution rejects non-human and Automation-sourced turns.'
 const DELETE_DESCRIPTION = 'Delete one Host Automation rule by id. Past runs remain. Execution rejects non-human and Automation-sourced turns.'
@@ -249,6 +260,11 @@ export function registerAutomationTools(ctx: Context, agentCtx: Context): void {
  * @param ctx - plugin context carrying automation and the tool registry.
  */
 export function apply(ctx: Context): void {
+  ctx.systemPrompt.section({
+    name: 'tool:automation',
+    order: 117,
+    text: GUIDANCE,
+  })
   ctx.effect(() => {
     const stop = ctx.on('agent/created', ({ agent }) => {
       if (!ctx.agents.roots().includes(agent))

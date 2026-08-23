@@ -1075,7 +1075,7 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 
 ### `automation_create`
 
-创建一条 Host Automation 规则：在未来时刻打开一条新 session 并提交 task。当用户要求稍后或按重复墙上时钟日程跑工作时使用。不要用仅限会话内的提醒。恰好传入 after_seconds、at、every_seconds 或 local_clock 之一。无人值守写入或命令需要 permission_preset danger-full-access；省略 permission 则保留用户默认。on_overlap 为 skip 时，若上一次 run 仍在运行则等待；replace 会停止该 run 并开启新 session。执行拒绝非人类来源和 Automation 来源的 turn。
+创建一条 Host Automation 规则：在未来时刻打开一条新 session 并提交 task。当用户要求创建自动化、定时任务、重复任务，或稍后/每天/每周跑工作时，即可推断该意图；不必出现 Host Automation 字样。不要在当前 session 开工，也不要把该请求改走仅限会话内的提醒、goal、jobs 或 workflow。恰好传入 after_seconds、at、every_seconds 或 local_clock 之一。无人值守写入或命令需要 permission_preset danger-full-access；省略 permission 则保留用户默认。on_overlap 为 skip 时，若上一次 run 仍在运行则等待；replace 会停止该 run 并开启新 session。执行拒绝非人类来源和 Automation 来源的 turn。
 
 ```json
 {
