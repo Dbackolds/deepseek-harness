@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-23-starpivot-container-image.md
+2026-08-23-starpivot-container-image.md: f35adc7aa81b1d115d579c23553943ff1606df2a
+2026-08-23-starpivot-container-image.zh.md: 18ab7b00e9838971928bfa74b02989de8fae89bc

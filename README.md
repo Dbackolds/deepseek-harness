@@ -36,6 +36,16 @@ pnpm dsh web
 
 `pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
 
+### Run from this repository's container image
+
+Official npm packages and any third-party dsh image omit this fork's Host customizations. Build and publish `ghcr.io/starpivotnet/deepseek-harness` from this checkout ([container image](docker/README.md)):
+
+```sh
+docker compose -f docker/compose.yml up --build
+```
+
+The container listens on port 3080. Mount a workspace at `/workspace` and persist `$DSH_HOME` at `/var/lib/dsh`.
+
 ## Community and support
 
 - Feel free to submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).

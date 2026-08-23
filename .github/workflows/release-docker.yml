@@ -1,0 +1,98 @@
+# Pack a container image from this checkout and publish it to GHCR.
+# The image is the StarPivot tree, not an official npm install: official
+# bytes omit this repository's Host customizations.
+name: Release (docker)
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+      - 'docker-v*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the packed image to GHCR. Must run from a desktop-v* or docker-v* tag, or from master.
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: starpivotnet/deepseek-harness
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  publish:
+    name: Build and publish container
+    if: github.event_name == 'push' || inputs.publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tags
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./apps/desktop/package.json').version")"
+          sha="$(git rev-parse --short=12 HEAD)"
+          tags=()
+          tags+=("${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${sha}")
+          tags+=("${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}")
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            tags+=("${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}")
+          fi
+          if [[ "${{ github.ref }}" == "refs/heads/master" || "${{ github.ref_name }}" == desktop-v* || "${{ github.ref_name }}" == docker-v* ]]; then
+            tags+=("${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest")
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'tags=%s\n' "$(IFS=,; echo "${tags[*]}")" >> "$GITHUB_OUTPUT"
+          printf 'Resolved tags:\n'
+          printf '%s\n' "${tags[@]}"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify published image
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE"
+          docker inspect --format '{{.Id}} {{index .RepoTags 0}}' "$IMAGE"
+          cid="$(docker create --entrypoint node "$IMAGE" /opt/dsh/lib/bin.js --version)"
+          docker start -a "$cid"
+          docker rm "$cid" >/dev/null
+          test -n "$(docker inspect --format '{{.Id}}' "$IMAGE")"

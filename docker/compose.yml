@@ -1,0 +1,18 @@
+services:
+  dsh:
+    image: ghcr.io/starpivotnet/deepseek-harness:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3080:3080"
+    working_dir: /workspace
+    environment:
+      DSH_HOME: /var/lib/dsh
+      DSH_TELEMETRY_DISABLED: "1"
+    volumes:
+      - dsh-home:/var/lib/dsh
+      - ./..:/workspace
+
+volumes:
+  dsh-home:

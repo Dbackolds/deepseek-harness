@@ -1,0 +1,8 @@
+# Container bind overlay for `dsh web`.
+# The CLI rejects `--host 0.0.0.0`; this --patch replaces the webserver
+# row config so the process listens on all interfaces inside the container
+# while `--port` still wins through webStartup.
+- id: webserver
+  config:
+    host: 0.0.0.0
+    port: !!js ctx.webStartup.port ?? 3080

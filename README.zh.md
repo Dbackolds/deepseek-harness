@@ -40,6 +40,16 @@ pnpm dsh web
 
 `pnpm run build` 会准备仓库产物。`pnpm dsh web` 会直接使用这些已构建产物，不会重新构建。
 
+### 用本仓库的容器镜像运行
+
+官方 npm 包和任何第三方 dsh 镜像都不包含本 fork 的 Host 定制。请从本 checkout 构建并发布 `ghcr.io/starpivotnet/deepseek-harness`（[容器镜像](docker/README.zh.md)）：
+
+```sh
+docker compose -f docker/compose.yml up --build
+```
+
+容器监听 3080 端口。把工作区挂到 `/workspace`，并把 `$DSH_HOME` 持久化到 `/var/lib/dsh`。
+
 ## 社区与支持
 
 - 欢迎通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。
