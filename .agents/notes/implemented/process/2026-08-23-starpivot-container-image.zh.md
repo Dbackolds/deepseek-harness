@@ -14,7 +14,7 @@ CLI 拒绝 `--host 0.0.0.0`，因此只转发该 flag 的容器无法绑定所�
 
 StarPivot 容器镜像是第五条发布序列，与 npm `dsh`、vendor、Landlock 和 desktop 分开。
 
-[docker/Dockerfile](../../../../docker/Dockerfile) 对本 checkout 做两阶段构建：`pnpm install --frozen-lockfile`、`pnpm run build`，然后把 `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` 写进 `/opt/dsh`。运行时镜像不以官方或第三方 dsh 镜像为起点。`.dockerignore` 排除 `.git`，因此 `pnpm run build` 无法 `git rev-parse HEAD`。Dockerfile 要求 build-arg `DSH_CLIENT_COMMIT_HASH`；`Release (docker)` 传入 `github.sha`。
+[docker/Dockerfile](../../../../docker/Dockerfile) 对本 checkout 做两阶段构建：`pnpm install --frozen-lockfile`、`pnpm run build`，然后把 `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` 写进 `/opt/dsh`。运行时镜像不以官方或第三方 dsh 镜像为起点。`.dockerignore` 排除 `.git`，因此 `pnpm run build` 无法 `git rev-parse HEAD`。Dockerfile 要求 build-arg `DSH_CLIENT_COMMIT_HASH`；`Release (docker)` 传入 `github.sha`。deploy 之后，[scripts/docker/restore-vendored-host.ts](../../../../scripts/docker/restore-vendored-host.ts) 把被省略的 vendored 包（`cosmokit`、`schemastery`、`cordis-plugin-group` 以及其他 Cordis vendor 行）拷进 Host 的 `node_modules`，因为工作区 `link:` override 和生产态 peer 省略会让这些 import 无法解析。
 
 [docker/webserver.cordis.yml](../../../../docker/webserver.cordis.yml) 是启动器 `--patch`，它把 `webserver` 行配置替换为 `host: 0.0.0.0`，并保留 `port: !!js ctx.webStartup.port ?? 3080`。入口是 `dsh web --patch /etc/dsh/webserver.cordis.yml --no-open`；`--port` 仍是应用参数。
 
@@ -32,6 +32,8 @@ StarPivot 容器镜像是第五条发布序列，与 npm `dsh`、vendor、Landlo
 
 **把 `.git` 拷进构建上下文，好让 `git rev-parse HEAD` 可用。** 不予采纳：上下文会带上镜像不需要的历史。客户端构建已经接受 `DSH_CLIENT_COMMIT_HASH`，它就是源码提交。
 
+**只靠 `pnpm deploy --legacy --prod` 作为 Host 闭包。** 不予采纳：工作区 `link:` override 会省略 cosmokit/schemastery，Cordis 插件 peer（如 group）也不在 CLI 生产图上。部署树在把它们拷回去之前无法 import。
+
 ## Consequences
 
 desktop 或 docker 标签会从本 checkout 重建 GHCR。StarPivot 部署不再使用官方 npm 和第三方镜像。
@@ -45,4 +47,4 @@ desktop 或 docker 标签会从本 checkout 重建 GHCR。StarPivot 部署不再
 
 ## Testing
 
-`scripts/docker/image.spec.ts` 固定 overlay 绑定主机、启动器 `--patch` / 应用 `--port` 拆分、Dockerfile 对本 checkout 的 deploy、必需的 `DSH_CLIENT_COMMIT_HASH` build-arg、GHCR 名称，以及工作流标签触发。`Release (docker)` 是实际执行的构建与发布路径。
+`scripts/docker/image.spec.ts` 固定 overlay 绑定主机、启动器 `--patch` / 应用 `--port` 拆分、Dockerfile 对本 checkout 的 deploy、必需的 `DSH_CLIENT_COMMIT_HASH` build-arg、vendored Host 补齐、GHCR 名称，以及工作流标签触发。`scripts/docker/restore-vendored-host.spec.ts` 把被省略的 vendor 包拷进假的 deploy 树。`Release (docker)` 是实际执行的构建与发布路径。

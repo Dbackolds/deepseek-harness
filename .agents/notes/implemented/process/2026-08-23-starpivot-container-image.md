@@ -14,7 +14,7 @@ The CLI rejects `--host 0.0.0.0`, so a container that only forwarded that flag w
 
 The StarPivot container image is a fifth release sequence, independent of npm `dsh`, vendor, Landlock, and desktop.
 
-[docker/Dockerfile](../../../../docker/Dockerfile) is a two-stage build of this checkout: `pnpm install --frozen-lockfile`, `pnpm run build`, then `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` into `/opt/dsh`. The runtime image does not start from an official or third-party dsh image. `.dockerignore` excludes `.git`, so `pnpm run build` cannot `git rev-parse HEAD`. The Dockerfile requires build-arg `DSH_CLIENT_COMMIT_HASH`; `Release (docker)` passes `github.sha`.
+[docker/Dockerfile](../../../../docker/Dockerfile) is a two-stage build of this checkout: `pnpm install --frozen-lockfile`, `pnpm run build`, then `pnpm --filter @deepseek-ai/dsh deploy --legacy --prod` into `/opt/dsh`. The runtime image does not start from an official or third-party dsh image. `.dockerignore` excludes `.git`, so `pnpm run build` cannot `git rev-parse HEAD`. The Dockerfile requires build-arg `DSH_CLIENT_COMMIT_HASH`; `Release (docker)` passes `github.sha`. After deploy, [scripts/docker/restore-vendored-host.ts](../../../../scripts/docker/restore-vendored-host.ts) copies omitted vendored packages (`cosmokit`, `schemastery`, `cordis-plugin-group`, and the other Cordis vendor rows) into the Host `node_modules`, because workspace `link:` overrides and production-peer omission leave those imports unresolved.
 
 [docker/webserver.cordis.yml](../../../../docker/webserver.cordis.yml) is a launcher `--patch` that replaces the `webserver` row config with `host: 0.0.0.0` and keeps `port: !!js ctx.webStartup.port ?? 3080`. The entrypoint is `dsh web --patch /etc/dsh/webserver.cordis.yml --no-open`; `--port` remains an app argument.
 
@@ -32,6 +32,8 @@ The StarPivot container image is a fifth release sequence, independent of npm `d
 
 **Copy `.git` into the build context so `git rev-parse HEAD` works.** Rejected: the context would carry history the image does not need. The client build already accepts `DSH_CLIENT_COMMIT_HASH`, which is the source commit.
 
+**Rely on `pnpm deploy --legacy --prod` alone for the Host closure.** Rejected: workspace `link:` overrides omit cosmokit/schemastery, and Cordis plugin peers such as group stay off the CLI production graph. The deployed tree cannot import them until they are copied back.
+
 ## Consequences
 
 A desktop or docker tag rebuilds GHCR from this checkout. Official npm and third-party images stay unused for StarPivot deployments.
@@ -45,4 +47,4 @@ What this costs:
 
 ## Testing
 
-`scripts/docker/image.spec.ts` pins the overlay bind host, the launcher `--patch` / app `--port` split, the Dockerfile deploy of this checkout, the required `DSH_CLIENT_COMMIT_HASH` build-arg, the GHCR name, and the workflow tag triggers. `Release (docker)` is the executed build-and-publish path.
+`scripts/docker/image.spec.ts` pins the overlay bind host, the launcher `--patch` / app `--port` split, the Dockerfile deploy of this checkout, the required `DSH_CLIENT_COMMIT_HASH` build-arg, the vendored-host restore, the GHCR name, and the workflow tag triggers. `scripts/docker/restore-vendored-host.spec.ts` copies omitted vendor packages into a fake deploy tree. `Release (docker)` is the executed build-and-publish path.

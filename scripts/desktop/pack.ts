@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process'
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { restoreVendoredHostPackages } from '../docker/restore-vendored-host.ts'
 import { isEntry } from '../release/process.ts'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -209,6 +210,7 @@ function stageHost(skipBuild = false): void {
   if (!existsSync(join(deployed, 'lib', 'bin.js'))) {
     throw new Error('desktop pack: pnpm deploy did not write apps/cli/lib/bin.js into the Host tree')
   }
+  restoreVendoredHostPackages(deployed, root)
   stageNodeBinary(hostRoot)
 }
 

@@ -98,3 +98,4 @@ jobs:
           docker start -a "$cid"
           docker rm "$cid" >/dev/null
           test -n "$(docker inspect --format '{{.Id}}' "$IMAGE")"
+          docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$IMAGE"

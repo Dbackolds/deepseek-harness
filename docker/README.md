@@ -23,6 +23,6 @@ docker run --rm -p 3080:3080 -v "$PWD:/workspace" ghcr.io/starpivotnet/deepseek-
 
 ## Publish
 
-`Release (docker)` (`.github/workflows/release-docker.yml`) builds [Dockerfile](Dockerfile) and pushes GHCR tags. A `desktop-v*` or `docker-v*` tag, or a manual dispatch with `publish=true`, publishes `sha-<12>`, `<desktop version>`, the git tag name, and `latest`. The job passes `github.sha` as `DSH_CLIENT_COMMIT_HASH` because `.dockerignore` excludes `.git`. The job pulls the version tag and runs `dsh --version` before it finishes.
+`Release (docker)` (`.github/workflows/release-docker.yml`) builds [Dockerfile](Dockerfile) and pushes GHCR tags. A `desktop-v*` or `docker-v*` tag, or a manual dispatch with `publish=true`, publishes `sha-<12>`, `<desktop version>`, the git tag name, and `latest`. The job passes `github.sha` as `DSH_CLIENT_COMMIT_HASH` because `.dockerignore` excludes `.git`. After deploy it restores omitted vendored packages so `dsh --version` can resolve cosmokit and the Cordis plugin peers. The job pulls the version tag and runs `dsh --version` before it finishes.
 
 Do not start this image from `npx @deepseek-ai/dsh` or another registry's dsh image. Rebuild from this checkout whenever master or a desktop release moves.
