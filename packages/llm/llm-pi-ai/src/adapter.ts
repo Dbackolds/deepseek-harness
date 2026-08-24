@@ -59,6 +59,7 @@ import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
+import { acquireOpenAiSseFetchRepair } from './openai-sse-fetch.ts'
 import { toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
@@ -352,6 +353,10 @@ export class PiAiAdapter extends LlmAdapter {
       : AbortSignal.any([options.signal, consumer.signal])
     const streamIdleTimeoutMs = profile.streamIdleTimeoutMs
     using watchdog = idleWatchdog(upstream, streamIdleTimeoutMs, 'LLM_STREAM_IDLE_TIMEOUT')
+    // pi-ai's OpenAI client has no fetch hook; this lease wraps globalThis.fetch
+    // for the stream lifetime so illegal SSE JSON string literals are repaired
+    // before the SDK parses them.
+    const releaseSseRepair = acquireOpenAiSseFetchRepair()
 
     try {
       const containsImage = options.messages.some(message => contentHasImage(message.content))
@@ -413,6 +418,7 @@ export class PiAiAdapter extends LlmAdapter {
       }
       throw error
     } finally {
+      releaseSseRepair()
       consumer.abort('pi-ai stream consumer stopped')
     }
   }

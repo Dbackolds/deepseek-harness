@@ -197,7 +197,7 @@ pi-ai 会安装多个提供方 SDK，并延迟加载 catalog 模型所选的 SDK
 
 #### 模型看到的内容
 
-pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 分片。适配器把解析后的工具参数作为原始 JSON 字符串传给 harness。
+pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 分片。适配器把解析后的工具参数作为原始 JSON 字符串传给 harness。OpenAI 兼容 SSE 的 `data:` JSON 若在字符串字面量中带有原始 C0 控制字符或未闭合引号，会在 OpenAI SDK 解析之前于 fetch 响应体上修复，因此 Grok 风格、含真实换行的 `run_code` 载荷仍会成为一次工具调用，而不是 `PI_AI_ERROR`。
 
 #### Token 影响
 
@@ -226,3 +226,4 @@ pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 
 - **历史中的 `system` 消息使用 pi-ai 通用上下文转换**：提供方特定位置由 pi-ai 决定，而非由 harness 拥有的协议覆盖决定。
 - **无法获取提供方 HTTP 状态**：pi-ai 错误事件不会在所有提供方上公开稳定 HTTP 状态；失败只公开稳定 harness 错误 code。
 - **重试策略由提供方持有，而不是 SDK 重试**：每个提供方 profile 都可以提供嵌套的 `retryPolicy`；省略时解析为 normal 模式并重试五次，`dsh-llm-retry` 会在 agent 的失败步骤扩展点上执行有效路由策略。pi-ai SDK 重试仍保持禁用，因此持久化的 agent 步骤与 `llm/retry` 事件记录每次可见尝试，直接 `ctx.llm.stream()` 调用仍只尝试一次。
+- **SSE JSON 修复只作用于字符串字面量**：JSON 字符串中的原始 C0 控制字符与未闭合引号会被转义或补上闭合，被截断事件上未匹配的 `{` / `[` 也会被补上，以便 OpenAI SDK 能解析该事件。walker 不会补造键或值；经过这一步仍不是 JSON 的载荷会以 `PI_AI_ERROR` 使本轮失败。闭合被截断的字符串可能得到不完整的工具调用参数对象，随后由工具执行器校验。

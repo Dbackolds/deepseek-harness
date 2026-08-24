@@ -196,7 +196,7 @@ Conversion preserves logical request order without adding text, while the select
 
 #### What the model sees
 
-pi-ai events become harness reasoning, text, tool-call, usage, and finish chunks. The adapter passes parsed tool arguments to the harness as raw JSON strings.
+pi-ai events become harness reasoning, text, tool-call, usage, and finish chunks. The adapter passes parsed tool arguments to the harness as raw JSON strings. OpenAI-compatible SSE `data:` JSON whose string literals contain raw C0 controls or an unterminated quote is repaired on the fetch body before the OpenAI SDK parses it, so a Grok-style `run_code` payload with real newlines still becomes a tool call instead of `PI_AI_ERROR`.
 
 #### Token effect
 
@@ -225,3 +225,4 @@ Recorded response content appends to the next request and does not invalidate it
 - **In-history `system` messages use pi-ai's common context conversion** — provider-specific placement follows pi-ai rather than a harness-owned wire override.
 - **Provider HTTP status is unavailable** — pi-ai error events do not expose a stable HTTP status across providers; failures expose only stable harness error codes.
 - **Retry policy is provider-owned, not an SDK retry** — each provider profile may supply nested `retryPolicy`; omission resolves to normal mode with five retries, and the effective route policy is what `dsh-llm-retry` executes at the agent failed-step extension point. pi-ai SDK retries stay disabled so durable agent steps and `llm/retry` events own every visible attempt, and direct `ctx.llm.stream()` calls remain single-attempt.
+- **SSE JSON repair is string-literal local** — raw C0 controls and an unterminated quote inside JSON strings are escaped or closed, and unmatched `{` / `[` on a truncated event are closed, so the OpenAI SDK can parse the event. The walker does not invent keys or values; a payload that is still not JSON after that pass fails the turn as `PI_AI_ERROR`. Closing a truncated string can yield a partial tool-call argument object, which the tool executor then validates.

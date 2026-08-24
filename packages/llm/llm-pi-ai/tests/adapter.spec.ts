@@ -392,6 +392,55 @@ describe('PiAiAdapter provider routing', () => {
     })
   })
 
+  it('repairs a Grok-style tool-call SSE event whose arguments contain a raw newline', async () => {
+    const code = 'await tools.edit({\n  file_path: "state.rs",\n})'
+    const inner = JSON.stringify({ description: 'edit', code })
+    const brokenInner = inner.replaceAll('\\n', '\n')
+    const events = [
+      '{"choices":[{"delta":{"role":"assistant"},"index":0,"finish_reason":null}]}',
+      JSON.stringify({
+        choices: [{
+          delta: {
+            tool_calls: [{
+              index: 0,
+              id: 'call-1',
+              type: 'function',
+              function: { name: 'run_code', arguments: brokenInner },
+            }],
+          },
+          index: 0,
+          finish_reason: null,
+        }],
+      }).replaceAll('\\n', '\n'),
+      '{"choices":[{"delta":{},"index":0,"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":3,"completion_tokens":8}}',
+      '[DONE]',
+    ]
+    const server = await mockServer([{ events }])
+    const ctx = await harness(server.url)
+    const result = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(result.finish).toMatchObject({ kind: 'tool-calls' })
+    const tool = result.message.content.find(block => block.type === 'tool-call')
+    expect(tool).toMatchObject({ type: 'tool-call', name: 'run_code' })
+    expect(tool && 'arguments' in tool ? JSON.parse(tool.arguments) : undefined).toEqual({
+      description: 'edit',
+      code,
+    })
+  })
+
+  it('repairs an unterminated tool-call arguments string instead of failing the turn', async () => {
+    const events = [
+      '{"choices":[{"delta":{"role":"assistant"},"index":0,"finish_reason":null}]}',
+      '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"run_code","arguments":"{\\"description\\":\\"x\\",\\"code\\":\\"const x = 1"}}]},"index":0,"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":3,"completion_tokens":4}}',
+      '[DONE]',
+    ]
+    const server = await mockServer([{ events }])
+    const ctx = await harness(server.url)
+    const result = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(result.finish).toMatchObject({ kind: 'tool-calls' })
+    const tool = result.message.content.find(block => block.type === 'tool-call')
+    expect(tool).toMatchObject({ type: 'tool-call', name: 'run_code' })
+  })
+
   it('stops the SDK request when the adapter idle watchdog expires', async () => {
     const server = await mockServer([{ events: textEvents, delayMs: 200 }])
     const ctx = await harness(server.url, { streamIdleTimeoutMs: 20 })
