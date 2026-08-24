@@ -10,7 +10,7 @@ English | [中文](2026-08-15-desktop-listen-ready-and-windows-identity.zh.md)
 
 ## Decision
 
-The desktop process starts `dsh web --port 0` as soon as it exists, overlapping Host boot with Chromium ready. `web-runtime` prints `dsh web: http://127.0.0.1:<port>` as soon as `ctx.webServer` can form that URL. The HTTP server is already listening; unmatched paths stay 404 until later rows register, and the browser boot kernel waits for client plugins itself. The window loads that loopback origin; it does not serve the GUI over `file://`.
+The desktop process starts `dsh web` as soon as it exists, overlapping Host boot with Chromium ready. The first launch uses `--port 0`; later launches reuse the last successful loopback port from Electron userData so Chromium keeps the same origin, and an occupied remembered port falls back to `--port 0` ([origin reuse](../bug-fix/2026-08-24-desktop-reuses-host-origin-for-localstorage.md)). `web-runtime` prints `dsh web: http://127.0.0.1:<port>` as soon as `ctx.webServer` can form that URL. The HTTP server is already listening; unmatched paths stay 404 until later rows register, and the browser boot kernel waits for client plugins itself. The window loads that loopback origin; it does not serve the GUI over `file://`.
 
 Windows uses Electron `titleBarOverlay` for the system caption buttons. The injected bar only owns the drag strip and double-click maximize, and keeps 138px of right padding so the overlay is not a drag target.
 

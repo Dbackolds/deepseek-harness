@@ -103,6 +103,22 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  it('restores the Pinned heading from persisted Session ids', () => {
+    const store = createWorkspaceViewStore().create()
+    store.actions.pinSession('keep-me')
+    store.actions.setGroupExpanded('alpha', true)
+    mount({
+      useSessions: hook(sessionState([summary('keep-me', 2), summary('other', 1)])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['keep-me', 'other'])])),
+      useStore: bindSnapshotSelector(store),
+      actions: store.actions,
+    })
+    expect(screen.getByRole('button', { name: '置顶' })).toBeTruthy()
+    const rows = screen.getAllByRole('treeitem').map(row => row.textContent)
+    expect(rows[0]).toContain('keep-me')
+    expect(rows.some(text => text?.includes('other'))).toBe(true)
+  })
+
   it('workspace hover card shows a POSIX home descendant as ~', () => {
     vi.useFakeTimers()
     try {

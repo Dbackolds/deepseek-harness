@@ -5,6 +5,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -170,11 +171,55 @@ export async function waitForPluginRoute(
 }
 
 /**
- * Start `dsh web --port 0` and resolve when `/` carries `window.__DSH_BOOT__`.
+ * True when `port` is a usable TCP listen port, excluding OS-assigned `0`.
+ * @param port - candidate from launch memory or a Host readiness URL.
+ * @returns whether the value can be reused as `--port`.
+ */
+export function isReusableListenPort(port: unknown): port is number {
+  return typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535
+}
+
+/**
+ * Whether `127.0.0.1:<port>` accepts a new listener right now.
+ * Used only to decide between a remembered origin and `--port 0`; a later
+ * bind race still fails the Host loudly.
+ * @param port - remembered loopback port.
+ * @returns true when this process could bind that port.
+ */
+export function listenPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer()
+    server.once('error', () => {
+      server.close()
+      resolve(false)
+    })
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => { resolve(true) })
+    })
+  })
+}
+
+/**
+ * Choose `--port` for the Host this window will load.
+ * An explicit `--port` in extra args wins. Otherwise reuse the last successful
+ * loopback port so Chromium keeps the same origin (and therefore the same
+ * localStorage) across restarts. Occupied or invalid remembered ports select `0`.
+ * @param extraArgs - flags forwarded to `dsh web`.
+ * @param rememberedPort - last successful Host port, when one exists.
+ * @returns argv after the CLI entry, starting with `web`.
+ */
+export function webHostArgs(extraArgs: readonly string[] = [], rememberedPort?: number): string[] {
+  if (extraArgs.includes('--port')) return ['web', ...extraArgs]
+  const port = isReusableListenPort(rememberedPort) ? String(rememberedPort) : '0'
+  return ['web', '--port', port, ...extraArgs]
+}
+
+/**
+ * Start `dsh web` and resolve when `/` carries `window.__DSH_BOOT__`.
  * The readiness line means the HTTP server is listening; the modules row
  * injects the boot graph later. Loading before that marker leaves the
  * window on a blank page.
- * @param options - working directory and extra web flags.
+ * @param options - working directory, extra web flags, and the last successful port.
  * @returns the child and the announced loopback URL.
  */
 export async function startWebHost(options: {
@@ -182,12 +227,14 @@ export async function startWebHost(options: {
   extraArgs?: readonly string[]
   timeoutMs?: number
   nodePath?: string
+  port?: number
 }): Promise<StartedHost> {
   const invocation = resolveDshInvocation(dirname(fileURLToPath(import.meta.url)), options.nodePath)
   const extra = options.extraArgs ?? []
-  const args = extra.includes('--port')
-    ? [...invocation.args, 'web', ...extra]
-    : [...invocation.args, 'web', '--port', '0', ...extra]
+  const remembered = isReusableListenPort(options.port) && await listenPortAvailable(options.port)
+    ? options.port
+    : undefined
+  const args = [...invocation.args, ...webHostArgs(extra, remembered)]
   const child = spawn(invocation.command, args, {
     cwd: options.cwd,
     env: process.env,

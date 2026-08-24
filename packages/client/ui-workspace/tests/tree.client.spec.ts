@@ -600,7 +600,35 @@ describe('createWorkspaceViewStore', () => {
       sessionOrderByAccount: { alpha: ['one', 'two'] },
       sessionUpdatedAtByAccount: { alpha: { one: 1, two: 2 } },
       activityExpansion: { 'alpha:unread': false },
+      pinnedSessionIds: ['one'],
     })
+  })
+
+  it('rehydrates pinned Session ids from the persist key', () => {
+    const backing = new Map<string, string>([
+      ['dsh.workspace.view.v8', JSON.stringify({
+        groupBy: 'workspace',
+        orderBy: 'updated',
+        activityLayout: 'folders',
+        groupExpansion: {},
+        sessionOrderByAccount: {},
+        sessionUpdatedAtByAccount: {},
+        activityExpansion: {},
+        pinnedSessionIds: ['keep-me'],
+      })],
+    ])
+    const storage = {
+      getItem: (key: string) => backing.get(key) ?? null,
+      setItem: (key: string, value: string) => { backing.set(key, value) },
+      removeItem: (key: string) => { backing.delete(key) },
+    }
+    const previous = globalThis.localStorage
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
+    try {
+      expect(createWorkspaceViewStore().create().getSnapshot().pinnedSessionIds).toEqual(['keep-me'])
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous })
+    }
   })
 
   it('removes view state outside the retained Workspace key set', () => {

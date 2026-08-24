@@ -1,9 +1,13 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { findRepoRoot, packagedHostRoot, resolveDshInvocation, resolveNodeExecutable, waitForPluginRoute } from '../src/host.ts'
+import {
+  findRepoRoot, isReusableListenPort, listenPortAvailable, packagedHostRoot, resolveDshInvocation,
+  resolveNodeExecutable, waitForPluginRoute, webHostArgs,
+} from '../src/host.ts'
 import { desktopIconPath } from '../src/icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from '../src/shortcut.ts'
 
@@ -83,5 +87,35 @@ describe('desktop host resolution', () => {
     expect(spec.appUserModelId).toBe('ai.deepseek.dsh.desktop')
     expect(spec.icon.replaceAll('\\', '/')).toMatch(/apps\/desktop\/assets\/icon\.ico$/)
     expect(windowsShortcutPath('C:\\Programs').replaceAll('\\', '/')).toBe('C:/Programs/DeepSeek Harness.lnk')
+  })
+
+  it('reuses a remembered loopback port so Chromium keeps localStorage', () => {
+    expect(isReusableListenPort(49344)).toBe(true)
+    expect(isReusableListenPort(0)).toBe(false)
+    expect(isReusableListenPort(65536)).toBe(false)
+    expect(isReusableListenPort(49344.5)).toBe(false)
+    expect(webHostArgs()).toEqual(['web', '--port', '0'])
+    expect(webHostArgs(['--no-open'], 49344)).toEqual(['web', '--port', '49344', '--no-open'])
+    expect(webHostArgs(['--port', '8080'], 49344)).toEqual(['web', '--port', '8080'])
+    expect(webHostArgs([], 0)).toEqual(['web', '--port', '0'])
+  })
+
+  it('reports whether a remembered loopback port can be bound again', async () => {
+    const occupied = createServer()
+    await new Promise<void>((resolve, reject) => {
+      occupied.once('error', reject)
+      occupied.listen(0, '127.0.0.1', () => { resolve() })
+    })
+    const address = occupied.address()
+    if (address === null || typeof address === 'string') {
+      occupied.close()
+      throw new Error('expected a TCP address')
+    }
+    try {
+      expect(await listenPortAvailable(address.port)).toBe(false)
+    } finally {
+      await new Promise<void>((resolve) => { occupied.close(() => { resolve() }) })
+    }
+    expect(await listenPortAvailable(address.port)).toBe(true)
   })
 })

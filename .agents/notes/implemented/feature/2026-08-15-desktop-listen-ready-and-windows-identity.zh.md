@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-桌面进程一旦存在就启动 `dsh web --port 0`，让 Host 启动与 Chromium ready 重叠。`web-runtime` 一旦能用 `ctx.webServer` 拼出 `dsh web: http://127.0.0.1:<port>` 就打印该行。HTTP 服务器此时已经在听；尚未注册的路径继续 404，浏览器 boot 内核自己等待客户端插件。窗口加载该 loopback origin，不通过 `file://` 提供 GUI。
+桌面进程一旦存在就启动 `dsh web`，让 Host 启动与 Chromium ready 重叠。首次启动使用 `--port 0`；之后从 Electron userData 复用上次成功的 loopback 端口，让 Chromium 保持同一 origin，记住的端口被占用时回退到 `--port 0`（[origin 复用](../bug-fix/2026-08-24-desktop-reuses-host-origin-for-localstorage.zh.md)）。`web-runtime` 一旦能用 `ctx.webServer` 拼出 `dsh web: http://127.0.0.1:<port>` 就打印该行。HTTP 服务器此时已经在听；尚未注册的路径继续 404，浏览器 boot 内核自己等待客户端插件。窗口加载该 loopback origin，不通过 `file://` 提供 GUI。
 
 Windows 用 Electron `titleBarOverlay` 提供系统标题栏按钮。注入条只负责拖拽带和双击最大化，右侧保留 138px 内边距，避免 overlay 落在拖拽目标上。
 

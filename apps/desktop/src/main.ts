@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { applyCompletedDockIcon } from './dock-attention.ts'
-import { startWebHost, stopWebHost, waitForPluginRoute, type StartedHost } from './host.ts'
+import { isReusableListenPort, startWebHost, stopWebHost, waitForPluginRoute, type StartedHost } from './host.ts'
 import { APP_USER_MODEL_ID, desktopIconPath } from './icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from './shortcut.ts'
 import {
@@ -24,7 +24,7 @@ const PRELOAD = fileURLToPath(new URL('./preload.js', import.meta.url))
 const IS_MAC = process.platform === 'darwin'
 const TITLEBAR_VARIANT = titlebarVariantForPlatform(process.platform)
 
-/** Last successful workspace and Node path, kept next to Electron's userData. */
+/** Last successful workspace, Node path, and Host port, kept next to Electron's userData. */
 function workspaceMemoryPath(): string {
   return join(app.getPath('userData'), 'workspace.json')
 }
@@ -32,27 +32,31 @@ function workspaceMemoryPath(): string {
 interface LaunchMemory {
   cwd?: string
   node?: string
+  /** Last successful Host loopback port; reused so Chromium keeps localStorage. */
+  port?: number
 }
 
-/** Restore the previous window's `dsh web` cwd and Node executable. */
+/** Restore the previous window's `dsh web` cwd, Node executable, and loopback port. */
 function readLaunchMemory(): LaunchMemory {
   try {
     const parsed: unknown = JSON.parse(readFileSync(workspaceMemoryPath(), 'utf8'))
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    const record = parsed as { cwd?: unknown; node?: unknown }
+    const record = parsed as { cwd?: unknown; node?: unknown; port?: unknown }
+    const port = isReusableListenPort(record.port) ? record.port : undefined
     return {
       ...typeof record.cwd === 'string' && existsSync(record.cwd) ? { cwd: record.cwd } : {},
       ...typeof record.node === 'string' && existsSync(record.node) ? { node: record.node } : {},
+      ...port === undefined ? {} : { port },
     }
   } catch {
     return {}
   }
 }
 
-/** Persist the directory and Node path this window used. */
-function rememberLaunch(cwd: string, node: string): void {
+/** Persist the directory, Node path, and Host port this window used. */
+function rememberLaunch(cwd: string, node: string, port: number): void {
   mkdirSync(app.getPath('userData'), { recursive: true })
-  writeFileSync(workspaceMemoryPath(), `${JSON.stringify({ cwd, node })}\n`)
+  writeFileSync(workspaceMemoryPath(), `${JSON.stringify({ cwd, node, port })}\n`)
 }
 
 /** Working directory for the Host spawned beside this window. */
@@ -216,6 +220,7 @@ function startHost(memory: LaunchMemory): HostLaunch {
       cwd,
       extraArgs: extraWebArgs(),
       ...memory.node === undefined ? {} : { nodePath: memory.node },
+      ...memory.port === undefined ? {} : { port: memory.port },
     }),
   }
 }
@@ -230,7 +235,7 @@ async function presentWindow(launch: HostLaunch): Promise<void> {
   try {
     host = await launch.ready
     await waitForPluginRoute(host.ready.href)
-    rememberLaunch(launch.cwd, host.child.spawnfile)
+    rememberLaunch(launch.cwd, host.child.spawnfile, host.ready.port)
     fenceNavigation(window, host.ready.href)
     await window.loadURL(host.ready.href)
   } catch (error) {
