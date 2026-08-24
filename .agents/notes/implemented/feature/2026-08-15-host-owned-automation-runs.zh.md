@@ -14,9 +14,9 @@ Status: implemented
 
 `ctx.automation` 在 `automation` storage domain 里拥有 Host 级规则表。存活的 Web Host 从 enabled 规则武装定时器，开火时创建 `origin: 'automation'` 的 Session，固定可选 permission preset，追加仅日志的 `automation/start`，把 task 作为插件来源的 user message 入队，并在 `ctx.sessionTitle` 存在时用规则名命名该 Session。
 
-选择器是 `after`、`at`、`every`（≥ 300 秒，只取最近一次）和 `local-clock`（`HH:mm` 加可选 ISO 星期与显式 IANA 时区）。没有 Cron 求值器。`onOverlap` 是逐条规则的 `skip` | `replace`，只看该规则上一次 `started` Session：忙表示 live Agent 且 `status === 'running'`。`skip` 记录 `skipped_busy`；`replace` 用 `{ kind: 'automation', ruleId }` 取消并立即打开新 Session。独立到期规则即使已有其他 Automation Session 在跑也会开火；Host 范围的并发开火上限已[移除](../simplification/2026-08-21-drop-automation-max-concurrent-runs.md)。
+选择器是 `after`、`at`、`every`（≥ 300 秒，只取最近一次）和 `local-clock`（`HH:mm` 加可选 ISO 星期与显式 IANA 时区）。没有 Cron 求值器。`onOverlap` 是逐条规则的 `skip` | `replace`，只看该规则上一次 `started` Session：忙表示 live Agent 且 `status === 'running'`。`skip` 记录 `skipped_busy`；`replace` 用 `{ kind: 'automation', ruleId }` 取消并立即打开新 Session。独立到期规则即使已有其他 Automation Session 在跑也会开火；Host 范围的并发开火上限已[移除](../simplification/2026-08-21-drop-automation-max-concurrent-runs.zh.md)。
 
-tool、Host RPC 和 Web 侧栏面板是同一服务的 Consumer。本记录交付服务、持久表、origin/cancel-cause 扩展、模型 tool、Host RPC 和包测试。[Web Automation 侧栏](2026-08-15-web-automation-sidebar.md) 在该接口上占据 New Session 下方的 `sidebar.automation`。
+tool、Host RPC 和 Web 侧栏面板是同一服务的 Consumer。本记录交付服务、持久表、origin/cancel-cause 扩展、模型 tool、Host RPC 和包测试。[Web Automation 侧栏](2026-08-15-web-automation-sidebar.zh.md) 在该接口上占据 New Session 下方的 `sidebar.automation`。
 
 ## 考虑过的替代方案
 
@@ -30,7 +30,7 @@ tool、Host RPC 和 Web 侧栏面板是同一服务的 Consumer。本记录交�
 
 ## 验证
 
-包测试覆盖选择器校验、`after` 规则的创建/开火、`skip` 与 `replace` 互斥、idle 不算忙、permission 固定、删除不复用 id、`deleteRun`、`runNow` 不移动下一目标、live timer owner、domain/table 不变式，以及 tool 权威。Session 测试接受 `origin: 'automation'`，并拒绝其他 origin 字面量。日常说法创建请求的模型路由由[推断创建意图](../bug-fix/2026-08-23-automation-infer-create-intent.md)记录负责。
+包测试覆盖选择器校验、`after` 规则的创建/开火、`skip` 与 `replace` 互斥、idle 不算忙、permission 固定、删除不复用 id、`deleteRun`、`runNow` 不移动下一目标、live timer owner、墙上时钟跳跃后的等待切片追赶、domain/table 不变式，以及 tool 权威。Session 测试接受 `origin: 'automation'`，并拒绝其他 origin 字面量。日常说法创建请求的模型路由由[推断创建意图](../bug-fix/2026-08-23-automation-infer-create-intent.zh.md)记录负责。
 
 ## 后果
 

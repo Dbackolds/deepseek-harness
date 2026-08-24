@@ -43,6 +43,6 @@ The prompt is the first user message of a fresh Session, so there is no reusable
 
 ## Known Limitations and Deferred Work
 
-- **Host-process delivery only** — a rule fires on time only while this Web Host is live; a stopped desktop window does no OS-level wake.
+- **Host-process delivery only** — a rule fires on time only while this Web Host is live; a stopped desktop window does no OS-level wake. A sleeping Host rechecks due rules at least every minute, so a missed local-clock instant still fires after wake instead of waiting out the original delay.
 - **No Cron language** — calendar expressions stay out of the protocol; `local-clock` covers daily and weekday wall times.
 - **No self-reproducing fire path** — this package does not register model tools; `dsh-tool-automation` refuses mutate calls from Automation-sourced turns.

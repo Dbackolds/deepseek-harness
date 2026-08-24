@@ -402,4 +402,19 @@ describe('automation timer', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     await vi.waitFor(() => { expect(created).toHaveLength(1) })
   })
+
+  it('fires a due local-clock rule after a wait slice even when the original delay has not elapsed', async () => {
+    vi.useFakeTimers()
+    internals.now = () => NOW
+    const { service, created } = await harness()
+    await service.create({
+      task: 'nightly',
+      workspaceId: WORKSPACE,
+      localClock: { time: '21:00', time_zone: 'UTC' },
+    })
+    expect(service.get(service.list()[0]!.id)?.scheduledAt).toBe('2026-08-15T21:00:00.000Z')
+    internals.now = () => Date.parse('2026-08-15T21:00:01.000Z')
+    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.waitFor(() => { expect(created).toHaveLength(1) })
+  })
 })

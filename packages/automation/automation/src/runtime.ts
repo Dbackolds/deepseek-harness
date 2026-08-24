@@ -18,6 +18,12 @@ export interface AutomationTimerHost {
 
 /** Largest delay that Node timers represent without clamping. */
 export const MAX_TIMER_DELAY_MS = 2_147_483_647
+/**
+ * Recheck wall-clock due rules at least this often while waiting.
+ * Sleeping the Host stretches setTimeout against a monotonic clock, so a
+ * long wait can miss a local-clock fire until the original delay elapses.
+ */
+export const MAX_WAIT_SLICE_MS = 60_000
 
 /** One process-local projection of the durable Automation rule table. */
 export class AutomationRuntime {
@@ -84,7 +90,7 @@ export class AutomationRuntime {
         const target = this.service.nextWakeAt(now)
         if (target === undefined)
           return
-        const delay = Math.min(Math.max(1, target - now), MAX_TIMER_DELAY_MS)
+        const delay = Math.min(Math.max(1, target - now), MAX_TIMER_DELAY_MS, MAX_WAIT_SLICE_MS)
         await this.wait(delay)
         continue
       }
@@ -101,7 +107,7 @@ export class AutomationRuntime {
         this.timer = undefined
         resolve()
       }, delay)
-      this.stop.promise.then(() => {
+      void this.stop.promise.then(() => {
         this.clearTimer()
         resolve()
       }, () => undefined)
