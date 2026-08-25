@@ -20,7 +20,7 @@ The owning Host halves register three schemas: optional `locale.preference` (`zh
 
 User changes update the live service synchronously and queue a `settings.mutate` path operation through `scope.set`. The scope serializes gestures, sends the latest known namespace revision as `expectedRevision`, records every successful revision, and lets only the latest write settlement republish live state. A rejected or failed latest write reloads Host state. Disposal rejects new work, skips queued operations, suppresses publication by the in-flight operation, and waits for that operation to settle before the plugin reaches quiescence.
 
-A `--trusted-host` browser calls the same settings RPCs as loopback, so its preferences write `$DSH_HOME/settings.yaml`. An undeclared remote page cannot call those RPCs, so its preferences remain process-local. Native `settings.openDocument` and the credential plane stay loopback-only. Dynamic third-party theme ids remain in-process extensions outside the built-in Host schema; removing one resets the live registry without replacing the last durable built-in preference.
+A `--trusted-host` browser calls the same settings RPCs as loopback, so its preferences write `$DSH_HOME/settings.yaml`. The shared describe mirror uses host persistence on those pages as well; `isLoopback` only still gates native dialogs, credentials, and `settings.openDocument`. An undeclared remote page cannot call those RPCs, so its preferences remain process-local. Dynamic third-party theme ids remain in-process extensions outside the built-in Host schema; removing one resets the live registry without replacing the last durable built-in preference.
 
 ## Alternatives considered
 

@@ -49,10 +49,12 @@ export const inject = ['connection', 'remote']
 export function apply(ctx: ClientContext): void {
   const schema = new SettingsSchemaService(ctx)
   const connection = ctx.get('connection') as ConnectionHandle
-  const mirror = new SettingsDescribeMirror(
-    connection.api,
-    connection.isLoopback ? 'host' : 'memory',
-  )
+  // Host persistence for loopback and `--trusted-host` pages alike. Settings
+  // describe/mutate are admitted on a declared authority; keying this off
+  // `isLoopback` would leave a LAN phone with no document and the Models
+  // page reporting "settings are unavailable in this browser". Memory mode
+  // stays for explicit compositions and tests.
+  const mirror = new SettingsDescribeMirror(connection.api)
   ctx.effect(() => {
     const disposers = [
       (ctx.get('remote') as ClientContext['remote']).$on('settings/document-updated', () => { void mirror.load() }),

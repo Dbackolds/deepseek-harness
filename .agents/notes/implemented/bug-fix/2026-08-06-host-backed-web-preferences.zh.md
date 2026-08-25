@@ -20,7 +20,7 @@ Web 的 Appearance、Language 和繁忙态 Enter 偏好原本存在浏览器 `lo
 
 用户变更会同步更新实时服务，并经 `scope.set` 将一项 `settings.mutate` 路径操作排入队列。scope 会串行处理手势，以最新已知 namespace revision 作为 `expectedRevision` 发送，记录每次成功写入的 revision，并且只允许最新写入的结算结果重新发布实时状态。最新写入被拒或失败时，scope 会重新加载 Host 状态。插件释放会拒绝新工作、跳过已排队操作、抑制运行中操作发布状态，并等待该操作结算后才让插件达到完全停稳。
 
-`--trusted-host` 浏览器与回环一样调用 settings RPC，因此其偏好写入 `$DSH_HOME/settings.yaml`。未声明的远程页面无法调用这些 RPC，因此其偏好仅保留在进程内。原生 `settings.openDocument` 与凭据面仍仅限回环。动态第三方主题 id 仍是内置 Host schema 之外的进程内扩展；移除其中一个会重置实时注册表，但不会替换上一个持久化的内置偏好。
+`--trusted-host` 浏览器与回环一样调用 settings RPC，因此其偏好写入 `$DSH_HOME/settings.yaml`。共享的 describe 镜像在这些页面上也使用 host 持久化；`isLoopback` 仍只约束原生对话框、凭据面和 `settings.openDocument`。未声明的远程页面无法调用这些 RPC，因此其偏好仅保留在进程内。动态第三方主题 id 仍是内置 Host schema 之外的进程内扩展；移除其中一个会重置实时注册表，但不会替换上一个持久化的内置偏好。
 
 ## 曾考虑的替代方案
 
