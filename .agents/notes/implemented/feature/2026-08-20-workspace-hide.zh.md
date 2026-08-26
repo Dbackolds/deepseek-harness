@@ -69,6 +69,7 @@ Status: implemented
 - 隐式新建会话使用当前 Workspace，即使它已隐藏；否则只用可见的 No Repo／最近的可见 Workspace。
 - 当前分组在已隐藏区内自动展开，可能在隐藏后立刻展开某一个 Workspace 的会话，以便仍能找到打开中的对话。
 - TUI 和其他非 Web 消费方会看到额外的列表字段，本交付中忽略它。
+- 自动隐藏空项目 Workspace 是另一套分组列表过滤，不写入本集合（[自动隐藏空工作区](2026-08-26-auto-hide-empty-workspaces.zh.md)）。
 
 ## 测试
 

@@ -16,6 +16,12 @@ export type SessionGroupBy = 'workspace' | 'flat'
 export type SessionOrderBy = 'manual' | 'updated'
 /** Whether Completed / Running / Abnormal / History headings fold the list. */
 export type SessionActivityLayout = 'folders' | 'inline'
+/**
+ * Whether empty project Workspaces stay in the grouped main list.
+ * Persist rehydrate is a whole-value JSON replace, so a missing field is not
+ * `'hide'`; every read treats only `'hide'` as Auto-hide.
+ */
+export type SessionEmptyWorkspaces = 'show' | 'hide'
 
 /** Workspace browser viewing state persisted across surface remounts and reloads. */
 type WorkspaceViewState = {
@@ -23,6 +29,11 @@ type WorkspaceViewState = {
   orderBy: SessionOrderBy
   /** Foldable status headings, or live work above idle rows with no headings. */
   activityLayout: SessionActivityLayout
+  /**
+   * Omit empty project Workspaces from the grouped main list when `'hide'`.
+   * A rehydrated v8 blob that omits this field is Always show.
+   */
+  emptyWorkspaces: SessionEmptyWorkspaces
   /** Explicit zero-or-five-session state keyed by Workspace group identity. */
   groupExpansion: Record<string, boolean>
   /** Shared editable order per Workspace group plus the browser-local flat-list account. */
@@ -43,6 +54,7 @@ type WorkspaceViewActions = {
   setGroupBy: (draft: WorkspaceViewState, mode: SessionGroupBy) => void
   setOrderBy: (draft: WorkspaceViewState, mode: SessionOrderBy) => void
   setActivityLayout: (draft: WorkspaceViewState, mode: SessionActivityLayout) => void
+  setEmptyWorkspaces: (draft: WorkspaceViewState, mode: SessionEmptyWorkspaces) => void
   setGroupExpanded: (draft: WorkspaceViewState, key: string, expanded: boolean) => void
   retainAccountKeys: (draft: WorkspaceViewState, workspaceKeys: readonly string[]) => void
   syncSessionOrderAccount: (
@@ -67,6 +79,7 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       groupBy: 'workspace',
       orderBy: 'updated',
       activityLayout: 'folders',
+      emptyWorkspaces: 'show',
       groupExpansion: {},
       sessionOrderByAccount: {},
       sessionUpdatedAtByAccount: {},
@@ -78,6 +91,7 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       setGroupBy: (d, mode: SessionGroupBy) => { d.groupBy = mode },
       setOrderBy: (d, mode: SessionOrderBy) => { d.orderBy = mode },
       setActivityLayout: (d, mode: SessionActivityLayout) => { d.activityLayout = mode },
+      setEmptyWorkspaces: (d, mode: SessionEmptyWorkspaces) => { d.emptyWorkspaces = mode },
       setGroupExpanded: (d, key: string, expanded: boolean) => { d.groupExpansion[key] = expanded },
       retainAccountKeys: (d, workspaceKeys: readonly string[]) => {
         const retained = new Set(workspaceKeys)

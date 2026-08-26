@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-21-sidebar-chat-bucket.md
-2026-08-21-sidebar-chat-bucket.md: afb2482dac28282b42290d02b5a5c4b20642d4ce
-2026-08-21-sidebar-chat-bucket.zh.md: 001cae4765a9ea9ad7fa1154fbf26503acff52c8
+2026-08-21-sidebar-chat-bucket.md: a27ef46971ab7023a6e801550ff8b9d36955c0a0
+2026-08-21-sidebar-chat-bucket.zh.md: 43db773a153b7cf8889503e04fe763ed449bb636

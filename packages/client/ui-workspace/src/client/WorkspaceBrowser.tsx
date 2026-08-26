@@ -25,7 +25,7 @@ import {
   partitionLiveIdle, partitionSessionActivity, sessionActivityBucket, HIDDEN_SECTION_KEY, UNGROUPED_KEY,
 } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
-import { FLAT_SESSION_ORDER_KEY, type SessionActivityLayout } from './stores.ts'
+import { FLAT_SESSION_ORDER_KEY, type SessionActivityLayout, type SessionEmptyWorkspaces } from './stores.ts'
 import { WorkspacePickFlow } from './WorkspacePicker.tsx'
 import css from './WorkspaceBrowser.module.css'
 
@@ -242,14 +242,17 @@ function nextSessionOrderAccount({
 
 /** Grouping and ordering menu; own open state so it resets with the wide chrome. */
 function ViewOptionsMenu({
-  groupBy, orderBy, activityLayout, onGroupPick, onOrderPick, onActivityLayoutPick, t,
+  groupBy, orderBy, activityLayout, emptyWorkspaces,
+  onGroupPick, onOrderPick, onActivityLayoutPick, onEmptyWorkspacesPick, t,
 }: {
   groupBy: 'workspace' | 'flat'
   orderBy: SessionOrderBy
   activityLayout: SessionActivityLayout
+  emptyWorkspaces: SessionEmptyWorkspaces
   onGroupPick: (mode: 'workspace' | 'flat') => void
   onOrderPick: (mode: SessionOrderBy) => void
   onActivityLayoutPick: (mode: SessionActivityLayout) => void
+  onEmptyWorkspacesPick: (mode: SessionEmptyWorkspaces) => void
   t: WorkspaceBrowserProps['t']
 }) {
   const [open, setOpen] = useState(false)
@@ -269,12 +272,23 @@ function ViewOptionsMenu({
         { type: 'label' as const, id: 'activity-layout', text: t('activityLayout.label') },
         { id: 'folders', label: t('activityLayout.folders') },
         { id: 'inline', label: t('activityLayout.inline') },
+        { type: 'separator' as const, id: 'empty-workspaces-separator' },
+        { type: 'label' as const, id: 'empty-workspaces', text: t('emptyWorkspaces.label') },
+        { id: 'empty-hide', label: t('emptyWorkspaces.hide') },
+        { id: 'empty-show', label: t('emptyWorkspaces.show') },
       ]}
-      selectedIds={[groupBy, orderBy, activityLayout]}
+      selectedIds={[
+        groupBy,
+        orderBy,
+        activityLayout,
+        emptyWorkspaces === 'hide' ? 'empty-hide' : 'empty-show',
+      ]}
       onSelect={(id) => {
         if (id === 'workspace' || id === 'flat') onGroupPick(id)
         else if (id === 'manual' || id === 'updated') onOrderPick(id)
         else if (id === 'folders' || id === 'inline') onActivityLayoutPick(id)
+        else if (id === 'empty-hide') onEmptyWorkspacesPick('hide')
+        else if (id === 'empty-show') onEmptyWorkspacesPick('show')
         setOpen(false)
       }}
       align="end"
@@ -349,6 +363,11 @@ type SessionTreeProps = Pick<
   setActivityExpanded: (key: string, expanded: boolean) => void
   /** Foldable status headings, or live work above idle rows. */
   activityLayout: SessionActivityLayout
+  /**
+   * Omit empty project Workspaces from the grouped main list when `'hide'`.
+   * Anything other than `'hide'` is Always show.
+   */
+  emptyWorkspaces: SessionEmptyWorkspaces
   /** Registry-global archive set (hidden rows). */
   archivedSessionIds: readonly SessionNode['id'][]
   /** Registry-global hidden Workspace set. */
@@ -385,7 +404,7 @@ function SessionTree({
   onRenameRequest, onHideRequest, onShowRequest, onDeleteRequest, onAddFolderRequest, onRemoveFolderRequest,
   onSessionRename, onSessionArchive,
   onSessionPin, onSessionUnpin, insertWorkspaceBefore, insertSessionBefore, markUnread, openPath, openSplit,
-  pinnedSessionIds, orderBy, activityLayout,
+  pinnedSessionIds, orderBy, activityLayout, emptyWorkspaces,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   activityExpansion, setActivityExpanded, home, t,
@@ -415,11 +434,6 @@ function SessionTree({
       hiddenWorkspaceSet.has(workspace.workspaceId) && !isNoRepoWorkspace(workspace)
         ? [...workspace.sessionIds]
         : []),
-    [hiddenWorkspaceSet, workspaces],
-  )
-  const visibleWorkspaces = useMemo(
-    () => workspaces.filter(workspace =>
-      !hiddenWorkspaceSet.has(workspace.workspaceId) && !isNoRepoWorkspace(workspace)),
     [hiddenWorkspaceSet, workspaces],
   )
   const chatWorkspace = useMemo(
@@ -493,11 +507,21 @@ function SessionTree({
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }, hiddenWorkspaceIds).map(group => ({
+    }, hiddenWorkspaceIds, emptyWorkspaces).map(group => ({
       ...group,
       sessions: group.sessions.filter(session => !pinned.has(session.id)),
     }))
-  }, [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount, pinnedSessionIds, hiddenWorkspaceIds])
+  }, [
+    list, orderedWorkspaces, archivedSessionIds, expandedGroups,
+    sessionOrderByAccount, pinnedSessionIds, hiddenWorkspaceIds, emptyWorkspaces,
+  ])
+  const visibleWorkspaces = useMemo(
+    () => groups.flatMap(group =>
+      group.key === UNGROUPED_KEY || group.workspaceId === undefined
+        ? []
+        : [{ workspaceId: group.workspaceId }]),
+    [groups],
+  )
   const hiddenGroups = useMemo(
     () => deriveHiddenGroups(list, orderedWorkspaces, archivedSessionIds, { expandedGroups }, hiddenWorkspaceIds),
     [list, orderedWorkspaces, archivedSessionIds, expandedGroups, hiddenWorkspaceIds],
@@ -1501,6 +1525,7 @@ export function WorkspaceBrowser({
   const groupBy = useStore(s => s.groupBy)
   const orderBy = useStore(s => s.orderBy)
   const activityLayout = useStore(s => s.activityLayout)
+  const emptyWorkspaces = useStore(s => s.emptyWorkspaces === 'hide' ? 'hide' : 'show')
   const groupExpansion = useStore(s => s.groupExpansion)
   const sessionOrderByAccount = useStore(s => s.sessionOrderByAccount)
   const sessionUpdatedAtByAccount = useStore(s => s.sessionUpdatedAtByAccount)
@@ -1827,9 +1852,11 @@ export function WorkspaceBrowser({
               groupBy={groupBy}
               orderBy={orderBy}
               activityLayout={activityLayout}
+              emptyWorkspaces={emptyWorkspaces}
               onGroupPick={(mode) => { actions.setGroupBy(mode) }}
               onOrderPick={(mode) => { actions.setOrderBy(mode) }}
               onActivityLayoutPick={(mode) => { actions.setActivityLayout(mode) }}
+              onEmptyWorkspacesPick={(mode) => { actions.setEmptyWorkspaces(mode) }}
               t={t}
             />
           )}
@@ -1955,6 +1982,7 @@ export function WorkspaceBrowser({
                 activityExpansion={activityExpansion}
                 setActivityExpanded={actions.setActivityExpanded}
                 activityLayout={activityLayout}
+                emptyWorkspaces={emptyWorkspaces}
                 archivedSessionIds={archivedSessionIds}
                 hiddenWorkspaceIds={hiddenWorkspaceIds}
                 startSession={startSession}
