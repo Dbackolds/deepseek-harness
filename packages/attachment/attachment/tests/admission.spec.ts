@@ -1,13 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
-import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-import type { ImageAttachmentRef, SaveImageAttachment } from '@deepseek-ai/dsh-attachment/types'
+import { admitEncodedImages, admitEncodedVideos } from '@deepseek-ai/dsh-attachment'
+import type {
+  ImageAttachmentRef,
+  SaveImageAttachment,
+  SaveVideoAttachment,
+  VideoAttachmentRef,
+} from '@deepseek-ai/dsh-attachment/types'
 
 const PNG = 'AAAA' // canonical base64, 3 bytes
+const MP4 = 'QUJD' // canonical base64, 3 bytes; the double only records and replays
 
-/** Delegation double: records the exact saveImages batch and answers ordered refs. */
+/** Delegation double: records the exact save batch and answers ordered refs. */
 function storeOf() {
   const store = {
+    saveVideos: vi.fn((inputs: readonly SaveVideoAttachment[]) => Promise.resolve(inputs.map((input, index): VideoAttachmentRef => ({
+      attachmentId: `att-${index + 1}` as VideoAttachmentRef['attachmentId'],
+      mediaType: input.mediaType,
+      bytes: input.data.byteLength,
+      ...input.name === undefined ? {} : { name: input.name },
+    })))),
     saveImages: vi.fn((inputs: readonly SaveImageAttachment[]) => Promise.resolve(inputs.map((input, index): ImageAttachmentRef => ({
       attachmentId: `att-${index + 1}` as ImageAttachmentRef['attachmentId'],
       mediaType: input.mediaType,
@@ -62,5 +74,50 @@ describe('admitEncodedImages', () => {
     const refused = Object.assign(new Error('Image batch exceeds the configured image-count limit.'), { code: 'TOO_MANY_IMAGES' })
     mocks.saveImages.mockRejectedValueOnce(refused)
     await expect(admitEncodedImages(store, [{ mediaType: 'image/png', data: PNG }])).rejects.toBe(refused)
+  })
+})
+
+describe('admitEncodedVideos', () => {
+  it('decodes every member and delegates one ordered batch to saveVideos', async () => {
+    const { store, mocks } = storeOf()
+    const refs = await admitEncodedVideos(store, [
+      { mediaType: 'video/mp4', data: MP4, name: 'first.mp4' },
+      { mediaType: 'video/x-matroska', data: MP4, name: 'second.mkv' },
+    ])
+    expect(mocks.saveVideos).toHaveBeenCalledTimes(1)
+    const batch = mocks.saveVideos.mock.calls[0]?.[0] as readonly SaveVideoAttachment[]
+    expect(batch.map(input => [input.name, input.mediaType, input.data.byteLength]))
+      .toEqual([['first.mp4', 'video/mp4', 3], ['second.mkv', 'video/x-matroska', 3]])
+    expect(refs.map(ref => ref.attachmentId)).toEqual(['att-1', 'att-2'])
+  })
+
+  it('omits the name from store inputs when the upload has none', async () => {
+    const { store, mocks } = storeOf()
+    const refs = await admitEncodedVideos(store, [{ mediaType: 'video/quicktime', data: MP4 }])
+    const batch = mocks.saveVideos.mock.calls[0]?.[0] as readonly SaveVideoAttachment[]
+    expect('name' in (batch[0] as object)).toBe(false)
+    expect(refs[0]?.name).toBeUndefined()
+  })
+
+  it('delegates an empty batch unchanged', async () => {
+    const { store, mocks } = storeOf()
+    await expect(admitEncodedVideos(store, [])).resolves.toEqual([])
+    expect(mocks.saveVideos).toHaveBeenCalledWith([])
+  })
+
+  it('rejects non-canonical and empty base64 payloads before any store call', async () => {
+    const { store, mocks } = storeOf()
+    for (const data of ['', 'AAA', '!!!!']) {
+      await expect(admitEncodedVideos(store, [{ mediaType: 'video/mp4', data }]))
+        .rejects.toMatchObject({ name: 'AttachmentError', code: 'INVALID_VIDEO' })
+    }
+    expect(mocks.saveVideos).not.toHaveBeenCalled()
+  })
+
+  it('propagates the store batch rejection unchanged', async () => {
+    const { store, mocks } = storeOf()
+    const refused = Object.assign(new Error('Video batch exceeds the configured video-count limit.'), { code: 'TOO_MANY_VIDEOS' })
+    mocks.saveVideos.mockRejectedValueOnce(refused)
+    await expect(admitEncodedVideos(store, [{ mediaType: 'video/mp4', data: MP4 }])).rejects.toBe(refused)
   })
 })

@@ -18,6 +18,13 @@ import { normalizeImage } from './normalization.ts'
 import type { NormalizationPolicy } from './normalization.ts'
 import { detectImage, probeImage } from './image.ts'
 import type { DetectedImage } from './image.ts'
+import { detectVideo } from './video.ts'
+import type {
+  SaveVideoAttachment,
+  StoredVideoAttachment,
+  VideoAttachmentLimits,
+  VideoAttachmentRef,
+} from '@deepseek-ai/dsh-attachment'
 
 const ID_PATTERN = /^sha256:([a-f0-9]{64})$/
 const durableHomes = new Set<string>()
@@ -40,7 +47,13 @@ function objectPath(root: string, sha256: string): string {
   return join(root, 'objects', sha256.slice(0, 2), sha256)
 }
 
-function ensureReference(ref: ImageAttachmentRef): string {
+/** Reference facts every prepared object carries for verification and publication. */
+interface PreparedRef {
+  readonly attachmentId: AttachmentId
+  readonly bytes: number
+}
+
+function ensureReference(ref: PreparedRef): string {
   const match = ID_PATTERN.exec(String(ref.attachmentId))
   if (match?.[1] === undefined) throw new AttachmentError('Attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')
   return match[1]
@@ -176,15 +189,19 @@ async function ensureDurableHome(path: string): Promise<string> {
 }
 
 /**
- * Publish one already verified normalized image below a versioned attachment root.
+ * Publish one already verified object below a versioned attachment root.
+ * Shared by every media family: the durability protocol is content-addressed
+ * and media-agnostic.
  * @param root - absolute `DSH_HOME/attachments/v1` root.
- * @param prepared - deterministic normalized bytes and reference.
- * @returns durable content-addressed normalized image reference.
+ * @param prepared - deterministic bytes and reference.
+ * @param persistFailureMessage - media-specific message for unexpected storage failures.
+ * @returns the durable reference of the published object.
  */
-export async function commitPreparedImageFile(
+async function publishPreparedObject<R extends PreparedRef>(
   root: string,
-  prepared: PreparedImageFile,
-): Promise<ImageAttachmentRef> {
+  prepared: { readonly data: Uint8Array; readonly ref: R },
+  persistFailureMessage: string,
+): Promise<R> {
   const normalized = prepared.data
   const sha256 = ensureReference(prepared.ref)
   if (digest(normalized) !== sha256 || normalized.byteLength !== prepared.ref.bytes) {
@@ -236,9 +253,22 @@ export async function commitPreparedImageFile(
       },
     )
     if (error instanceof AttachmentError) throw error
-    throw new AttachmentError('Unable to persist image attachment.', 'ATTACHMENT_WRITE_FAILED', { cause: error })
+    throw new AttachmentError(persistFailureMessage, 'ATTACHMENT_WRITE_FAILED', { cause: error })
   }
   return prepared.ref
+}
+
+/**
+ * Publish one already verified normalized image below a versioned attachment root.
+ * @param root - absolute `DSH_HOME/attachments/v1` root.
+ * @param prepared - deterministic normalized bytes and reference.
+ * @returns durable content-addressed normalized image reference.
+ */
+export async function commitPreparedImageFile(
+  root: string,
+  prepared: PreparedImageFile,
+): Promise<ImageAttachmentRef> {
+  return publishPreparedObject(root, prepared, 'Unable to persist image attachment.')
 }
 
 /**
@@ -259,6 +289,32 @@ export async function saveImageFile(
 }
 
 /**
+ * Read one content-addressed object, mapping absence and transport failures
+ * to stable storage errors while preserving cancellation.
+ * @param root - absolute `DSH_HOME/attachments/v1` root.
+ * @param sha256 - content digest naming the object.
+ * @param media - media family naming read failures.
+ * @param signal - optional cancellation for the filesystem read.
+ * @returns the stored bytes.
+ */
+async function readObjectBytes(
+  root: string,
+  sha256: string,
+  media: 'image' | 'video',
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  let data: Uint8Array
+  try {
+    data = new Uint8Array(await readFile(objectPath(root, sha256), { signal }))
+  } catch (error) {
+    signal?.throwIfAborted()
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') throw new AttachmentError('Attachment object is missing.', 'ATTACHMENT_NOT_FOUND')
+    throw new AttachmentError(`Unable to read ${media} attachment.`, 'ATTACHMENT_READ_FAILED', { cause: error })
+  }
+  return data
+}
+
+/**
  * Read and verify one content-addressed image.
  * @param root - absolute `DSH_HOME/attachments/v1` root.
  * @param ref - reference recorded in the session log.
@@ -273,14 +329,7 @@ export async function readImageFile(
 ): Promise<StoredImageAttachment> {
   signal?.throwIfAborted()
   const sha256 = ensureReference(ref)
-  let data: Uint8Array
-  try {
-    data = new Uint8Array(await readFile(objectPath(root, sha256), { signal }))
-  } catch (error) {
-    signal?.throwIfAborted()
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') throw new AttachmentError('Attachment object is missing.', 'ATTACHMENT_NOT_FOUND')
-    throw new AttachmentError('Unable to read image attachment.', 'ATTACHMENT_READ_FAILED', { cause: error })
-  }
+  const data = await readObjectBytes(root, sha256, 'image', signal)
   signal?.throwIfAborted()
   if (digest(data) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
   // The digest proves these are the exact bytes admission fully decoded, so
@@ -290,6 +339,118 @@ export async function readImageFile(
   signal?.throwIfAborted()
   if (metadata.mediaType !== ref.mediaType || data.byteLength !== ref.bytes
     || metadata.width !== ref.width || metadata.height !== ref.height) {
+    throw new AttachmentError('Stored attachment metadata does not match its reference.', 'ATTACHMENT_CORRUPT')
+  }
+  return { ref, data }
+}
+
+/** Fully prepared video object, verified before any batch member is persisted. */
+export interface PreparedVideoFile {
+  /** Exact submitted bytes whose digest is {@link ref.attachmentId}. */
+  data: Uint8Array
+  /** Durable reference describing {@link data}. */
+  ref: VideoAttachmentRef
+}
+
+/**
+ * Run the full admission policy for one video without touching storage:
+ * container sniff and byte caps. Version one stores submitted bytes
+ * untransformed, so unlike images a prepared batch cannot later be refused
+ * during publication.
+ * @param input - submitted bytes and declared media type.
+ * @param limits - resolved admission policy.
+ * @returns completion after the container header has been verified.
+ */
+export async function validateVideoFile(
+  input: SaveVideoAttachment,
+  limits: VideoAttachmentLimits,
+): Promise<void> {
+  await prepareVideoFile(input, limits)
+}
+
+/**
+ * Sniff, cap-check, and verify one submitted video without touching storage.
+ * Async to mirror prepareImageFile's admission contract for batch callers;
+ * container sniffing itself is synchronous and needs no await.
+ * @param input - submitted bytes and declared media type.
+ * @param limits - resolved admission policy.
+ * @returns immutable reference facts beside the exact bytes ready for atomic publication.
+ */
+// oxlint-disable-next-line typescript/require-await
+export async function prepareVideoFile(
+  input: SaveVideoAttachment,
+  limits: VideoAttachmentLimits,
+): Promise<PreparedVideoFile> {
+  if (input.data.byteLength === 0) throw new AttachmentError('Video is empty.', 'INVALID_VIDEO')
+  if (input.data.byteLength > limits.maxVideoBytes) {
+    throw new AttachmentError('Video exceeds the configured byte limit.', 'VIDEO_TOO_LARGE')
+  }
+  const mediaType = detectVideo(input.data)
+  if (mediaType !== input.mediaType) throw new AttachmentError('Declared video type does not match its bytes.', 'INVALID_VIDEO')
+  const sha256 = digest(input.data)
+  const name = displayName(input.name)
+  return {
+    data: input.data,
+    ref: {
+      attachmentId: AttachmentId(`sha256:${sha256}`),
+      mediaType: input.mediaType,
+      bytes: input.data.byteLength,
+      ...(name !== undefined ? { name } : {}),
+    },
+  }
+}
+
+/**
+ * Publish one already verified video below a versioned attachment root.
+ * @param root - absolute `DSH_HOME/attachments/v1` root.
+ * @param prepared - verified bytes and reference.
+ * @returns durable content-addressed video reference.
+ */
+export async function commitPreparedVideoFile(
+  root: string,
+  prepared: PreparedVideoFile,
+): Promise<VideoAttachmentRef> {
+  return publishPreparedObject(root, prepared, 'Unable to persist video attachment.')
+}
+
+/**
+ * Sniff and verify one video once, then publish the prepared object.
+ * @param root - absolute `DSH_HOME/attachments/v1` root.
+ * @param input - submitted bytes and declared media type.
+ * @param limits - resolved admission policy.
+ * @returns durable content-addressed video reference.
+ */
+export async function saveVideoFile(
+  root: string,
+  input: SaveVideoAttachment,
+  limits: VideoAttachmentLimits,
+): Promise<VideoAttachmentRef> {
+  return commitPreparedVideoFile(root, await prepareVideoFile(input, limits))
+}
+
+/**
+ * Read and verify one content-addressed video.
+ * @param root - absolute `DSH_HOME/attachments/v1` root.
+ * @param ref - reference recorded in the session log.
+ * @param signal - optional cancellation for filesystem and verification work.
+ * @returns verified bytes and reference.
+ * @throws the signal reason when aborted, or an AttachmentError when verification fails.
+ */
+export async function readVideoFile(
+  root: string,
+  ref: VideoAttachmentRef,
+  signal?: AbortSignal,
+): Promise<StoredVideoAttachment> {
+  signal?.throwIfAborted()
+  const sha256 = ensureReference(ref)
+  const data = await readObjectBytes(root, sha256, 'video', signal)
+  signal?.throwIfAborted()
+  if (digest(data) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+  // The digest proves these are the exact bytes admission sniffed, so the
+  // read path only re-derives the container header.
+  const mediaType = detectVideo(data)
+  signal?.throwIfAborted()
+  if (mediaType !== ref.mediaType || data.byteLength !== ref.bytes) {
     throw new AttachmentError('Stored attachment metadata does not match its reference.', 'ATTACHMENT_CORRUPT')
   }
   return { ref, data }

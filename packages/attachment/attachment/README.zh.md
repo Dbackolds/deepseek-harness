@@ -8,16 +8,19 @@
 
 `admitEncodedImages(attachments, images)` 是每个接受浏览器上传的 RPC 端点（会话 prompt 端点与命令执行器）共用的 wire 入口：它对每个成员强制执行规范 base64，随后把批量准入——限额、校验、有序提交——委托给 `saveImages`。base64 上传形式为 `EncodedImageAttachment`，从 `@deepseek-ai/dsh-attachment/types` 导出，供 wire 契约引用。
 
+视频经由同一服务边界以未变换形式存储。`VideoAttachmentRef` 记录嗅探得到的容器类型、字节长度与净化后的名称；`validateVideo`、`saveVideos`、`saveVideo`、`readVideo` 与图片侧一一对应，`videoLimits` 约束单视频、数量与总字节数准入。不支持视频的后端保留默认的零准入策略，因此每个视频操作都以调用方可修正的 `UNSUPPORTED_VIDEO_TYPE` 失败，`readVideoRequest` 默认返回 `ATTACHMENT_PROJECTION_UNSUPPORTED`。`admitEncodedVideos` 与 `admitEncodedImages` 对应，`isVideoAdmissionError` 在运行时识别视频准入子集（`TOO_MANY_VIDEOS`、`VIDEOS_TOO_LARGE`、`UNSUPPORTED_VIDEO_TYPE`、`INVALID_VIDEO`、`VIDEO_TOO_LARGE`）。
+
 ## 模型体验
 
-该包通过角色无关的核心 `ImageBlock`，以及把持久引用解析为确定请求版本的提供方适配器，间接影响模型。请求描述会公开完整附件 ID 和实际请求尺寸。
+该包通过角色无关的核心 `ImageBlock`，以及把持久引用解析为确定请求版本的提供方适配器，间接影响模型。请求描述会公开完整附件 ID 和实际请求尺寸。视频块直接引用已存储字节；请求版本是原始直通形式 `raw-v1`。
 
 #### KV 缓存影响
 
-添加图片会改变提供方请求，因此会使受影响的请求后缀失效。
+添加图片或视频会改变提供方请求，因此会使受影响的请求后缀失效。
 
 ## 已知限制与待完成工作
 
-- 第一版仅接受 PNG、JPEG、WebP 和 GIF。
+- 第一版仅接受 PNG、JPEG、WebP、GIF 图片与 MP4、Matroska、QuickTime 视频容器。
+- 视频以字节一致的方式存储与回放：不做转码、时长或分辨率探测，WebM 在准入时被拒绝。
 - 保留策略与垃圾回收尚未实现，因为恢复和 fork 后的会话可能共享不可变对象。
-- 通用文件、音频、视频和持久的未发送草稿需要单独的生命周期与提供方契约。
+- 通用文件、音频和持久的未发送草稿需要单独的生命周期与提供方契约。
