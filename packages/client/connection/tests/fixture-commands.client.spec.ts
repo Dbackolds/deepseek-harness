@@ -108,6 +108,33 @@ describe('createFixtureApi commands/skills', () => {
     ])
   })
 
+  it('refuses a video-carrying execute for every command with a logged error pair', async () => {
+    const { api, rpc } = createFixtureFaces()
+    const frames: unknown[] = []
+    const abort = new AbortController()
+    const stream = api.events.mux(req({}), abort.signal)
+    const pump = (async () => {
+      for await (const frame of stream) {
+        frames.push(frame.payload)
+        if (frames.filter(f => (f as { type: string }).type === 'session/event').length >= 2) abort.abort()
+      }
+    })()
+    const mp4 = { mediaType: 'video/mp4', data: 'AA==' }
+    // Even the image-declaring producers refuse video: no command declares it.
+    const refused = await callRemote<{ commandId: string; result: { kind: string; text?: string } } | undefined>(
+      rpc, 'commands/execute', { agentId: sid('fx-alpha'), line: '/goal ship it', videos: [mp4] })
+    expect(refused?.commandId).toBeTruthy()
+    expect(refused?.result).toEqual({ kind: 'error', text: '/goal does not accept video attachments' })
+    await pump
+    const events = frames
+      .filter((f): f is { type: string; event: { type: string; data: Record<string, unknown> } } => (f as { type: string }).type === 'session/event')
+      .map(f => f.event)
+    expect(events).toMatchObject([
+      { type: 'command/run', data: { name: 'goal', args: ' ship it', source: { kind: 'user' } } },
+      { type: 'command/done', data: { kind: 'error', text: '/goal does not accept video attachments' } },
+    ])
+  })
+
   it('a declaring command accepts an image-carrying execute', async () => {
     const { rpc } = createFixtureFaces()
     const png = { mediaType: 'image/png', data: 'AA==' }

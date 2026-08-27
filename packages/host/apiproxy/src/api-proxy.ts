@@ -13,8 +13,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
-import { AttachmentError, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import { AttachmentError, admitEncodedImages, admitEncodedVideos } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
@@ -103,7 +103,7 @@ import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-a
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { approvalResponsePayloadSchema } from './api/approvals.schema.ts'
-import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema } from './api/sessions.schema.ts'
+import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema, videoLimitsProjectionSchema } from './api/sessions.schema.ts'
 import { questionResponsePayloadSchema } from './api/questions.schema.ts'
 import type { ClientResponse, RpcError, RpcReceipt, RpcRequest, RpcResponse } from './api/rpc.ts'
 import { RpcId } from './api/rpc.ts'
@@ -167,31 +167,48 @@ function mergeQueueEditText(
   return merged
 }
 
-/** Validate one prompt as a batch before publishing any durable image object. */
+/** Validate one prompt as a batch before publishing any durable image or video object. */
 async function durablePromptContent(ctx: Context, content: readonly PromptContentPart[]): Promise<ContentBlock[]> {
   if (content.every(part => part.type === 'text')) {
     return content.map(part => ({ type: 'text', text: part.text }))
   }
-  const refs = await admitEncodedImages(ctx.attachments, content.filter(part => part.type === 'image'))
-  let next = 0
+  // Each kind admits only when its batch is non-empty: an image-only prompt
+  // never couples to the deployment's video limits, and vice versa.
+  const images = content.filter(part => part.type === 'image')
+  const videos = content.filter(part => part.type === 'video')
+  const [imageRefs, videoRefs] = await Promise.all([
+    images.length > 0 ? admitEncodedImages(ctx.attachments, images) : [],
+    videos.length > 0 ? admitEncodedVideos(ctx.attachments, videos) : [],
+  ])
+  let nextImage = 0
+  let nextVideo = 0
   return content.map(part => part.type === 'text'
     ? { type: 'text', text: part.text }
-    // admitEncodedImages returns one reference per image part in order.
-    : { type: 'image', attachment: refs[next++] as ImageAttachmentRef })
+    // Each admission returns one reference per submitted part, in order.
+    : part.type === 'image'
+      ? { type: 'image', attachment: imageRefs[nextImage++] as ImageAttachmentRef }
+      : { type: 'video', attachment: videoRefs[nextVideo++] as VideoAttachmentRef })
 }
 
-/** Search durable content for an image reference, including nested tool results. */
-function imageBlockIn(content: unknown, match: (ref: ImageAttachmentRef) => boolean): ImageAttachmentRef | undefined {
+/** Durable attachment reference kinds the session-log authorization walker recognizes. */
+type AttachmentBlockRef = ImageAttachmentRef | VideoAttachmentRef
+
+/** Search durable content for one attachment reference, including nested tool results. */
+function attachmentBlockIn<R extends AttachmentBlockRef>(
+  content: unknown,
+  tag: 'image' | 'video',
+  match: (ref: R) => boolean,
+): R | undefined {
   if (!Array.isArray(content)) return undefined
   for (const value of content) {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) continue
     const block = value as { type?: unknown; attachment?: unknown; content?: unknown }
-    if (block.type === 'image' && typeof block.attachment === 'object' && block.attachment !== null) {
-      const ref = block.attachment as ImageAttachmentRef
+    if (block.type === tag && typeof block.attachment === 'object' && block.attachment !== null) {
+      const ref = block.attachment as R
       if (match(ref)) return ref
     }
     if (block.type === 'tool-result') {
-      const nested = imageBlockIn(block.content, match)
+      const nested = attachmentBlockIn<R>(block.content, tag, match)
       if (nested !== undefined) return nested
     }
   }
@@ -199,35 +216,48 @@ function imageBlockIn(content: unknown, match: (ref: ImageAttachmentRef) => bool
 }
 
 /** Search every durable event carrier that can own model-visible content. */
-function imageInEvent(event: SessionEvent, match: (ref: ImageAttachmentRef) => boolean): ImageAttachmentRef | undefined {
+function attachmentInEvent<R extends AttachmentBlockRef>(
+  event: SessionEvent,
+  tag: 'image' | 'video',
+  match: (ref: R) => boolean,
+): R | undefined {
   const data = event.data as {
     content?: unknown
     message?: { content?: unknown }
     inserted?: Array<{ content?: unknown }>
     chunk?: { type?: unknown; block?: unknown }
   }
-  const direct = imageBlockIn(data.content, match)
+  const direct = attachmentBlockIn<R>(data.content, tag, match)
   if (direct !== undefined) return direct
   if (data.message !== undefined) {
-    const wrapped = imageBlockIn(data.message.content, match)
+    const wrapped = attachmentBlockIn<R>(data.message.content, tag, match)
     if (wrapped !== undefined) return wrapped
   }
   if (data.inserted !== undefined) {
     for (const message of data.inserted) {
-      const inserted = imageBlockIn(message.content, match)
+      const inserted = attachmentBlockIn<R>(message.content, tag, match)
       if (inserted !== undefined) return inserted
     }
   }
   if (event.type === 'assistant/chunk' && data.chunk?.type === 'block-end') {
-    return imageBlockIn([data.chunk.block], match)
+    return attachmentBlockIn<R>([data.chunk.block], tag, match)
   }
   return undefined
 }
 
-/** Resolve the first reference matching one opaque id. */
+/** Resolve the first image reference matching one opaque id. */
 function referencedImage(events: readonly SessionEvent[], attachmentId: string): ImageAttachmentRef | undefined {
   for (const event of events) {
-    const found = imageInEvent(event, ref => String(ref.attachmentId) === attachmentId)
+    const found = attachmentInEvent<ImageAttachmentRef>(event, 'image', ref => String(ref.attachmentId) === attachmentId)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
+/** Resolve the first video reference matching one opaque id. */
+function referencedVideo(events: readonly SessionEvent[], attachmentId: string): VideoAttachmentRef | undefined {
+  for (const event of events) {
+    const found = attachmentInEvent<VideoAttachmentRef>(event, 'video', ref => String(ref.attachmentId) === attachmentId)
     if (found !== undefined) return found
   }
   return undefined
@@ -1148,12 +1178,16 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   const pendingQuestions = new Map<RpcId, PendingQuestion>()
   const pendingApprovals = new Map<RpcId, PendingApproval>()
   const muxQueues = new Set<FrameQueue<RpcRequest<MuxFrame>>>()
-  const imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
+  const attachmentAdmissionChains = new WeakMap<Agent, Promise<void>>()
 
-  /** Serialize image admission with model selection for one agent. */
-  function serializeImageAdmission<T>(agent: Agent, operation: () => Promise<T>): Promise<T> {
-    const result = (imageAdmissionChains.get(agent) ?? Promise.resolve()).then(operation)
-    imageAdmissionChains.set(agent, result.then(() => undefined, () => undefined))
+  /**
+   * Serialize attachment admission (image or video) with model selection for
+   * one agent: a prompt admitting attachments and a model switch contend for
+   * the same admission gate, so they share one chain per agent.
+   */
+  function serializeAttachmentAdmission<T>(agent: Agent, operation: () => Promise<T>): Promise<T> {
+    const result = (attachmentAdmissionChains.get(agent) ?? Promise.resolve()).then(operation)
+    attachmentAdmissionChains.set(agent, result.then(() => undefined, () => undefined))
     return result
   }
 
@@ -1338,6 +1372,21 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       init: () => null,
       apply: state => state,
       wire: { viewSchema: imageLimitsProjectionSchema, view: () => projectionCtx.attachments.imageLimits },
+      stateVersion: 1,
+    })
+  })
+
+  // The videoLimits projection unit mirrors imageLimits with the attachments
+  // service's video config, under the same boot-constant regime and the same
+  // composition condition. imageLimits is untouched; the two units register
+  // independently so a deployment-level view of either stays complete.
+  ctx.inject(['sessionProjections', 'attachments'], (projectionCtx) => {
+    projectionCtx.sessionProjections.register<'videoLimits', null>({
+      key: 'videoLimits',
+      stateSchema: zod.null(),
+      init: () => null,
+      apply: state => state,
+      wire: { viewSchema: videoLimitsProjectionSchema, view: () => projectionCtx.attachments.videoLimits },
       stateVersion: 1,
     })
   })
@@ -2354,7 +2403,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const { sessionId, provider, model, reasoningEffort } = request.payload
         const found = await agentFor(sessionId)
         if ('error' in found) return err(request, found.error)
-        return serializeImageAdmission(found.agent, async () => {
+        return serializeAttachmentAdmission(found.agent, async () => {
           try {
             const resolved = await ctx.llm.resolveCallConfig({
               provider,
@@ -2638,6 +2687,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           ...(canonicalTimeZone === undefined ? {} : { clientTimeZone: canonicalTimeZone }),
         }
         const hasImage = content.some(part => part.type === 'image')
+        const hasVideo = content.some(part => part.type === 'video')
         const admit = async (): Promise<RpcResponse<{ accepted: true }>> => {
           try {
             if (hasImage) {
@@ -2648,6 +2698,17 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
                   code: 'attachment-error',
                   message: `Model "${current.model}" does not support image input.`,
                   details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+                })
+              }
+            }
+            if (hasVideo) {
+              const current = selectionFor(agent).current
+              const modelInfo = await ctx.llm.resolveModelInfo(current.provider, current.model)
+              if (modelInfo.inputModalities !== undefined && !modelInfo.inputModalities.includes('video')) {
+                return err(request, {
+                  code: 'attachment-error',
+                  message: `Model "${current.model}" does not support video input.`,
+                  details: { reason: 'MODEL_DOES_NOT_SUPPORT_VIDEOS' },
                 })
               }
             }
@@ -2678,7 +2739,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           }
           return ok(request, { accepted: true as const })
         }
-        return hasImage ? serializeImageAdmission(agent, admit) : admit()
+        return (hasImage || hasVideo) ? serializeAttachmentAdmission(agent, admit) : admit()
       },
 
       async prompt(request) {
@@ -2703,6 +2764,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           ...(canonicalTimeZone === undefined ? {} : { clientTimeZone: canonicalTimeZone }),
         }
         const hasImage = content.some(part => part.type === 'image')
+        const hasVideo = content.some(part => part.type === 'video')
         const admit = async (): Promise<RpcResponse<{ accepted: true }>> => {
           try {
             if (hasImage) {
@@ -2713,6 +2775,17 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
                   code: 'attachment-error',
                   message: `Model "${current.model}" does not support image input.`,
                   details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+                })
+              }
+            }
+            if (hasVideo) {
+              const current = selectionFor(agent).current
+              const modelInfo = await ctx.llm.resolveModelInfo(current.provider, current.model)
+              if (modelInfo.inputModalities !== undefined && !modelInfo.inputModalities.includes('video')) {
+                return err(request, {
+                  code: 'attachment-error',
+                  message: `Model "${current.model}" does not support video input.`,
+                  details: { reason: 'MODEL_DOES_NOT_SUPPORT_VIDEOS' },
                 })
               }
             }
@@ -2736,7 +2809,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           }
           return ok(request, { accepted: true as const })
         }
-        return hasImage ? serializeImageAdmission(agent, admit) : admit()
+        return (hasImage || hasVideo) ? serializeAttachmentAdmission(agent, admit) : admit()
       },
 
       async attachment(request) {
@@ -2758,34 +2831,59 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: {},
           })
         }
-        const ref = referencedImage(state.events, String(attachmentId))
-        if (ref === undefined) {
-          return err(request, {
-            code: 'attachment-error',
-            message: 'Image is not referenced by this session.',
-            details: { reason: 'ATTACHMENT_NOT_REFERENCED' },
-          })
-        }
-        try {
-          const stored = await ctx.attachments.readImage(ref)
-          return ok(request, {
-            attachment: stored.ref,
-            data: Buffer.from(stored.data).toString('base64'),
-          })
-        } catch (error: unknown) {
-          if (error instanceof AttachmentError) {
+        // The id names no kind: authorization walks the image carriers first,
+        // then the video carriers, and the miss error stays kind-neutral.
+        const image = referencedImage(state.events, String(attachmentId))
+        if (image !== undefined) {
+          try {
+            const stored = await ctx.attachments.readImage(image)
+            return ok(request, {
+              attachment: stored.ref,
+              data: Buffer.from(stored.data).toString('base64'),
+            })
+          } catch (error: unknown) {
+            if (error instanceof AttachmentError) {
+              return err(request, {
+                code: 'attachment-error',
+                message: error.message,
+                details: { reason: error.code },
+              })
+            }
             return err(request, {
-              code: 'attachment-error',
-              message: error.message,
-              details: { reason: error.code },
+              code: 'internal',
+              message: 'Unable to read image attachment.',
+              details: {},
             })
           }
-          return err(request, {
-            code: 'internal',
-            message: 'Unable to read image attachment.',
-            details: {},
-          })
         }
+        const video = referencedVideo(state.events, String(attachmentId))
+        if (video !== undefined) {
+          try {
+            const stored = await ctx.attachments.readVideo(video)
+            return ok(request, {
+              attachment: stored.ref,
+              data: Buffer.from(stored.data).toString('base64'),
+            })
+          } catch (error: unknown) {
+            if (error instanceof AttachmentError) {
+              return err(request, {
+                code: 'attachment-error',
+                message: error.message,
+                details: { reason: error.code },
+              })
+            }
+            return err(request, {
+              code: 'internal',
+              message: 'Unable to read video attachment.',
+              details: {},
+            })
+          }
+        }
+        return err(request, {
+          code: 'attachment-error',
+          message: 'Attachment is not referenced by this session.',
+          details: { reason: 'ATTACHMENT_NOT_REFERENCED' },
+        })
       },
 
       updateQueue(request) {

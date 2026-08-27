@@ -129,6 +129,14 @@ function registerTextOnly(ctx: Context): void {
   }('Text Only', []))
 }
 
+function registerNoVideo(ctx: Context): void {
+  ctx.llm.registerAdapter(['no-video'], new class extends CatalogAdapter {
+    override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+      return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
+    }
+  }('No Video', []))
+}
+
 describe('Web session model selection', () => {
   it('validates an ordered image batch before persisting any member', async () => {
     const { ctx, agent, sessionId } = await harness()
@@ -279,6 +287,215 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it('validates an ordered video batch before persisting any member', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const validateVideo = vi.fn((_input: { data: Uint8Array }) => Promise.resolve())
+    const saveVideo = vi.fn((input: { data: Uint8Array; mediaType: 'video/mp4' | 'video/x-matroska'; name?: string }) => Promise.resolve({
+      attachmentId: `att-v-${String(input.data[0])}`,
+      mediaType: input.mediaType,
+      bytes: input.data.byteLength,
+      ...input.name === undefined ? {} : { name: input.name },
+    }))
+    const attachments = {
+      imageLimits: {
+        maxImageBytes: 4,
+        maxImagesPerMessage: 2,
+        maxMessageImageBytes: 4,
+        maxImagePixels: 4,
+        maxImageDimension: 2000,
+        mediaTypes: ['image/png'],
+      },
+      videoLimits: {
+        maxVideoBytes: 4,
+        maxVideosPerMessage: 2,
+        maxMessageVideoBytes: 4,
+        mediaTypes: ['video/mp4', 'video/x-matroska'],
+      },
+      validateVideo,
+      saveVideo,
+    }
+    ctx.provide('attachments', Object.setPrototypeOf(attachments, AttachmentStore.prototype) as never)
+    const followup = vi.fn()
+    Object.assign(agent, { followup })
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+
+    const result = await api.sessions.prompt(request({
+      sessionId,
+      mode: 'queue' as const,
+      content: [
+        { type: 'video' as const, mediaType: 'video/mp4' as const, data: 'AQ==', name: 'clip.mp4' },
+        { type: 'text' as const, text: 'describe' },
+        { type: 'video' as const, mediaType: 'video/x-matroska' as const, data: 'Ag==' },
+      ],
+    }))
+    expect(result.result.ok).toBe(true)
+    expect(validateVideo.mock.calls.map(([input]) => [...input.data])).toEqual([[1], [2]])
+    expect(saveVideo.mock.calls.map(([input]) => [...input.data])).toEqual([[1], [2]])
+    expect((followup.mock.calls[0]?.[0] as UserMessage).content).toEqual([
+      {
+        type: 'video',
+        attachment: {
+          attachmentId: 'att-v-1', mediaType: 'video/mp4', bytes: 1, name: 'clip.mp4',
+        },
+      },
+      { type: 'text', text: 'describe' },
+      { type: 'video', attachment: { attachmentId: 'att-v-2', mediaType: 'video/x-matroska', bytes: 1 } },
+    ])
+
+    const denied = await api.sessions.prompt(request({
+      sessionId,
+      mode: 'queue' as const,
+      content: Array.from({ length: 3 }, () => ({
+        type: 'video' as const, mediaType: 'video/mp4' as const, data: 'AQ==',
+      })),
+    }))
+    expect(denied.result).toMatchObject({
+      ok: false,
+      error: { code: 'attachment-error', details: { reason: 'TOO_MANY_VIDEOS' } },
+    })
+    expect(saveVideo).toHaveBeenCalledTimes(2)
+    await ctx.fiber.dispose()
+  })
+
+  it('refuses a video prompt for a model without video input and admits it after a switch', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    registerNoVideo(ctx)
+    const saveVideo = vi.fn((input: { data: Uint8Array }) => Promise.resolve({
+      attachmentId: 'att-v-gate', mediaType: 'video/mp4' as const, bytes: input.data.byteLength,
+    }))
+    const attachments = {
+      imageLimits: {
+        maxImageBytes: 4,
+        maxImagesPerMessage: 2,
+        maxMessageImageBytes: 4,
+        maxImagePixels: 4,
+        maxImageDimension: 2000,
+        mediaTypes: ['image/png'],
+      },
+      videoLimits: {
+        maxVideoBytes: 4,
+        maxVideosPerMessage: 2,
+        maxMessageVideoBytes: 4,
+        mediaTypes: ['video/mp4'],
+      },
+      validateVideo: () => Promise.resolve(),
+      saveVideo,
+    }
+    ctx.provide('attachments', Object.setPrototypeOf(attachments, AttachmentStore.prototype) as never)
+    const followup = vi.fn()
+    Object.assign(agent, { followup })
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+
+    expectValue(await api.sessions.selectModel(request({ sessionId, provider: 'no-video', model: 'sight' })))
+    const refused = await api.sessions.prompt(request({
+      sessionId,
+      mode: 'queue' as const,
+      content: [
+        { type: 'video' as const, mediaType: 'video/mp4' as const, data: 'AQ==' },
+        { type: 'text' as const, text: 'describe' },
+      ],
+    }))
+    expect(refused.result).toMatchObject({
+      ok: false,
+      error: { code: 'attachment-error', details: { reason: 'MODEL_DOES_NOT_SUPPORT_VIDEOS' } },
+    })
+    expect(saveVideo).not.toHaveBeenCalled()
+    expect(followup).not.toHaveBeenCalled()
+
+    expectValue(await api.sessions.selectModel(request({
+      sessionId, provider: 'deepseek-official', model: 'deepseek-chat',
+    })))
+    const accepted = await api.sessions.prompt(request({
+      sessionId,
+      mode: 'queue' as const,
+      content: [
+        { type: 'video' as const, mediaType: 'video/mp4' as const, data: 'AQ==' },
+        { type: 'text' as const, text: 'describe' },
+      ],
+    }))
+    expect(accepted.result).toEqual({ ok: true, value: { accepted: true } })
+    expect((followup.mock.calls[0]?.[0] as UserMessage).content).toEqual([
+      { type: 'video', attachment: { attachmentId: 'att-v-gate', mediaType: 'video/mp4', bytes: 1 } },
+      { type: 'text', text: 'describe' },
+    ])
+    await ctx.fiber.dispose()
+  })
+
+  it('rewrites a settled prompt with a new video after the model admits it', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const continueFromSurface = vi.fn()
+    Object.assign(agent, {
+      status: 'idle',
+      continueFromSurface,
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    agent.session.append('user/message', {
+      id: 'orig-video', role: 'user', source: { kind: 'user' },
+      content: [{ type: 'text', text: 'orig' }],
+    } as never, { surfaceOp: 'append' })
+    const atSeq = agent.session.events.find(event => event.type === 'user/message')?.seq
+    if (atSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const saveVideo = vi.fn((input: { data: Uint8Array }) => Promise.resolve({
+      attachmentId: 'att-v-rewrite', mediaType: 'video/mp4' as const, bytes: input.data.byteLength,
+    }))
+    const attachments = {
+      imageLimits: {
+        maxImageBytes: 4,
+        maxImagesPerMessage: 2,
+        maxMessageImageBytes: 4,
+        maxImagePixels: 4,
+        maxImageDimension: 2000,
+        mediaTypes: ['image/png'],
+      },
+      videoLimits: {
+        maxVideoBytes: 4,
+        maxVideosPerMessage: 2,
+        maxMessageVideoBytes: 4,
+        mediaTypes: ['video/mp4'],
+      },
+      validateVideo: () => Promise.resolve(),
+      saveVideo,
+    }
+    ctx.provide('attachments', Object.setPrototypeOf(attachments, AttachmentStore.prototype) as never)
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    registerTextOnly(ctx)
+    expectValue(await api.sessions.selectModel(request({ sessionId, provider: 'text-only', model: 'plain' })))
+    const textOnly = await api.sessions.rewrite(request({
+      sessionId,
+      atSeq,
+      content: [{ type: 'video' as const, mediaType: 'video/mp4' as const, data: 'AQ==' }],
+    }))
+    expect(textOnly.result).toMatchObject({
+      ok: false,
+      error: { code: 'attachment-error', details: { reason: 'MODEL_DOES_NOT_SUPPORT_VIDEOS' } },
+    })
+    expect(saveVideo).not.toHaveBeenCalled()
+    expectValue(await api.sessions.selectModel(request({
+      sessionId, provider: 'deepseek-official', model: 'deepseek-chat',
+    })))
+    const accepted = await api.sessions.rewrite(request({
+      sessionId,
+      atSeq,
+      content: [
+        { type: 'video' as const, mediaType: 'video/mp4' as const, data: 'AQ==' },
+        { type: 'text' as const, text: 'caption' },
+      ],
+    }))
+    expect(accepted.result).toEqual({ ok: true, value: { accepted: true } })
+    expect(continueFromSurface).toHaveBeenCalledTimes(1)
+    await ctx.fiber.dispose()
+  })
+
   it('allows a text-only selection while durable or pending images remain available for later models', async () => {
     const { ctx, agent, sessionId } = await harness()
     registerTextOnly(ctx)
@@ -319,7 +536,11 @@ describe('Web session model selection', () => {
       attachmentId: 'att-authorized', mediaType: 'image/png' as const, bytes: 2, width: 1, height: 1,
     }
     const readImage = vi.fn(() => Promise.resolve({ ref, data: Uint8Array.of(1, 2) }))
-    ctx.provide('attachments', { readImage } as never)
+    const videoRef = {
+      attachmentId: 'att-video', mediaType: 'video/mp4' as const, bytes: 3,
+    }
+    const readVideo = vi.fn(() => Promise.resolve({ ref: videoRef, data: Uint8Array.of(7, 8, 9) }))
+    ctx.provide('attachments', { readImage, readVideo } as never)
     const api = createApiProxy(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
@@ -332,11 +553,19 @@ describe('Web session model selection', () => {
         content: [{ type: 'image', attachment: ref }],
       }],
     } as never)
+    agent.session.append('user/message', {
+      id: 'queued-video', role: 'user', source: { kind: 'user' },
+      content: [{ type: 'video', attachment: videoRef }],
+    } as never, { surfaceOp: 'append' })
 
     const allowed = await api.sessions.attachment(request({
       sessionId, attachmentId: 'att-authorized' as never,
     }))
     expect(allowed.result).toMatchObject({ ok: true, value: { attachment: ref, data: 'AQI=' } })
+    const video = await api.sessions.attachment(request({
+      sessionId, attachmentId: 'att-video' as never,
+    }))
+    expect(video.result).toMatchObject({ ok: true, value: { attachment: videoRef, data: 'BwgJ' } })
     const denied = await api.sessions.attachment(request({
       sessionId, attachmentId: 'att-other' as never,
     }))
@@ -345,6 +574,33 @@ describe('Web session model selection', () => {
       error: { code: 'attachment-error', details: { reason: 'ATTACHMENT_NOT_REFERENCED' } },
     })
     expect(readImage).toHaveBeenCalledOnce()
+    expect(readVideo).toHaveBeenCalledOnce()
+    await ctx.fiber.dispose()
+  })
+
+  it('reports a video read failure without leaking storage details', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const videoRef = {
+      attachmentId: 'att-video-fail', mediaType: 'video/mp4' as const, bytes: 1,
+    }
+    const readVideo = vi.fn(() => Promise.reject(new Error('disk sector gone')))
+    ctx.provide('attachments', { readVideo } as never)
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    agent.session.append('user/message', {
+      id: 'failed-video', role: 'user', source: { kind: 'user' },
+      content: [{ type: 'video', attachment: videoRef }],
+    } as never, { surfaceOp: 'append' })
+
+    const failed = await api.sessions.attachment(request({
+      sessionId, attachmentId: 'att-video-fail' as never,
+    }))
+    expect(failed.result).toMatchObject({
+      ok: false,
+      error: { code: 'internal', message: 'Unable to read video attachment.' },
+    })
     await ctx.fiber.dispose()
   })
   it('groups successful providers and leaves an unlisted current selection out of the catalog', async () => {

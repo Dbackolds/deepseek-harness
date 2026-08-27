@@ -112,8 +112,15 @@ describe('session.history projections block', () => {
       maxImageDimension: 2000,
       mediaTypes: ['image/png'] as const,
     }
+    const videoLimits = {
+      maxVideoBytes: 100 * 1024 * 1024,
+      maxVideosPerMessage: 2,
+      maxMessageVideoBytes: 200 * 1024 * 1024,
+      mediaTypes: ['video/mp4', 'video/x-matroska', 'video/quicktime'] as const,
+    }
     await ctx.plugin(class extends AttachmentStore {
       readonly imageLimits = limits
+      override readonly videoLimits = videoLimits
       validateImage(): Promise<void> { return Promise.resolve() }
       saveImage(): Promise<never> { return Promise.reject(new Error('unused')) }
       readImage(): Promise<never> { return Promise.reject(new Error('unused')) }
@@ -123,6 +130,8 @@ describe('session.history projections block', () => {
     const response = await gateway.sessions.history(request({ sessionId: session.id }))
     if (!response.result.ok) throw new Error('history failed')
     expect(response.result.value.projections?.values['imageLimits']).toEqual(limits)
+    // The video mirror publishes under its own key beside imageLimits.
+    expect(response.result.value.projections?.values['videoLimits']).toEqual(videoLimits)
     // Constant unit: appending events must never broadcast an imageLimits frame.
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
@@ -137,6 +146,7 @@ describe('session.history projections block', () => {
     seedMessages(session, 1)
     await drained
     expect(frames.some(f => f.type === 'session/projection' && f.key === 'imageLimits')).toBe(false)
+    expect(frames.some(f => f.type === 'session/projection' && f.key === 'videoLimits')).toBe(false)
   })
 
   it('leaves the imageLimits key absent while no attachment service is composed', async () => {
@@ -146,6 +156,7 @@ describe('session.history projections block', () => {
     if (!response.result.ok) throw new Error('history failed')
     expect(response.result.value.projections).toBeDefined()
     expect('imageLimits' in (response.result.value.projections?.values ?? {})).toBe(false)
+    expect('videoLimits' in (response.result.value.projections?.values ?? {})).toBe(false)
   })
 
   it('never carries the block on loadOlder pages (beforeSeq present)', async () => {

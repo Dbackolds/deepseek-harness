@@ -5,7 +5,10 @@
  */
 
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
-import type { AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type {
+  AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
+  VideoAttachmentLimits, VideoAttachmentRef, VideoMediaType,
+} from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 // The pure-type outlet: api/ is browser-importable, and the package root's
@@ -19,6 +22,7 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     sessionListMetadata: SessionListMetadata
     imageLimits: null
+    videoLimits: null
   }
   interface SessionProjectionMap {
     /**
@@ -36,6 +40,13 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
      * composed — clients skip the pre-check and let the host answer.
      */
     imageLimits: ImageAttachmentLimits
+    /**
+     * The deployment's video-intake limits, mirroring {@link imageLimits}:
+     * the attachments service's video config as this proxy enforces it at
+     * prompt admission, constant per host boot. Key absence means no
+     * attachment service is composed.
+     */
+    videoLimits: VideoAttachmentLimits
   }
 }
 
@@ -89,10 +100,11 @@ export interface SessionProjectionsBlock {
   values: Partial<SessionProjectionMap>
 }
 
-/** Browser-submitted prompt content; the host promotes image bytes to durable references. */
+/** Browser-submitted prompt content; the host promotes image and video bytes to durable references. */
 export type PromptContentPart =
   | { type: 'text'; text: string }
   | { type: 'image'; mediaType: ImageMediaType; data: string; name?: string }
+  | { type: 'video'; mediaType: VideoMediaType; data: string; name?: string }
 
 /** Complete model selection for one session. */
 export interface ModelSelection {
@@ -380,11 +392,11 @@ export interface SessionsApi {
   Promise<RpcResponse<{ accepted: true }>>
 
   /**
-   * Sends text and temporary image bytes to an ordinary session Agent after durable host admission.
-   * Browser callers attach their current IANA zone;
-   * the Host validates, canonicalizes, and records it on that exact user message. Omission remains
-   * valid for non-browser callers. Session-backed subagents reject with `agent-busy` and use
-   * `subagent.prompt`.
+   * Sends text and temporary image or video bytes to an ordinary session Agent
+   * after durable host admission. Browser callers attach their current IANA
+   * zone; the Host validates, canonicalizes, and records it on that exact user
+   * message. Omission remains valid for non-browser callers. Session-backed
+   * subagents reject with `agent-busy` and use `subagent.prompt`.
    */
   prompt(request: RpcRequest<{
     sessionId: SessionId
@@ -394,9 +406,9 @@ export interface SessionsApi {
   }>):
   Promise<RpcResponse<{ accepted: true; command?: { kind: 'success'; text?: string } }>>
 
-  /** Reads one durable image after proving that this session's log references its id. */
+  /** Reads one durable image or video after proving that this session's log references its id. */
   attachment(request: RpcRequest<{ sessionId: SessionId; attachmentId: AttachmentIdType }>):
-  Promise<RpcResponse<{ attachment: ImageAttachmentRef; data: string }>>
+  Promise<RpcResponse<{ attachment: ImageAttachmentRef | VideoAttachmentRef; data: string }>>
 
   /**
    * Edits, removes, reorders, or strictly steers one pending queued occurrence on an ordinary session.

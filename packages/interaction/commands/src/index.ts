@@ -6,7 +6,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { AttachmentError, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-import type { EncodedImageAttachment } from '@deepseek-ai/dsh-attachment/types'
+import type { EncodedImageAttachment, EncodedVideoAttachment } from '@deepseek-ai/dsh-attachment/types'
 import type { ImageBlock } from '@deepseek-ai/dsh-llm'
 import { NamedEntries, ScopedLayers } from '@deepseek-ai/dsh-scope'
 import type { ScopeKey, ScopeLayer } from '@deepseek-ai/dsh-scope'
@@ -316,11 +316,15 @@ export class CommandRuntime extends TypertRemoteService {
    * command that does not declare `input.images`, an absent attachment store,
    * and an exceeded attachment limit each settle as an error result before
    * the handler runs, and a rejected batch publishes no durable object.
+   * Videos settle the same way, unconditionally: no command declares video
+   * input, so every submitted video is refused before any admission work.
    *
    * @param agent - exact receiving agent.
    * @param line - complete slash-command line.
    * @param images - base64-encoded composer images accompanying the line, in
    *   submission order; empty for a plain invocation.
+   * @param videos - base64-encoded composer videos accompanying the line, in
+   *   submission order; every non-empty batch is refused as an error result.
    * @param signal - cancellation signal owned by the UI request.
    * @returns the settled execution (result + lifecycle pairing id), or
    *   `undefined` when syntax or name does not resolve.
@@ -330,6 +334,7 @@ export class CommandRuntime extends TypertRemoteService {
     agent: Agent,
     line: string,
     images: readonly EncodedImageAttachment[],
+    videos: readonly EncodedVideoAttachment[],
     signal: AbortSignal,
   ): Promise<CommandExecution | undefined> {
     const parsed = parseCommand(line)
@@ -353,6 +358,9 @@ export class CommandRuntime extends TypertRemoteService {
           : {},
       })
       return Object.freeze({ commandId, result: Object.freeze(result) })
+    }
+    if (videos.length > 0) {
+      return settle({ kind: 'error', text: `/${parsed.name} does not accept video attachments` })
     }
     let attachments: readonly ImageBlock[] = NO_ATTACHMENTS
     if (images.length > 0) {
