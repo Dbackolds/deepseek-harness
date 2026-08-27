@@ -428,7 +428,8 @@ export interface PiAiCompatProfile {
   /**
    * Whether the endpoint accepts the `developer` role for the system prompt,
    * which pi-ai sends only to a reasoning model; `false` keeps `system`.
-   * `openai-completions` and the three Responses protocols.
+   * `openai-completions` and the three Responses protocols. Naming
+   * `thinkingFormat: zai` without this switch fills `false`.
    */
   supportsDeveloperRole?: boolean
   /** Whether the endpoint accepts `reasoning_effort`; `openai-completions`. */
@@ -863,7 +864,15 @@ function resolveModelCompat(
   // model starts from pi-ai's baseURL-derived detection instead, which is
   // what a protocol change means for every other compat field too.
   const inherited = base?.api === api ? base.compat : undefined
-  return { compat: { ...inherited, ...configured } as ModelCompat }
+  const merged = { ...inherited, ...configured } as Record<string, unknown>
+  // Official zai catalog entries always refuse `developer`. A private URL
+  // still detects as OpenAI, so a profile that names only `thinkingFormat:
+  // zai` would otherwise leave the system prompt on that role. Fill `false`
+  // only when no layer named the switch; an explicit `true` still wins.
+  if (merged.thinkingFormat === 'zai' && merged.supportsDeveloperRole === undefined) {
+    merged.supportsDeveloperRole = false
+  }
+  return { compat: merged as ModelCompat }
 }
 
 /** One route's materialized catalog, plus the request caps its profile chose. */

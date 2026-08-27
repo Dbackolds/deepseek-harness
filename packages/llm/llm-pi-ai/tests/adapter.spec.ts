@@ -819,6 +819,36 @@ describe('provider profile lifecycle', () => {
     expect(await roles('acme-guess')).toEqual(['developer'])
   })
 
+  it('keeps the system role when a reasoning model names only the zai thinking format', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          models: [{
+            id: 'glm-flash',
+            reasoningEfforts: { off: null, max: 'max' },
+            compat: { thinkingFormat: 'zai', supportsReasoningEffort: true },
+          }],
+        },
+      },
+    })
+    await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'glm-flash',
+      reasoningEffort: ReasoningEffortId('max'),
+      system: 'you are a harness',
+      messages: [],
+    })
+    const request = server.requests.at(-1) as { messages: { role: string }[] }
+    expect(request.messages.map(message => message.role)).toEqual(['system'])
+  })
+
   it('sends a declared off value as the effort parameter instead of omitting it', async () => {
     vi.stubEnv('PI_TEST_KEY', 'test-key')
     const server = await mockServer([{ events: textEvents }])

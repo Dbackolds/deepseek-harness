@@ -22,6 +22,8 @@ pi-ai 依据提供方 id 与 baseURL 决定每个请求的形状——系统提�
 
 三类 `compat` 键在其被写下之处遭到拒绝而非丢弃：没有任何协议声明的键、被门禁扣留的键，以及完全没有写值的键。该检查在任何协议解析之前遍历全部键，因此即便路由上的模型永远不会走到那个本会接受它的协议，笔误同样失败。它刻意读取原始键：被扣留或未声明的名字不在 schema 中，所以 schemastery 不可能物化它，写下它的必然是人。无值那一类是必须失败而不能忽略的：schemastery 会把 YAML 裸键放行为 null，照单收下就会用 null 写覆盖已安装 catalog 的值，随后 pi-ai 的 `??` 转而去够它的 baseURL 检测，catalog 这一层被整个跳过。随后再单独过滤携带值的字段，因为 schemastery 会把缺省的 dict 物化成 `{}`，于是无论有没有人写过，`chatTemplateKwargs` 都出现在每一个解析过的 profile 上。
 
+只写 `thinkingFormat: zai` 而不写 `supportsDeveloperRole` 时，物化会填入 `false`。官方 zai catalog 条目拒绝该角色；私有 URL 仍被检测为 OpenAI，因此只点名 zai 思考格式的 profile 否则会把推理模型的系统提示词留在 `developer` 上。显式写 `true` 仍然胜出。
+
 ## Where a refusal lands
 
 所有检查都在 `resolveProfiles` 中运行，而请求路径不会重新进入它：适配器按原始快照的标识 memoize，且 `apply` 会主动预先解析一次。因此一次拒绝会以 `settings-rejected` 的形式在落盘之前抵达 `settings.mutate`，以插件挂载失败的形式抵达 `cordis.yml` 的 `config:` 块，以 `settings.register` 启动失败的形式抵达已存的 section。

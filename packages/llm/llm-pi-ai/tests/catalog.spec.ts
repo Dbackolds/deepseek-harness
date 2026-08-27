@@ -945,6 +945,45 @@ describe('compat switches', () => {
     })
   })
 
+  it('fills supportsDeveloperRole false when a hand-declared model names only the zai thinking format', () => {
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        models: [{
+          id: 'glm-flash',
+          reasoningEfforts: { off: null, max: 'max' },
+          compat: { thinkingFormat: 'zai', supportsReasoningEffort: true },
+        }],
+      },
+    }, 'acme-gateway')
+
+    expect(models.get('glm-flash')?.compat).toEqual({
+      thinkingFormat: 'zai',
+      supportsReasoningEffort: true,
+      supportsDeveloperRole: false,
+    })
+  })
+
+  it('keeps an explicit developer-role switch beside thinkingFormat zai', () => {
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        models: [{
+          id: 'glm-dev',
+          reasoningEfforts: { off: null, max: 'max' },
+          compat: { thinkingFormat: 'zai', supportsDeveloperRole: true },
+        }],
+      },
+    }, 'acme-gateway')
+
+    expect(models.get('glm-dev')?.compat).toEqual({
+      thinkingFormat: 'zai',
+      supportsDeveloperRole: true,
+    })
+  })
+
   it('carries a switch both OpenAI protocols declare onto an openai-responses route', () => {
     const models = modelsOf({
       'acme-responses': {
