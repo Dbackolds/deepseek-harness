@@ -3,7 +3,7 @@
  * discovered skill, including built-in providers.
  */
 
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -34,11 +34,11 @@ export const inject = ['slots', 'locale', 'connection']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-skills: dictionaries')
 
-  const { api } = ctx.get('connection') as ConnectionHandle
+  const api = ctx.remote
   const t = ctx.locale.bind(NS)
   const list: SkillsSectionInjected['list'] = async () => {
-    const { result } = await api.skills.catalog({})
-    if (!result.ok) throw new Error(`skill.catalog failed: ${result.error.code}: ${result.error.message}`)
+    const result = await api.skills.list({ sessionId: '' as never })
+    if (!result.ok) throw new Error(`skills.list failed: ${result.error.code}: ${result.error.message}`)
     return result.value.skills
   }
   const injected = (): SkillsSectionInjected => ({ list })

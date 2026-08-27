@@ -88,7 +88,7 @@ function mountFrame() {
     return sel(sessionState)
   }) as never
   const workspaceState: WorkspaceSnapshot = {
-    items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+    items: [], archivedSessionIds: [], hiddenWorkspaceIds: [], state: 'idle', phase: 'ready', error: null,
     ...(workspacesReady.current ? {} : { state: 'loading' as const, phase: 'pending' as const }),
   }
   const element = () => (

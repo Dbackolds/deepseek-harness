@@ -62,11 +62,17 @@
  * leaves a FAILED fiber for the shell's status projection. Both log loudly.
  */
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { PluginsEventFrame } from '../events.ts'
-import { EVENTS_ENDPOINT, parsePluginsEventFrame } from '../events.ts'
+import { EVENTS_ENDPOINT, RELOAD_ENDPOINT, parsePluginsEventFrame } from '../events.ts'
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import { ReloadRow, type ReloadRowInjected } from './ReloadRow.tsx'
+import { en, zh, type HmrSettingsKey } from './locales.ts'
+import { ClientHmrReloadPolicy } from './reload-policy.ts'
+import { CLIENT_HMR_SETTINGS_NAMESPACE, type ClientHmrSettings } from '../hmr-settings.ts'
 
 export type { PluginsEventFrame } from '../events.ts'
 export { EVENTS_ENDPOINT, RELOAD_ENDPOINT } from '../events.ts'

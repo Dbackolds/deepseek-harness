@@ -140,10 +140,10 @@ export class SubagentsStore {
       state.error = null
     })
     try {
-      const settingsResponse = await this.api.settings.describe({})
+      const settingsResponse = await this.api.settings.describe()
       if (generation !== this.generation) return
-      if (!settingsResponse.result.ok) throw new Error(settingsResponse.result.error.message)
-      const view = settingsResponse.result.value.namespaces.find(entry => entry.ns === USER_SUBAGENTS_NS)
+      if (!settingsResponse.ok) throw new Error(settingsResponse.error.message)
+      const view = settingsResponse.value.namespaces.find(entry => entry.ns === USER_SUBAGENTS_NS)
       if (view === undefined) {
         this.view = undefined
         this.store.update((state) => {
@@ -153,7 +153,7 @@ export class SubagentsStore {
         })
         return
       }
-      this.accept(view, settingsResponse.result.value.writable)
+      this.accept(view, settingsResponse.value.writable)
     } catch (error) {
       if (generation !== this.generation) return
       this.fail(error)
@@ -325,14 +325,14 @@ export class SubagentsStore {
     }
     const generation = ++this.writeGeneration
     try {
-      const response = await this.api.settings.replace({
-        ns: USER_SUBAGENTS_NS,
-        section,
-        expectedRevision: view.revision,
-      })
+      const response = await this.api.settings.replace(
+        USER_SUBAGENTS_NS,
+        section as never,
+        view.revision,
+      )
       if (generation !== this.writeGeneration) return
-      if (!response.result.ok) throw new Error(response.result.error.message)
-      this.accept(response.result.value, this.store.getSnapshot().writable)
+      if (!response.ok) throw new Error(response.error.message)
+      this.accept(response.value, this.store.getSnapshot().writable)
       onSuccess?.()
     } catch (error) {
       /* v8 ignore next -- dispose() already bumped writeGeneration before the rejected replace settles */

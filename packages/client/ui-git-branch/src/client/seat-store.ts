@@ -12,7 +12,32 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** Host git.describe snapshot, mirrored locally so the chip stays off the host package. */
-type SessionGitView = Awaited<ReturnType<NonNullable<ClientRemote['git']>['describe']>>
+interface GitBranchView {
+  readonly name: string
+  readonly current: boolean
+  readonly remote: boolean
+}
+interface SessionGitView {
+  readonly currentBranch: string
+  readonly detached: boolean
+  readonly worktreePath: string
+  readonly isolated: boolean
+  readonly dirtyCount: number
+  readonly unpushedCount: number
+  readonly branches: readonly GitBranchView[]
+}
+function gitValue(response: unknown): SessionGitView {
+  const r = response as { ok?: boolean; value?: SessionGitView; result?: { ok: boolean; value: SessionGitView; error?: { code: string; message: string } } }
+  if (r.ok === true && r.value !== undefined) return r.value
+  if (r.result?.ok === true) return r.result.value
+  throw Object.assign(new Error('git.describe failed'), { response })
+}
+function gitError(response: unknown): { code: string; message: string } | undefined {
+  const r = response as { ok?: boolean; error?: { code: string; message: string }; result?: { ok: boolean; error?: { code: string; message: string } } }
+  if (r.ok === false) return r.error
+  if (r.result?.ok === false) return r.result.error
+  return undefined
+}
 
 /** Hero-chip snapshot. */
 export interface GitBranchSeatState {
@@ -113,23 +138,25 @@ export class GitBranchSeatController {
   ): Promise<void> {
     try {
       const response = await this.api.git.describe({
-        ...sessionId === undefined ? {} : { sessionId },
-        ...workspaceId === undefined ? {} : { workspaceId },
-      }, signal)
+        ...(sessionId !== undefined ? { sessionId } : {}),
+        ...(workspaceId !== undefined ? { workspaceId: workspaceId as never } : {}),
+      } as never)
+      void signal
       if (generation !== this.generation) return
-      if (!response.result.ok) {
-        const unavailable = response.result.error.code === 'git-not-a-repository'
+      const failure = gitError(response)
+      if (failure !== undefined) {
+        const unavailable = failure.code === 'git-not-a-repository'
         this.set({
           sessionId: sessionId ?? '',
           view: null,
           unavailable,
-          error: unavailable ? null : response.result.error.message,
+          error: unavailable ? null : failure.message,
         })
         return
       }
       this.set({
         sessionId: sessionId ?? '',
-        view: response.result.value,
+        view: gitValue(response),
         unavailable: false,
         error: null,
       })
@@ -165,13 +192,14 @@ export class GitBranchSeatController {
     this.set({ busy: true, error: null })
     try {
       const response = await run(sessionId)
-      if (!response.result.ok) {
-        this.set({ busy: false, error: response.result.error.message })
+      const failure = gitError(response)
+      if (failure !== undefined) {
+        this.set({ busy: false, error: failure.message })
         return
       }
       this.set({
         sessionId,
-        view: response.result.value,
+        view: gitValue(response),
         unavailable: false,
         error: null,
         busy: false,

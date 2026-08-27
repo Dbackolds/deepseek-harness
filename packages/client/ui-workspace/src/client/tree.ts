@@ -235,7 +235,7 @@ function groupByWorkspace(
       continue
     }
     groups.push(buildGroup(
-      workspace.workspaceId, workspace.workspaceId, workspace.path, workspace.folders,
+      workspace.workspaceId, workspace.workspaceId, workspace.path, workspace.folders ?? [],
       Date.parse(workspace.createdAt), workspace.title, members, 'account',
     ))
   }

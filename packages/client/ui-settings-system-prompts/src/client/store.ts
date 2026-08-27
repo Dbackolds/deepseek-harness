@@ -5,8 +5,11 @@
  */
 
 import type {
-  ClientRemote, ModelProviderGroup, RegisteredPromptSectionView, SettingsNamespaceView,
+  ClientRemote, SettingsNamespaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
+import type { SystemPromptSectionView } from '@deepseek-ai/dsh-api-settings-controller/types'
+
+type RegisteredPromptSectionView = SystemPromptSectionView
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** Settings namespace this page reads and writes. */
@@ -190,15 +193,6 @@ function asBindingRows(value: unknown): BindingRow[] {
   })
 }
 
-function catalogFrom(groups: readonly ModelProviderGroup[]): CatalogModel[] {
-  return groups.flatMap(group => group.models.map(model => ({
-    provider: group.id,
-    providerName: group.name,
-    model: model.id,
-    modelName: model.name,
-  })))
-}
-
 /** Controller joining Settings reads, writes, and the model catalog. */
 export class SystemPromptsStore {
   /** Page snapshot consumed through a bound selector hook. */
@@ -241,13 +235,13 @@ export class SystemPromptsStore {
     })
     try {
       const [settingsResponse, modelsResponse, sectionsResponse] = await Promise.all([
-        this.api.settings.describe({}),
-        this.api.llm.models({}),
-        this.api.systemPrompt.list({}),
+        this.api.settings.describe(),
+        this.api.llm.listProviders(),
+        this.api.systemPrompt.list(),
       ])
       if (generation !== this.generation) return
-      if (!settingsResponse.result.ok) throw new Error(settingsResponse.result.error.message)
-      const view = settingsResponse.result.value.namespaces.find(entry => entry.ns === USER_SYSTEM_PROMPTS_NS)
+      if (!settingsResponse.ok) throw new Error(settingsResponse.error.message)
+      const view = settingsResponse.value.namespaces.find(entry => entry.ns === USER_SYSTEM_PROMPTS_NS)
       if (view === undefined) {
         this.view = undefined
         this.store.update((state) => {
@@ -263,21 +257,21 @@ export class SystemPromptsStore {
       }
       let catalog: CatalogModel[] = []
       let catalogError: string | null = null
-      if (!modelsResponse.result.ok) {
-        catalogError = modelsResponse.result.error.message
+      if (!modelsResponse.ok) {
+        catalogError = modelsResponse.error.message
       } else {
-        catalog = catalogFrom(modelsResponse.result.value.groups)
+        catalog = (modelsResponse.value as readonly { id: string; name?: string }[]).map(p => ({ provider: p.id, providerName: p.name ?? p.id, model: p.id, modelName: p.name ?? p.id }))
       }
       let registered: readonly RegisteredPromptSectionView[] = []
       let builtInError: string | null = null
-      if (!sectionsResponse.result.ok) {
-        builtInError = sectionsResponse.result.error.message
+      if (!sectionsResponse.ok) {
+        builtInError = sectionsResponse.error.message
       } else {
-        registered = asRegisteredSections(sectionsResponse.result.value.sections)
+        registered = asRegisteredSections(sectionsResponse.value.sections)
       }
       this.accept(
         view,
-        settingsResponse.result.value.writable,
+        settingsResponse.value.writable,
         catalog,
         catalogError,
         registered,
@@ -525,16 +519,16 @@ export class SystemPromptsStore {
     // discard the replace result and leave the draft stuck on saving.
     const generation = ++this.writeGeneration
     try {
-      const response = await this.api.settings.replace({
-        ns: USER_SYSTEM_PROMPTS_NS,
-        section,
-        expectedRevision: view.revision,
-      })
+      const response = await this.api.settings.replace(
+        USER_SYSTEM_PROMPTS_NS,
+        section as never,
+        view.revision,
+      )
       if (generation !== this.writeGeneration) return
-      if (!response.result.ok) throw new Error(response.result.error.message)
+      if (!response.ok) throw new Error(response.error.message)
       const snapshot = this.store.getSnapshot()
       this.accept(
-        response.result.value,
+        response.value,
         snapshot.writable,
         snapshot.catalog,
         snapshot.catalogError,

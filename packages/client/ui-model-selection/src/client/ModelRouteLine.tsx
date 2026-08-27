@@ -53,7 +53,7 @@ export function ModelRouteLine({
   // is the fallback (a step whose message carried no source still names its
   // request). Neither share present → nothing to label.
   const identity = provenance ?? requestConfig
-  if (identity === undefined) return null
+  if (identity == null) return null
 
   const label = resolveRouteLabel(
     { groups }, identity.provider, identity.model, requestConfig?.reasoningEffort,

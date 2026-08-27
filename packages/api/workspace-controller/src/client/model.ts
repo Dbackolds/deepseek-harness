@@ -210,14 +210,14 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
 
   async hide(workspaceId: WorkspaceId): Promise<RemoteResult<{ hiddenWorkspaceIds: readonly WorkspaceId[] }>> {
     const result = await this.remote.hide({ workspaceId })
-    if (result.ok) this.installHidden(result.value.hiddenWorkspaceIds)
-    return result
+    if (result.ok) this.installHidden(result.value.hiddenWorkspaceIds ?? [])
+    return result as RemoteResult<{ hiddenWorkspaceIds: readonly WorkspaceId[] }>
   }
 
   async show(workspaceId: WorkspaceId): Promise<RemoteResult<{ hiddenWorkspaceIds: readonly WorkspaceId[] }>> {
     const result = await this.remote.show({ workspaceId })
-    if (result.ok) this.installHidden(result.value.hiddenWorkspaceIds)
-    return result
+    if (result.ok) this.installHidden(result.value.hiddenWorkspaceIds ?? [])
+    return result as RemoteResult<{ hiddenWorkspaceIds: readonly WorkspaceId[] }>
   }
   /**
    * Replace the projection from one complete stream-generation baseline.
@@ -227,7 +227,7 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     this.orderFrameGeneration++
     this.installViews(baseline.items)
     this.installArchived(baseline.archivedSessionIds)
-    this.installHidden(baseline.hiddenWorkspaceIds)
+    this.installHidden(baseline.hiddenWorkspaceIds ?? [])
     this.state = 'idle'
     this.phase = 'ready'
     this.error = null

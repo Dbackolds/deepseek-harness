@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { settingsSchema } from './settings-schema.client.ts'
-import {
-  assignModelKeyRefs, deriveKeyRef, deriveModelKeyRef, isPageManagedRef, messageOf, ModelsSettingsStore,
-} from '../src/client/store.ts'
+import { messageOf, ModelsSettingsStore } from '../src/client/store.ts'
 
 let nextRpc = 0
 function ok<T>(value: T): RpcResponse<T> {
@@ -356,35 +354,5 @@ describe('messageOf', () => {
     expect(messageOf(new Error('connection lost'))).toBe('connection lost')
     expect(messageOf('the host refused')).toBe('the host refused')
     expect(messageOf(undefined)).toBe('undefined')
-  })
-})
-
-describe('per-model credential references', () => {
-  it('derives a POSIX-safe per-model reference and recognizes page-managed names', () => {
-    expect(deriveKeyRef('acme-gateway')).toBe('ACME_GATEWAY_API_KEY')
-    expect(deriveModelKeyRef('acme-gateway', 'claude-sonnet')).toBe('ACME_GATEWAY_CLAUDE_SONNET_API_KEY')
-    expect(deriveModelKeyRef('acme', '4o')).toBe('ACME_M_4O_API_KEY')
-    expect(isPageManagedRef('acme', 'ACME_API_KEY')).toBe(true)
-    expect(isPageManagedRef('acme', 'ACME_CLAUDE_API_KEY')).toBe(true)
-    expect(isPageManagedRef('acme', 'CUSTOM_REF')).toBe(false)
-  })
-
-  it('shares one reference across models that type the same key', () => {
-    const { models, writes } = assignModelKeyRefs(
-      'acme',
-      [{ id: 'chat' }, { id: 'vision' }, { id: 'claude' }],
-      new Map([['chat', 'shared'], ['vision', 'shared'], ['claude', 'other']]),
-      'ACME_API_KEY',
-      'shared',
-    )
-    expect(models).toEqual([
-      { id: 'chat' },
-      { id: 'vision' },
-      { id: 'claude', apiKeyEnv: 'ACME_CLAUDE_API_KEY' },
-    ])
-    expect(writes).toEqual([
-      { ref: 'ACME_API_KEY', value: 'shared' },
-      { ref: 'ACME_CLAUDE_API_KEY', value: 'other' },
-    ])
   })
 })

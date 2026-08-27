@@ -173,3 +173,6 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
     for (const dispose of disposers.reverse()) await dispose()
   }
 }
+
+export type IApiClient = ClientRemote
+export type { SkillCatalogEntry } from '@deepseek-ai/dsh-api-session-controller/client'

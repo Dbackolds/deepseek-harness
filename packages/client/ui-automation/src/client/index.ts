@@ -6,7 +6,7 @@
  * preference.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -43,8 +43,7 @@ export const inject = ['slots', 'locale', 'connection', 'remote', 'sessions', 's
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-automation: dictionaries')
 
-  const connection = ctx.get('connection') as ConnectionHandle
-  const controller = new AutomationStore(connection.api, ctx.sessions)
+  const controller = new AutomationStore(ctx.remote, ctx.sessions as never)
   const keepAwake = new AutomationKeepAwakePolicy(
     ctx.settingsScope.bind<AutomationSettings>({ namespace: AUTOMATION_SETTINGS_NAMESPACE }),
   )
@@ -81,6 +80,6 @@ export function apply(ctx: ClientContext): void {
     name: 'shell.overlay',
     id: 'automation-page',
     locale: NS,
-    inject: injected,
-  }, AutomationPage))
+    inject: injected as never,
+  }, AutomationPage as never))
 }

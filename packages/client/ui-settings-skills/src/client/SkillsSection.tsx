@@ -110,15 +110,15 @@ export function SkillsSection({ list, t }: SkillsSectionProps): ReactNode {
               {filtered.map((skill) => {
                 const open = expanded === skill.name
                 const detailId = `${catalogId}-details-${encodeURIComponent(skill.name)}`
-                const origin = sourceLabel(skill.source, t)
+                const origin = sourceLabel((skill.source ?? ''), t)
                 const model = t(skill.modelInvocable ? 'modelYes' : 'modelNo')
-                const user = t(skill.userInvocable ? 'userYes' : 'userNo')
+                const user = t((skill.userInvocable === true) ? 'userYes' : 'userNo')
                 return (
                   <li
                     className={css.card}
                     key={`${skill.provider}:${skill.name}`}
                     data-skill-name={skill.name}
-                    data-skill-source={skill.source}
+                    data-skill-source={(skill.source ?? '')}
                     data-open={open ? 'true' : undefined}
                   >
                     <button
@@ -138,7 +138,7 @@ export function SkillsSection({ list, t }: SkillsSectionProps): ReactNode {
                       <span className={css.cardTrailing}>
                         <span
                           className={css.sourceTag}
-                          data-source={skill.source}
+                          data-source={(skill.source ?? '')}
                         >
                           {origin}
                         </span>

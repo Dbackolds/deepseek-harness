@@ -77,6 +77,8 @@ export interface SidebarBrandNameOwnerProps {
 export interface SidebarAutomationOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail). */
   wide: boolean
+  useWorkspaces?: any
+  useSessions?: any
 }
 
 export interface SidebarSectionOwnerProps {

@@ -14,6 +14,7 @@
  * created later through the host Settings API.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -111,7 +112,7 @@ export function apply(ctx: ClientContext): void {
   /* jscpd:ignore-end */
   const t = ctx.locale.bind(ACCESS_NS)
   const sessionFor = (session: ClientSessionContext): SessionFace | undefined =>
-    sessions.binding(session.sessionId)?.session
+    (sessions as unknown as ISessions).binding(session.sessionId)?.session
 
   ctx.effect(() => ctx.locale.register('settings.permission', { zh, en }), 'ui-permission: settings row dictionaries')
 

@@ -43,6 +43,7 @@ function fakeWorkspace(id: string, over: Partial<WorkspaceView> = {}): Workspace
   return {
     workspaceId: id as WorkspaceId,
     path: '/f/ws',
+    folders: [],
     title: 'ws',
     sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -232,6 +233,8 @@ export class FakeApiClient {
         ),
         rename: payload => this.remoteResult('session.rename', payload, this.onRename(payload)),
         fork: payload => this.remoteResult('session.fork', payload, this.onFork(payload)),
+        rehome: payload => this.remoteResult('session.rehome', payload, Promise.resolve(ok({ cwd: '/f/ws' } as never))),
+        rewrite: payload => this.remoteResult('session.rewrite', payload, Promise.resolve(ok({ accepted: true }))),
         prompt: payload => this.remoteResult('session.prompt', payload, this.onPrompt(payload)),
         attachment: payload => this.remoteResult('session.attachment', payload, this.onAttachment(payload)),
         updateQueue: payload => this.remoteResult('session.updateQueue', payload, this.onUpdateQueue(payload)),
@@ -277,6 +280,11 @@ export class FakeApiClient {
           payload,
           this.onWorkspaceArchiveSession(payload),
         ),
+        unarchiveSession: payload => this.record('workspace.unarchiveSession', payload, Promise.resolve(remoteOk({ archivedSessionIds: [] }))),
+        addFolder: payload => this.record('workspace.addFolder', payload, Promise.resolve(remoteOk({ workspace: fakeWorkspace('fk-ws') }))),
+        removeFolder: payload => this.record('workspace.removeFolder', payload, Promise.resolve(remoteOk({ workspace: fakeWorkspace('fk-ws') }))),
+        hide: payload => this.record('workspace.hide', payload, Promise.resolve(remoteOk({ hiddenWorkspaceIds: [] }))),
+        show: payload => this.record('workspace.show', payload, Promise.resolve(remoteOk({ hiddenWorkspaceIds: [] }))),
         follow: signal => this.openWorkspace(signal),
       },
     }

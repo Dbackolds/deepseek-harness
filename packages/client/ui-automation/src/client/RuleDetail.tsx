@@ -40,8 +40,8 @@ export function RuleDetail(props: {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | undefined>(undefined)
-  const runningIds = useSessions(snapshot => new Set(
-    Object.values(snapshot.byId).filter(session => session.running === true).map(session => session.id),
+  const runningIds = useSessions((snapshot: any) => new Set(
+    Object.values(snapshot.byId as Record<string, { running?: boolean; id: string }>).filter(session => session.running === true).map(session => session.id),
   ))
   const running = item.lastSessionId !== undefined && runningIds.has(item.lastSessionId)
   const act = (work: () => Promise<string | undefined>): void => {

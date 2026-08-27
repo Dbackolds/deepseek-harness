@@ -23,7 +23,7 @@ export interface WorkspaceView {
    * Additional canonical folders in durable add order. Never includes
    * {@link path}.
    */
-  readonly folders: readonly string[]
+  readonly folders?: readonly string[]
   /** User-visible title. */
   readonly title: string
   /** Sessions accounted to this Workspace in manual order. */
@@ -156,7 +156,7 @@ export interface WorkspaceHideRequest {
 export interface WorkspaceBaseline {
   readonly items: readonly WorkspaceView[]
   readonly archivedSessionIds: readonly SessionId[]
-  readonly hiddenWorkspaceIds: readonly WorkspaceId[]
+  readonly hiddenWorkspaceIds?: readonly WorkspaceId[]
 }
 
 /** One ordered Workspace change after a generation's baseline. */

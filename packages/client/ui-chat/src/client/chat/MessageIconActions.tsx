@@ -14,6 +14,7 @@ import css from './MessageIconActions.module.css'
 export interface MessageIconActionsProps {
   /** Plain text the copy action writes. */
   text: string
+  time?: number | undefined
   /** Turn wall time in ms, shown as `Ran for 15s`; omitted when the turn's start is unknown. */
   runMs?: number | undefined
   /** Turn first-step TTFT in ms, appended as `· TTFT 1.2s`; omitted when unrecorded. */
@@ -33,6 +34,7 @@ export interface MessageIconActionsProps {
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
   branchUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
+  clock?: 'start' | 'end'
   className?: string | undefined
   /**
    * Slot-rendered actions owned by independent plugins, placed between the
@@ -49,7 +51,7 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, runMs, ttftMs, tokensPerSecond, onEdit, onSaveEdit, onCancelEdit, saveDisabled = false,
+  text, time: _time, runMs, ttftMs, tokensPerSecond, clock: _clock, onEdit, onSaveEdit, onCancelEdit, saveDisabled = false,
   onBranch, branchUnavailable = false, className,
   extraActions, t,
 }: MessageIconActionsProps) {

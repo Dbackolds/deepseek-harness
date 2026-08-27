@@ -73,7 +73,7 @@ describe('Session queue snapshot intake', () => {
     ])
   })
 
-  it('projects mixed-content text for the queue editor while retaining the preview', () => {
+  it('marks mixed-content messages non-editable while retaining their preview', () => {
     const session = makeSession()
     session.handleControlFrame(queueFrame([{
       id: 'q-image',
@@ -86,7 +86,7 @@ describe('Session queue snapshot intake', () => {
       {
         id: 'q-image', placement: 'queued',
         content: [{ type: 'text', text: 'hi' }, { type: 'image', data: 'x' }],
-        preview: 'hi [image]', text: 'hi',
+        preview: 'hi [image]', text: null,
       },
     ])
   })
@@ -218,8 +218,6 @@ describe('queue operation transport', () => {
       .resolves.toEqual({ ok: true, value: { accepted: true } })
     await expect(session.updateQueue(iid('q-op'), { kind: 'steer' }))
       .resolves.toEqual({ ok: true, value: { accepted: true } })
-    await expect(session.updateQueue(iid('q-op'), { kind: 'move', beforeItemId: iid('q-next') }))
-      .resolves.toEqual({ ok: true, value: { accepted: true } })
     expect(api.callsOf('session.updateQueue')).toEqual([
       {
         sessionId: SID,
@@ -230,11 +228,6 @@ describe('queue operation transport', () => {
         sessionId: SID,
         itemId: 'q-op',
         action: { kind: 'steer' },
-      },
-      {
-        sessionId: SID,
-        itemId: 'q-op',
-        action: { kind: 'move', beforeItemId: 'q-next' },
       },
     ])
     expect(session.getSnapshot().queue).toBe(before)

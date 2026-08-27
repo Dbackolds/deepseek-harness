@@ -4,14 +4,15 @@
  * next list, pushed or refetched.
  */
 
-import type { ClientRemote, RpcResponse, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ClientRemote, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** Wire view of one Automation rule, as the list RPC returns it. */
 export type AutomationRuleView = Awaited<
   ReturnType<ClientRemote['automation']['list']>
-> extends RpcResponse<infer Value>
+> extends RemoteResult<infer Value>
   ? Value extends { items: readonly (infer Item)[] } ? Item : never
   : never
 
@@ -24,7 +25,7 @@ export type AutomationUpdateInput = Omit<Parameters<ClientRemote['automation']['
 /** One fire attempt as the listRuns RPC returns it. */
 export type AutomationRunView = Awaited<
   ReturnType<ClientRemote['automation']['listRuns']>
-> extends RpcResponse<infer Value>
+> extends RemoteResult<infer Value>
   ? Value extends { items: readonly (infer Item)[] } ? Item : never
   : never
 
@@ -70,9 +71,9 @@ export function messageOf(error: unknown): string {
  * @param response - the unary response.
  * @returns the success value.
  */
-function valueOf<T>(response: RpcResponse<T>): T {
-  if (!response.result.ok) throw new Error(response.result.error.message)
-  return response.result.value
+function valueOf<T>(response: RemoteResult<T>): T {
+  if (!response.ok) throw new Error(response.error.message)
+  return response.value
 }
 
 /** How long run-now waits for the started Session to appear in the list. */
@@ -126,7 +127,7 @@ export class AutomationStore {
       draft.error = null
     })
     try {
-      const value = valueOf(await this.api.automation.list({}))
+      const value = valueOf(await this.api.automation.list())
       if (generation !== this.loadGeneration) return
       const previousById = new Map(previous.items.map(item => [item.rule.id, item]))
       const items = value.items.map((rule) => {

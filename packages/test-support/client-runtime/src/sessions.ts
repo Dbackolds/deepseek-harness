@@ -137,6 +137,14 @@ export class FixtureSession implements SessionFace {
   }
 
   /**
+   * Fail-loud stub; supply `rewrite` on the fixture's session face to exercise it.
+   * @returns never — always throws.
+   */
+  rewrite(): never {
+    throw new Error(`test session "${this.sessionId}": rewrite is not stubbed — supply it on the fixture's session face`)
+  }
+
+  /**
    * Fail-loud stub; supply `command` on the fixture's session face to exercise it.
    * @returns never — always throws.
    */
@@ -190,7 +198,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'search' | 'fork'
+      | 'clear' | 'refresh' | 'search' | 'fork' | 'rewrite'
     args: unknown[]
   }[] = []
 
@@ -504,6 +512,10 @@ export class TestSessions implements ISessions {
    * @param opts - source session id, optional cut anchor, and client title policy.
    * @returns the source id (no child record is created).
    */
+  rewrite(): never {
+    throw new Error('test sessions: rewrite is not stubbed — supply it on the fixture face')
+  }
+
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId> {
     this.calls.push({ method: 'fork', args: [opts] })
     return Promise.resolve(opts.sessionId)

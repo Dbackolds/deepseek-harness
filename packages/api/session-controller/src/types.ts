@@ -243,6 +243,9 @@ export interface SkillListRequest {
 
 /** One skill available to the Session's human-facing composer. */
 export interface SkillEntry {
+  readonly source?: string
+  readonly provider?: string
+  readonly userInvocable?: boolean
   /** Kebab-case identifier referenced as `/name`. */
   readonly name: string
   /** Short routing description. */
@@ -607,8 +610,8 @@ export interface SessionGitView {
 
 /** Identify a Session or Workspace whose Git overlay should be described. */
 export interface GitDescribeRequest {
-  readonly sessionId?: SessionId
-  readonly workspaceId?: WorkspaceId
+  readonly sessionId?: SessionId | undefined
+  readonly workspaceId?: WorkspaceId | undefined
 }
 
 /** Checkout or create a named branch for one Session. */

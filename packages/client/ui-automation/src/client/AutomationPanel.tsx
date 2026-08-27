@@ -136,7 +136,7 @@ export function AutomationPage(props: AutomationPageProps): ReactNode {
   } = props
   const state = useAutomation(snapshot => snapshot)
   const keepAwake = useKeepAwake(value => value)
-  const workspaces = useWorkspaces(snapshot => snapshot.items)
+  const workspaces = useWorkspaces((snapshot: { items: unknown[] }) => snapshot.items)
   const wasOpen = useRef(false)
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 // Always-visible local clock for a chat message row.
 
-import { formatMessageClock } from './message-chrome.ts'
+import { formatMessageClock, type ClockTranslate } from './message-chrome.ts'
 import { useCalendarDay } from './use-calendar-day.ts'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import css from './MessageClock.module.css'
@@ -21,5 +21,5 @@ export function MessageClock({
 }) {
   const day = useCalendarDay()
   if (time === undefined) return null
-  return <time className={css.clock} dateTime={new Date(time).toISOString()}>{formatMessageClock(time, t, day)}</time>
+  return <time className={css.clock} dateTime={new Date(time).toISOString()}>{formatMessageClock(time, t as ClockTranslate, day)}</time>
 }

@@ -3,7 +3,7 @@
  * library and per-model assemblies stored in `user-system-prompts`.
  */
 
-import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -39,8 +39,7 @@ export const inject = ['slots', 'locale', 'connection', 'remote']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-system-prompts: dictionaries')
 
-  const connection = ctx.get('connection') as ConnectionHandle
-  const controller = new SystemPromptsStore(connection.api)
+  const controller = new SystemPromptsStore(ctx.remote)
   const t = ctx.locale.bind(NS)
   const injected = (): SystemPromptsSectionInjected => ({
     hooks: { systemPrompts: controller.store },

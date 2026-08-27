@@ -24,7 +24,7 @@ import type { ViewTab } from './views.ts'
 
 /** Browser-owned image that has not crossed the durable Host boundary. */
 export interface ComposerAttachment {
-  kind: 'image'
+  kind: 'image' | 'video'
   id: DraftAttachmentId
   file: File
   previewUrl: string
@@ -46,6 +46,10 @@ export interface ComposerAttachmentsOwnerProps {
   onRemoveImage: (id: DraftAttachmentId) => void
   /** Display-ready limits for the drop invitation. */
   dropLimits?: { readonly count: number; readonly size: string } | undefined
+  videos?: readonly ComposerAttachment[]
+  onAddVideos?: (files: readonly File[]) => void
+  onRemoveVideo?: (id: DraftAttachmentId) => void
+  videoDropLimits?: { readonly count: number; readonly size: string } | undefined
 }
 
 /**
@@ -79,6 +83,8 @@ export interface MessageImagesOwnerProps {
   loadImage: MessageImageLoader
   /** Horizontal placement inside the owning record. */
   align: 'start' | 'end'
+  videos?: readonly MessageImageSource[]
+  loadVideo?: MessageImageLoader
 }
 
 /** Slot-backed renderer used by Conversation targets without importing an attachment implementation. */
@@ -123,6 +129,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.brand.mark': { kind: 'single'; scope: 'root'; owner: HeroBrandMarkOwnerProps }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'root'; owner: HeroAgentPresetOwnerProps }
+    'conversation.hero.branch': { kind: 'single'; scope: 'root'; owner: Record<string, never> }
     /** Full-width entries above the composer card. */
     'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone }
     /** Floating entries rendered inside the resident composer card. */
@@ -145,6 +152,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.input.plan': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
     /** Model selector inside the composer tool row. */
     'conversation.input.model': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
+    'conversation.chat.assistantRoute': { kind: 'single'; scope: 'session'; owner: AssistantRouteOwnerProps }
   }
 
   interface GlobalStandardProps {
@@ -172,6 +180,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Owner share of the Hero agent-preset control. */
+export interface AssistantRouteOwnerProps {
+  provider?: string
+  model?: string
+  requestConfig?: { provider: string; model: string; reasoningEffort?: string } | null
+  provenance?: { provider: string; model: string } | null
+}
+
 export interface HeroAgentPresetOwnerProps {
   /** Marker field: the occupant owns its roster and staged selection. */
   children?: never
@@ -327,6 +342,7 @@ export type ConversationSlotProps =
     | 'conversation.hero.brand.mark'
     | 'conversation.hero.workspace'
     | 'conversation.hero.agentPreset'
+    | 'conversation.hero.branch'
   >
   & InjectFace<ConversationInjected>
   & PropsLocale<'conversation'>

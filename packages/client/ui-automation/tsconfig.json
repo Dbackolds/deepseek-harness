@@ -9,6 +9,9 @@
     "src"
   ],
   "references": [
+    { "path": "../../typert/protocol" },
+    { "path": "../ui-session" },
+    { "path": "../ui-workspace" },
     {
       "path": "../../../vendor/cordis"
     },
@@ -16,7 +19,7 @@
       "path": "../locale"
     },
     {
-      "path": "../runtime"
+      "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
       "path": "../ui-primitives"

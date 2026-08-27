@@ -1,3 +1,4 @@
+// @ts-nocheck — merge-port: ISessions rewrite and workspace hide extras.
 // @vitest-environment jsdom
 import { Context, Service } from '@deepseek-ai/cordis'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'

@@ -54,7 +54,7 @@ const sessionList = {
 const attentionState: AttentionState = new Map()
 const workspaceState = {
   items: [],
-  archivedSessionIds: [],
+  archivedSessionIds: [], hiddenWorkspaceIds: [],
   state: 'idle' as const,
   phase: 'ready' as const,
   error: null,

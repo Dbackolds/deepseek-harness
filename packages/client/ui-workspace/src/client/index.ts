@@ -125,6 +125,16 @@ export function apply(ctx: Context): void {
       await workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     },
     createWorkspace: input => workspaces.create(input),
+    markUnread: (_sessionId) => {},
+    openPath: async (path) => {
+      const result = await ctx.remote.session.openWorkspacePath({ path })
+      if (!result.ok) throw new Error(result.error.message)
+    },
+    openSplit: (sessionId) => { sessions.open(sessionId) },
+    hideWorkspace: async (workspaceId) => { await workspaces.hide(workspaceId) },
+    showWorkspace: async (workspaceId) => { await workspaces.show(workspaceId) },
+    addWorkspaceFolder: (workspaceId, path) => workspaces.addFolder(workspaceId, path),
+    removeWorkspaceFolder: (workspaceId, path) => workspaces.removeFolder(workspaceId, path),
     hooks: { directoryFlow: browserFlowSource, connectionGeneration },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({

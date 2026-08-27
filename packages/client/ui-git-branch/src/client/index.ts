@@ -3,8 +3,8 @@
  * lists the workspace repository and switches this session overlay.
  */
 
-import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { GitBranchSeat } from './GitBranchSeat.tsx'
 import type { GitBranchSeatInjected } from './GitBranchSeat.tsx'
@@ -31,7 +31,7 @@ export const inject = ['slots', 'locale', 'connection', 'sessions', 'workspaces'
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-git-branch: dictionaries')
   ctx.inject(['slots', 'conversation', 'sessions', 'workspaces'], (scope: ClientContext) => {
-    const api = (scope.get('connection') as ConnectionHandle).api
+    const api = scope.remote
     const currentWorkspaceId = (): string | undefined => {
       const sessionId = scope.sessions.list.getSnapshot().current
       const workspaces = scope.workspaces.list.getSnapshot()
@@ -39,7 +39,7 @@ export function apply(ctx: ClientContext): void {
         const owning = workspaces.items.find(item => item.sessionIds.includes(sessionId))
         if (owning !== undefined) return owning.workspaceId
       }
-      return workspaces.recentWorkspaceId ?? workspaces.items[0]?.workspaceId
+      return workspaces.items[0]?.workspaceId
     }
     const seat = new GitBranchSeatController(
       api,

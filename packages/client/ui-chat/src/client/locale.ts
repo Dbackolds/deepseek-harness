@@ -111,6 +111,11 @@ export const zh = {
   'json.truncated': '… 已截断，共 {total} 字符',
   'clock.md': '{m}月{d}日',
   'clock.ymd': '{y}年{m}月{d}日',
+  'clock.am': '上午',
+  'clock.pm': '下午',
+  'message.edit': '编辑',
+  'message.saveEdit': '保存',
+  'message.cancelEdit': '取消',
 } satisfies Record<string, string>
 
 /** Chat dictionary key union. */
@@ -224,4 +229,9 @@ export const en = {
   'json.truncated': '… truncated, {total} characters total',
   'clock.md': '{m}/{d}',
   'clock.ymd': '{y}-{m}-{d}',
+  'clock.am': 'AM',
+  'clock.pm': 'PM',
+  'message.edit': 'Edit',
+  'message.saveEdit': 'Save',
+  'message.cancelEdit': 'Cancel',
 } satisfies Record<ChatKey, string>

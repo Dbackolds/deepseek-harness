@@ -17,7 +17,7 @@ interface ComposerRailItem extends AttachmentRailItem {
 /** Draft-image rail, document drop target, and original-image preview slot entry. */
 export function ComposerAttachments({
   attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits,
-  videos, onAddVideos, onRemoveVideo, videoDropLimits, t,
+  videos = [], onAddVideos, onRemoveVideo, videoDropLimits, t,
 }: ComposerAttachmentsProps) {
   const [preview, setPreview] = useState<ComposerAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -74,7 +74,7 @@ export function ComposerAttachments({
       if (droppedImages.length + droppedVideos.length !== files.length) onAddImages(files)
       else {
         if (droppedImages.length > 0) onAddImages(droppedImages)
-        if (droppedVideos.length > 0) onAddVideos(droppedVideos)
+        if (droppedVideos.length > 0) onAddVideos?.(droppedVideos)
       }
     }
     document.addEventListener('dragenter', onDragEnter)
@@ -132,7 +132,7 @@ export function ComposerAttachments({
             items={videoRailItems}
             labels={videoRailLabels(t)}
             onOpen={(item) => { void item }}
-            onRemove={(item) => { onRemoveVideo(item.attachment.id) }}
+            onRemove={(item) => { onRemoveVideo?.(item.attachment.id) }}
           />
         </div>
       )}

@@ -8,6 +8,7 @@
     "src"
   ],
   "references": [
+    { "path": "../ui-workspace" },
     {
       "path": "../../../vendor/cordis"
     },
@@ -15,7 +16,7 @@
       "path": "../locale"
     },
     {
-      "path": "../runtime"
+      "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
       "path": "../ui-conversation"

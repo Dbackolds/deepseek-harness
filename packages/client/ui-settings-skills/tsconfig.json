@@ -21,7 +21,7 @@
       "path": "../connection/tsconfig.client.json"
     },
     {
-      "path": "../runtime"
+      "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
       "path": "../../test-support/client-runtime"

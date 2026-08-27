@@ -66,14 +66,12 @@ const baseline = (id?: string): Extract<WorkspaceFollowFrame, { type: 'baseline'
     items: id === undefined ? [] : [{
       workspaceId: id as never,
       path: `/work/${id}`,
-      folders: [],
       title: id,
       sessionIds: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     }],
     archivedSessionIds: [],
-    hiddenWorkspaceIds: [],
   },
 })
 
@@ -84,7 +82,6 @@ function workspace(id: string, overrides: Partial<WorkspaceView> = {}): Workspac
   return {
     workspaceId: wid(id),
     path: `/work/${id}`,
-    folders: [],
     title: id,
     sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -143,26 +140,11 @@ class ScriptedWorkspaceRemote implements WorkspaceRemote {
   archiveSession(_request: WorkspaceArchiveSessionRequest): Promise<RemoteResult<WorkspaceArchiveValue>> {
     throw new Error('unused')
   }
-
-  unarchiveSession(_request: WorkspaceArchiveSessionRequest): Promise<RemoteResult<WorkspaceArchiveValue>> {
-    throw new Error('unused')
-  }
-
-  addFolder(_request: { workspaceId: WorkspaceId; path: string }): Promise<RemoteResult<WorkspaceValue>> {
-    throw new Error('unused')
-  }
-
-  removeFolder(_request: { workspaceId: WorkspaceId; path: string }): Promise<RemoteResult<WorkspaceValue>> {
-    throw new Error('unused')
-  }
-
-  hide(_request: { workspaceId: WorkspaceId }): Promise<RemoteResult<{ hiddenWorkspaceIds: readonly WorkspaceId[] }>> {
-    throw new Error('unused')
-  }
-
-  show(_request: { workspaceId: WorkspaceId }): Promise<RemoteResult<{ hiddenWorkspaceIds: readonly WorkspaceId[] }>> {
-    throw new Error('unused')
-  }
+  unarchiveSession = ((_request: unknown) => Promise.reject(new Error('unused'))) as WorkspaceRemote['unarchiveSession']
+  addFolder = ((_request: unknown) => Promise.reject(new Error('unused'))) as WorkspaceRemote['addFolder']
+  removeFolder = ((_request: unknown) => Promise.reject(new Error('unused'))) as WorkspaceRemote['removeFolder']
+  hide = ((_request: unknown) => Promise.reject(new Error('unused'))) as WorkspaceRemote['hide']
+  show = ((_request: unknown) => Promise.reject(new Error('unused'))) as WorkspaceRemote['show']
 
   async *follow(signal = new AbortController().signal): AsyncIterable<WorkspaceFollowFrame> {
     const generation = this.generations[this.calls++]
@@ -203,26 +185,11 @@ class CommandWorkspaceRemote implements WorkspaceRemote {
   readonly archiveSession = vi.fn<WorkspaceRemote['archiveSession']>(request => Promise.resolve(remoteOk({
     archivedSessionIds: [request.sessionId],
   })))
-
-  readonly unarchiveSession = vi.fn<WorkspaceRemote['unarchiveSession']>(request => Promise.resolve(remoteOk({
-    archivedSessionIds: [],
-  })))
-
-  readonly addFolder = vi.fn<WorkspaceRemote['addFolder']>(request => Promise.resolve(remoteOk({
-    workspace: workspace(String(request.workspaceId), { folders: [request.path] }),
-  })))
-
-  readonly removeFolder = vi.fn<WorkspaceRemote['removeFolder']>(request => Promise.resolve(remoteOk({
-    workspace: workspace(String(request.workspaceId), { folders: [] }),
-  })))
-
-  readonly hide = vi.fn<WorkspaceRemote['hide']>(request => Promise.resolve(remoteOk({
-    hiddenWorkspaceIds: [request.workspaceId],
-  })))
-
-  readonly show = vi.fn<WorkspaceRemote['show']>(() => Promise.resolve(remoteOk({
-    hiddenWorkspaceIds: [],
-  })))
+  readonly unarchiveSession = vi.fn<WorkspaceRemote['unarchiveSession']>(() => Promise.resolve(remoteOk({ archivedSessionIds: [] })))
+  readonly addFolder = vi.fn<WorkspaceRemote['addFolder']>(request => Promise.resolve(remoteOk({ workspace: workspace(String(request.workspaceId)) })))
+  readonly removeFolder = vi.fn<WorkspaceRemote['removeFolder']>(request => Promise.resolve(remoteOk({ workspace: workspace(String(request.workspaceId)) })))
+  readonly hide = vi.fn<WorkspaceRemote['hide']>(() => Promise.resolve(remoteOk({ hiddenWorkspaceIds: [] })))
+  readonly show = vi.fn<WorkspaceRemote['show']>(() => Promise.resolve(remoteOk({ hiddenWorkspaceIds: [] })))
 
   async *follow(_signal?: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {}
 }

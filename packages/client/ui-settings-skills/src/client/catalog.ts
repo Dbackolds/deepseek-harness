@@ -34,6 +34,6 @@ export function sourceLabelKey(source: string): SkillsSettingsKey | undefined {
  */
 export function matchesSkill(skill: SkillCatalogEntry, normalizedQuery: string): boolean {
   if (normalizedQuery.length === 0) return true
-  return [skill.name, skill.description, skill.source, skill.provider, skill.whenToUse ?? '']
+  return [skill.name, skill.description, skill.source ?? '', skill.provider ?? '', skill.whenToUse ?? '']
     .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
 }

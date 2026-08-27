@@ -45,7 +45,7 @@ export interface SessionSummary {
   cwd?: string
   parentId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
-  origin?: 'subagent'
+  origin?: 'subagent' | 'automation'
   running: boolean
   /** Finished while not selected and not yet opened — the sidebar's green "done" reminder. Absent = false. */
   completed?: boolean

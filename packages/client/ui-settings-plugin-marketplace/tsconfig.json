@@ -9,6 +9,7 @@
     "src"
   ],
   "references": [
+    { "path": "../ui-chat" },
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/include" },
     { "path": "../../../vendor/loader" },
@@ -21,7 +22,7 @@
     { "path": "../../test-support/client-runtime" },
     { "path": "../locale" },
     { "path": "../modules" },
-    { "path": "../runtime" },
+    { "path": "../../api/session-controller/tsconfig.client.json" },
     { "path": "../ui-commands" },
     { "path": "../ui-conversation" },
     { "path": "../ui-primitives" },

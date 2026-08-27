@@ -2,8 +2,9 @@
  * Live product-wide retry and idle-timeout preference used by the Settings row.
  */
 import {
-  createSnapshotStore, type SettingsScope, type SnapshotStore,
+  createSnapshotStore, type SnapshotStore,
 } from '@deepseek-ai/dsh-client-store'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   DEFAULT_MAX_RETRIES,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,

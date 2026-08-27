@@ -27,6 +27,12 @@ export type ChatNode<Kind extends ChatNodeKind = ChatNodeKind> = {
 }[Kind]
 
 /** Final Assistant row payload shared by streaming and settled states. */
+export interface ChatRequestHeaderChatData {
+  readonly seq: number
+  readonly config: unknown
+  readonly location: ConversationLocation
+}
+
 export interface AssistantChatData {
   readonly status: 'running' | 'settled' | 'interrupted'
   readonly turn: number
@@ -35,6 +41,8 @@ export interface AssistantChatData {
   readonly time: number
   readonly usage?: unknown
   readonly finalNode?: AssistantMessageNode
+  readonly requestConfig?: unknown
+  readonly provenance?: unknown
 }
 
 /** Settled or interrupted Assistant payload with its durable presentation node. */

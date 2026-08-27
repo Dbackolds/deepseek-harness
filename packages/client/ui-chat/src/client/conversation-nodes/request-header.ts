@@ -3,7 +3,7 @@ import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conv
 import type { ChatRequestHeaderChatData } from '../contract/chat-nodes.ts'
 import { chatNode } from './common.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '../contract/chat-nodes.ts' {
   interface ChatNodeDataMap {
     /** Hidden per-header carrier joined onto assistant steps as requestConfig. */
     'chat-request-header': ChatRequestHeaderChatData
@@ -46,5 +46,5 @@ export const chatRequestHeaderDefinition: ConversationNodeDefinition<ChatRequest
  * @param ctx - owning UI Conversation context.
  */
 export function registerRequestHeaderConversationNode(ctx: Context): void {
-  ctx.conversationEvents.register(chatRequestHeaderDefinition)
+  ctx.uiConversation.events.register(chatRequestHeaderDefinition)
 }

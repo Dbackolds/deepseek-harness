@@ -3,7 +3,7 @@
  * user definition library stored in user-subagents.
  */
 
-import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -41,8 +41,7 @@ export const inject = ['slots', 'locale', 'connection', 'remote', 'settingsScope
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-subagents: dictionaries')
 
-  const connection = ctx.get('connection') as ConnectionHandle
-  const controller = new SubagentsStore(connection.api)
+  const controller = new SubagentsStore(ctx.remote)
   const delivery = new SubagentDeliveryPolicy(
     ctx.settingsScope.bind<SubagentDeliverySettings>({
       namespace: SUBAGENT_DELIVERY_SETTINGS_NAMESPACE,
