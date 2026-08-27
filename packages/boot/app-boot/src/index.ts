@@ -18,8 +18,9 @@ import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import type {} from '@deepseek-ai/cordis-plugin-hmr'
-// Side-effect type import: resolves `ctx.get('systemPrompt')` to the service.
+// Side-effect type import: resolves `ctx.get('systemPrompt')` / `ctx.get('agents')`.
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import type {} from '@deepseek-ai/dsh-agent'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -251,6 +252,18 @@ export async function watchUserPatches(
   const entry = bootstrapIncludes.get(ctx)
   if (entry === undefined) throw new Error(`${binName}: user patch-layer watching requires the root Include entry`)
   const register = hmr.registerConfig(filename, async () => {
+    // A live turn owns its plugin tree. Recomposing the user layer would
+    // dispose that tree and abort the turn as { kind: 'disposed' }, so wait
+    // for every live agent to reach idle first. Later file generations still
+    // serialize through HMR and apply the latest contents after this wait.
+    const agents = ctx.get('agents')
+    if (agents !== undefined) {
+      for (;;) {
+        const running = agents.list().filter(agent => agent.status === 'running')
+        if (running.length === 0) break
+        await Promise.all(running.map(agent => agent.whenIdle()))
+      }
+    }
     // Re-read the include's non-patch options per refresh: a writer that
     // updates the root Include's other options between refreshes (none exists
     // today) must not have them silently reverted by a user-layer reload.

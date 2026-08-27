@@ -74,7 +74,7 @@ Merge-extensible via `SessionEventMap` — a plugin declaration-merges its own t
 
 Also defines `TurnEndReasonMap`, the merge-extensible `kind`-tagged sum type for turn endings. `turn/start` carries only the turn number; the following entered `user/message` batch records its input, while `llm/retry` records request recovery.
 
-An interrupted live turn ends with `{ kind: 'aborted', reason: AgentCancelCause }`, preserving the typed cancellation cause in the durable transcript. Persistence imports the coarse aborted outcome from the supported older format as `{ kind: 'aborted', reason: { kind: 'legacy' } }`, because that record did not retain its caller. A turn failure carries `{ kind: 'error', error }`; crash recovery alone synthesizes `{ kind: 'interrupted' }`.
+An interrupted live turn ends with `{ kind: 'aborted', reason: AgentCancelCause }`, preserving the typed cancellation cause in the durable transcript. `formatAbortReason` / `formatAgentCancelCause` render that object for diagnostics; `String(reason)` would otherwise collapse it to `[object Object]`. Persistence imports the coarse aborted outcome from the supported older format as `{ kind: 'aborted', reason: { kind: 'legacy' } }`, because that record did not retain its caller. A turn failure carries `{ kind: 'error', error }`; crash recovery alone synthesizes `{ kind: 'interrupted' }`.
 
 Every `SessionEvent` carries three optional top-level fields (structural metadata):
 

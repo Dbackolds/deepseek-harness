@@ -3,6 +3,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, CallId, createMessage, createToolResultMessage, MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
   adoptSessionEvent,
+  formatAbortReason,
+  formatAgentCancelCause,
+  isAgentCancelCause,
   SESSION_FORMAT_VERSION,
   Session,
   SessionEvent,
@@ -1739,5 +1742,23 @@ describe('todo/write event', () => {
       .toEqual([{ content: 'only', status: 'completed' }])
     expect(replayed.events.slice(0, original.seq)).toEqual(original.events)
     expect(replayed.firstLiveSeq).toBe(original.seq)
+  })
+})
+
+describe('abort-reason formatting', () => {
+  it('renders typed cancel causes instead of [object Object]', () => {
+    expect(formatAgentCancelCause({ kind: 'user' })).toBe('cancelled by user')
+    expect(formatAgentCancelCause({ kind: 'parent' })).toBe('cancelled by parent')
+    expect(formatAgentCancelCause({ kind: 'disposed' })).toBe('agent disposed')
+    expect(formatAgentCancelCause({ kind: 'hook', reason: 'policy' })).toBe('cancelled by hook: policy')
+    expect(formatAgentCancelCause({ kind: 'automation', ruleId: 'r1' })).toBe('cancelled by automation r1')
+    expect(formatAbortReason({ kind: 'disposed' })).toBe('agent disposed')
+    expect(formatAbortReason(undefined)).toBe('aborted')
+    expect(formatAbortReason('user-cancel')).toBe('user-cancel')
+    expect(formatAbortReason(new Error('stopped'))).toBe('stopped')
+    expect(formatAbortReason(new Error(''))).toBe('Error')
+    expect(isAgentCancelCause({ kind: 'user' })).toBe(true)
+    expect(isAgentCancelCause({ kind: 'hook' })).toBe(false)
+    expect(isAgentCancelCause('user')).toBe(false)
   })
 })

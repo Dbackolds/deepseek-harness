@@ -222,6 +222,14 @@ describe('WorkerThreadCodeRuntime — budgets and containment (real workers)', (
     expect(result.error).toEqual({ kind: 'abort', message: 'too-late' })
   })
 
+  it('renders a typed cancel cause instead of [object Object]', async () => {
+    const { runtime } = await setup()
+    const controller = new AbortController()
+    controller.abort({ kind: 'disposed' })
+    const result = await runtime.run({ program: 'return 1', bindings: [], signal: controller.signal })
+    expect(result.error).toEqual({ kind: 'abort', message: 'agent disposed' })
+  })
+
   it('applies the outer-output cap to failures before worker startup', async () => {
     const capped = await setup({ maxOutputBytes: 64 })
     const controller = new AbortController()

@@ -74,7 +74,7 @@
 
 此包还定义 `TurnEndReasonMap`，即用于轮次结束、可合并扩展且以 `kind` 为标签的和类型。`turn/start` 只携带轮次编号；随后已进入的 `user/message` 批次记录其输入，`llm/retry` 则记录请求恢复。
 
-被中断的实时轮次以 `{ kind: 'aborted', reason: AgentCancelCause }` 结束，在持久 transcript 中保留类型化取消原因。持久化会将受支持旧格式中的粗粒度中止结果导入为 `{ kind: 'aborted', reason: { kind: 'legacy' } }`，因为该记录没有保留调用方。轮次失败携带 `{ kind: 'error', error }`；只有崩溃恢复会合成 `{ kind: 'interrupted' }`。
+被中断的实时轮次以 `{ kind: 'aborted', reason: AgentCancelCause }` 结束，在持久 transcript 中保留类型化取消原因。`formatAbortReason` / `formatAgentCancelCause` 会把该对象渲染成诊断文本；直接 `String(reason)` 会变成 `[object Object]`。持久化会将受支持旧格式中的粗粒度中止结果导入为 `{ kind: 'aborted', reason: { kind: 'legacy' } }`，因为该记录没有保留调用方。轮次失败携带 `{ kind: 'error', error }`；只有崩溃恢复会合成 `{ kind: 'interrupted' }`。
 
 每个 `SessionEvent` 都有三个可选顶层字段（结构元数据）：
 

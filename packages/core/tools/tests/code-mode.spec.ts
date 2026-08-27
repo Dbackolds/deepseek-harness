@@ -9,7 +9,7 @@ import type { CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtim
 import ToolRuntime, { CodeRunFailedError, RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, defineContentToolFixture, defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config, JsonSchemaNode, PostToolDecision, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { formatAbortReason, Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { JsonValue, SessionEventMap } from '@deepseek-ai/dsh-session'
 
 const testToolSignal = new AbortController().signal
@@ -1579,7 +1579,7 @@ describe('the run_code dispatch bridge', () => {
     const calls = registerEcho(ctx)
     runtime.behavior = (request) => {
       // The fake honors the seam contract for an already-aborted signal.
-      if (request.signal?.aborted) return Promise.resolve({ logs: [], error: { kind: 'abort' as const, message: String(request.signal.reason) } })
+      if (request.signal?.aborted) return Promise.resolve({ logs: [], error: { kind: 'abort' as const, message: formatAbortReason(request.signal.reason) } })
       return Promise.resolve({ logs: [], value: 'unreachable' })
     }
     const controller = new AbortController()
@@ -1596,6 +1596,29 @@ describe('the run_code dispatch bridge', () => {
     })
     expect(runtime.lastRequest).toBeUndefined()
     expect(calls).toEqual([])
+  })
+
+  it('surfaces a typed disposed abort as agent disposed, not [object Object]', async () => {
+    const { ctx, runtime } = await setup({ mode: 'code' })
+    runtime.behavior = async (request) => {
+      await new Promise<void>((resolve) => {
+        if (request.signal?.aborted) {
+          resolve()
+          return
+        }
+        request.signal?.addEventListener('abort', () => { resolve() }, { once: true })
+      })
+      return { logs: [], error: { kind: 'abort' as const, message: formatAbortReason(request.signal?.reason) } }
+    }
+    const controller = new AbortController()
+    const executing = runCode(ctx, 'program', { signal: controller.signal })
+    await Promise.resolve()
+    controller.abort({ kind: 'disposed' })
+    const result = await executing
+    expect(result.isError).toBe(true)
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('code run failed (abort): agent disposed')
+    expect(text).not.toContain('[object Object]')
   })
 
   it('reports cancellation after rejecting a late binding without dispatching it', async () => {

@@ -9,7 +9,7 @@
 import { CallId, createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { CodeBindingFunction, CodeRunResult, CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
-import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
+import { formatAbortReason, snapshotJsonValue } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { defineTool, parameterSchemaSpecToJsonSchema } from './schema.ts'
 import { TOOL_RUNTIME_SCHEDULER } from './index.ts'
@@ -465,7 +465,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
 
       const binding = (name: string): CodeBindingFunction => async (rawArgs: unknown): Promise<JsonValue> => {
         if (runOver()) {
-          throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} not dispatched`)
+          throw new Error(`run_code run is over (${formatAbortReason(runController.signal.reason)}); ${name} not dispatched`)
         }
         const normalized = jsonNormalizeArgs(rawArgs)
         const n = ++dispatches
@@ -531,7 +531,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             // declared; fail-closed exclusive when undeclared/invalid.
             classify: () => registry.executionMode(input).kind,
             abandon: () => {
-              reject(new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} tool call abandoned`))
+              reject(new Error(`run_code run is over (${formatAbortReason(runController.signal.reason)}); ${name} tool call abandoned`))
             },
             async start(): Promise<void> {
               exec.agent?.session.append('tool/code-dispatch-start', {
@@ -592,7 +592,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         // flight already aborted the dispatch; stop the program now rather
         // than hand it a result from a run that is over.
         if (runOver()) {
-          throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} result discarded`)
+          throw new Error(`run_code run is over (${formatAbortReason(runController.signal.reason)}); ${name} result discarded`)
         }
         // The worker turns a binding rejection into ToolCallError and adds
         // only the binding name. Native content and internal error metadata

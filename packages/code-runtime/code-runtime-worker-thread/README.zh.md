@@ -28,7 +28,7 @@
 - **中间绑定值是完整 JSON**：绑定参数与 resolve 值会接受迭代式无损 JSON 验证。程序执行前，worker 会捕获自己 realm 中的普通容器原型身份，以及只用于外部 realm 的原生函数源码检查，因此构造器槽修改和用户编写的仿冒对象都无法改变容器分类。它还会捕获该 JSON 边界使用的每一个结构与计量 intrinsic，以无原型对象创建属性描述符，并绕过可变集合原型管理私有遍历状态；因此，模型对全局对象、原型方法或 `Object.prototype` 上形似描述符字段的修改，都无法改变验证、wire 传输或字节计量。值会展平为自身嵌套深度有界的前序 wire 值，供 structured clone 使用，并在另一侧迭代式重建。它们没有字节、JavaScript 调用栈或嵌套 structured-clone 深度上限，绝不会进入外层输出账本或模型上下文；上限仍来自提供方／执行器获取限制与进程／worker 内存。
 - **日志主动流入一个外层账本**：console／stdout／stderr 文本按产生顺序经端口传输，因此超时或被终止的程序仍会显示已经打印的内容。worker 会精确统计 JSON 字符串的字节数，并在发送完成值和异常诊断前，根据组合预算的剩余量预检；因此，抛出的百万字节 stack 会在 worker 边界变成固定的 `output-limit` 诊断。绕过补丁 stream 槽的原生写入会到达独立于完成端口的 pipe，因此宿主会针对这些字节和不可信伪造通信再次执行账本统计；在物化结果前，结算过程会持续进行有界 pipe 捕获，直到 worker 完成终止。`maxOutputBytes` 统计外层 `logs` 数组加完成值或失败消息载荷的 JSON 序列化；固定的 `CodeRunResult` 字段名、花括号、有界错误 kind 标签，以及后续呈现空白不计入这份可变载荷账本。未超过上限时会返回精确值；有损完成值属于 `invalid-output`，组合溢出属于 `output-limit`，不会用 inspected string 代替。失败会保留能容纳的已捕获前缀，之后按普通外层 `run_code` 落盘策略处理。
 - **空环境**：worker 使用 `env: {}` 和 `execArgv: []`，既不会获得环境变量中的凭据（比 spawn 命令的清理环境规则更严格），也不会继承 loader 标志。
-- **dispose（资源释放）时等待完全停稳**：清理会使进行中的运行以 `abort` 失败，并会等待每个 worker 退出后再完成。
+- **dispose（资源释放）时等待完全停稳**：清理会使进行中的运行以 `abort` 失败，并会等待每个 worker 退出后再完成。调用方的 abort 原因（包括类型化的 `AgentCancelCause` 对象）会经 `formatAbortReason` 渲染，而不再 `String(reason)`。
 
 ## 未构建与已构建的 worker 入口
 

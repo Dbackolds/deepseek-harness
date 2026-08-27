@@ -15,7 +15,7 @@ import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { CodeRuntime, DUNDER_MEMBER, PORTABLE_RESERVED_WORDS, RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS } from '@deepseek-ai/dsh-code-runtime'
 import type { CodeBindingNamespace, CodeJsonValue, CodeRunFailure, CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
-import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
+import { formatAbortReason, snapshotJsonValue } from '@deepseek-ai/dsh-session'
 import type { ReplyMessage, WorkerBootData, WorkerToHost } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodeWorkerJson, encodeWorkerJson } from './worker-json.ts'
@@ -294,7 +294,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
     if (this.disposed) throw new Error('dsh-code-runtime-worker-thread: run() after disposal')
     const bindings = this.validateBindings(request)
     if (request.signal?.aborted) {
-      return this.failureBeforeWorker({ kind: 'abort', message: String(request.signal.reason) })
+      return this.failureBeforeWorker({ kind: 'abort', message: formatAbortReason(request.signal.reason) })
     }
 
     let code: string
@@ -544,7 +544,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
         finish(() => output.failure([...logs, ...strayLogs], { kind: 'timeout', message: `wall-clock ceiling reached (${this.config.maxWallMs}ms)` }))
       }, this.config.maxWallMs)
       const onAbort = (): void => {
-        finish(() => output.failure([...logs, ...strayLogs], { kind: 'abort', message: String(request.signal?.reason) }))
+        finish(() => output.failure([...logs, ...strayLogs], { kind: 'abort', message: formatAbortReason(request.signal?.reason) }))
       }
       request.signal?.addEventListener('abort', onAbort, { once: true })
 

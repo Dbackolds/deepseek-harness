@@ -371,6 +371,46 @@ describe('boot with user patches', () => {
     }
   })
 
+  it('waits for a running agent to become idle before applying a user-patch refresh', { timeout: 20_000 }, async () => {
+    const dir = tmp()
+    const userDir = tmp()
+    const filename = join(userDir, PROFILE_PATCH_FILENAME)
+    const basePatches = [{ id: 'noop', config: { value: 'generated' } }]
+    const ctx = await boot(NAME, writeTree(dir), basePatches)
+    await ctx.plugin(Timer)
+    await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+    let releaseIdle!: () => void
+    const idle = new Promise<void>((resolve) => { releaseIdle = resolve })
+    let whenIdleCalls = 0
+    const agent = {
+      status: 'running' as 'idle' | 'running',
+      whenIdle: () => {
+        whenIdleCalls += 1
+        return idle.then(() => {
+          agent.status = 'idle'
+        })
+      },
+    }
+    ctx.provide('agents', {
+      list: () => [agent],
+    })
+    const dispose = await watchUserPatches(ctx, {
+      binName: NAME,
+      filename,
+      compose: userPatches => [...basePatches, ...userPatches],
+    })
+    try {
+      writeFileSync(filename, '- id: noop\n  config:\n    value: live\n')
+      await eventually(() => whenIdleCalls === 1, 'refresh did not wait for the running agent')
+      expect((entryConfig(ctx, 'noop') as { value?: string }).value).toBe('generated')
+      releaseIdle()
+      await eventually(() => (entryConfig(ctx, 'noop') as { value?: string }).value === 'live', 'deferred user patch was not applied after idle')
+    } finally {
+      await dispose()
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('fails loud when the exact watcher lacks HMR or a root Include', async () => {
     const dir = tmp()
     const withoutHmr = await boot(NAME, writeTree(dir))
