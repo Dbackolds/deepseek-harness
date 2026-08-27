@@ -1,8 +1,14 @@
 import type { MessageImagesProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ImageGallery } from '../MessageImage.tsx'
-import { messageImageLabels } from './labels.ts'
+import { VideoGallery } from '../MessageVideo.tsx'
+import { messageImageLabels, messageVideoLabels } from './labels.ts'
 
-/** Historical message-image slot entry. */
-export function MessageImages({ images, loadImage, align, t }: MessageImagesProps) {
-  return <ImageGallery images={images} load={loadImage} align={align} labels={messageImageLabels(t)} />
+/** Historical message-image and message-video slot entry. */
+export function MessageImages({ images, loadImage, videos, loadVideo, align, t }: MessageImagesProps) {
+  return (
+    <>
+      <ImageGallery images={images} load={loadImage} align={align} labels={messageImageLabels(t)} />
+      <VideoGallery videos={videos} load={loadVideo} align={align} labels={messageVideoLabels(t)} />
+    </>
+  )
 }

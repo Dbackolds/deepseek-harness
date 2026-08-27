@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-workspace-hide.md
-2026-08-20-workspace-hide.md: daae9cc37e2e7bfc022b93735fc3f2be02b1e37f
-2026-08-20-workspace-hide.zh.md: ec28a6da907e5d7306e1b3370e377845b66a671f
+2026-08-20-workspace-hide.md: 261b55556429012e08db93b8f758beb2e00f4a20
+2026-08-20-workspace-hide.zh.md: 1946357660b3c3b3b348cb61e78006a0172128e6

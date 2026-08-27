@@ -34,7 +34,7 @@ import type { ViewTab } from '../src/client/contract/views.ts'
 /** Machine-backed wiring over a sink spy. */
 function fakeWiring() {
   const sink = vi.fn(() => Promise.resolve({ kind: 'success' as const }))
-  const shell = new SessionInputShell({ actx: {} as ClientContext, defaultSink: sink, commandImages: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` } })
+  const shell = new SessionInputShell({ actx: {} as ClientContext, defaultSink: sink, commandImages: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported`, videosUnsupportedNotice: () => 'videos-unsupported' } })
   return { wiring: shell, sink, shell }
 }
 
@@ -222,6 +222,9 @@ function mount(
           addImages={() => null}
           removeImage={() => {}}
           draftImages={() => []}
+          addVideos={() => null}
+          removeVideo={() => {}}
+          draftVideos={() => []}
           resolveSubmitMode={() => 'queue'}
           toggleCommandMenu={vi.fn()}
           useNotices={bindSnapshotSelector(wiring.notices)}
@@ -339,7 +342,7 @@ describe('ConversationRoot resident composer', () => {
     fireEvent.change(box, { target: { value: 'ordinary revised' } })
     expect(b.chat.store.getSnapshot().draft).toBe('ordinary revised')
     fireEvent.keyDown(box, { key: 'Enter' })
-    expect(b.sink).toHaveBeenCalledWith('ordinary revised', [], 'queue', expect.any(AbortSignal))
+    expect(b.sink).toHaveBeenCalledWith('ordinary revised', [], [], 'queue', expect.any(AbortSignal))
     expect((b.view.getByRole('button', { name: 'Child' }) as HTMLButtonElement).disabled).toBe(true)
     expect(b.view.queryByText('Root')).toBeNull()
   })

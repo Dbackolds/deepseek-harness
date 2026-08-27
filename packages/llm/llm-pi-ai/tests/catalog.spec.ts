@@ -1291,3 +1291,57 @@ describe('configurable-provider directory', () => {
     })
   })
 })
+
+describe('video modality superset', () => {
+  it('keeps the pi-ai gate output unchanged and extends it only through DSH_MODALITIES', async () => {
+    const { DSH_MODALITIES, MODALITIES } = await import('../src/catalog.ts')
+    // The drift alarm stays pinned to pi-ai's own vocabulary; the harness
+    // superset is a separate list layered on top of it.
+    expect([...MODALITIES]).toEqual(['text', 'image'])
+    expect([...DSH_MODALITIES]).toEqual(['text', 'image', 'video'])
+  })
+
+  it('carries a declared video modality through entry, route default, and seam metadata', async () => {
+    const resolved = resolveProfiles({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test/v1',
+        models: [{ id: 'acme-vision', input: ['text', 'image', 'video'] }],
+      },
+      'video-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://video.test/v1',
+        defaultInput: ['text', 'video'],
+        models: [{ id: 'bare' }],
+      },
+    })
+    const inputOf = (route: string, id: string): readonly string[] | undefined =>
+      resolved.get(route)?.piProvider.getModels().find(model => model.id === id)?.input
+    expect(inputOf('acme-gateway', 'acme-vision')).toEqual(['text', 'image', 'video'])
+    expect(inputOf('video-gateway', 'bare')).toEqual(['text', 'video'])
+
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test/v1',
+          models: [{ id: 'acme-vision', input: ['text', 'image', 'video'] }],
+        },
+      },
+    })
+    expect((await ctx.llm.listModels('acme-gateway'))[0]?.inputModalities).toEqual(['text', 'image', 'video'])
+    expect((await ctx.llm.resolveModelInfo('acme-gateway', 'acme-vision')).inputModalities)
+      .toEqual(['text', 'image', 'video'])
+  })
+
+  it('keeps the entry empty-list semantics unchanged beside the superset', () => {
+    const [catalogModel] = getBuiltinModels('deepseek')
+    if (catalogModel === undefined) throw new Error('the installed catalog ships no deepseek model')
+    const resolved = resolveProfiles({
+      deepseek: { models: [{ id: catalogModel.id, input: [] }] },
+    })
+    expect(resolved.get('deepseek')?.piProvider.getModels()[0]?.input).toEqual(catalogModel.input)
+  })
+})

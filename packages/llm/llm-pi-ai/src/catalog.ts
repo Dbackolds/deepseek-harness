@@ -43,6 +43,13 @@ export type PiAiModality = Model<Api>['input'][number]
  * Every pi-ai request modality. The `Record` key type is a drift gate: a pi-ai
  * upgrade that adds or removes a modality fails compilation here naming the
  * drifted key, instead of silently narrowing what a profile may declare.
+ *
+ * The gate deliberately stays pinned to pi-ai's own vocabulary: it exists to
+ * alarm on *upstream* drift, and a harness-owned modality folded into it would
+ * silence exactly that alarm — a pi-ai release adding `video` natively would
+ * then compile without anyone noticing the harness superset had become
+ * redundant. Harness-only modalities extend the gate's output through
+ * {@link DSH_MODALITIES} instead.
  */
 const MODALITY_GATE: Record<PiAiModality, true> = {
   text: true,
@@ -53,6 +60,27 @@ const MODALITY_GATE: Record<PiAiModality, true> = {
 export const MODALITIES = Object.keys(MODALITY_GATE) as readonly PiAiModality[]
 
 /**
+ * Harness modality superset: every pi-ai modality plus the harness-owned
+ * `video`. pi-ai has no video vocabulary — a video never enters pi-ai as a
+ * content block; it rides through as a text marker and the harness fetch
+ * pipeline injects the provider's `video_url` wire form — so the superset
+ * exists only where the harness reads or writes model `input`, never inside
+ * pi-ai itself.
+ */
+export type DshModality = PiAiModality | 'video'
+
+/** Every request modality a profile may declare, including the harness superset. */
+export const DSH_MODALITIES = [...MODALITIES, 'video'] as const
+
+/**
+ * One materialized model: pi-ai's descriptor with `input` widened to the
+ * harness modality superset. These records stay harness-typed end to end;
+ * the single documented crossing into pi-ai's narrower `Model<Api>` lives in
+ * `provider.ts`.
+ */
+export type DshModel = Omit<Model<Api>, 'input'> & { input: readonly DshModality[] }
+
+/**
  * One entry's modality list, or `undefined` when it states no answer. Absent
  * and empty mean the same thing — `[]` describes a model that accepts nothing
  * and could serve no request — which is what makes an entry naming a catalog
@@ -61,7 +89,7 @@ export const MODALITIES = Object.keys(MODALITY_GATE) as readonly PiAiModality[]
  * @param configured - the list a `models` or `modelOverrides` entry supplied.
  * @returns the declared modalities, or `undefined` to ask the next level.
  */
-function declaredInput(configured: readonly PiAiModality[] | undefined): Model<Api>['input'] | undefined {
+function declaredInput(configured: readonly DshModality[] | undefined): readonly DshModality[] | undefined {
   return configured === undefined || configured.length === 0 ? undefined : [...configured]
 }
 
@@ -614,12 +642,14 @@ export interface PiAiModelProfile {
    * installed catalog entry's modalities, then the route's `defaultInput`.
    * Declaring images is what makes a hand-declared vision model usable, and
    * declaring text alone corrects a catalog model whose gateway does not serve
-   * what the catalog records. This is a claim about the endpoint, not a check
-   * of it: nothing interrogates a gateway for what it accepts, so a model
-   * claiming images its endpoint refuses is refused by the provider instead,
-   * mid-turn.
+   * what the catalog records. `video` is the harness superset: a video never
+   * enters pi-ai as a content block, so declaring it gates the harness's own
+   * video admission and `video_url` injection, not anything pi-ai sends. This
+   * is a claim about the endpoint, not a check of it: nothing interrogates a
+   * gateway for what it accepts, so a model claiming an input its endpoint
+   * refuses is refused by the provider instead, mid-turn.
    */
-  input?: PiAiModality[]
+  input?: DshModality[]
   /**
    * Selectable reasoning efforts. Absent inherits the installed catalog
    * entry's capability (a hand-declared model has none and does not reason);
@@ -679,7 +709,7 @@ export interface RouteCatalogRequest {
   /** Output capability for a model neither the entry nor the catalog sizes. */
   defaultMaxTokens: number
   /** Modalities for a model neither the entry nor the catalog declares. */
-  defaultInput: Model<Api>['input']
+  defaultInput: readonly DshModality[]
 }
 
 /** Report a route the deployment cannot serve, naming the settings key at fault. */
@@ -838,8 +868,8 @@ function resolveModelCompat(
 
 /** One route's materialized catalog, plus the request caps its profile chose. */
 export interface RouteCatalog {
-  /** The materialized models in configuration order. */
-  models: readonly Model<Api>[]
+  /** The materialized models in configuration order, carrying the harness modality superset. */
+  models: readonly DshModel[]
   /**
    * Complete system-prompt templates this profile explicitly configured, by
    * model id. Empty or omitted entries never appear here.
@@ -925,7 +955,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
   const configuredMaxTokens = new Map<string, number>()
   const configuredSystemPrompts = new Map<string, string>()
   const configuredApiKeys = new Map<string, string>()
-  const models = entries.map((entry) => {
+  const models: DshModel[] = entries.map((entry): DshModel => {
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
     seen.add(entry.id)

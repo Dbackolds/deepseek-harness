@@ -4,7 +4,14 @@
  * @module dsh-llm-pi-ai/context
  */
 
-import { CallId, contentHasImage, LlmError, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
+import {
+  CallId,
+  contentHasImage,
+  contentHasVideo,
+  LlmError,
+  offloadRequestImagesWithPolicy,
+  requestImageHandleText,
+} from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
 import type {
   AttachmentId,
@@ -12,10 +19,39 @@ import type {
   ImageAttachmentRef,
   ImageRequestPolicy,
   RequestImageAttachment,
+  VideoAttachmentRef,
 } from '@deepseek-ai/dsh-attachment'
 import type { Context as PiContext, ImageContent, Message as PiMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
 import { toPiAssistant } from './replay.ts'
 import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
+
+/** Prefix every video request marker starts with, including its opening bracket. */
+export const VIDEO_REQUEST_MARKER_PREFIX = '[dsh-video-request:'
+/** Suffix every video request marker ends with. */
+const VIDEO_REQUEST_MARKER_SUFFIX = ']'
+
+/**
+ * Stable model-facing marker standing in for one video while the request
+ * travels through pi-ai, which has no video content vocabulary. The harness
+ * fetch pipeline recognizes the marker on the OpenAI-compatible wire and
+ * replaces it with the provider's `video_url` content item.
+ * @param attachmentId - durable video attachment the marker names.
+ * @returns the exact marker text the pipeline recognizes.
+ */
+export function requestVideoMarker(attachmentId: AttachmentId | string): string {
+  return `${VIDEO_REQUEST_MARKER_PREFIX}${attachmentId}${VIDEO_REQUEST_MARKER_SUFFIX}`
+}
+
+/**
+ * Extract the attachment id from a complete video request marker.
+ * @param text - one content item's text.
+ * @returns the named attachment id, or undefined when the text is not exactly one marker.
+ */
+export function parseRequestVideoMarker(text: string): string | undefined {
+  if (!text.startsWith(VIDEO_REQUEST_MARKER_PREFIX) || !text.endsWith(VIDEO_REQUEST_MARKER_SUFFIX)) return undefined
+  const attachmentId = text.slice(VIDEO_REQUEST_MARKER_PREFIX.length, -VIDEO_REQUEST_MARKER_SUFFIX.length)
+  return attachmentId.length > 0 ? attachmentId : undefined
+}
 
 /** Join the text blocks of a harness message. */
 function flattenText(message: Message): string {
@@ -33,12 +69,24 @@ function toolResultText(blocks: readonly ContentBlock[]): string {
     : block.type === 'tool-result' ? toolResultText(block.content) : '').join('')
 }
 
-/** Reject image roles that pi-ai cannot replay before request-size offloading can replace them. */
-function assertSupportedImageRoles(messages: readonly Message[]): void {
+/**
+ * Reject media pi-ai cannot replay in the role that carries it, before
+ * request-size offloading could replace it. User-role content and tool
+ * results (which pi-ai also receives as user-side material) are the two
+ * homes images and videos legitimately reach.
+ */
+function assertSupportedMediaRoles(messages: readonly Message[]): void {
   for (const message of messages) {
-    if (message.role !== 'user' && contentHasImage(message.content)) {
+    if (message.role === 'user') continue
+    if (contentHasImage(message.content)) {
       throw new LlmError(
         `pi-ai cannot represent an image in an in-history ${message.role} message`,
+        'UNSUPPORTED_CONTENT',
+      )
+    }
+    if (contentHasVideo(message.content)) {
+      throw new LlmError(
+        `pi-ai cannot represent a video in an in-history ${message.role} message`,
         'UNSUPPORTED_CONTENT',
       )
     }
@@ -50,6 +98,7 @@ async function userContent(
   requestImages: ReadonlyMap<AttachmentId, RequestImageAttachment>,
 ): Promise<string | (TextContent | ImageContent)[]> {
   const content: (TextContent | ImageContent)[] = []
+  let sawVideo = false
   for (const block of blocks) {
     switch (block.type) {
       case 'text':
@@ -65,6 +114,13 @@ async function userContent(
         })
         break
       }
+      case 'video':
+        // The marker must stay a standalone text item: the fetch pipeline
+        // replaces whole marker items with the provider's video content, so
+        // joining it into surrounding text would strand it on the wire.
+        sawVideo = true
+        content.push({ type: 'text', text: requestVideoMarker(block.attachment.attachmentId) })
+        break
       case 'tool-result':
         {
           const nested = await userContent(block.content, requestImages)
@@ -80,6 +136,9 @@ async function userContent(
         break
     }
   }
+  // A video marker forces the array form even when every item is text, so the
+  // marker survives as its own item through pi-ai's message conversion.
+  if (sawVideo) return content
   if (content.every(block => block.type === 'text')) return content.map(block => block.text).join('')
   return content
 }
@@ -91,6 +150,23 @@ function collectImageRefs(
   for (const block of blocks) {
     if (block.type === 'image') refs.set(block.attachment.attachmentId, block.attachment)
     else if (block.type === 'tool-result') collectImageRefs(block.content, refs)
+  }
+}
+
+/**
+ * Collect every unique video reference in request and nested-block order,
+ * keyed by attachment id. One video referenced from several messages is read
+ * once per request.
+ * @param blocks - typed model content blocks.
+ * @param refs - collected reference map, keyed by attachment id.
+ */
+export function collectVideoRefs(
+  blocks: readonly ContentBlock[],
+  refs: Map<AttachmentId, VideoAttachmentRef>,
+): void {
+  for (const block of blocks) {
+    if (block.type === 'video') refs.set(block.attachment.attachmentId, block.attachment)
+    else if (block.type === 'tool-result') collectVideoRefs(block.content, refs)
   }
 }
 
@@ -139,6 +215,9 @@ function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: st
   for (const message of options.messages) {
     if (contentHasImage(message.content)) {
       throw new LlmError('pi-ai image conversion requires the durable attachment service', 'UNSUPPORTED_CONTENT')
+    }
+    if (contentHasVideo(message.content)) {
+      throw new LlmError('pi-ai video conversion requires the durable attachment service', 'UNSUPPORTED_CONTENT')
     }
     if (message.role === 'system') {
       messages.push({ role: 'user', content: flattenText(message), timestamp: 0 })
@@ -225,7 +304,7 @@ async function toPiContextWithImages(
     maxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
   },
 ): Promise<PiContext> {
-  assertSupportedImageRoles(options.messages)
+  assertSupportedMediaRoles(options.messages)
   const requestMessages = offloadRequestImagesWithPolicy(options.messages, {
     representation: 'base64',
     ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },

@@ -401,7 +401,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     line: string,
     images: readonly SubmitImageAttachment[] = [],
   ): Promise<SubmitOutcome> {
-    const result = await this.ctx.remote.commands.execute(session.sessionId, line, images)
+    const result = await this.ctx.remote.commands.execute(session.sessionId, line, images, [])
     if (!result.ok) throw new Error(`command.execute failed: ${result.error.code}: ${result.error.message}`)
     if (result.value === undefined) return { kind: 'error', text: `unknown or malformed command: ${line}` }
     this.notifyExecuted(session.sessionId, submittedCommandName(line), result.value.result)

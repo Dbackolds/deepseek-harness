@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseJsonRepairingStringLiterals } from '../src/json-repair.ts'
-import { acquireOpenAiSseFetchRepair } from '../src/openai-sse-fetch.ts'
+import { acquireOpenAiSseFetchRepair } from '../src/openai-fetch-pipeline.ts'
 import {
   createSseJsonRepairStream,
   indexOfEventTerminator,

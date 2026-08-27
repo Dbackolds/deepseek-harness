@@ -49,6 +49,12 @@ describe('attachment rejection copy', () => {
     maxImageDimension: 2000,
     mediaTypes: ['image/png'] as const,
   }
+  const videoLimits = {
+    maxVideoBytes: 100 * 1024 * 1024,
+    maxVideosPerMessage: 2,
+    maxMessageVideoBytes: 200 * 1024 * 1024,
+    mediaTypes: ['video/mp4'] as const,
+  }
 
   it('renders megabytes without a trailing fraction unless one exists', () => {
     expect(imageSizeText(10 * 1024 * 1024)).toBe('10MB')
@@ -71,12 +77,30 @@ describe('attachment rejection copy', () => {
       .toBe('图片发送失败（IMAGE_DIMENSION_TOO_LARGE），请重新添加图片后再试')
   })
 
+  it('maps video reasons to the video copy with the projected video limits', () => {
+    expect(attachmentErrorText(t, 'MODEL_DOES_NOT_SUPPORT_VIDEOS', limits, videoLimits))
+      .toBe('当前模型不支持视频，请切换支持视频的模型')
+    expect(attachmentErrorText(t, 'SUBAGENT_VIDEO_UNSUPPORTED', limits, videoLimits)).toBe('子智能体会话暂不支持视频')
+    expect(attachmentErrorText(t, 'INVALID_VIDEO', limits, videoLimits)).toBe('仅支持 MP4、MKV、MOV 格式的视频')
+    expect(attachmentErrorText(t, 'UNSUPPORTED_VIDEO_TYPE', limits, videoLimits)).toBe('仅支持 MP4、MKV、MOV 格式的视频')
+    expect(attachmentErrorText(t, 'TOO_MANY_VIDEOS', limits, videoLimits)).toBe('一条消息最多添加 2 个视频')
+    expect(attachmentErrorText(t, 'VIDEO_TOO_LARGE', limits, videoLimits)).toBe('单个视频不能超过 100MB')
+    expect(attachmentErrorText(t, 'VIDEOS_TOO_LARGE', limits, videoLimits)).toBe('视频总大小超过 200MB，请移除部分视频')
+    expect(attachmentErrorText(enT, 'TOO_MANY_VIDEOS', limits, videoLimits)).toBe('A message can include up to 2 videos')
+  })
+
   it('folds unknown reasons and limit reasons without projected limits into the send-failed line', () => {
     expect(attachmentErrorText(t, 'INVALID_IMAGE_BASE64')).toBe('图片发送失败（INVALID_IMAGE_BASE64），请重新添加图片后再试')
     expect(attachmentErrorText(t, 'TOO_MANY_IMAGES')).toBe('图片发送失败（TOO_MANY_IMAGES），请重新添加图片后再试')
     expect(attachmentErrorText(t, 'IMAGE_TOO_LARGE')).toBe('图片发送失败（IMAGE_TOO_LARGE），请重新添加图片后再试')
     expect(attachmentErrorText(t, 'IMAGES_TOO_LARGE')).toBe('图片发送失败（IMAGES_TOO_LARGE），请重新添加图片后再试')
     expect(attachmentErrorText(t, 'IMAGE_DIMENSION_TOO_LARGE')).toBe('图片发送失败（IMAGE_DIMENSION_TOO_LARGE），请重新添加图片后再试')
+    // Limit-known video codes without the projection keep the video kind.
+    expect(attachmentErrorText(t, 'TOO_MANY_VIDEOS')).toBe('视频发送失败（TOO_MANY_VIDEOS），请重新添加视频后再试')
+    expect(attachmentErrorText(t, 'VIDEO_TOO_LARGE')).toBe('视频发送失败（VIDEO_TOO_LARGE），请重新添加视频后再试')
+    expect(attachmentErrorText(t, 'VIDEOS_TOO_LARGE')).toBe('视频发送失败（VIDEOS_TOO_LARGE），请重新添加视频后再试')
+    // Unknown codes stay on the image line (the historical default).
+    expect(attachmentErrorText(t, 'ATTACHMENT_CORRUPT')).toBe('图片发送失败（ATTACHMENT_CORRUPT），请重新添加图片后再试')
   })
 })
 

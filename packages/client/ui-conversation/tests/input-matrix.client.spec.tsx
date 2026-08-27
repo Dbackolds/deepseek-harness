@@ -59,6 +59,9 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
       file: new File([Uint8Array.of(1)], `${id}.png`, { type: 'image/png' }),
       previewUrl: `blob:${id}`,
     })),
+    addVideos: () => null,
+    removeVideo: () => {},
+    draftVideos: () => [],
     resolveSubmitMode: () => 'queue',
     toggleCommandMenu: vi.fn(),
     useNotices: bindSnapshotSelector(shell.notices),
@@ -83,7 +86,7 @@ function bench(over?: {
   const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'success' }))
   const serialize = vi.fn(over?.serialize ?? (() => Promise.resolve<readonly SubmitImageAttachment[]>([])))
   const release = vi.fn()
-  const shell = new SessionInputShell({ actx: SCTX, defaultSink: sink, commandImages: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` } })
+  const shell = new SessionInputShell({ actx: SCTX, defaultSink: sink, commandImages: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported`, videosUnsupportedNotice: () => 'videos-unsupported' } })
   const wiring = shell
   const view = mountBar(shell, over)
   const textarea = view.container.querySelector('textarea')!
@@ -109,7 +112,7 @@ describe('matrix row: plain', () => {
     fireEvent.change(textarea, { target: { value: '普通消息' } })
     expect(shell.snapshot.claim).toBeUndefined()
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('普通消息', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('普通消息', [], [], 'queue', expect.any(AbortSignal))
     expect(shell.snapshot.phase).toBe('submitting')
     await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
     expect(shell.snapshot.claim).toBeUndefined()
@@ -301,7 +304,7 @@ describe('matrix row: locked (session disabled)', () => {
     expect((textarea).disabled).toBe(false)
     fireEvent.change(textarea, { target: { value: '排队' } })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('排队', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('排队', [], [], 'queue', expect.any(AbortSignal))
   })
 })
 

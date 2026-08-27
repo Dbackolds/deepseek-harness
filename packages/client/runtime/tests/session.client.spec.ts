@@ -518,6 +518,66 @@ describe('prompt and cancel errors', () => {
     })
   })
 
+  it('refuses image and video parts on subagent continuation addresses before any transport', async () => {
+    const api = new FakeApiClient()
+    const session = new Session(SID, api, fakeRemote(), {
+      address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
+      parentAvailable: true,
+    })
+    await session.open()
+    const refusedVideo = await session.prompt([
+      { type: 'video', mediaType: 'video/mp4', data: 'AAAA', name: 'clip.mp4' },
+    ], 'queue')
+    expect(refusedVideo).toMatchObject({
+      ok: false,
+      error: {
+        code: 'attachment-error',
+        message: 'Video input is unavailable for subagent continuations.',
+        details: { reason: 'SUBAGENT_VIDEO_UNSUPPORTED' },
+      },
+    })
+    expect(session.getSnapshot().promptError).toMatchObject({
+      op: 'send', error: { details: { reason: 'SUBAGENT_VIDEO_UNSUPPORTED' } },
+    })
+    expect(api.callsOf('subagent.prompt')).toEqual([])
+    // The image gate still refuses independently.
+    const refusedImage = await session.prompt([
+      { type: 'image', mediaType: 'image/png', data: 'AAAA', name: 'dot.png' },
+    ], 'queue')
+    expect(refusedImage).toMatchObject({
+      ok: false,
+      error: { details: { reason: 'SUBAGENT_IMAGE_UNSUPPORTED' } },
+    })
+    expect(api.callsOf('subagent.prompt')).toEqual([])
+  })
+
+  it('sends prompt video parts through the ordinary session transport', async () => {
+    const api = new FakeApiClient()
+    const session = new Session(SID, api, fakeRemote())
+    await session.open()
+    const result = await session.prompt([
+      { type: 'text', text: 'describe' },
+      {
+        type: 'video',
+        mediaType: 'video/mp4',
+        data: 'AAAA',
+        name: 'clip.mp4',
+      },
+    ], 'queue')
+    expect(result).toEqual({ ok: true, value: { accepted: true } })
+    expect(api.callsOf('session.prompt')).toEqual([
+      {
+        sessionId: SID,
+        mode: 'queue',
+        content: [
+          { type: 'text', text: 'describe' },
+          { type: 'video', mediaType: 'video/mp4', data: 'AAAA', name: 'clip.mp4' },
+        ],
+        clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+    ])
+  })
+
   it('keeps one-shot history readable without exposing prompt or cancel transport', async () => {
     const api = new FakeApiClient()
     const session = new Session(SID, api, fakeRemote(), {

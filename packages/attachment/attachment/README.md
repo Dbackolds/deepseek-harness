@@ -8,16 +8,19 @@ Unsent composer images remain browser-owned temporary drafts. `validateImage` ru
 
 `admitEncodedImages(attachments, images)` is the shared wire entry used by every RPC endpoint that accepts browser uploads (the session prompt endpoint and the command executor): it enforces canonical base64 on every member, then delegates batch admission — limits, validation, ordered commit — to `saveImages`. The base64 upload form is `EncodedImageAttachment`, exported from `@deepseek-ai/dsh-attachment/types` so wire contracts can reference it.
 
+Video rides the same seam with an untransformed store. `VideoAttachmentRef` records the sniffed container, byte length, and sanitized name; `validateVideo`, `saveVideos`, `saveVideo`, and `readVideo` mirror their image counterparts, with `videoLimits` governing per-video, count, and aggregate-byte admission. Backends without video support keep the default zero-admission policy, so every video operation fails as caller-correctable `UNSUPPORTED_VIDEO_TYPE` and `readVideoRequest` defaults to `ATTACHMENT_PROJECTION_UNSUPPORTED`. `admitEncodedVideos` mirrors `admitEncodedImages`, and `isVideoAdmissionError` recognizes the video admission subset (`TOO_MANY_VIDEOS`, `VIDEOS_TOO_LARGE`, `UNSUPPORTED_VIDEO_TYPE`, `INVALID_VIDEO`, `VIDEO_TOO_LARGE`).
+
 ## Model Experience
 
-Indirectly, through the role-neutral core `ImageBlock` and provider adapters that resolve its durable reference into an exact request version. Request descriptors expose the complete attachment id and actual request dimensions.
+Indirectly, through the role-neutral core `ImageBlock` and provider adapters that resolve its durable reference into an exact request version. Request descriptors expose the complete attachment id and actual request dimensions. Video blocks reference the stored bytes directly; the request version is the raw passthrough form `raw-v1`.
 
 #### KV Cache effect
 
-Adding an image changes the provider request and therefore invalidates the affected request suffix.
+Adding an image or video changes the provider request and therefore invalidates the affected request suffix.
 
 ## Known Limitations and Deferred Work
 
-- Version one accepts PNG, JPEG, WebP, and GIF only.
+- Version one accepts PNG, JPEG, WebP, and GIF images and MP4, Matroska, and QuickTime video containers.
+- Video is stored and replayed byte-identically: no transcode, duration, or resolution probing, and WebM is refused at admission.
 - Retention and garbage collection are deferred because resumed and forked sessions may share immutable objects.
-- Generic files, audio, video, and persistent unsent drafts require separate lifecycle and provider contracts.
+- Generic files, audio, and persistent unsent drafts require separate lifecycle and provider contracts.

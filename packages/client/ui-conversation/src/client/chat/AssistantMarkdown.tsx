@@ -89,6 +89,10 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
           <Fragment key={start}>
             {renderMessageImages({
               images: group.map(({ attachment }) => ({ attachment })),
+              // Assistants declare text-only output today; a video block in
+              // assistant history degrades upstream (llm context), so the
+              // gallery's video half stays empty here.
+              videos: [],
               align: 'start',
             })}
           </Fragment>,

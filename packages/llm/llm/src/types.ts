@@ -5,7 +5,7 @@
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { CallId, ProviderRequestId, ReasoningEffortId } from './brand.ts'
 import type { Message } from './message.ts'
 
@@ -74,6 +74,18 @@ export interface ImageBlock {
   attachment: ImageAttachmentRef
 }
 
+/**
+ * A durable stored-video reference, valid in user or tool-result content.
+ * Assistant output is text-only across current adapters, so no adapter emits
+ * the block; adapters that cannot carry video project it to text before the
+ * request leaves the harness.
+ */
+export interface VideoBlock {
+  type: 'video'
+  /** Immutable stored bytes and container metadata owned by the attachment service. */
+  attachment: VideoAttachmentRef
+}
+
 /** A tool invocation requested by the model. */
 export interface ToolCallBlock {
   type: 'tool-call'
@@ -100,6 +112,7 @@ export interface ContentBlockMap {
   'text': TextBlock
   'reasoning': ReasoningBlock
   'image': ImageBlock
+  'video': VideoBlock
   'tool-call': ToolCallBlock
   'tool-result': ToolResultBlock
 }
@@ -152,6 +165,7 @@ export interface LlmProviderInfo {
 export interface ModelModalityMap {
   text: 'text'
   image: 'image'
+  video: 'video'
 }
 
 /** Any declared provider model modality. */

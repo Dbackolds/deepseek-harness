@@ -9,6 +9,7 @@ import {
   type SessionSearchResultItem, type SessionSummary, type SubagentDescendantSummary,
   type WorkspaceId, type WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionEmptyWorkspaces } from './stores.ts'
 
 /** Group key for Sessions outside every project Workspace (Chat / No Repo). */
 export const UNGROUPED_KEY = ''
@@ -360,9 +361,12 @@ export function partitionSessionActivity(sessions: readonly SessionNode[]): read
 /**
  * Derive the workspace browser groups with every session as a top-level row.
  *
- * Every group shows; sessions populate under expanded groups in the selected
- * local order. Blank sessions stay hidden until the first accepted prompt;
- * archived sessions are excluded everywhere.
+ * Project groups appear in Host order, then Chat. Sessions populate under
+ * expanded groups in the selected local order. Blank sessions stay hidden
+ * until the first accepted prompt; archived sessions are excluded everywhere.
+ * Auto-hide (`emptyWorkspaces === 'hide'`) omits a project group whose
+ * visible `sessionCount` is 0 unless that group owns `list.current`
+ * (including a blank current Session). Chat / No Repo always remains.
  * Content search lives outside this derivation
  * (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot (`current` feeds containsCurrent).
@@ -373,7 +377,9 @@ export function partitionSessionActivity(sessions: readonly SessionNode[]): read
  * project Workspaces stay out of the main grouped list; callers that need
  * Hidden-section rows pass those ids into {@link deriveHiddenGroups}. A
  * hidden No Repo still occupies the trailing Chat bucket so chats remain
- * reachable without a project Workspace.
+ * reachable without a project Workspace. Auto-hide never writes this set.
+ * @param emptyWorkspaces - `'hide'` omits empty project groups from this
+ * list. Any other value is Always show.
  * @returns group sections in render order (visible project Workspaces, then Chat).
  */
 export function deriveGroups(
@@ -382,6 +388,7 @@ export function deriveGroups(
   archivedSessionIds: readonly SessionId[],
   view: TreeView,
   hiddenWorkspaceIds: readonly WorkspaceId[] = [],
+  emptyWorkspaces: SessionEmptyWorkspaces = 'show',
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
   const hidden = new Set(hiddenWorkspaceIds)
@@ -396,6 +403,12 @@ export function deriveGroups(
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)) {
     if (g.key !== UNGROUPED_KEY && g.workspaceId !== undefined && hidden.has(g.workspaceId)) continue
+    if (
+      emptyWorkspaces === 'hide'
+      && g.key !== UNGROUPED_KEY
+      && g.sessions.length === 0
+      && g.key !== currentGroup
+    ) continue
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,

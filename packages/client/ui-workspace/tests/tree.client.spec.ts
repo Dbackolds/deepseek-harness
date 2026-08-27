@@ -293,6 +293,39 @@ describe('deriveGroups', () => {
     const looseGroups = deriveGroups({ ...list(owned, loose), current: loose.id }, [ws], noArchive, view())
     expect(looseGroups.find(group => group.key === UNGROUPED_KEY)!.containsCurrent).toBe(true)
   })
+
+  it('auto-hides empty project Workspaces while keeping Chat and the current Session owner', () => {
+    const blank = { ...summary('blank', 1), blank: true }
+    const archivedOnly = summary('gone', 2)
+    const subagentOnly = { ...summary('child', 4), origin: 'subagent' as const }
+    const visible = summary('kept', 3)
+    const workspaces = [
+      workspace('empty', []),
+      workspace('archived-only', ['gone']),
+      workspace('subagent-only', ['child']),
+      workspace('current-blank', ['blank']),
+      workspace('kept', ['kept']),
+    ]
+    const sessions = { ...list(blank, archivedOnly, subagentOnly, visible), current: blank.id }
+    const shown = deriveGroups(sessions, workspaces, archived('gone'), view(), [], 'show')
+    expect(shown.map(group => group.key)).toEqual([
+      'empty', 'archived-only', 'subagent-only', 'current-blank', 'kept', UNGROUPED_KEY,
+    ])
+    const hidden = deriveGroups(sessions, workspaces, archived('gone'), view(), [], 'hide')
+    expect(hidden.map(group => group.key)).toEqual(['current-blank', 'kept', UNGROUPED_KEY])
+    expect(hidden.find(group => group.key === UNGROUPED_KEY)!.sessionCount).toBe(0)
+    expect(deriveGroups(sessions, workspaces, archived('gone'), view()).map(group => group.key))
+      .toEqual(['empty', 'archived-only', 'subagent-only', 'current-blank', 'kept', UNGROUPED_KEY])
+  })
+
+  it('keeps Host-hidden Workspaces in Hidden rather than omitting them as empty', () => {
+    const sessions = list()
+    const workspaces = [workspace('hidden-empty', []), workspace('visible-empty', [])]
+    const groups = deriveGroups(sessions, workspaces, noArchive, view(), [wid('hidden-empty')], 'hide')
+    expect(groups.map(group => group.key)).toEqual([UNGROUPED_KEY])
+    expect(deriveHiddenGroups(sessions, workspaces, noArchive, view(), [wid('hidden-empty')])
+      .map(group => group.key)).toEqual(['hidden-empty'])
+  })
 })
 
 describe('deriveFlat', () => {
@@ -579,6 +612,9 @@ describe('createWorkspaceViewStore', () => {
     expect(store.getSnapshot().groupBy).toBe('workspace')
     expect(store.getSnapshot().orderBy).toBe('updated')
     expect(store.getSnapshot().activityLayout).toBe('folders')
+    expect(store.getSnapshot().emptyWorkspaces).toBe('show')
+    store.actions.setEmptyWorkspaces('hide')
+    expect(store.getSnapshot().emptyWorkspaces).toBe('hide')
     store.actions.setGroupBy('flat')
     store.actions.setOrderBy('updated')
     store.actions.setActivityLayout('inline')
@@ -602,6 +638,33 @@ describe('createWorkspaceViewStore', () => {
       activityExpansion: { 'alpha:unread': false },
       pinnedSessionIds: ['one'],
     })
+  })
+
+  it('treats a v8 persist blob without emptyWorkspaces as Always show', () => {
+    const backing = new Map<string, string>([
+      ['dsh.workspace.view.v8', JSON.stringify({
+        groupBy: 'workspace',
+        orderBy: 'updated',
+        activityLayout: 'folders',
+        groupExpansion: {},
+        sessionOrderByAccount: {},
+        sessionUpdatedAtByAccount: {},
+        activityExpansion: {},
+        pinnedSessionIds: [],
+      })],
+    ])
+    const storage = {
+      getItem: (key: string) => backing.get(key) ?? null,
+      setItem: (key: string, value: string) => { backing.set(key, value) },
+      removeItem: (key: string) => { backing.delete(key) },
+    }
+    const previous = globalThis.localStorage
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
+    try {
+      expect(createWorkspaceViewStore().create().getSnapshot().emptyWorkspaces).not.toBe('hide')
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous })
+    }
   })
 
   it('rehydrates pinned Session ids from the persist key', () => {

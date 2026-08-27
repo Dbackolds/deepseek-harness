@@ -89,6 +89,7 @@ export {
 } from './catalog.ts'
 export { Config } from './config.ts'
 export type {
+  DshModality,
   PiAiCompatProfile,
   PiAiModality,
   PiAiModelOverride,

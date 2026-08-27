@@ -8,6 +8,8 @@
 
 请求版本保存在 `<DSH_HOME>/attachments/v1/request-images/`。`readImageRequest` 在不放大小图的前提下，把存储的规范化附件缩放到总像素预算内，再执行独立的编码字节上限。请求编码器使用同一分类分支：低色数图片先尝试 PNG，只有不带 alpha 通道时才使用 palette，再尝试质量 85 和 80 的 WebP；其他透明图片依次尝试质量 85 和 80 的 WebP；其他非透明图片依次尝试质量 85 和 80 的 JPEG。候选按需执行，两个质量档均超限后才缩小尺寸。缓存身份包含附件 ID、变换策略版本、像素和字节预算及固定编码参数。缓存字节在使用前会完整解码并校验为 8-bit sRGB/sRGBA。同一身份的并发调用共享一次变换和缓存写入；取消一个等待方不会取消共享任务。调用方组合单数读取得到有序批次，服务的 FIFO 限流器通过 `imageCompressionConcurrency` 限制同时执行的规范化和请求变换。该配置范围为 1 至 8，默认值为 2；文件发布仍在准备结束后按顺序执行。
 
+视频对象共享同一内容寻址目录树和发布协议。准入只嗅探容器头：ISO-BMFF 文件按 `ftyp` 主品牌映射（`qt  ` 为 QuickTime，其余品牌为 MP4），EBML 头仅在 `DocType` 为 `matroska` 时接受；WebM 以 `UNSUPPORTED_VIDEO_TYPE` 失败，无法解析的内容以 `INVALID_VIDEO` 失败。声明类型必须与嗅探结果一致。提交字节按原样存储，因此引用对其描述精确。默认每条消息最多 2 个视频、总量 200MiB，单个视频 100MiB（`maxVideoBytes`、`maxVideosPerMessage`、`maxMessageVideoBytes`）。`readVideo` 重新校验摘要并重新嗅探容器头；`readVideoRequest` 以版本 `raw-v1` 返回精确字节的规范 base64——没有缓存、转码或探测。
+
 `DSH_HOME` 按共享路径策略解析：显式配置、`$DSH_HOME`，最后是 `~/.dsh`。会话日志只包含引用和经过校验的元数据，绝不包含这个宿主路径。`readImage` 会把可选取消信号传入文件系统读取、在校验前后观察该信号，并保留取消语义，而不会将其包装成 `ATTACHMENT_READ_FAILED`。
 
 ## 模型体验
@@ -23,4 +25,5 @@
 - 对象会无限期保留；基于引用的垃圾回收尚未实现。
 - 本地后端假定宿主与提供方适配器共享同一个文件系统服务。
 - 动态 GIF 源图只保留首帧；动画在版本一图片契约之外。
+- 视频仅接受 MP4、Matroska 和 QuickTime；WebM 与音频容器被拒绝，不执行转码或探测。
 - 规范化和请求版本编码器由安装的 sharp/libvips 构建钉定；编码器或变换策略版本升级会让未来的规范化附件或请求变体产生新地址，已有对象保持有效。

@@ -18,7 +18,9 @@ import type {
 } from './contract/slots.ts'
 import type { InputNotice } from './input/contract.ts'
 import { createChatStore } from './stores.ts'
-import { ConversationController, UnsupportedImageMediaTypeError } from './service.ts'
+import {
+  ConversationController, UnsupportedImageMediaTypeError, UnsupportedVideoMediaTypeError,
+} from './service.ts'
 import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
 import type { ComposerBlock } from './input/blocks.ts'
@@ -219,15 +221,19 @@ export function apply(ctx: Context): void {
           const from = inputHub.shell(sessionId)
           const draft = from.snapshot.draft
           const imageIds = from.snapshot.imageIds
+          const videoIds = from.snapshot.videoIds
           const next = inputHub.shell(nextId)
-          if (imageIds.length === 0 || next.addImages(imageIds)) {
+          if ((imageIds.length === 0 || next.addImages(imageIds)) && (videoIds.length === 0 || next.addVideos(videoIds))) {
             if (draft !== '') {
               next.setDraft(draft)
               from.setDraft('')
             }
-            if (imageIds.length > 0) {
-              for (const id of imageIds) from.removeImage(id)
-            }
+            for (const id of imageIds) from.removeImage(id)
+            for (const id of videoIds) from.removeVideo(id)
+          } else {
+            // A refused half must not strand the accepted half in the target.
+            for (const id of imageIds) next.removeImage(id)
+            for (const id of videoIds) next.removeVideo(id)
           }
         }
         sessions.open(nextId)
@@ -296,6 +302,9 @@ export function apply(ctx: Context): void {
           addImages: undefined,
           removeImage: undefined,
           draftImages: undefined,
+          addVideos: undefined,
+          removeVideo: undefined,
+          draftVideos: undefined,
           resolveSubmitMode: (running, gesture, steeringAvailable) =>
             submissionPolicy.resolve(running, gesture, steeringAvailable),
           toggleCommandMenu: undefined,
@@ -330,6 +339,27 @@ export function apply(ctx: Context): void {
           shell.removeImage(id)
         },
         draftImages: ids => conversation.draftImages(ids),
+        addVideos: (files) => {
+          try {
+            const videos = conversation.createDraftVideos(files)
+            if (!shell.addVideos(videos.map(video => video.id))) {
+              conversation.releaseDraftVideos(videos)
+            }
+            return null
+          } catch (error: unknown) {
+            if (error instanceof UnsupportedVideoMediaTypeError) {
+              // Positive copy: the supported list is fixed in videoMediaType,
+              // and naming it beats echoing the rejected MIME type back.
+              return t('video.unsupportedType')
+            }
+            return error instanceof Error ? error.message : String(error)
+          }
+        },
+        removeVideo: (id) => {
+          conversation.releaseDraftVideo(id)
+          shell.removeVideo(id)
+        },
+        draftVideos: ids => conversation.draftVideos(ids),
         resolveSubmitMode: (running, gesture, steeringAvailable) =>
           submissionPolicy.resolve(running, gesture, steeringAvailable),
         toggleCommandMenu: inputTriggers === undefined
@@ -404,6 +434,7 @@ export function apply(ctx: Context): void {
         },
         loadOlder: () => { void scoped.loadOlder() },
         loadImage: attachment => conversation.resolveImage(sessionId, attachment),
+        loadVideo: attachment => conversation.resolveVideo(sessionId, attachment),
         // Unregistered 'trajectory' id is safe: the tab ring falls back to
         // the first view, and the untouched inspect target stays inert.
         inspectCall: (callId) => {

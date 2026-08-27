@@ -7,6 +7,9 @@ export type { AttachmentId } from './brand.ts'
 /** Raster image formats accepted by the version-one attachment path. */
 export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
 
+/** Video container formats accepted by the version-one attachment path. */
+export type VideoMediaType = 'video/mp4' | 'video/x-matroska' | 'video/quicktime'
+
 /** Durable, serializable reference to one immutable normalized image. */
 export interface ImageAttachmentRef {
   /** Opaque storage identifier; never a filesystem path or bearer URL. */
@@ -96,4 +99,62 @@ export interface RequestImageAttachment {
   space: 'srgb'
   /** Whether the encoded request version retains an alpha channel. */
   hasAlpha: boolean
+}
+
+/** Durable, serializable reference to one immutable stored video. */
+export interface VideoAttachmentRef {
+  /** Opaque storage identifier; never a filesystem path or bearer URL. */
+  attachmentId: AttachmentId
+  /** Container media type verified from the stored bytes. */
+  mediaType: VideoMediaType
+  /** Exact stored byte length. */
+  bytes: number
+  /** Optional display name stripped of local path information. */
+  name?: string
+}
+
+/** Deployment-resolved limits used by video upload admission and request buffering. */
+export interface VideoAttachmentLimits {
+  maxVideoBytes: number
+  maxVideosPerMessage: number
+  maxMessageVideoBytes: number
+  mediaTypes: readonly VideoMediaType[]
+}
+
+/** Base64-encoded video upload accompanying one wire request. */
+export interface EncodedVideoAttachment {
+  /** Declared media type, verified against the sniffed container during admission. */
+  mediaType: VideoMediaType
+  /** Canonical base64 encoding of the video bytes. */
+  data: string
+  /** Optional display name; it is never interpreted as a path. */
+  name?: string
+}
+
+/** Request to validate and durably commit one video. */
+export interface SaveVideoAttachment {
+  data: Uint8Array
+  /** Caller-declared media type, checked against the sniffed container header. */
+  mediaType: VideoMediaType
+  /** Optional browser/provider display name; it is never interpreted as a path. */
+  name?: string
+}
+
+/** Stored video bytes returned after reference and digest verification. */
+export interface StoredVideoAttachment {
+  ref: VideoAttachmentRef
+  data: Uint8Array
+}
+
+/** Raw request version derived from one stored video; bytes pass through untransformed. */
+export interface RequestVideoAttachment {
+  /** Durable stored video from which this request version was derived. */
+  attachment: VideoAttachmentRef
+  /** Canonical base64 encoding of the exact stored bytes. */
+  data: string
+  mediaType: VideoMediaType
+  /** Exact stored byte length before base64 expansion. */
+  bytes: number
+  /** Raw passthrough version; the only video request form version one defines. */
+  version: 'raw-v1'
 }

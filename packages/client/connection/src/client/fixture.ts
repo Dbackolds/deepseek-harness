@@ -20,7 +20,7 @@ import type {
   ToolResultMessage,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
-import type { AttachmentIdType, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentIdType, ImageAttachmentRef, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
   SessionEvent,
   SessionId,
@@ -1090,6 +1090,13 @@ function projectionValuesOf(log: readonly SessionEvent[]): Record<string, unknow
     maxImagePixels: 40_000_000,
     mediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
   }
+  // Same regime for video intake (mirrors the attachment-local defaults).
+  values['videoLimits'] = {
+    maxVideoBytes: 100 * 1024 * 1024,
+    maxVideosPerMessage: 2,
+    maxMessageVideoBytes: 200 * 1024 * 1024,
+    mediaTypes: ['video/mp4', 'video/x-matroska', 'video/quicktime'],
+  }
   return values
 }
 
@@ -1533,7 +1540,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     session.sessionId,
     { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
   ]))
-  const attachments = new Map<string, { attachment: ImageAttachmentRef; data: string }>([[
+  const attachments = new Map<string, { attachment: ImageAttachmentRef | VideoAttachmentRef; data: string }>([[
     String(FIXTURE_IMAGE_REF.attachmentId),
     { attachment: FIXTURE_IMAGE_REF, data: FIXTURE_IMAGE_DATA },
   ]])
@@ -1762,7 +1769,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         ],
       }
     },
-    execute(id: SessionId, line: string, images: readonly unknown[] = []): RpcResult<CommandExecution | undefined> {
+    execute(
+      id: SessionId,
+      line: string,
+      images: readonly unknown[] = [],
+      videos: readonly unknown[] = [],
+    ): RpcResult<CommandExecution | undefined> {
       const missing = requireGoalSession(id)
       if (missing !== undefined) return missing
       // Structured split mirroring the Host parser: name + verbatim rawInput
@@ -1770,13 +1782,22 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       const match = /^\/(\S+)((?:\s.*)?)$/.exec(line.trim())
       const name = match?.[1]
       const args = match?.[2] ?? ''
+      // Mirror the Host video policy: no command declares video input, so
+      // every known command refuses a submitted video after resolution.
+      const known = ['permission', 'goal', 'compact', 'echo', 'plan']
+      if (videos.length > 0 && name !== undefined && known.includes(name)) {
+        const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+        append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
+        const result: CommandResult = { kind: 'error', text: `/${name} does not accept video attachments` }
+        append(id, { type: 'command/done', data: { commandId, ...result } })
+        return { ok: true, value: { commandId, result } }
+      }
       // Mirror the Host image policy AFTER command resolution, matching the
       // executor's order (an unknown name answers undefined and logs no
       // lifecycle): the declaration rejection covers every known command
       // without `input.images`, and the two producer grammar rejections cover
       // the declaring commands' control-only lines. The fixture stores no
       // bytes, so an accepted batch is acknowledged and dropped.
-      const known = ['permission', 'goal', 'compact', 'echo', 'plan']
       if (images.length > 0 && name !== undefined && known.includes(name)) {
         const rejection = name !== 'goal' && name !== 'plan'
           ? `/${name} does not accept image attachments`
@@ -2578,14 +2599,25 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         const userText = content.map(b => (b.type === 'text' ? b.text : '')).join('')
         const durable: ContentBlock[] = content.map((block) => {
           if (block.type === 'text') return block
+          const bytes = Math.max(
+            1,
+            Math.floor(block.data.length * 3 / 4)
+            - (block.data.endsWith('==') ? 2 : block.data.endsWith('=') ? 1 : 0),
+          )
+          if (block.type === 'video') {
+            const attachment: VideoAttachmentRef = {
+              attachmentId: `fixture:${randomUuid()}` as AttachmentIdType,
+              mediaType: block.mediaType,
+              bytes,
+              ...block.name === undefined ? {} : { name: block.name },
+            }
+            attachments.set(String(attachment.attachmentId), { attachment, data: block.data })
+            return { type: 'video', attachment }
+          }
           const attachment: ImageAttachmentRef = {
             attachmentId: `fixture:${randomUuid()}` as AttachmentIdType,
             mediaType: block.mediaType,
-            bytes: Math.max(
-              1,
-              Math.floor(block.data.length * 3 / 4)
-              - (block.data.endsWith('==') ? 2 : block.data.endsWith('=') ? 1 : 0),
-            ),
+            bytes,
             width: 160,
             height: 90,
             ...block.name === undefined ? {} : { name: block.name },
@@ -3391,6 +3423,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           line?: string
           query?: string
           images?: readonly unknown[]
+          videos?: readonly unknown[]
           ref?: { id: string; revision: number }
           request?: { objective?: string; maxGoalRounds?: number }
         }
@@ -3398,7 +3431,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       const sessionId = args.agentId
       switch (endpoint) {
         case 'commands/list': return Promise.resolve(commandRemotes.list(sessionId))
-        case 'commands/execute': return Promise.resolve(commandRemotes.execute(sessionId, args.line as string, args.images ?? []))
+        case 'commands/execute': return Promise.resolve(commandRemotes.execute(sessionId, args.line as string, args.images ?? [], args.videos ?? []))
         case 'fileReferences/list': return Promise.resolve(referenceRemotes.files(sessionId, args.query ?? ''))
         case 'sessionReferenceResolver/candidates': return Promise.resolve(referenceRemotes.sessions(sessionId, args.query ?? ''))
         case 'goals/create': return Promise.resolve(goalRemotes.create(sessionId, {

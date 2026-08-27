@@ -50,6 +50,28 @@
   object-fit: cover;
 }
 
+/* The video chip trades the 64px square for an inline player card: controls
+   need real width to be usable, so the card widens to 180px (flex-basis keeps
+   it out of the square image flow). */
+.itemVideo {
+  flex-basis: 180px;
+  width: 180px;
+}
+
+.video {
+  flex: 0 0 180px;
+  width: 180px;
+  cursor: default;
+}
+
+.video video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: #000;
+}
+
 .remove {
   position: absolute;
   top: 4px;

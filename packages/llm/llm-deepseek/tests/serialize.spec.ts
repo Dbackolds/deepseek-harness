@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
-import type { ImageAttachmentRef, ImageMediaType, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, ImageMediaType, RequestImageAttachment, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, CallId, ReasoningEffortId, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
 import {
@@ -35,6 +35,15 @@ function imageRef(mediaType: ImageMediaType = 'image/png', bytes = 3): ImageAtta
 
 function fileResolver(id = 'file-api-image') {
   return vi.fn<FileResolver>(() => Promise.resolve(id))
+}
+
+/** One durable video reference; the DeepSeek wire accepts no video input. */
+function videoRef(): VideoAttachmentRef {
+  return {
+    attachmentId: AttachmentId(`sha256:${'e'.repeat(64)}`),
+    mediaType: 'video/mp4',
+    bytes: 3,
+  }
 }
 
 function requestVersion(ref: ImageAttachmentRef): RequestImageAttachment {
@@ -216,6 +225,33 @@ describe('serializeMessages', () => {
       }],
       source: { kind: 'plugin', plugin: 'test' },
     })])).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_CONTENT' }))
+  })
+
+  it('rejects video blocks on every path instead of silently flattening them away', async () => {
+    const video = videoRef()
+    expect(() => serializeMessages([createUserMessage({
+      content: [{ type: 'video', attachment: video }],
+      source: { kind: 'plugin', plugin: 'test' },
+    })])).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_CONTENT' }))
+    // The image-capable path refuses a video in any role before reading
+    // attachments or offloading, mirroring its image-role guard.
+    const resolveFileId = vi.fn()
+    for (const role of ['user', 'system', 'assistant'] as const) {
+      await expect(serializeMessagesWithImages([createMessage({
+        role,
+        content: [{ type: 'video', attachment: video }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })], imageOptions([imageRef()], resolveFileId)))
+        .rejects.toMatchObject({ code: 'UNSUPPORTED_CONTENT' })
+    }
+    await expect(serializeRequestWithImages(request({
+      messages: [createUserMessage({
+        content: [{ type: 'video', attachment: video }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }), imageOptions([imageRef()], resolveFileId)))
+      .rejects.toMatchObject({ code: 'UNSUPPORTED_CONTENT' })
+    expect(resolveFileId).not.toHaveBeenCalled()
   })
 
   it('emits an empty user message rather than dropping block-less messages', () => {

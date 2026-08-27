@@ -78,6 +78,7 @@ export type InputBarProps = ComposerBarProps
 
 export function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,
+  addVideos, removeVideo, draftVideos,
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
   renderSlot, useNotices, useLexicon, useMenuLauncher,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
@@ -105,7 +106,11 @@ export function InputBar({
     () => input === undefined || draftImages === undefined ? [] : draftImages(input.imageIds),
     [draftImages, input?.imageIds],
   )
-  const empty = draft.trim() === '' && attachments.length === 0
+  const videos = useMemo(
+    () => input === undefined || draftVideos === undefined ? [] : draftVideos(input.videoIds),
+    [draftVideos, input?.videoIds],
+  )
+  const empty = draft.trim() === '' && attachments.length === 0 && videos.length === 0
   // Transient error banner (machine notices, image-intake rejections, and
   // prompt failures): the seq keys the Toast so an identical repeated message
   // restarts the hold-then-fade cycle instead of reusing the faded one.
@@ -119,6 +124,8 @@ export function InputBar({
   // The deployment's image-intake limits (absent while no attachment service
   // is composed — the pre-check below then defers entirely to the host).
   const imageLimits = useProjection('imageLimits')
+  // Same posture for video intake.
+  const videoLimits = useProjection('videoLimits')
   // Prompt failures are ordinary failures (no create/attach transaction exists
   // anymore): the toast announces promptError, the draft stays in the machine,
   // and the user resubmits. A remount over a session whose machine still holds
@@ -129,9 +136,9 @@ export function InputBar({
   useEffect(() => {
     if (promptError === null) return
     showToast(promptError.error.code === 'attachment-error'
-      ? attachmentErrorText(t, promptError.error.details.reason, imageLimits)
+      ? attachmentErrorText(t, promptError.error.details.reason, imageLimits, videoLimits)
       : `${promptError.error.message} (${promptError.error.code})`)
-  }, [promptError, showToast, t, imageLimits])
+  }, [promptError, showToast, t, imageLimits, videoLimits])
   useEffect(() => {
     if (notice?.level === 'error') showToast(notice.text)
   }, [notice, showToast])
@@ -187,7 +194,10 @@ export function InputBar({
     if (attachments.length !== input.imageIds.length) {
       inputActions.pruneImages(attachments.map(attachment => attachment.id))
     }
-  }, [attachments, input?.imageIds, inputActions])
+    if (videos.length !== input.videoIds.length) {
+      inputActions.pruneVideos(videos.map(video => video.id))
+    }
+  }, [attachments, videos, input?.imageIds, input?.videoIds, inputActions])
 
   // A native Safari edit that shortens the draft may leave the previous
   // soft-wrap layout behind after the mirror shrinks. The native-change signal
@@ -483,7 +493,19 @@ export function InputBar({
       .filter(item => item.kind === 'file')
       .map(item => item.getAsFile())
       .filter((file): file is File => file !== null)
-    if (files.length > 0) intakeImages(files)
+    if (files.length > 0) {
+      // The clipboard carries one batch but two validation regimes: a clean
+      // batch routes each file to its kind's intake, while a batch holding a
+      // foreign member stays whole and announces the format problem through
+      // the image path (the pre-video behavior).
+      const pastedImages = files.filter(file => file.type.startsWith('image/'))
+      const pastedVideos = files.filter(file => file.type.startsWith('video/'))
+      if (pastedImages.length + pastedVideos.length !== files.length) intakeImages(files)
+      else {
+        if (pastedImages.length > 0) intakeImages(pastedImages)
+        if (pastedVideos.length > 0) intakeVideos(pastedVideos)
+      }
+    }
     const text = e.clipboardData.getData('text/plain')
     if (text === '') {
       if (files.length > 0) e.preventDefault()
@@ -533,6 +555,32 @@ export function InputBar({
     })()
     if (rejected !== null) showToast(rejected)
   }, [addImages, attachments, imageLimits, showToast, t])
+
+  // The video mirror of {@link intakeImages}: count, per-file bytes, then the
+  // batch total including the held rail, against the projected videoLimits.
+  const intakeVideos = useCallback((files: readonly File[]): void => {
+    if (addVideos === undefined || files.length === 0) return
+    const rejected = ((): string | null => {
+      if (videoLimits !== undefined) {
+        if (files.some(file => !(videoLimits.mediaTypes as readonly string[]).includes(file.type))) {
+          return addVideos(files)
+        }
+        if (videos.length + files.length > videoLimits.maxVideosPerMessage) {
+          return t('video.tooMany', { count: videoLimits.maxVideosPerMessage })
+        }
+        if (files.some(file => file.size > videoLimits.maxVideoBytes)) {
+          return t('video.fileTooLarge', { size: imageSizeText(videoLimits.maxVideoBytes) })
+        }
+        const total = videos.reduce((sum, video) => sum + video.file.size, 0)
+          + files.reduce((sum, file) => sum + file.size, 0)
+        if (total > videoLimits.maxMessageVideoBytes) {
+          return t('video.totalTooLarge', { size: imageSizeText(videoLimits.maxMessageVideoBytes) })
+        }
+      }
+      return addVideos(files)
+    })()
+    if (rejected !== null) showToast(rejected)
+  }, [addVideos, videos, videoLimits, showToast, t])
 
   const canAcceptDrop = !locked && !machineBusy && addImages !== undefined
 
@@ -715,6 +763,13 @@ export function InputBar({
           dropLimits: imageLimits === undefined ? undefined : {
             count: imageLimits.maxImagesPerMessage,
             size: imageSizeText(imageLimits.maxImageBytes),
+          },
+          videos,
+          onAddVideos: intakeVideos,
+          onRemoveVideo: (id) => { removeVideo?.(id) },
+          videoDropLimits: videoLimits === undefined ? undefined : {
+            count: videoLimits.maxVideosPerMessage,
+            size: imageSizeText(videoLimits.maxVideoBytes),
           },
         })}
         {/* One scrollport, two text layers. The hidden mirror renders draft+'\n' and stretches the

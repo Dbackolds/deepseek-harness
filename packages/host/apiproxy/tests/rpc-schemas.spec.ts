@@ -6,13 +6,13 @@ import {
 } from '../src/api/rpc.schema.ts'
 import { z } from 'zod'
 import {
-  contentBlockSchema, sessionCancelRequestSchema, sessionCancelValueSchema, sessionCreateRequestSchema,
-  sessionCreateValueSchema, sessionEventSchema, sessionHistoryRequestSchema, sessionHistoryValueSchema,
-  sessionIdSchema, sessionListRequestSchema, sessionListValueSchema, sessionModelsRequestSchema,
-  sessionModelsValueSchema, sessionPromptRequestSchema, sessionPromptValueSchema,
+  contentBlockSchema, sessionAttachmentValueSchema, sessionCancelRequestSchema, sessionCancelValueSchema,
+  sessionCreateRequestSchema, sessionCreateValueSchema, sessionEventSchema, sessionHistoryRequestSchema,
+  sessionHistoryValueSchema, sessionIdSchema, sessionListRequestSchema, sessionListValueSchema,
+  sessionModelsRequestSchema, sessionModelsValueSchema, sessionPromptRequestSchema, sessionPromptValueSchema,
   sessionSearchRequestSchema, sessionSearchValueSchema, sessionSelectModelRequestSchema,
-  sessionSelectModelValueSchema, sessionSummarySchema,
-  sessionUpdateQueueRequestSchema, sessionUpdateQueueValueSchema,
+  sessionSelectModelValueSchema, sessionSummarySchema, sessionUpdateQueueRequestSchema,
+  sessionUpdateQueueValueSchema, videoLimitsProjectionSchema,
 } from '../src/api/sessions.schema.ts'
 import {
   hostCreateDirectoryRequestSchema, hostCreateDirectoryValueSchema,
@@ -294,6 +294,39 @@ describe('sessions domain schemas', () => {
       sessionId: 's1', mode: 'queue', content: [],
     }).clientTimeZone).toBeUndefined()
     expect(() => sessionPromptRequestSchema.parse({ sessionId: 's1', mode: 'inject', content: [] })).toThrow()
+    // The video part mirrors the image part: declared container type, base64 seat, optional name.
+    const videoPrompt = sessionPromptRequestSchema.parse({
+      sessionId: 's1',
+      mode: 'queue',
+      content: [
+        { type: 'video', mediaType: 'video/mp4', data: 'AAAA', name: 'clip.mp4' },
+        { type: 'video', mediaType: 'video/x-matroska', data: 'AAAA' },
+        { type: 'video', mediaType: 'video/quicktime', data: 'AAAA' },
+      ],
+    })
+    expect(videoPrompt.content).toHaveLength(3)
+    expect(() => sessionPromptRequestSchema.parse({
+      sessionId: 's1', mode: 'queue', content: [{ type: 'video', mediaType: 'video/webm', data: 'AAAA' }],
+    })).toThrow()
+    expect(() => sessionPromptRequestSchema.parse({
+      sessionId: 's1', mode: 'queue', content: [{ type: 'video', mediaType: 'video/mp4' }],
+    })).toThrow()
+    // The attachment readback answer accepts either durable reference kind.
+    expect(sessionAttachmentValueSchema.parse({
+      attachment: { attachmentId: 'a1', mediaType: 'video/mp4', bytes: 4, name: 'clip.mp4' },
+      data: 'AAAA',
+    }).attachment).toEqual({ attachmentId: 'a1', mediaType: 'video/mp4', bytes: 4, name: 'clip.mp4' })
+    expect(sessionAttachmentValueSchema.parse({
+      attachment: { attachmentId: 'a2', mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
+      data: 'AQ==',
+    }).attachment).toMatchObject({ attachmentId: 'a2' })
+    expect(() => sessionAttachmentValueSchema.parse({
+      attachment: { attachmentId: 'a3', mediaType: 'video/mp4' },
+      data: 'AAAA',
+    })).toThrow()
+    expect(videoLimitsProjectionSchema.parse({
+      maxVideoBytes: 1, maxVideosPerMessage: 2, maxMessageVideoBytes: 3, mediaTypes: ['video/mp4'],
+    })).toMatchObject({ maxVideosPerMessage: 2 })
     expect(sessionPromptValueSchema.parse({ accepted: true }).accepted).toBe(true)
     // The command slot appears only when the prompt dispatched a slash command.
     const dispatched = sessionPromptValueSchema.parse({ accepted: true, command: { kind: 'success', text: 'Goal set' } })

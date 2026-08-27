@@ -9,20 +9,47 @@ import type {
   ImageAttachmentRef,
   ImageRequestPolicy,
   RequestImageAttachment,
+  RequestVideoAttachment,
   SaveImageAttachment,
+  SaveVideoAttachment,
   StoredImageAttachment,
+  StoredVideoAttachment,
+  VideoAttachmentLimits,
+  VideoAttachmentRef,
 } from '@deepseek-ai/dsh-attachment'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import type { NormalizationPolicy } from './normalization.ts'
 import { CompressionLimiter } from './compression-limiter.ts'
-import { commitPreparedImageFile, prepareImageFile, readImageFile, validateImageFile } from './store.ts'
+import {
+  commitPreparedImageFile,
+  commitPreparedVideoFile,
+  prepareImageFile,
+  prepareVideoFile,
+  readImageFile,
+  readVideoFile,
+  validateImageFile,
+  validateVideoFile,
+} from './store.ts'
 import { readRequestImageFile, requestImageVariantId } from './request-image.ts'
+import { readRequestVideoFile } from './request-video.ts'
 
 export { canPassThroughNormalization, normalizeImage } from './normalization.ts'
 export type { NormalizedImage, NormalizationPolicy } from './normalization.ts'
-export { commitPreparedImageFile, prepareImageFile, readImageFile, saveImageFile, validateImageFile } from './store.ts'
-export type { PreparedImageFile } from './store.ts'
+export {
+  commitPreparedImageFile,
+  commitPreparedVideoFile,
+  prepareImageFile,
+  prepareVideoFile,
+  readImageFile,
+  readVideoFile,
+  saveImageFile,
+  saveVideoFile,
+  validateImageFile,
+  validateVideoFile,
+} from './store.ts'
+export type { PreparedImageFile, PreparedVideoFile } from './store.ts'
 export { readRequestImageFile, requestImageDimensions, requestImageVariantId } from './request-image.ts'
+export { readRequestVideoFile } from './request-video.ts'
 
 /** Default maximum encoded bytes for one submitted image; oversized sources are refused, not shrunk. */
 export const DEFAULT_MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -44,6 +71,12 @@ export const DEFAULT_NORMALIZED_IMAGE_MAX_BYTES = 4 * 1024 * 1024
 export const DEFAULT_IMAGE_COMPRESSION_CONCURRENCY = 2
 /** Maximum configurable native image transformations per store. */
 export const MAX_IMAGE_COMPRESSION_CONCURRENCY = 8
+/** Default maximum bytes for one submitted video; oversized sources are refused, not transcoded. */
+export const DEFAULT_MAX_VIDEO_BYTES = 100 * 1024 * 1024
+/** Default maximum videos in one prompt. */
+export const DEFAULT_MAX_VIDEOS_PER_MESSAGE = 2
+/** Default maximum aggregate video bytes in one prompt. */
+export const DEFAULT_MAX_MESSAGE_VIDEO_BYTES = 200 * 1024 * 1024
 
 /** Local attachment backend configuration. */
 export interface Config {
@@ -69,6 +102,12 @@ export interface Config {
   normalizedImageMaxBytes?: number
   /** Maximum simultaneous normalization or request-image transformations in this service instance. */
   imageCompressionConcurrency?: number
+  /** Maximum bytes accepted for one submitted video. Default: 100 MiB. */
+  maxVideoBytes?: number
+  /** Maximum video count accepted in one submitted message. Default: 2. */
+  maxVideosPerMessage?: number
+  /** Maximum aggregate video bytes accepted in one submitted message. Default: 200 MiB. */
+  maxMessageVideoBytes?: number
 }
 
 function abortReason(signal: AbortSignal): Error {
@@ -145,11 +184,15 @@ export class LocalAttachmentStore extends AttachmentStore {
     normalizedImageMaxBytes: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_BYTES),
     imageCompressionConcurrency: z.number().step(1).min(1).max(MAX_IMAGE_COMPRESSION_CONCURRENCY)
       .default(DEFAULT_IMAGE_COMPRESSION_CONCURRENCY),
+    maxVideoBytes: z.number().step(1).min(1).default(DEFAULT_MAX_VIDEO_BYTES),
+    maxVideosPerMessage: z.number().step(1).min(1).default(DEFAULT_MAX_VIDEOS_PER_MESSAGE),
+    maxMessageVideoBytes: z.number().step(1).min(1).default(DEFAULT_MAX_MESSAGE_VIDEO_BYTES),
   })
 
   /** Absolute versioned storage root. */
   readonly root: string
   readonly imageLimits: ImageAttachmentLimits
+  override readonly videoLimits: VideoAttachmentLimits
   /** Resolved provider-independent normalization policy. */
   readonly normalizationPolicy: Readonly<NormalizationPolicy>
   /** Resolved instance-level compression limit. */
@@ -167,6 +210,12 @@ export class LocalAttachmentStore extends AttachmentStore {
       maxImagePixels: config.maxImagePixels ?? DEFAULT_MAX_IMAGE_PIXELS,
       ...config.maxImageDimension === undefined ? {} : { maxImageDimension: config.maxImageDimension },
       mediaTypes: Object.freeze(['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const),
+    })
+    this.videoLimits = Object.freeze({
+      maxVideoBytes: config.maxVideoBytes ?? DEFAULT_MAX_VIDEO_BYTES,
+      maxVideosPerMessage: config.maxVideosPerMessage ?? DEFAULT_MAX_VIDEOS_PER_MESSAGE,
+      maxMessageVideoBytes: config.maxMessageVideoBytes ?? DEFAULT_MAX_MESSAGE_VIDEO_BYTES,
+      mediaTypes: Object.freeze(['video/mp4', 'video/x-matroska', 'video/quicktime'] as const),
     })
     this.normalizationPolicy = Object.freeze({
       maxDimension: config.normalizedImageMaxDimension ?? DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION,
@@ -215,6 +264,31 @@ export class LocalAttachmentStore extends AttachmentStore {
     signal?: AbortSignal,
   ): Promise<RequestImageAttachment> {
     return this.requestVersion(ref, policy, undefined, signal)
+  }
+
+  override async validateVideo(input: SaveVideoAttachment): Promise<void> {
+    await validateVideoFile(input, this.videoLimits)
+  }
+
+  override async saveVideos(inputs: readonly SaveVideoAttachment[]): Promise<readonly VideoAttachmentRef[]> {
+    this.validateVideoBatch(inputs)
+    const prepared = await Promise.all(inputs.map(input => prepareVideoFile(input, this.videoLimits)))
+    const refs: VideoAttachmentRef[] = []
+    for (const video of prepared) refs.push(await commitPreparedVideoFile(this.root, video))
+    return refs
+  }
+
+  override async saveVideo(input: SaveVideoAttachment): Promise<VideoAttachmentRef> {
+    const prepared = await prepareVideoFile(input, this.videoLimits)
+    return commitPreparedVideoFile(this.root, prepared)
+  }
+
+  override async readVideo(ref: VideoAttachmentRef, signal?: AbortSignal): Promise<StoredVideoAttachment> {
+    return readVideoFile(this.root, ref, signal)
+  }
+
+  override readVideoRequest(ref: VideoAttachmentRef, signal?: AbortSignal): Promise<RequestVideoAttachment> {
+    return readRequestVideoFile(this.root, ref, signal)
   }
 
   private requestVersion(

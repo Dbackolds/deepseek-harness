@@ -69,6 +69,7 @@ Pinned ids of Sessions in a hidden Workspace remain in the browser pin store and
 - Implicit New Session uses the current Workspace even when hidden; otherwise only visible No Repo / recent visible Workspace.
 - Auto-expand of the current group inside Hidden can open one Workspace's Sessions on Hide so the open conversation remains findable.
 - TUI and other non-Web consumers see the extra list field and ignore it in this delivery.
+- Auto-hide empty project Workspaces is a separate grouped-list filter and does not write this set ([Auto-hide empty workspaces](2026-08-26-auto-hide-empty-workspaces.md)).
 
 ## Testing
 

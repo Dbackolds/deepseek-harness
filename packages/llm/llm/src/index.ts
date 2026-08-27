@@ -29,7 +29,7 @@ import type { LlmCallConfig, LlmCallConfigAdapterDefaults } from './call-config.
 import { HarnessError, INVALID_CREDENTIAL_CODE } from './error.ts'
 import { normalizeLlmFailure } from './adapter-failure.ts'
 import { normalizeApiKey } from './api-key.ts'
-import { contentHasImage, projectImagesForTextModel } from './content.ts'
+import { contentHasImage, contentHasVideo, projectImagesForTextModel, projectVideosForTextModel } from './content.ts'
 
 export * from './attribution.ts'
 export * from './brand.ts'
@@ -964,13 +964,7 @@ export class LlmRuntime extends Service {
         : Object.isFrozen(options)
           ? deepFreeze({ ...options, ...resolvedConfig })
           : { ...options, ...resolvedConfig }
-      const projectedOptions = modelInfo.inputModalities !== undefined
-        && !modelInfo.inputModalities.includes('image')
-        && resolvedOptions.messages.some(message => contentHasImage(message.content))
-        ? Object.isFrozen(resolvedOptions)
-          ? deepFreeze({ ...resolvedOptions, messages: projectImagesForTextModel(resolvedOptions.messages) as Message[] })
-          : { ...resolvedOptions, messages: projectImagesForTextModel(resolvedOptions.messages) as Message[] }
-        : resolvedOptions
+      const projectedOptions = projectForModelInput(resolvedOptions, modelInfo.inputModalities)
       const stream = dispatch(this.forAdapter(projectedOptions, adapter))
       iterator = stream[Symbol.asyncIterator]()
     } catch (error: unknown) {
@@ -1034,6 +1028,39 @@ export class LlmRuntime extends Service {
       () => this.adapterStream(options, prepared),
     )
   }
+}
+
+/** One message-list projection step, preserving the deep-frozen state of a loop-built request. */
+function withProjectedMessages(options: GenerateOptions, messages: readonly Message[]): GenerateOptions {
+  return Object.isFrozen(options)
+    ? deepFreeze({ ...options, messages: messages as Message[] })
+    : { ...options, messages: messages as Message[] }
+}
+
+/**
+ * Replace request content the resolved route cannot carry with deterministic
+ * text placeholders: images for a route whose modalities omit `image`, videos
+ * for one that omits `video`. Explicit omissions are negative capability, so
+ * the projection is request-local — durable history keeps its blocks.
+ * @param options - fully assembled request.
+ * @param inputModalities - exact-route modalities; absent leaves content untouched.
+ * @returns the original options, or shallow copies with projected message lists.
+ */
+function projectForModelInput(
+  options: GenerateOptions,
+  inputModalities: readonly ModelModality[] | undefined,
+): GenerateOptions {
+  if (inputModalities === undefined) return options
+  let projected = options
+  if (!inputModalities.includes('image')
+    && projected.messages.some(message => contentHasImage(message.content))) {
+    projected = withProjectedMessages(projected, projectImagesForTextModel(projected.messages))
+  }
+  if (!inputModalities.includes('video')
+    && projected.messages.some(message => contentHasVideo(message.content))) {
+    projected = withProjectedMessages(projected, projectVideosForTextModel(projected.messages))
+  }
+  return projected
 }
 
 /** Convert one adapter throw into the stream protocol's terminal outcome. */

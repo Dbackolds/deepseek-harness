@@ -175,6 +175,12 @@ describe('createFixtureApi', () => {
           maxImagePixels: 40_000_000,
           mediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
         },
+        videoLimits: {
+          maxVideoBytes: 100 * 1024 * 1024,
+          maxVideosPerMessage: 2,
+          maxMessageVideoBytes: 200 * 1024 * 1024,
+          mediaTypes: ['video/mp4', 'video/x-matroska', 'video/quicktime'],
+        },
       } },
     })
   })
@@ -391,10 +397,14 @@ describe('createFixtureApi', () => {
       type: 'session/projection', sessionId: 'fx-alpha', key: 'imageLimits',
       value: { maxImagesPerMessage: 20, maxImageBytes: 5 * 1024 * 1024 },
     })
-    expect(first[11]?.payload).toMatchObject({ type: 'approval/requested', toolName: 'dangerous_tool' })
-    expect(second[11]?.rpcId).toBe(first[11]?.rpcId) // stable rpcId across replays (host replay semantics)
-    expect(first[12]?.payload).toMatchObject({ type: 'question/requested', sessionId: 'fx-alpha' })
-    expect(second[12]?.rpcId).toBe(first[12]?.rpcId)
+    expect(first[11]?.payload).toMatchObject({
+      type: 'session/projection', sessionId: 'fx-alpha', key: 'videoLimits',
+      value: { maxVideosPerMessage: 2 },
+    })
+    expect(first[12]?.payload).toMatchObject({ type: 'approval/requested', toolName: 'dangerous_tool' })
+    expect(second[12]?.rpcId).toBe(first[12]?.rpcId) // stable rpcId across replays (host replay semantics)
+    expect(first[13]?.payload).toMatchObject({ type: 'question/requested', sessionId: 'fx-alpha' })
+    expect(second[13]?.rpcId).toBe(first[13]?.rpcId)
   })
 
   it('steer with no replay in flight falls through to a fresh queued turn; non-text blocks stringify empty', async () => {

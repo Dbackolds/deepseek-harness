@@ -26,7 +26,7 @@ When No Repo is registered, Manual-mode Session drags inside Chat write that Hos
 
 ## Consequences
 
-- Grouped mode always renders Chat after visible project Workspaces and before Hidden.
+- Grouped mode always renders Chat after visible project Workspaces and before Hidden, including when Auto-hide omits empty project Workspaces ([Auto-hide empty workspaces](2026-08-26-auto-hide-empty-workspaces.md)).
 - No Repo never appears as a project row, picker item, or Hidden-section row.
 - Chat ＋ starts a no-project session; blank rows still stay off the list until the first accepted prompt.
 - Delete of a project Workspace still spills remaining Sessions into Chat.

@@ -26,7 +26,7 @@ Status: implemented
 
 ## Consequences
 
-- 分组模式始终在可见项目 Workspace 之后、已隐藏之前渲染聊天。
+- 分组模式始终在可见项目 Workspace 之后、已隐藏之前渲染聊天，包括自动隐藏空项目 Workspace 时（[自动隐藏空工作区](2026-08-26-auto-hide-empty-workspaces.zh.md)）。
 - No Repo 不会作为项目行、选择器项或已隐藏区行出现。
 - 聊天的 ＋ 开始无项目会话；空白行在首次获受理的 prompt 之前仍不进入列表。
 - 删除项目 Workspace 后，剩余 Session 仍进入聊天。

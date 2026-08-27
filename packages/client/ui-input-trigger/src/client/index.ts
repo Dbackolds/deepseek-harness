@@ -22,7 +22,8 @@ export type {
   ArbitrateKey, ArbitrateOutcome, BeginCommandRequest, CandidateRequest, ClientSessionContext,
   CommandClaim, ConsumeTokenRequest, InsertReferenceRequest, PickOutcome, PickVia, ReferenceCodec,
   ReferenceInsert, InputTriggerCandidate, InputTriggerPick, InputTriggerSource, SubmitEnvelope,
-  SubmitImageAttachment, SubmitOutcome, TokenSpan, TriggerChar, TriggerGuard, TriggerPosition,
+  SubmitImageAttachment, SubmitOutcome, SubmitVideoAttachment, TokenSpan, TriggerChar, TriggerGuard,
+  TriggerPosition,
 } from '../types.ts'
 export type { DetectTrigger, ExactMatch, MenuEvent, MenuReduce, MenuState, TriggerHit } from '../core/contract.ts'
 export type { InputTriggerServiceContract } from './contract.ts'

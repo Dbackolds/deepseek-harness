@@ -1,7 +1,7 @@
 // Sessions remain resident after creation so they continue consuming mux frames off-screen.
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { AttachmentIdType, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentIdType, ImageAttachmentRef, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type {
   HistoryEntry, IApiClient, MessageId, MuxFrame, PromptContentPart, QueueAction, RpcError,
@@ -183,7 +183,7 @@ export class Session implements SessionFace {
 
   /**
    * Send (queue/steer passed through 1:1); failures land in the snapshot's promptError.
-   * @param content - text plus browser-owned temporary image uploads.
+   * @param content - text plus browser-owned temporary image or video uploads.
    * @param mode - queue appends after the current turn; steer interrupts it.
    * @returns the prompt result (also mirrored into promptError on failure).
    */
@@ -219,6 +219,9 @@ export class Session implements SessionFace {
           },
         }
       } else {
+        // Both attachment kinds are client-refused before the subagent
+        // transport: the subagent prompt wire carries text only, so a video
+        // part would be silently dropped rather than rejected.
         if (content.some(part => part.type === 'image')) {
           result = {
             ok: false,
@@ -226,6 +229,15 @@ export class Session implements SessionFace {
               code: 'attachment-error',
               message: 'Image input is unavailable for subagent continuations.',
               details: { reason: 'SUBAGENT_IMAGE_UNSUPPORTED' },
+            },
+          }
+        } else if (content.some(part => part.type === 'video')) {
+          result = {
+            ok: false,
+            error: {
+              code: 'attachment-error',
+              message: 'Video input is unavailable for subagent continuations.',
+              details: { reason: 'SUBAGENT_VIDEO_UNSUPPORTED' },
             },
           }
         } else {
@@ -303,13 +315,13 @@ export class Session implements SessionFace {
   }
 
   /**
-   * Resolve one image referenced by this session into browser-consumable bytes.
+   * Resolve one image or video referenced by this session into browser-consumable bytes.
    * @param attachmentId - opaque id found in the folded session log.
    * @returns the authenticated reference and decoded bytes.
    */
   async readAttachment(
     attachmentId: AttachmentIdType,
-  ): Promise<RpcResult<{ attachment: ImageAttachmentRef; data: Uint8Array }>> {
+  ): Promise<RpcResult<{ attachment: ImageAttachmentRef | VideoAttachmentRef; data: Uint8Array }>> {
     try {
       const result = (await this.api.sessions.attachment({
         sessionId: this.sessionId,
@@ -399,7 +411,7 @@ export class Session implements SessionFace {
    * @returns the admission result, or the error branch on transport failure.
    */
   async command(line: string): Promise<RemoteResult<{ matched: boolean }>> {
-    const result = await this.remote.commands.execute(this.sessionId, line, [])
+    const result = await this.remote.commands.execute(this.sessionId, line, [], [])
     if (!result.ok) return result
     return { ok: true, value: { matched: result.value !== undefined } }
   }

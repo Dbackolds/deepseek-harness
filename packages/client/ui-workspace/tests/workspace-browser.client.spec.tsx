@@ -175,12 +175,15 @@ describe('WorkspaceBrowser', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     expect(screen.getByText('分组方式')).toBeTruthy() // the menu heading label
-    expect(screen.getAllByRole('separator')).toHaveLength(2)
+    expect(screen.getByText('空工作区')).toBeTruthy()
+    expect(screen.getAllByRole('separator')).toHaveLength(3)
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      '按工作区', '单列表', '手动排序', '最近更新', '按状态分区', '不分区',
+      '按工作区', '单列表', '手动排序', '最近更新', '按状态分区', '不分区', '自动隐藏', '始终显示',
     ])
     expect(screen.getByRole('menuitem', { name: '按工作区' }).querySelector('svg')).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: '手动排序' }).querySelector('svg')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: '始终显示' }).querySelector('svg')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: '自动隐藏' }).querySelector('svg')).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
     // Store-driven flip: title changes, rows flatten newest-first, headers gone.
     expect(b.store.getSnapshot().groupBy).toBe('flat')
@@ -795,6 +798,39 @@ describe('WorkspaceBrowser', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('auto-hides empty project Workspaces from the grouped list without Host hide', () => {
+    const hideWorkspace = vi.fn(async () => {})
+    const blank = { ...summary('blank', 1), blank: true }
+    const b = mount({
+      useSessions: hook(sessionState([blank], { current: blank.id })),
+      useWorkspaces: hook(workspaceState([
+        workspace('empty', []),
+        workspace('current-blank', ['blank']),
+      ])),
+      hideWorkspace,
+    })
+    expect(screen.getByText('empty')).toBeTruthy()
+    expect(screen.getByText('current-blank')).toBeTruthy()
+    expect(screen.getByText('聊天')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '自动隐藏' }))
+    expect(b.store.getSnapshot().emptyWorkspaces).toBe('hide')
+    expect(hideWorkspace).not.toHaveBeenCalled()
+    expect(screen.queryByText('empty')).toBeNull()
+    expect(screen.queryByText('已隐藏')).toBeNull()
+    expect(screen.getByText('current-blank')).toBeTruthy()
+    expect(screen.getByText('聊天')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '始终显示' }))
+    expect(b.store.getSnapshot().emptyWorkspaces).toBe('show')
+    expect(hideWorkspace).not.toHaveBeenCalled()
+    expect(screen.getByText('empty')).toBeTruthy()
+    expect(screen.getByText('current-blank')).toBeTruthy()
+    expect(screen.getByText('聊天')).toBeTruthy()
   })
 
   it('keeps Chat in grouped mode, shows the no-sessions empty state in flat mode, and resolves an empty search', async () => {

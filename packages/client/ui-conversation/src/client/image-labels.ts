@@ -1,6 +1,6 @@
 /** Attachment error and limit copy owned by the conversation input flow. */
 
-import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentLimits, VideoAttachmentLimits } from '@deepseek-ai/dsh-attachment'
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationKey } from './locales.ts'
 
@@ -21,13 +21,15 @@ export function imageSizeText(bytes: number): string {
  * reason code for a bug report.
  * @param t - the conversation-namespace translate.
  * @param reason - the wire `details.reason` code.
- * @param limits - projected limits interpolated into count/size copy, when known.
+ * @param limits - projected image limits interpolated into count/size copy, when known.
+ * @param videoLimits - projected video limits interpolated into count/size copy, when known.
  * @returns the banner text.
  */
 export function attachmentErrorText(
   t: Translate<ConversationKey>,
   reason: string,
   limits?: ImageAttachmentLimits,
+  videoLimits?: VideoAttachmentLimits,
 ): string {
   switch (reason) {
     case 'MODEL_DOES_NOT_SUPPORT_IMAGES': return t('image.modelUnsupported')
@@ -52,7 +54,35 @@ export function attachmentErrorText(
     case 'IMAGES_TOO_LARGE':
       if (limits !== undefined) return t('image.totalTooLarge', { size: imageSizeText(limits.maxMessageImageBytes) })
       break
+    // Video mirrors the image table: solvable container/limit problems name
+    // the limit; a model or subagent refusal names the way out.
+    case 'MODEL_DOES_NOT_SUPPORT_VIDEOS': return t('video.modelUnsupported')
+    case 'SUBAGENT_VIDEO_UNSUPPORTED': return t('video.subagentUnsupported')
+    case 'INVALID_VIDEO':
+    case 'UNSUPPORTED_VIDEO_TYPE':
+      return t('video.unsupportedType')
+    case 'TOO_MANY_VIDEOS':
+      if (videoLimits !== undefined) return t('video.tooMany', { count: videoLimits.maxVideosPerMessage })
+      break
+    case 'VIDEO_TOO_LARGE':
+      if (videoLimits !== undefined) return t('video.fileTooLarge', { size: imageSizeText(videoLimits.maxVideoBytes) })
+      break
+    case 'VIDEOS_TOO_LARGE':
+      if (videoLimits !== undefined) {
+        return t('video.totalTooLarge', { size: imageSizeText(videoLimits.maxMessageVideoBytes) })
+      }
+      break
     default: break
   }
-  return t('image.sendFailed', { reason })
+  // The fallback names the kind it can: video codes keep the video copy.
+  return VIDEO_FALLBACK_REASONS.has(reason)
+    ? t('video.sendFailed', { reason })
+    : t('image.sendFailed', { reason })
 }
+
+/** Limit codes whose limits-unknown branch still names the video kind in the fallback. */
+const VIDEO_FALLBACK_REASONS: ReadonlySet<string> = new Set([
+  'TOO_MANY_VIDEOS',
+  'VIDEO_TOO_LARGE',
+  'VIDEOS_TOO_LARGE',
+])

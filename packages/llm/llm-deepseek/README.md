@@ -147,4 +147,5 @@ Loop-retained response blocks append to the next request and preserve its earlie
 - **`tool_choice` is not mapped** — not part of the core vocabulary (MVP cut, shared with the pi-ai twin).
 - **Requests use raw `fetch`, not `@cordisjs/plugin-http`** — no shared proxy/interception configuration; adoption is deferred until a second adapter wants it (`TODO(http)`).
 - **Plugin-added content block types are skipped** — core text and supported image blocks are serialized, and empty tool output crosses the wire as the literal `(no output)`.
+- **Video input is refused, never silently dropped** — the DeepSeek wire API accepts no video, so serialization throws `UNSUPPORTED_CONTENT` for a video block in any role. The shared LLM runtime has already projected videos into text placeholders for these models, so a video reaching this adapter means a caller bypassed that projection.
 - **Images are input-only durable attachments** — direct external URLs and assistant image output are not supported; DeepSeek input normally uses the Files API and uses inline base64 only for per-request recovery.

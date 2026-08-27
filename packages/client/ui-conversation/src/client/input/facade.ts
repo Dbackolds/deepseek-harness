@@ -48,6 +48,7 @@ export interface SessionInputDeps {
   defaultSink(
     text: string,
     imageIds: readonly DraftAttachmentId[],
+    videoIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal: AbortSignal,
   ): Promise<SubmitOutcome>
@@ -59,6 +60,8 @@ export interface SessionInputDeps {
     release(ids: readonly DraftAttachmentId[]): void
     /** Localized composer notice for a claimed command that does not accept images. */
     unsupportedNotice(token: string): string
+    /** Localized composer notice for a command submit attempted with videos attached. */
+    videosUnsupportedNotice(): string
   }
 }
 
@@ -91,6 +94,9 @@ export class SessionInputShell implements SessionInput {
     addImages: ids => this.addImages(ids),
     removeImage: (id) => { this.removeImage(id) },
     pruneImages: (ids) => { this.pruneImages(ids) },
+    addVideos: ids => this.addVideos(ids),
+    removeVideo: (id) => { this.removeVideo(id) },
+    pruneVideos: (ids) => { this.pruneVideos(ids) },
     submit: () => { this.submit('queue') },
   }
 
@@ -100,8 +106,9 @@ export class SessionInputShell implements SessionInput {
   private noticeSeq = 0
   private lastMirroredDraft = ''
   private imageIds: readonly DraftAttachmentId[] = []
-  /** One image-only send at a time: Enter during the Host round-trip is a no-op. */
-  private imageSendInFlight = false
+  private videoIds: readonly DraftAttachmentId[] = []
+  /** One image-or-video-only send at a time: Enter during the Host round-trip is a no-op. */
+  private attachmentSendInFlight = false
   private disposed = false
   /** Draft persistence mirror (chat store write; receives the clipboard projection, never display-only ranges). */
   private mirrorFn: ((text: string) => void) | undefined
@@ -157,15 +164,52 @@ export class SessionInputShell implements SessionInput {
     this.publish()
   }
 
+  /** Append ordered video ids unless an admission transaction is locked. */
+  addVideos(ids: readonly DraftAttachmentId[]): boolean {
+    if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting') return false
+    if (ids.length === 0) return true
+    this.videoIds = [...this.videoIds, ...ids]
+    this.publish()
+    return true
+  }
+
+  /**
+   * Remove one video id from this draft. Busy admission phases refuse, like
+   * {@link addVideos}: a removal landing while a submit serializes would
+   * otherwise vanish from the rail yet still ride the in-flight send.
+   */
+  removeVideo(id: DraftAttachmentId): void {
+    if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting') return
+    const next = this.videoIds.filter(candidate => candidate !== id)
+    if (next.length === this.videoIds.length) return
+    this.videoIds = next
+    this.publish()
+  }
+
+  /**
+   * Keep only video ids that still resolve in the browser attachment registry.
+   * @param available - live registry ids.
+   */
+  pruneVideos(available: readonly DraftAttachmentId[]): void {
+    const keep = new Set(available)
+    const next = this.videoIds.filter(id => keep.has(id))
+    if (next.length === this.videoIds.length) return
+    this.videoIds = next
+    this.publish()
+  }
+
   /**
    * Clear the draft as a successful-send commit: no undo unit is recorded and
    * the undo history is cut, so Ctrl/Cmd-Z cannot resurrect sent content
    * (the command path gets the same discipline from submit-settled success).
    * @param imageIds - admitted image ids to remove from this draft.
+   * @param videoIds - admitted video ids to remove from this draft.
    */
-  commitSend(imageIds: readonly DraftAttachmentId[]): void {
-    const submitted = new Set(imageIds)
-    this.imageIds = this.imageIds.filter(id => !submitted.has(id))
+  commitSend(imageIds: readonly DraftAttachmentId[], videoIds: readonly DraftAttachmentId[] = []): void {
+    const submittedImages = new Set(imageIds)
+    const submittedVideos = new Set(videoIds)
+    this.imageIds = this.imageIds.filter(id => !submittedImages.has(id))
+    this.videoIds = this.videoIds.filter(id => !submittedVideos.has(id))
     this.run(this.core.dispatch({ type: 'send-committed' }))
   }
 
@@ -207,17 +251,19 @@ export class SessionInputShell implements SessionInput {
    * dismisses and the menu tracks frozen.
    */
   submit(mode: InputSubmitMode = 'queue'): void {
-    if (this.snapshot.draft.trim() === '' && this.imageIds.length > 0) {
-      if (this.snapshot.phase === 'plain' && !this.imageSendInFlight) {
+    const attachmentsPending = this.imageIds.length > 0 || this.videoIds.length > 0
+    if (this.snapshot.draft.trim() === '' && attachmentsPending) {
+      if (this.snapshot.phase === 'plain' && !this.attachmentSendInFlight) {
         const imageIds = [...this.imageIds]
-        this.imageSendInFlight = true
-        void this.deps.defaultSink('', imageIds, mode, new AbortController().signal).then((outcome) => {
-          this.imageSendInFlight = false
+        const videoIds = [...this.videoIds]
+        this.attachmentSendInFlight = true
+        void this.deps.defaultSink('', imageIds, videoIds, mode, new AbortController().signal).then((outcome) => {
+          this.attachmentSendInFlight = false
           if (this.disposed) return
-          if (outcome.kind === 'success') this.commitSend(imageIds)
+          if (outcome.kind === 'success') this.commitSend(imageIds, videoIds)
           else if (outcome.text !== undefined) this.notify('error', outcome.text)
         }, (error: unknown) => {
-          this.imageSendInFlight = false
+          this.attachmentSendInFlight = false
           if (!this.disposed) this.notify('error', error instanceof Error ? error.message : String(error))
         })
       }
@@ -225,12 +271,19 @@ export class SessionInputShell implements SessionInput {
     }
     // Claimed pre-gate: a claim that does not declare image acceptance never
     // submits while images are attached — one notice, everything retained.
-    // Enter-time adjudication applies the same policy for unclaimed lines
-    // inside the command source itself.
+    // No command declares video input, so any attached video refuses the
+    // same way. Enter-time adjudication applies the same policy for
+    // unclaimed lines inside the command source itself.
     const before = this.snapshot
-    if (before.phase === 'claimed' && this.imageIds.length > 0 && before.claim?.images !== true) {
-      this.notify('error', this.deps.commandImages.unsupportedNotice(before.claim?.token ?? before.draft))
-      return
+    if (before.phase === 'claimed' && attachmentsPending) {
+      if (this.videoIds.length > 0) {
+        this.notify('error', this.deps.commandImages.videosUnsupportedNotice())
+        return
+      }
+      if (this.imageIds.length > 0 && before.claim?.images !== true) {
+        this.notify('error', this.deps.commandImages.unsupportedNotice(before.claim?.token ?? before.draft))
+        return
+      }
     }
     this.run(this.core.dispatch({ type: 'enter', mode }))
     const phase = this.snapshot.phase
@@ -455,9 +508,10 @@ export class SessionInputShell implements SessionInput {
    */
   private sinkSerialized(attempt: SubmitAttempt, draft: string, mode: InputSubmitMode): void {
     const imageIds = [...this.imageIds]
+    const videoIds = [...this.videoIds]
     const occurrences = this.core.state.occurrences
     if (occurrences.length === 0) {
-      this.settleSubmit(attempt, this.deps.defaultSink(draft.trim(), imageIds, mode, attempt.signal), imageIds)
+      this.settleSubmit(attempt, this.deps.defaultSink(draft.trim(), imageIds, videoIds, mode, attempt.signal), imageIds, videoIds)
       return
     }
     const inputTriggers = this.deps.inputTriggers?.()
@@ -481,7 +535,7 @@ export class SessionInputShell implements SessionInput {
           cursor = part.offset + part.length
         }
         out += draft.slice(cursor)
-        this.settleSubmit(attempt, this.deps.defaultSink(out.trim(), imageIds, mode, attempt.signal), imageIds)
+        this.settleSubmit(attempt, this.deps.defaultSink(out.trim(), imageIds, videoIds, mode, attempt.signal), imageIds, videoIds)
       },
       (error: unknown) => {
         controller.abort()
@@ -492,18 +546,21 @@ export class SessionInputShell implements SessionInput {
     )
   }
 
-  /** Settle one admission attempt; successful sends consume only their captured images. */
+  /** Settle one admission attempt; successful sends consume only their captured attachments. */
   private settleSubmit(
     attempt: SubmitAttempt,
     pending: Promise<SubmitOutcome>,
     imageIds: readonly DraftAttachmentId[] = [],
+    videoIds: readonly DraftAttachmentId[] = [],
   ): void {
     pending.then(
       (outcome) => {
         if (this.dead(attempt)) return
-        if (outcome.kind === 'success' && imageIds.length > 0) {
-          const submitted = new Set(imageIds)
-          this.imageIds = this.imageIds.filter(id => !submitted.has(id))
+        if (outcome.kind === 'success' && (imageIds.length > 0 || videoIds.length > 0)) {
+          const submittedImages = new Set(imageIds)
+          const submittedVideos = new Set(videoIds)
+          this.imageIds = this.imageIds.filter(id => !submittedImages.has(id))
+          this.videoIds = this.videoIds.filter(id => !submittedVideos.has(id))
         }
         this.run(this.core.dispatch({
           type: 'submit-settled',
@@ -550,10 +607,22 @@ export class SessionInputShell implements SessionInput {
    * from the outcome kind. An accepting claim receives the serialized draft
    * images, which are cleared and released only on a success outcome; a
    * failure (serialize, transport, or handler error) keeps draft and images
-   * for correction.
+   * for correction. Videos never ride a command submit (no command declares
+   * video input): an enter-adjudicated claim with videos attached settles as
+   * one refusal notice — the host executor would reject the batch the same
+   * way, and the composer keeps everything for correction.
    */
   private beginSubmit(attempt: SubmitAttempt, claim: CommandClaim, args: string): void {
     const imageIds = claim.images === true ? [...this.imageIds] : []
+    if (this.videoIds.length > 0) {
+      this.run(this.core.dispatch({
+        type: 'submit-settled',
+        attempt,
+        ok: false,
+        message: this.deps.commandImages.videosUnsupportedNotice(),
+      }))
+      return
+    }
     Promise.resolve()
       .then(async () => {
         const images = imageIds.length > 0 ? await this.deps.commandImages.serialize(imageIds) : []
@@ -590,7 +659,7 @@ export class SessionInputShell implements SessionInput {
 
   private compose(): InputState {
     const core = this.core.state
-    return { ...core, imageIds: this.imageIds, queue: this.deps.queue?.getSnapshot() ?? EMPTY_QUEUE }
+    return { ...core, imageIds: this.imageIds, videoIds: this.videoIds, queue: this.deps.queue?.getSnapshot() ?? EMPTY_QUEUE }
   }
 
   private publish(): void {

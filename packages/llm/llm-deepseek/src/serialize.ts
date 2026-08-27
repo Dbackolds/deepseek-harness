@@ -6,7 +6,7 @@
  * @module dsh-llm-deepseek/serialize
  */
 
-import { contentHasImage, LlmError, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
+import { contentHasImage, contentHasVideo, LlmError, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
 import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import type {
@@ -108,6 +108,20 @@ function flattenText(blocks: ContentBlock[]): string {
 function assertTextOnly(blocks: readonly ContentBlock[]): void {
   if (contentHasImage(blocks)) {
     throw new LlmError('The DeepSeek chat-completions adapter does not support image content.', 'UNSUPPORTED_CONTENT')
+  }
+}
+
+/**
+ * Reject video content anywhere in the history. The DeepSeek wire API accepts
+ * no video input, so no role and no path may carry a block: the shared LLM
+ * runtime has already projected videos into text placeholders for these
+ * models, and one arriving here means a caller bypassed that projection.
+ */
+function assertNoVideo(messages: readonly Message[]): void {
+  for (const message of messages) {
+    if (contentHasVideo(message.content)) {
+      throw new LlmError('The DeepSeek chat-completions adapter does not support video content.', 'UNSUPPORTED_CONTENT')
+    }
   }
 }
 
@@ -240,6 +254,7 @@ function serializeAssistant(message: Message): WireMessage {
  * @returns the wire messages; order preserved, each tool result expanded into its own entry.
  */
 export function serializeMessages(messages: Message[]): WireMessage[] {
+  assertNoVideo(messages)
   const wire: WireMessage[] = []
   for (const message of messages) {
     assertTextOnly(message.content)
@@ -282,6 +297,7 @@ export async function serializeMessagesWithImages(
   messages: readonly Message[],
   images: ImageSerializationOptions,
 ): Promise<WireMessage[]> {
+  assertNoVideo(messages)
   assertSupportedImageRoles(messages)
   const wire: WireMessage[] = []
   let pendingToolImages: WireImageContentPart[] = []
@@ -401,6 +417,7 @@ export async function serializeRequestWithImages(
   images: ImageSerializationOptions,
   defaults: RequestDefaults = {},
 ): Promise<WireRequest> {
+  assertNoVideo(options.messages)
   assertSupportedImageRoles(options.messages)
   const requestMessages = offloadRequestImagesWithPolicy(options.messages, {
     representation: images.representation.kind === 'file' ? 'raw' : 'base64',
