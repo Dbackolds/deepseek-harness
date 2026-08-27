@@ -10,6 +10,25 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* Stacked right-of-body column owning the message chrome: the clock stays
+   the first line; the per-step model line rides directly under it in the
+   same muted tertiary tone. Content-sized, so the column costs nothing
+   beyond the clock it already carries. */
+.chrome {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Second muted line under the clock (assistantRoute slot output). */
+.route {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
 .body {
   display: flex;
   flex: 1 1 auto;

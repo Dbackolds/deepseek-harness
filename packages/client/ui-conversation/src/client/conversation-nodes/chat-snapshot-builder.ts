@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  ChatConversationViewNode, ChatLocationNodeIndex, ChatNodeStore, ChatSnapshot,
-  ConversationLocation, ConversationNode, ConversationTimelineSnapshot,
+  AssistantRequestConfig, ChatConversationViewNode, ChatLocationNodeIndex, ChatNodeStore,
+  ChatSnapshot, ConversationLocation, ConversationNode, ConversationTimelineSnapshot,
   ConversationViewBuilder, ConversationViewDefinition, LegacyConversationSlice,
   PartialAssistant, RunningToolCall,
 } from '@deepseek-ai/dsh-client-runtime/client'
@@ -244,6 +244,134 @@ class ReferenceLabelProjector {
       byKey.set(key, withReferenceLabels(node, this.labelsByMessageSeq.get(messageSeq) ?? EMPTY_KEYS))
     }
     return [...byKey.values()]
+  }
+}
+
+/** One hidden chat-request-header node reduced to its join inputs. */
+interface ChatHeaderRecord {
+  readonly key: string
+  readonly seq: number
+  readonly config: AssistantRequestConfig
+  /** Turn/step key of the header's Location; undefined outside any step. */
+  readonly stepKeyOf: string | undefined
+}
+
+function headerRecord(node: ChatConversationViewNode): ChatHeaderRecord | undefined {
+  if (node.kind !== 'chat-request-header') return undefined
+  const data = (node as ChatNode<'chat-request-header'>).data
+  const location = data.location
+  return {
+    key: node.key,
+    seq: data.seq,
+    config: data.config,
+    stepKeyOf: location.kind === 'step' ? stepKey(location.turn.turn, location.step.step) : undefined,
+  }
+}
+
+/**
+ * Stamps each assistant step with the request configuration of the header
+ * that governs it (the Trajectory join semantics mirrored for the chat fold):
+ * a header located inside the step matches exactly — the latest one wins —
+ * otherwise the step inherits the latest header predating it. Identity of a
+ * stamp's config object is preserved across applies, so an unchanged join
+ * never replaces a stored Node.
+ */
+class RequestConfigProjector {
+  private headers: ChatHeaderRecord[] = []
+  private readonly headerKeys = new Set<string>()
+  private byStep = new Map<string, ChatHeaderRecord>()
+
+  replace(nodes: readonly ChatConversationViewNode[]): readonly ChatConversationViewNode[] {
+    const records: ChatHeaderRecord[] = []
+    this.headerKeys.clear()
+    this.byStep = new Map()
+    for (const node of nodes) {
+      const record = headerRecord(node)
+      if (record === undefined) continue
+      records.push(record)
+      this.headerKeys.add(record.key)
+    }
+    records.sort((left, right) => left.seq - right.seq)
+    this.headers = records
+    for (const record of records) {
+      if (record.stepKeyOf !== undefined) this.byStep.set(record.stepKeyOf, record)
+    }
+    return nodes.map(node => this.stamp(node))
+  }
+
+  apply(
+    upserts: readonly ChatConversationViewNode[],
+    store: ChatNodeStore,
+  ): readonly ChatConversationViewNode[] {
+    let headersChanged = false
+    for (const node of upserts) {
+      if (node.kind !== 'chat-request-header' || this.headerKeys.has(node.key)) continue
+      const record = headerRecord(node)
+      if (record === undefined) continue
+      headersChanged = true
+      this.insert(record)
+    }
+    const output = upserts.map(node => this.stamp(node))
+    if (!headersChanged) return output
+    // A newly indexed header can also govern already-stored steps: a prepend
+    // delivering older history, or a step whose header trailed into the
+    // window behind it. Re-stamp every stored assistant step; unchanged
+    // stamps keep their Node identity, so only real changes surface as upserts.
+    const touched = new Set(upserts.map(node => node.key))
+    for (const node of store.values()) {
+      if (node.kind !== 'assistant-step' || touched.has(node.key)) continue
+      output.push(this.stamp(node))
+    }
+    return output
+  }
+
+  private insert(record: ChatHeaderRecord): void {
+    this.headerKeys.add(record.key)
+    let low = 0
+    let high = this.headers.length
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2)
+      if ((this.headers[middle]?.seq ?? 0) < record.seq) low = middle + 1
+      else high = middle
+    }
+    this.headers.splice(low, 0, record)
+    if (record.stepKeyOf === undefined) return
+    const existing = this.byStep.get(record.stepKeyOf)
+    // Ascending seq wins per step; an older header prepended behind a newer
+    // one for the same step never demotes it.
+    if (existing === undefined || existing.seq < record.seq) {
+      this.byStep.set(record.stepKeyOf, record)
+    }
+  }
+
+  private stamp(node: ChatConversationViewNode): ChatConversationViewNode {
+    if (node.kind !== 'assistant-step') return node
+    const data = (node as ChatNode<'assistant-step'>).data
+    const config = this.configFor(node.anchorSeq, data.turn, data.step)
+    if (data.requestConfig === config) return node
+    /* v8 ignore next 3 -- defensive strip: the join index only grows, so a
+     * stamp never regresses to undefined under today's producers. */
+    if (config === undefined) {
+      const { requestConfig: _stripped, ...rest } = data
+      return { ...node, data: rest }
+    }
+    return { ...node, data: { ...data, requestConfig: config } }
+  }
+
+  private configFor(anchorSeq: number, turn: number, step: number): AssistantRequestConfig | undefined {
+    const exact = this.byStep.get(stepKey(turn, step))
+    if (exact !== undefined) return exact.config
+    // The anchor sits inside its own step, after any inherited header and
+    // before any later step's header (steps are sequential in the log), so
+    // the latest header strictly before the anchor is the step's own.
+    let low = 0
+    let high = this.headers.length
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2)
+      if ((this.headers[middle]?.seq ?? 0) < anchorSeq) low = middle + 1
+      else high = middle
+    }
+    return low === 0 ? undefined : this.headers[low - 1]?.config
   }
 }
 
@@ -494,6 +622,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
   private readonly locations = new MutableChatLocationIndex()
   private readonly legacy = new LegacySliceBuilder()
   private readonly referenceLabels = new ReferenceLabelProjector()
+  private readonly requestConfigs = new RequestConfigProjector()
   private order: readonly string[] = EMPTY_KEYS
   readonly empty: ChatSnapshot
 
@@ -505,7 +634,9 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly nodes: readonly ChatConversationViewNode[]
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
-    const nodes = hideRewritten(this.referenceLabels.replace(input.nodes))
+    const labelled = this.referenceLabels.replace(input.nodes)
+    const stamped = this.requestConfigs.replace(labelled)
+    const nodes = hideRewritten(stamped)
     this.store.replace(nodes)
     this.order = orderedVisible(nodes).map(node => node.key)
     this.locations.rebuild(this.order, this.store)
@@ -517,9 +648,10 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
     const labelled = this.referenceLabels.apply(input.upserts, this.store)
+    const stamped = this.requestConfigs.apply(labelled, this.store)
     const merged = new Map<string, ChatConversationViewNode>()
     for (const node of this.store.values()) merged.set(node.key, node)
-    for (const node of labelled) merged.set(node.key, node)
+    for (const node of stamped) merged.set(node.key, node)
     const nextNodes = hideRewritten([...merged.values()])
     const upserts = nextNodes.filter(node => this.store.get(node.key) !== node)
     let structural = false

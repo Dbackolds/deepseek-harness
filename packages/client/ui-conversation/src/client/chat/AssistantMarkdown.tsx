@@ -7,7 +7,8 @@
 // Finalized content (text) nodes append IconActions once their turn ends;
 // their branch action is enabled only when the node is also the completed
 // turn's transcript tail. Think / tool-head-only nodes stay chrome-free.
-// The event clock sits on the narration row itself, always visible.
+// The event clock sits on the narration row itself, always visible, with the
+// optional per-step model line stacked directly under it in the same column.
 
 import { Fragment, memo, useMemo } from 'react'
 import type { ReactNode } from 'react'
@@ -30,13 +31,15 @@ export interface AssistantMarkdownProps {
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   /** Resolved prose file mentions for this Assistant's closing turn. */
   mentions?: MarkdownFileMentions | undefined
+  /** Already-dispatched model-line slot content; undefined paints nothing. */
+  route?: ReactNode | undefined
   /** The owning view's locale seat, passed down as a plain prop. */
   t: ChatViewSlotProps['t']
 }
 
 /** Reasoning block as the Think variant summary row (figma 39:28304). */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
-  blocks, streaming, interrupted, time, renderMessageImages, mentions, t,
+  blocks, streaming, interrupted, time, renderMessageImages, mentions, route, t,
 }: AssistantMarkdownProps) {
   // Stable per locale revision (t identity changes on switch): a fresh object
   // per render would rebuild MarkdownText's component table every chunk.
@@ -106,13 +109,19 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         )
     }
   }
+  const routeLine = route === undefined || route === null ? null : <div className={css.route}>{route}</div>
   return (
     <div className={css.root} data-streaming={streaming || undefined}>
       <div className={css.body}>
         {rendered}
         {interrupted && <span className={css.stopped}>{t('message.stopped')}</span>}
       </div>
-      <MessageClock time={time} t={t} />
+      {(time !== undefined || routeLine !== null) && (
+        <div className={css.chrome}>
+          <MessageClock time={time} t={t} />
+          {routeLine}
+        </div>
+      )}
     </div>
   )
 })

@@ -6,9 +6,9 @@ import type {
   SlotHookFactory, SnapshotSelectorHook,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  CommandNode, CompactionSummaryNode, ConversationSnapshot, ConversationTurnDataMap,
-  ObservableSnapshot, PendingInteraction, PendingWait, SessionId, ToolCallBlock,
-  TurnLocation, WorkspaceId,
+  AssistantProvenanceView, AssistantRequestConfig, CommandNode, CompactionSummaryNode,
+  ConversationSnapshot, ConversationTurnDataMap, ObservableSnapshot, PendingInteraction,
+  PendingWait, SessionId, ToolCallBlock, TurnLocation, WorkspaceId,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MessageId } from '@deepseek-ai/dsh-client-connection/client'
@@ -149,6 +149,20 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       kind: 'list'
       scope: 'session'
       owner: AssistantActionOwnerProps
+    }
+    /**
+     * The model line under one assistant narration's clock: one occupant
+     * renders the per-step model identity from the owner's requestConfig
+     * (that step's joined request/header) and provenance (the serving
+     * message's source) shares. Declared by the chat node seat's
+     * assistant-step entry; both shares are optional — an occupant renders
+     * nothing until at least one is present, so a step predating every
+     * header stays unlabeled at no layout cost.
+     */
+    'conversation.chat.assistantRoute': {
+      kind: 'single'
+      scope: 'session'
+      owner: AssistantRouteOwnerProps
     }
     /**
      * The body of the details panel for the tool call the user selected —
@@ -410,6 +424,19 @@ export interface TurnTailOwnerProps {
 export interface AssistantActionOwnerProps {
   /** Stable identity carried from the `assistant/message` event. */
   messageId: MessageId
+}
+
+/**
+ * Owner currency of the assistant model line: the per-step request identity
+ * the chat fold derived for this one narration. Both shares are optional and
+ * derive from the node's data — requestConfig from the governing
+ * `request/header` join, provenance from the `assistant/message` source.
+ */
+export interface AssistantRouteOwnerProps {
+  /** Config of the request header governing this step; absent before any header. */
+  requestConfig?: AssistantRequestConfig | undefined
+  /** Provider/model identity reported by the message that actually served this step. */
+  provenance?: AssistantProvenanceView | undefined
 }
 
 /** Hook constrained to business data published on the current Chat Node's Turn. */

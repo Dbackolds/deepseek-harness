@@ -1,6 +1,7 @@
 import type {
-  AssistantBlock, AssistantMessageNode, ChatConversationViewNode, CommandNode,
-  CompactionSummaryNode, ModelRetryNode, RunningToolCall, ToolCallBlock,
+  AssistantBlock, AssistantMessageNode, AssistantRequestConfig, ChatConversationViewNode,
+  CommandNode, CompactionSummaryNode, ConversationLocation, ModelRetryNode, RunningToolCall,
+  ToolCallBlock,
 } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** Merge-extensible payload registry keyed by final Chat renderer kind. */
@@ -26,6 +27,27 @@ export interface AssistantChatData {
   readonly time: number
   readonly usage?: unknown
   readonly finalNode?: AssistantMessageNode
+  /**
+   * Config of the request/header governing this step, stamped by the Chat
+   * snapshot builder's step-keyed join (exact step header first, else the
+   * latest header that predates the step). Undefined while no header in the
+   * loaded window governs the step.
+   */
+  readonly requestConfig?: AssistantRequestConfig
+}
+
+/**
+ * Hidden request/header carrier node for the Chat fold: one per logged
+ * header, holding the call configuration the snapshot builder joins onto
+ * assistant steps. Never rendered — visibility stays `hidden`.
+ */
+export interface ChatRequestHeaderChatData {
+  /** Sequence of the governing `request/header` event. */
+  readonly seq: number
+  /** Provider/model and sampling configuration from the logged header. */
+  readonly config: AssistantRequestConfig
+  /** Location the fold resolved for the header event (its owning step, when any). */
+  readonly location: ConversationLocation
 }
 
 /** Settled or interrupted Assistant payload with its durable presentation node. */
