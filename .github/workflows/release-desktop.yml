@@ -160,16 +160,18 @@ jobs:
           else
             range="$tag"
           fi
-          log="$(git log --no-merges --format='%s%n%n%b' "$range")"
-          notes="$(NOTES_VERSION="$version" NOTES_LOG="$log" node --import tsx/esm -e '
+          git log --no-merges --format='%s%n%n%b' "$range" > /tmp/dsh-desktop-git-log.txt
+          NOTES_VERSION="$version" node --import tsx/esm -e '
+            import { readFileSync, writeFileSync } from "node:fs"
             import { desktopReleaseNotes } from "./scripts/desktop/pack.ts"
-            process.stdout.write(desktopReleaseNotes(process.env.NOTES_VERSION ?? "", process.env.NOTES_LOG ?? ""))
-          ')"
+            const log = readFileSync("/tmp/dsh-desktop-git-log.txt", "utf8")
+            writeFileSync("/tmp/dsh-desktop-notes.md", desktopReleaseNotes(process.env.NOTES_VERSION ?? "", log))
+          '
           shopt -s nullglob
           archives=(dist-desktop/release/*.zip dist-desktop/release/*.AppImage)
           gh release create "$tag" \
             --title "DeepSeek Harness Desktop ${version}" \
-            --notes "$notes" \
+            --notes-file /tmp/dsh-desktop-notes.md \
             --verify-tag \
             --prerelease \
             "${archives[@]}" \
