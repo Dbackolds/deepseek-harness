@@ -1121,6 +1121,40 @@ describe('the run_code dispatch bridge', () => {
     }])
   })
 
+  it('defers video-bearing final sub-call content onto the outer run_code result', async () => {
+    const { ctx, runtime } = await setup({ mode: 'code' })
+    ctx.tools.register(defineContentToolFixture({
+      name: 'video_result',
+      description: 'Return one durable video.',
+      parameters: {},
+      execute: () => Promise.resolve([
+        { type: 'text', text: 'video result' },
+        {
+          type: 'video',
+          attachment: {
+            attachmentId: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc' as never,
+            mediaType: 'video/mp4', bytes: 1,
+          },
+        },
+      ]),
+    }))
+    runtime.behavior = async (request) => {
+      await request.bindings[0]!.functions.video_result!({})
+      return { logs: [], value: 'done' }
+    }
+
+    const result = await runCode(ctx, 'program')
+
+    expect(result.additionalContexts).toMatchObject([{
+      role: 'user',
+      source: { kind: 'plugin', plugin: 'tools-code-mode' },
+      content: [
+        { type: 'text', text: 'video result' },
+        { type: 'video', attachment: { mediaType: 'video/mp4', bytes: 1 } },
+      ],
+    }])
+  })
+
   it('does not defer images removed by a nested post-execute decision', async () => {
     for (const decision of ['block', 'replace'] as const) {
       const { ctx, runtime } = await setup({ mode: 'code' })

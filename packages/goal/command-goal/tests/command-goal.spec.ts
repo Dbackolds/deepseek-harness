@@ -75,6 +75,7 @@ async function run(test: Harness, suffix = ''): Promise<NonNullable<Awaited<Retu
     test.agent,
     `/goal${suffix}`,
     [],
+    [],
     new AbortController().signal,
   )
   if (execution === undefined) throw new Error('goal command was not registered')
@@ -268,7 +269,7 @@ describe('/goal image attachments', () => {
     const images = Array.from({ length: count }, (_, index) => ({
       mediaType: 'image/png' as const, data: PNG, name: `ref-${index + 1}.png`,
     }))
-    const execution = await test.ctx.commands.execute(test.agent, `/goal${suffix}`, images, new AbortController().signal)
+    const execution = await test.ctx.commands.execute(test.agent, `/goal${suffix}`, images, [], new AbortController().signal)
     if (execution === undefined) throw new Error('goal command was not registered')
     return execution.result
   }
