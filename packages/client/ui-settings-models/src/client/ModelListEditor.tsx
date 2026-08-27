@@ -4,9 +4,7 @@
  *
  * The list is the profile's `models` array as the card holds it: an empty list
  * means "serve this route's built-in catalog", and any entry replaces that
- * catalog, so a row is only ever added deliberately. Each row can declare
- * image input; checking writes `input: [text, image]`, and unchecking drops
- * the field so a catalog answer still applies. Fetching asks the endpoint
+ * catalog, so a row is only ever added deliberately. Fetching asks the endpoint
  * **the form currently shows** — including a key typed but not yet saved — so
  * adding a provider is one pass instead of save-then-return; the reply is
  * candidates the user picks from, never configuration written behind them.
@@ -18,19 +16,17 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { DiscoveredModelView, IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
+import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
-import { messageOf } from './store.ts'
+import { messageOf, type ModelsWire } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
 /**
- * One configured model row. Structurally open, exactly like the DeepSeek
- * catalog editor's rows: a profile field this card does not edit — one a future
- * schema adds, or one hand-written in `settings.yaml` — has to survive being
- * edited here rather than being dropped by a rebuild.
+ * One configured model row. Fields this card does not edit must survive an
+ * edit rather than being dropped by a rebuild.
  */
 export type ModelDraft = DeepSeekModelDraft
 
@@ -44,16 +40,6 @@ function textOf(model: ModelDraft, key: string): string {
 function numberOf(model: ModelDraft, key: string): number | undefined {
   const value = model[key]
   return typeof value === 'number' ? value : undefined
-}
-
-/**
- * Whether this row itself declares image input. Absence is not a no: it
- * keeps the installed catalog entry, then the route's `defaultInput`, so a
- * catalog vision model stays visual until the row writes `input`.
- */
-function declaresImageInput(model: ModelDraft): boolean {
-  const input = model['input']
-  return Array.isArray(input) && input.includes('image')
 }
 
 /** What an interrogation needs, taken from the live form. */
@@ -94,23 +80,11 @@ export interface ModelListEditorProps {
    */
   probeBlocked?: keyof typeof en | undefined
   /** Wire face the fetch action calls. */
-  api: Pick<IApiClient, 'llm'>
+  api: Pick<ModelsWire, 'llm'>
   /** Section copy. */
   t: (key: keyof typeof en) => string
   /** Disable every control (read-only deployment or a pending write). */
   disabled: boolean
-  /** Wire protocols a model row may name; absent hides the per-model selector. */
-  protocols?: readonly string[]
-  /**
-   * Typed-but-unsaved keys keyed by model id. An empty string means keep the
-   * stored key, matching the provider field. Absent on a create card that
-   * never stores per-model keys until the parent records them.
-   */
-  modelKeys?: ReadonlyMap<string, string>
-  /** Replace the typed-but-unsaved key for one model id. */
-  onModelKeyChange?: (modelId: string, draft: string) => void
-  /** Stored-key placeholder by model id, shown when the draft is empty. */
-  modelKeyStored?: ReadonlySet<string>
 }
 
 /** Disclosure chevron; rotates to point down while its row is open. */
@@ -167,40 +141,13 @@ function capacitySpelling(value: number | undefined): string {
   return value === undefined ? '' : formatCapacity(value)
 }
 
-/** Adopt a candidate, keeping whatever capacities and efforts the provider disclosed. */
-function adopt(candidate: DiscoveredModelView): ModelDraft {
+/** Adopt a candidate, keeping whatever capacities the provider disclosed. */
+function adopt(candidate: LlmDiscoveredModel): ModelDraft {
   return {
     id: candidate.id,
     ...candidate.name === undefined ? {} : { name: candidate.name },
     ...candidate.contextWindow === undefined ? {} : { contextWindow: candidate.contextWindow },
     ...candidate.maxTokens === undefined ? {} : { maxTokens: candidate.maxTokens },
-    ...fillDisclosedReasoning({}, candidate),
-  }
-}
-
-/**
- * Copy disclosed thinking levels onto a row that has none. A row that already
- * declares `reasoningEfforts` or a reasoning-dispatch switch is left alone so
- * a later fetch cannot overwrite a hand-tuned declaration.
- * @param row - the stored or newly adopted draft.
- * @param candidate - the listing's disclosed efforts, when any.
- * @returns the reasoning fields to merge, or nothing.
- */
-function fillDisclosedReasoning(
-  row: ModelDraft,
-  candidate: DiscoveredModelView,
-): ModelDraft {
-  if (row['reasoningEfforts'] !== undefined) return {}
-  const compat = row['compat']
-  const compatRecord = compat !== null && typeof compat === 'object' && !Array.isArray(compat)
-    ? compat as Record<string, unknown>
-    : undefined
-  if (compatRecord !== undefined && 'supportsReasoningEffort' in compatRecord) return {}
-  return {
-    ...candidate.reasoningEfforts === undefined ? {} : { reasoningEfforts: candidate.reasoningEfforts },
-    ...candidate.supportsReasoningEffort === undefined
-      ? {}
-      : { compat: { ...compatRecord ?? {}, supportsReasoningEffort: candidate.supportsReasoningEffort } },
   }
 }
 
@@ -213,9 +160,9 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const { models, onChange, probe, api, t, disabled } = props
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  const [candidates, setCandidates] = useState<readonly DiscoveredModelView[] | undefined>(undefined)
+  const [candidates, setCandidates] = useState<readonly LlmDiscoveredModel[] | undefined>(undefined)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
-  // Rows carry an id, a name, and the image-input claim; capacities stay
+  // Rows carry an id and a name; capacities are the exception, so they stay
   // folded until asked for rather than crowding every row with four inputs.
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
   // Capacities are edited as text, so a field's keystrokes are held here rather
@@ -261,7 +208,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
-  const patch = (index: number, next: Record<string, unknown>): void => {
+  const patch = (index: number, next: Record<string, string | number | undefined>): void => {
     onChange(models.map((model, at) => {
       if (at !== index) return model
       // Rebuilt rather than spread over: an emptied optional field has to leave
@@ -278,29 +225,21 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     }))
   }
 
-  const setImageInput = (index: number, enabled: boolean): void => {
-    // Checking writes the claim that makes a hand-declared vision model
-    // usable. Unchecking drops the field rather than storing `[text]`, so a
-    // catalog model whose gateway already serves images keeps that answer.
-    patch(index, { input: enabled ? ['text', 'image'] : undefined })
-  }
-
   const fetchModels = async (): Promise<void> => {
     setBusy(true)
     setFailure(undefined)
     try {
-      const response = await api.llm.discoverModels({
-        settingsNs: probe.settingsNs,
+      const response = await api.llm.discoverModels(probe.settingsNs, {
         ...probe.provider === undefined ? {} : { provider: probe.provider },
         ...probe.baseURL === undefined || probe.baseURL.length === 0 ? {} : { baseURL: probe.baseURL },
         ...probe.api === undefined ? {} : { api: probe.api },
         ...probe.apiKey === undefined ? {} : { apiKey: probe.apiKey },
       })
-      if (!response.result.ok) {
-        setFailure(response.result.error.message)
+      if (!response.ok) {
+        setFailure(response.error.message)
         return
       }
-      const found = response.result.value.models
+      const found = response.value
       if (found.length === 0) {
         setFailure(t('fetchEmpty'))
         return
@@ -334,15 +273,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       // Keyed by id, so a half-typed row whose id is still empty is not a
       // match and the candidate joins as its own row — correct, since a row
       // without an id is not yet a model and the create/apply gates refuse it.
-      // Missing thinking levels are the one exception: a later fetch can fill
-      // them without touching capacities the user already set.
-      const existing = byId.get(candidate.id)
-      byId.set(
-        candidate.id,
-        existing === undefined
-          ? adopt(candidate)
-          : { ...existing, ...fillDisclosedReasoning(existing, candidate) },
-      )
+      byId.set(candidate.id, byId.get(candidate.id) ?? adopt(candidate))
     }
     onChange([...byId.values()])
     closePicker()
@@ -430,16 +361,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
               disabled={disabled}
               onChange={(event) => { patch(index, { name: event.target.value === '' ? undefined : event.target.value }) }}
             />
-            <label className={styles['modelImageInput']} title={t('modelImageInputHint')}>
-              <input
-                type="checkbox"
-                checked={declaresImageInput(model)}
-                aria-label={`${t('modelImageInput')} ${index + 1}`}
-                disabled={disabled}
-                onChange={(event) => { setImageInput(index, event.target.checked) }}
-              />
-              <span>{t('modelImageInput')}</span>
-            </label>
             <button
               type="button"
               className={styles['iconButton']}
@@ -503,62 +424,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     aria-label={`${t('modelMaxTokens')} ${index + 1}`}
                     disabled={disabled}
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
-                  />
-                </label>
-                {props.protocols === undefined || props.protocols.length === 0
-                  ? null
-                  : (
-                    <label className={styles['modelField']}>
-                      <span className={styles['modelFieldLabel']}>{t('modelApi')}</span>
-                      <select
-                        className={`${styles['input']} ${styles['selectInput']}`}
-                        value={textOf(model, 'api')}
-                        aria-label={`${t('modelApi')} ${index + 1}`}
-                        disabled={disabled}
-                        onChange={(event) => {
-                          patch(index, { api: event.target.value === '' ? undefined : event.target.value })
-                        }}
-                      >
-                        <option value="">{t('modelApiInherit')}</option>
-                        {props.protocols.map(choice => (
-                          <option key={choice} value={choice}>{choice}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                {props.onModelKeyChange === undefined
-                  ? null
-                  : (
-                    <label className={styles['modelField']}>
-                      <span className={styles['modelFieldLabel']}>{t('modelKeyInput')}</span>
-                      <input
-                        className={styles['input']}
-                        type="password"
-                        autoComplete="off"
-                        value={props.modelKeys?.get(textOf(model, 'id')) ?? ''}
-                        placeholder={textOf(model, 'id').length > 0
-                          && props.modelKeyStored?.has(textOf(model, 'id')) === true
-                          ? t('modelKeyStored')
-                          : t('modelKeyPlaceholder')}
-                        aria-label={`${t('modelKeyInput')} ${index + 1}`}
-                        disabled={disabled || textOf(model, 'id').length === 0}
-                        onChange={(event) => {
-                          props.onModelKeyChange?.(textOf(model, 'id'), event.target.value)
-                        }}
-                      />
-                    </label>
-                  )}
-                <label className={`${styles['modelField']} ${styles['modelSystemPrompt']}`}>
-                  <span className={styles['modelFieldLabel']}>{t('modelSystemPrompt')}</span>
-                  <textarea
-                    className={`${styles['input']} ${styles['modelSystemPromptInput']}`}
-                    value={textOf(model, 'systemPrompt')}
-                    placeholder={t('modelSystemPromptPlaceholder')}
-                    aria-label={`${t('modelSystemPrompt')} ${index + 1}`}
-                    disabled={disabled}
-                    onChange={(event) => {
-                      patch(index, { systemPrompt: event.target.value === '' ? undefined : event.target.value })
-                    }}
                   />
                 </label>
               </div>

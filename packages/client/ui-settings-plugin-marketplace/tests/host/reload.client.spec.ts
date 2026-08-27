@@ -100,7 +100,7 @@ assert(split.others.map(entry => entry.id).join(',') === 'plain', 'others first'
 assert(split.marketplace.map(entry => entry.id).join(',') === 'plugin-marketplace', 'marketplace last')
 assert(
   selectClientReloadIds([
-    '@deepseek-ai/dsh-client-runtime',
+    '@deepseek-ai/dsh-client-store',
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-conversation',
     '@deepseek-ai/dsh-client-ui-settings-plugin-marketplace',

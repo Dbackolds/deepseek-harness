@@ -3,9 +3,8 @@
  * settings section both read.
  */
 
-import {
-  createSnapshotStore, type SettingsScope, type SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { DEFAULT_KEEP_AWAKE, KEEP_AWAKE_FIELD } from '../automation-settings.ts'
 import type { AutomationSettings } from '../automation-settings.ts'
 

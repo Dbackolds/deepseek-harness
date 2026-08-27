@@ -4,6 +4,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
+import AutomationController from './remote.ts'
 import z from '@deepseek-ai/schemastery'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
@@ -128,6 +129,7 @@ export class AutomationService extends Service {
   private runtime?: AutomationRuntime
   constructor(ctx: Context, public readonly config: Config) {
     super(ctx, 'automation')
+    ctx.plugin(AutomationController)
   }
   /** Open the domain and start the process-local timer owner. */
   protected async [Service.init](): Promise<void> {

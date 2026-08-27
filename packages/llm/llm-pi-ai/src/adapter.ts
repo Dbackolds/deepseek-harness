@@ -41,13 +41,13 @@ import type {
 import {
   attributionHeaders,
   contentHasImage,
-  contentHasVideo,
   LlmAdapter,
   LlmError,
   ReasoningEffortId,
 } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions,
+  ImageAttachmentAccess,
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
@@ -56,13 +56,10 @@ import type {
   ResolvedRetryPolicy,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
-import type { AttachmentId, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import type { DshModality } from './catalog.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
-import { collectVideoRefs, toPiContext } from './context.ts'
-import { acquireFetchPipeline, acquireOpenAiSseFetchRepair, rewriteOpenAiVideoUrls } from './openai-fetch-pipeline.ts'
+import { toPiContext } from './context.ts'
 import { toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
@@ -78,19 +75,14 @@ export interface PiAiAdapterOptions {
   /** Current validated profiles by provider route; called once per operation. */
   profiles: () => ReadonlyMap<string, ResolvedPiAiProviderProfile>
   /**
-   * Resolve the credential for one already-resolved profile and the model the
-   * request names; called once per stream call and frozen for that call.
-   * `undefined` defers to the route's own pi-ai auth, which for an installed
-   * catalog route is its provider-native ambient discovery; the plugin allows
-   * that only when neither the model nor the route names a credential, because
-   * a named reference that misses throws `LlmError` `MISSING_CREDENTIAL`
-   * rather than falling back.
+   * Resolve the credential for one already-resolved profile; called once per
+   * stream call and frozen for that call. `undefined` defers to the route's own
+   * pi-ai auth, which for an installed catalog route is its provider-native
+   * ambient discovery; the plugin allows that only for a profile naming no
+   * credential at all, because a named reference that misses throws `LlmError`
+   * `MISSING_CREDENTIAL` rather than falling back.
    */
-  resolveApiKey: (
-    provider: string,
-    profile: ResolvedPiAiProviderProfile,
-    model?: string,
-  ) => Promise<string | undefined>
+  resolveApiKey: (provider: string, profile: ResolvedPiAiProviderProfile) => Promise<string | undefined>
   /**
    * How every collection this adapter builds resolves auth the request-level
    * `apiKey` override does not cover. Required rather than optional: a
@@ -102,6 +94,8 @@ export interface PiAiAdapterOptions {
   auth: PiAiAuthInjection
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
+  /** Bridge one attachment reference into the current model-tool execution world. */
+  resolveImageAccess?: (attachments: AttachmentStore, ref: ImageAttachmentRef) => ImageAttachmentAccess | undefined
   /**
    * Observe one assistant history message degrading to provider-neutral
    * conversion because its stored replay state is unusable by this build.
@@ -135,19 +129,6 @@ function profileOptions(
     // The agent recovery layer owns visible attempts; one adapter call is one SDK attempt.
     maxRetries: 0,
   }
-}
-
-/**
- * pi-ai model `input` read as the harness modality superset — the read-side
- * mirror of provider.ts's single documented cast. Materialized models may
- * name the harness-owned `video` even though pi-ai's type cannot express it;
- * pi-ai never reads the member (`video` blocks never reach it, only text
- * markers), so the widening is inert upstream.
- * @param model - a model this adapter materialized and resolved.
- * @returns the model's declared modalities, harness superset included.
- */
-function harnessInput(model: Model<Api>): readonly DshModality[] {
-  return model.input as readonly DshModality[]
 }
 
 /**
@@ -295,7 +276,7 @@ export class PiAiAdapter extends LlmAdapter {
         provider,
         id: model.id,
         name: model.name,
-        inputModalities: [...harnessInput(model)],
+        inputModalities: [...model.input],
       }))
     })
   }
@@ -318,15 +299,13 @@ export class PiAiAdapter extends LlmAdapter {
     // Only a cap the deployment configured is a request default; the
     // catalog's `maxTokens` sizes the model and stops there.
     const configuredMaxTokens = profile.configuredMaxTokens.get(model)
-    const systemPrompt = profile.configuredSystemPrompts.get(model)
     return {
       provider,
       id: model,
       name: resolvedModel.name,
-      inputModalities: [...harnessInput(resolvedModel)],
+      inputModalities: [...resolvedModel.input],
       context: { contextWindow: resolvedModel.contextWindow },
       ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
-      ...systemPrompt === undefined ? {} : { systemPrompt },
       ...reasoningInfo(resolvedModel, defaultLevel),
     }
   }
@@ -341,45 +320,6 @@ export class PiAiAdapter extends LlmAdapter {
 
   stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     return this.streamWithSnapshot(options, this.current())
-  }
-
-  /**
-   * Read every unique video reference once, enforcing the request-level video
-   * budget while the payload accumulates so the failure names the size that
-   * crossed it.
-   * @param options - the harness request whose history is scanned for references.
-   * @param attachments - durable byte resolver for video references.
-   * @param profile - the route profile owning the video budget.
-   * @param model - the pi-ai model descriptor, for the failure diagnostic.
-   * @param signal - watchdog signal forwarded to every read.
-   * @returns base64 payload by attachment id.
-   * @throws LlmError `UNSUPPORTED_CONTENT` when the accumulated payload exceeds the budget.
-   */
-  private async prepareVideoPayload(
-    options: GenerateOptions,
-    attachments: AttachmentStore,
-    profile: ResolvedPiAiProviderProfile,
-    model: Model<Api>,
-    signal: AbortSignal,
-  ): Promise<Map<string, string>> {
-    const refs = new Map<AttachmentId, VideoAttachmentRef>()
-    for (const message of options.messages) collectVideoRefs(message.content, refs)
-    const payload = new Map<string, string>()
-    let total = 0
-    for (const ref of refs.values()) {
-      const request = await attachments.readVideoRequest(ref, signal)
-      total += request.data.length
-      if (total > profile.maxRequestVideoBytes) {
-        throw new LlmError(
-          `pi-ai model "${model.id}" video request payload ${total} bytes exceeds the route's`
-          + ` maxRequestVideoBytes ${profile.maxRequestVideoBytes}; remove videos from the request`
-          + ' or raise the route budget',
-          'UNSUPPORTED_CONTENT',
-        )
-      }
-      payload.set(String(ref.attachmentId), request.data)
-    }
-    return payload
   }
 
   private async * streamWithSnapshot(
@@ -400,7 +340,7 @@ export class PiAiAdapter extends LlmAdapter {
       model,
       options.reasoningEffort ?? profile.reasoning,
     )
-    const apiKey = await this.config.resolveApiKey(options.provider, profile, options.model)
+    const apiKey = await this.config.resolveApiKey(options.provider, profile)
 
     const consumer = new AbortController()
     const upstream = options.signal === undefined
@@ -408,51 +348,30 @@ export class PiAiAdapter extends LlmAdapter {
       : AbortSignal.any([options.signal, consumer.signal])
     const streamIdleTimeoutMs = profile.streamIdleTimeoutMs
     using watchdog = idleWatchdog(upstream, streamIdleTimeoutMs, 'LLM_STREAM_IDLE_TIMEOUT')
-    // pi-ai's OpenAI client has no fetch hook; these leases wrap globalThis.fetch
-    // for the stream lifetime: illegal SSE JSON string literals are repaired
-    // before the SDK parses them, and video request markers become the
-    // provider's `video_url` wire items.
-    const releaseSseRepair = acquireOpenAiSseFetchRepair()
-    let releaseVideoRewrite: (() => void) | undefined
 
     try {
       const containsImage = options.messages.some(message => contentHasImage(message.content))
-      const containsVideo = options.messages.some(message => contentHasVideo(message.content))
-      const input = harnessInput(model)
-      if (containsImage && !input.includes('image')) {
+      if (containsImage && !model.input.includes('image')) {
         throw new LlmError(`pi-ai model "${model.id}" does not support image input`, 'UNSUPPORTED_CONTENT')
       }
-      if (containsVideo && !input.includes('video')) {
-        throw new LlmError(`pi-ai model "${model.id}" does not support video input`, 'UNSUPPORTED_CONTENT')
-      }
-      const attachments = containsImage || containsVideo ? this.config.resolveAttachments?.() : undefined
+      const attachments = containsImage ? this.config.resolveAttachments?.() : undefined
       if (containsImage && attachments === undefined) {
         throw new LlmError('pi-ai image input requires the durable attachment service', 'UNSUPPORTED_CONTENT')
-      }
-      if (containsVideo && attachments === undefined) {
-        throw new LlmError('pi-ai video input requires the durable attachment service', 'UNSUPPORTED_CONTENT')
-      }
-      if (containsVideo && attachments !== undefined) {
-        const videoPayload = await this.prepareVideoPayload(
-          options,
-          attachments,
-          profile,
-          model,
-          watchdog.signal,
-        )
-        releaseVideoRewrite = acquireFetchPipeline({
-          onRequest: (init, url) => rewriteOpenAiVideoUrls(init, url, videoPayload),
-        })
       }
       const onReplayDegrade = (reason: string): void => {
         this.config.onReplayDegrade?.({ provider: options.provider, model: options.model, reason })
       }
       const context = attachments === undefined
         ? toPiContext(options, undefined, onReplayDegrade)
-        : await toPiContext({ ...options, signal: watchdog.signal }, attachments, onReplayDegrade, profile.maxRequestImageBytes, {
-          maxPixels: profile.requestImagePixelBudget,
-          maxBytes: profile.requestImageMaxBytes,
-        })
+        : await toPiContext({ ...options, signal: watchdog.signal }, {
+          attachments,
+          resolveImageAccess: ref => this.config.resolveImageAccess?.(attachments, ref),
+          maxRequestImageBytes: profile.maxRequestImageBytes,
+          requestImagePolicy: {
+            maxPixels: profile.requestImagePixelBudget,
+            maxBytes: profile.requestImageMaxBytes,
+          },
+        }, onReplayDegrade)
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
@@ -463,7 +382,7 @@ export class PiAiAdapter extends LlmAdapter {
         // Harness-owned and therefore win collisions.
         headers: requestHeaders(profile.headers),
       })
-      const iterator = toStreamChunks(events, model.contextWindow)[Symbol.asyncIterator]()
+      const iterator = toStreamChunks(events, model.contextWindow, options.signal)[Symbol.asyncIterator]()
       let exhausted = false
       try {
         while (true) {
@@ -495,8 +414,6 @@ export class PiAiAdapter extends LlmAdapter {
       }
       throw error
     } finally {
-      releaseVideoRewrite?.()
-      releaseSseRepair()
       consumer.abort('pi-ai stream consumer stopped')
     }
   }

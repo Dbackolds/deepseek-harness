@@ -6,8 +6,8 @@
  * @module dsh-llm-deepseek/serialize
  */
 
-import { contentHasImage, contentHasVideo, LlmError, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
+import { contentHasImage, LlmError, offloadedImageText, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message } from '@deepseek-ai/dsh-llm'
 import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import type {
   WireImageContentPart,
@@ -48,6 +48,8 @@ export interface ImageSerializationOptions {
   representation: ImageRequestRepresentation
   /** Request versions prepared for the conservatively retained normalized attachments, keyed by attachment id. */
   requestImages: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>
+  /** Resolve current tool access independently from deterministic request-image versions. */
+  resolveImageAccess?: ImageAttachmentAccessResolver
   /** Positive bound on accumulated represented image bytes. */
   maxRequestImageBytes: number
   /** Maximum represented images in one request. */
@@ -111,20 +113,6 @@ function assertTextOnly(blocks: readonly ContentBlock[]): void {
   }
 }
 
-/**
- * Reject video content anywhere in the history. The DeepSeek wire API accepts
- * no video input, so no role and no path may carry a block: the shared LLM
- * runtime has already projected videos into text placeholders for these
- * models, and one arriving here means a caller bypassed that projection.
- */
-function assertNoVideo(messages: readonly Message[]): void {
-  for (const message of messages) {
-    if (contentHasVideo(message.content)) {
-      throw new LlmError('The DeepSeek chat-completions adapter does not support video content.', 'UNSUPPORTED_CONTENT')
-    }
-  }
-}
-
 /** Reject roles whose DeepSeek history format cannot carry image input. */
 function assertSupportedImageRoles(messages: readonly Message[]): void {
   for (const message of messages) {
@@ -139,12 +127,14 @@ function assertSupportedImageRoles(messages: readonly Message[]): void {
 
 /** Describe the exact request preview and its model-callable coordinate system. */
 function imageHandle(
+  ref: ImageAttachmentRef,
   version: RequestImageAttachment,
+  resolveAccess: ImageAttachmentAccessResolver | undefined,
   precededByContent: boolean,
 ): WireTextContentPart {
   return {
     type: 'text',
-    text: `${precededByContent ? '\n' : ''}${requestImageHandleText(version)}`,
+    text: `${precededByContent ? '\n' : ''}${requestImageHandleText(ref, version, resolveAccess?.(ref))}`,
   }
 }
 
@@ -168,7 +158,7 @@ async function imageParts(
       type: 'image_url',
       image_url: { url: `data:${version.mediaType};base64,${Buffer.from(version.data).toString('base64')}` },
     }
-  return [imageHandle(version, precededByContent), image]
+  return [imageHandle(block.attachment, version, images.resolveImageAccess, precededByContent), image]
 }
 
 /** Convert user or nested tool-result blocks into ordered wire parts. */
@@ -254,7 +244,6 @@ function serializeAssistant(message: Message): WireMessage {
  * @returns the wire messages; order preserved, each tool result expanded into its own entry.
  */
 export function serializeMessages(messages: Message[]): WireMessage[] {
-  assertNoVideo(messages)
   const wire: WireMessage[] = []
   for (const message of messages) {
     assertTextOnly(message.content)
@@ -297,7 +286,6 @@ export async function serializeMessagesWithImages(
   messages: readonly Message[],
   images: ImageSerializationOptions,
 ): Promise<WireMessage[]> {
-  assertNoVideo(messages)
   assertSupportedImageRoles(messages)
   const wire: WireMessage[] = []
   let pendingToolImages: WireImageContentPart[] = []
@@ -405,10 +393,10 @@ export function serializeRequest(
 
 /**
  * Build one image-capable request while keeping durable bytes out of session
- * messages. Oversized oldest images become deterministic text after their
+ * messages. Oversized oldest images become per-image text after their
  * exact request-version byte lengths are known and before provider serialization.
  * @param options - harness request containing image-capable user content.
- * @param images - attachment resolver, request bound, and cancellation.
+ * @param images - request versions, optional current access resolver, and request bounds.
  * @param defaults - adapter-level thinking defaults.
  * @returns the fully materialized DeepSeek request body.
  */
@@ -417,7 +405,6 @@ export async function serializeRequestWithImages(
   images: ImageSerializationOptions,
   defaults: RequestDefaults = {},
 ): Promise<WireRequest> {
-  assertNoVideo(options.messages)
   assertSupportedImageRoles(options.messages)
   const requestMessages = offloadRequestImagesWithPolicy(options.messages, {
     representation: images.representation.kind === 'file' ? 'raw' : 'base64',
@@ -432,6 +419,7 @@ export async function serializeRequestWithImages(
     ...images.maxImagesPerRequest === undefined ? {} : { maxImages: images.maxImagesPerRequest },
     ...images.byteQuantum === undefined ? {} : { byteQuantum: images.byteQuantum },
     ...images.countQuantum === undefined ? {} : { countQuantum: images.countQuantum },
+    placeholder: ref => offloadedImageText(ref, images.resolveImageAccess?.(ref)),
   })
   const messages: WireMessage[] = []
   if (options.system !== undefined) {

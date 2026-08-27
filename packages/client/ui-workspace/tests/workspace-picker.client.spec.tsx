@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
-  SessionListState, WorkspaceId, WorkspaceListState, WorkspaceView,
-} from '@deepseek-ai/dsh-client-runtime/client'
+  WorkspaceId, WorkspaceSnapshot, WorkspaceView,
+} from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from '../src/client/contract/slots.ts'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
@@ -20,7 +23,7 @@ const t: WorkspacePickerProps['t'] = makeTranslate(zh, commonZh)
 const wid = (id: string) => id as WorkspaceId
 function workspace(id: string, title = id): WorkspaceView {
   return {
-    workspaceId: wid(id), path: `/projects/${id}`, folders: [], title, sessionIds: [],
+    workspaceId: wid(id), path: `/projects/${id}`, title, sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   }
 }
@@ -30,12 +33,9 @@ function hook<T>(snapshot: T) {
 const sessions: SessionListState = {
   ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
 }
-const workspaceState = (
-  items: readonly WorkspaceView[],
-  hiddenWorkspaceIds: readonly WorkspaceId[] = [],
-): WorkspaceListState => ({
-  items, archivedSessionIds: [], hiddenWorkspaceIds, state: 'idle', phase: 'ready', error: null, baselinesReady: true,
-  recentWorkspaceId: items[0]?.workspaceId,
+const noPendingInteraction: SessionPendingInteractionSnapshot = new Map()
+const workspaceState = (items: readonly WorkspaceView[]): WorkspaceSnapshot => ({
+  items, archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
 })
 function anchor(): { current: HTMLElement } {
   const element = document.createElement('button')
@@ -84,7 +84,6 @@ function mount(
   items: readonly WorkspaceView[] = [workspace('alpha', 'Alpha')],
   createWorkspace = vi.fn(),
   occupancy = occupancySource(),
-  hiddenWorkspaceIds: readonly WorkspaceId[] = [],
 ) {
   const onPick = vi.fn()
   const onClose = vi.fn()
@@ -95,7 +94,8 @@ function mount(
       open
       anchorRef={anchorRef}
       useSessions={hook(sessions)}
-      useWorkspaces={hook(workspaceState(nextItems, hiddenWorkspaceIds))}
+      useSessionPendingInteraction={hook(noPendingInteraction)}
+      useWorkspaces={hook(workspaceState(nextItems))}
       onPick={onPick}
       onClose={onClose}
       createWorkspace={createWorkspace}
@@ -118,28 +118,6 @@ function chooseAdd(): void {
 }
 
 describe('WorkspacePicker', () => {
-  it('omits hidden Workspaces from the picker list', () => {
-    mount(
-      [workspace('alpha', 'Alpha'), workspace('hidden', 'Hidden Home')],
-      vi.fn(),
-      occupancySource(),
-      [wid('hidden')],
-    )
-    expect(screen.getByRole('menuitem', { name: 'Alpha' })).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: 'Hidden Home' })).toBeNull()
-  })
-
-  it('omits No Repo from the picker list', () => {
-    mount([
-      workspace('alpha', 'Alpha'),
-      { ...workspace('no-repo', 'No Repo'), path: '/root/.dsh/no-repo' },
-    ])
-    expect(screen.getByRole('menuitem', { name: 'Alpha' })).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: 'No Repo' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: 'Chat' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: '聊天' })).toBeNull()
-  })
-
   it('lists same-title Workspaces separately and forwards the selected id', () => {
     const b = mount([workspace('alpha', 'Shared'), workspace('beta', 'Shared')])
     const entries = screen.getAllByRole('menuitem', { name: 'Shared' })
@@ -237,6 +215,7 @@ describe('WorkspacePicker', () => {
     render(
       <WorkspacePicker
         open useSessions={hook(sessions)} useWorkspaces={hook(workspaceState([workspace('alpha', 'Alpha')]))}
+        useSessionPendingInteraction={hook(noPendingInteraction)}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
       />,
@@ -245,13 +224,14 @@ describe('WorkspacePicker', () => {
   })
 
   it('keeps the menu up while the list baseline is still in flight', () => {
-    const state: WorkspaceListState = {
-      ...workspaceState([]), phase: 'pending', state: 'loading', baselinesReady: false,
+    const state: WorkspaceSnapshot = {
+      ...workspaceState([]), phase: 'pending', state: 'loading',
     }
     const { renderSlot } = flowProbe()
     render(
       <WorkspacePicker
         open anchorRef={anchor()} useSessions={hook(sessions)} useWorkspaces={hook(state)}
+        useSessionPendingInteraction={hook(noPendingInteraction)}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
       />,

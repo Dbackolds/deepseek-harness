@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { join, sep } from 'node:path'
-import { createUserMessage, CallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH, type ToolExecution, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
@@ -213,7 +213,7 @@ function call(
 ) {
   return ctx.tools.execute({
     signal: testToolSignal,
-    callId: CallId(`call-${++callCounter}`),
+    callId: ToolCallId(`call-${++callCounter}`),
     name,
     arguments: args,
     ...options.agent ? { agent: options.agent as never } : {},
@@ -362,20 +362,6 @@ describe('command construction (plain argv)', () => {
       .toEqual(['--json', '--regexp=x', '--glob=*.{ts,tsx}', '--', '-leading-dash'])
   })
 
-  it('omitted path searches every extra workspace root', () => {
-    expect(buildGrepCommand({ pattern: 'x' }, ['/primary', '/extra'])).toEqual([
-      '--json', '--regexp=x', '--', '/primary', '/extra',
-    ])
-    expect(buildGlobCommand({ pattern: '*.ts' }, ['/primary', '/extra']).slice(-3)).toEqual([
-      '--', '/primary', '/extra',
-    ])
-  })
-
-  it('an explicit path still wins over extra workspace roots', () => {
-    expect(buildGrepCommand({ pattern: 'x', path: 'src' }, ['/primary', '/extra']))
-      .toEqual(['--json', '--regexp=x', '--', 'src'])
-  })
-
   it.each([
     ['a command-substitution pattern', '$(rm -rf /)'],
     ['a backtick pattern', '`touch pwned`'],
@@ -481,7 +467,7 @@ describe('workdir derivation and signal forwarding', () => {
     const { ctx } = await setup()
     const controller = new AbortController()
     controller.abort()
-    const exec = { signal: controller.signal, name: 'glob', callId: CallId('direct-pre-abort') } as unknown as ToolExecution
+    const exec = { signal: controller.signal, name: 'glob', callId: ToolCallId('direct-pre-abort') } as unknown as ToolExecution
     await expect(runRipgrep(ctx, exec, 'glob', ['--files'], 1_000_000, 3_000, 64 * 1024)).rejects
       .toMatchObject({ name: 'SearchError', code: 'SEARCH_ABORTED' })
   })

@@ -1,9 +1,4 @@
-/* Models settings section, in the settings-panel design language: 14/22 body,
- * 12/18 caption, capsule controls (h36 r18; h28 r14 where a row is dense),
- * 32px fields, and `border-l2` hairlines — the vocabulary GeneralSection and
- * the Button/Input primitives already use.
- *
- * Every color resolves through a `--dsw-alias-*` token. Bare `--border` /
+/* Every color resolves through a `--dsw-alias-*` token. Bare `--border` /
  * `--surface` / `--text-*` names, which nothing in this app defines, would
  * render the light-mode literals written as their fallbacks and stay light
  * under the dark theme. */
@@ -218,8 +213,7 @@
 .linkButton:focus-visible,
 .addModelButton:focus-visible,
 .iconButton:focus-visible,
-.customizedSummary:focus-visible,
-.setupSummary:focus-visible {
+.customizedSummary:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
 }
@@ -350,43 +344,6 @@
   padding: 0;
 }
 
-/* Same rotating chevron as `.customizedSummary`, sized for the card title. */
-.setupSummary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.setupSummary::-webkit-details-marker {
-  display: none;
-}
-
-.setupSummary::before {
-  content: '';
-  flex: none;
-  width: 5px;
-  height: 5px;
-  border-right: 1.5px solid currentcolor;
-  border-bottom: 1.5px solid currentcolor;
-  color: var(--dsw-alias-label-secondary);
-  transform: rotate(-45deg) translate(-1px, -1px);
-  transition: transform 120ms ease;
-}
-
-.setupDisclosure[open] > .setupSummary::before {
-  transform: rotate(45deg) translate(-1px, -1px);
-}
-
-.setupDisclosure[open] > .setupSummary {
-  margin-bottom: 14px;
-}
-
-.setupSummary:hover .editorTitle {
-  color: var(--dsw-alias-label-primary);
-}
-
 .customized {
   border-top: 1px solid var(--dsw-alias-border-l2);
   padding-top: 10px;
@@ -474,11 +431,11 @@
 }
 
 /* Model list, shared with the pi-ai provider form: one bordered
-   entry per model, id, display name, and image-input claim on the row,
-   capacities behind the row's own disclosure. The rules use this
-   stylesheet's token vocabulary — `--dsw-alias-border-subtle`,
-   `--dsw-alias-text-tertiary`, and `--dsw-alias-text-primary` are
-   undefined here and would resolve to their light-mode literals. */
+   entry per model, id and display name on the row, capacities behind the
+   row's own disclosure. The rules use this stylesheet's token vocabulary —
+   `--dsw-alias-border-subtle`, `--dsw-alias-text-tertiary`, and
+   `--dsw-alias-text-primary` are undefined here and would resolve to their
+   light-mode literals. */
 .modelList {
   display: flex;
   flex-direction: column;
@@ -500,35 +457,9 @@
 
 .modelRow {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 6px;
-}
-
-/* Per-row claim that this model accepts images. Sits on the identifying
-   line rather than behind the disclosure: a hand-declared vision model is
-   unusable until this is set, so hiding it behind Capacities would leave
-   the toast as the only way to discover the field. */
-.modelImageInput {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.modelImageInput input {
-  margin: 0;
-  cursor: pointer;
-}
-
-.modelImageInput:has(input:disabled) {
-  cursor: default;
-  opacity: 0.4;
 }
 
 /* Square, label-free affordances: the row's own inputs carry the meaning, so
@@ -568,10 +499,6 @@
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 8px;
   padding: 8px 4px 2px;
-}
-
-.modelSystemPrompt {
-  grid-column: 1 / -1;
 }
 
 .modelField {
@@ -650,13 +577,6 @@ select.input {
   cursor: default;
 }
 
-.modelSystemPromptInput {
-  height: auto;
-  min-height: 88px;
-  padding: 8px 10px;
-  resize: vertical;
-}
-
 /* Select variant of .input: replaces the OS arrow (which sits flush against
    the right edge) with the shared 12px chevron inset like the composer's
    .select chips; the right pad reserves its cell. */
@@ -704,7 +624,7 @@ select.input {
 
 @media (prefers-reduced-motion: reduce) {
   .customizedSummary::before,
-  .setupSummary::before {
+  .switchThumb {
     transition: none;
   }
 }

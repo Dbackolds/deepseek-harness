@@ -5,9 +5,9 @@
  */
 
 import type {
-  IApiClient, ModelProviderGroup, RegisteredPromptSectionView, SettingsNamespaceView,
+  ClientRemote, ModelProviderGroup, RegisteredPromptSectionView, SettingsNamespaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** Settings namespace this page reads and writes. */
 export const USER_SYSTEM_PROMPTS_NS = 'user-system-prompts'
@@ -225,7 +225,7 @@ export class SystemPromptsStore {
   private registered: readonly RegisteredPromptSectionView[] = []
 
   /** @param api - Settings, registered-section, and model-catalog wire faces. */
-  constructor(private readonly api: Pick<IApiClient, 'settings' | 'llm' | 'systemPrompt'>) {}
+  constructor(private readonly api: Pick<ClientRemote, 'settings' | 'llm' | 'systemPrompt'>) {}
 
   /**
    * Refresh the namespace and catalog. Latest request wins.

@@ -43,20 +43,30 @@ function displayName(value: string | undefined): string | undefined {
   return clean === '' ? undefined : clean
 }
 
-function objectPath(root: string, sha256: string): string {
-  return join(root, 'objects', sha256.slice(0, 2), sha256)
-}
-
-/** Reference facts every prepared object carries for verification and publication. */
 interface PreparedRef {
   readonly attachmentId: AttachmentId
   readonly bytes: number
+}
+
+function objectPath(root: string, sha256: string): string {
+  return join(root, 'objects', sha256.slice(0, 2), sha256)
 }
 
 function ensureReference(ref: PreparedRef): string {
   const match = ID_PATTERN.exec(String(ref.attachmentId))
   if (match?.[1] === undefined) throw new AttachmentError('Attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')
   return match[1]
+}
+
+/**
+ * Derive the absolute immutable-object path for one normalized attachment.
+ * @param root - absolute `DSH_HOME/attachments/v1` root.
+ * @param ref - durable normalized attachment reference.
+ * @returns provider-local path without reading the object.
+ */
+export function normalizedImagePath(root: string, ref: ImageAttachmentRef): string {
+  const sha256 = ensureReference(ref)
+  return join(root, 'objects', sha256.slice(0, 2), sha256)
 }
 
 async function inspectMetadata(
@@ -192,19 +202,15 @@ async function ensureDurableHome(path: string): Promise<string> {
 }
 
 /**
- * Publish one already verified object below a versioned attachment root.
- * Shared by every media family: the durability protocol is content-addressed
- * and media-agnostic.
+ * Publish one already verified normalized image below a versioned attachment root.
  * @param root - absolute `DSH_HOME/attachments/v1` root.
- * @param prepared - deterministic bytes and reference.
- * @param persistFailureMessage - media-specific message for unexpected storage failures.
- * @returns the durable reference of the published object.
+ * @param prepared - deterministic normalized bytes and reference.
+ * @returns durable content-addressed normalized image reference.
  */
-async function publishPreparedObject<R extends PreparedRef>(
+export async function commitPreparedImageFile(
   root: string,
-  prepared: { readonly data: Uint8Array; readonly ref: R },
-  persistFailureMessage: string,
-): Promise<R> {
+  prepared: PreparedImageFile,
+): Promise<ImageAttachmentRef> {
   const normalized = prepared.data
   const sha256 = ensureReference(prepared.ref)
   if (digest(normalized) !== sha256 || normalized.byteLength !== prepared.ref.bytes) {
@@ -219,7 +225,7 @@ async function publishPreparedObject<R extends PreparedRef>(
   await ensureDurableDirectory(bucket, boundary)
   await ensureDurableDirectory(staging, boundary)
   const temporary = join(staging, randomUUID())
-  const target = objectPath(root, sha256)
+  const target = normalizedImagePath(root, prepared.ref)
   let handle
   try {
     handle = await open(temporary, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600)
@@ -235,13 +241,18 @@ async function publishPreparedObject<R extends PreparedRef>(
       const existing = new Uint8Array(await readFile(target))
       if (digest(existing) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
     }
+    // Windows shares the read-only attribute across hard links and refuses to
+    // unlink either name once it is set, so discard the staging name first.
+    await unlink(temporary)
+    // The target remains the sole link for a new object; this also restores
+    // read-only mode when the deduplication path observes an existing object.
+    await chmod(target, 0o400)
     // Persist the target entry and close a concurrent bucket-creation window
     // before the reference can reach a session checkpoint. The dedup path
     // repeats both syncs because it may observe another writer's link before
     // that writer reaches its own durability boundary.
     await syncDirectory(bucket)
     await syncDirectory(join(root, 'objects'))
-    await unlink(temporary)
   } catch (error) {
     /* v8 ignore next -- A descriptor can remain open only when the underlying write/sync/close operation fails. */
     if (handle !== undefined) await handle.close().catch(
@@ -256,22 +267,9 @@ async function publishPreparedObject<R extends PreparedRef>(
       },
     )
     if (error instanceof AttachmentError) throw error
-    throw new AttachmentError(persistFailureMessage, 'ATTACHMENT_WRITE_FAILED', { cause: error })
+    throw new AttachmentError('Unable to persist image attachment.', 'ATTACHMENT_WRITE_FAILED', { cause: error })
   }
   return prepared.ref
-}
-
-/**
- * Publish one already verified normalized image below a versioned attachment root.
- * @param root - absolute `DSH_HOME/attachments/v1` root.
- * @param prepared - deterministic normalized bytes and reference.
- * @returns durable content-addressed normalized image reference.
- */
-export async function commitPreparedImageFile(
-  root: string,
-  prepared: PreparedImageFile,
-): Promise<ImageAttachmentRef> {
-  return publishPreparedObject(root, prepared, 'Unable to persist image attachment.')
 }
 
 /**
@@ -292,14 +290,88 @@ export async function saveImageFile(
 }
 
 /**
- * Read one content-addressed object, mapping absence and transport failures
- * to stable storage errors while preserving cancellation.
+ * Read and verify one content-addressed image.
  * @param root - absolute `DSH_HOME/attachments/v1` root.
- * @param sha256 - content digest naming the object.
- * @param media - media family naming read failures.
- * @param signal - optional cancellation for the filesystem read.
- * @returns the stored bytes.
+ * @param ref - reference recorded in the session log.
+ * @param signal - optional cancellation for filesystem and verification work.
+ * @returns verified bytes and reference.
+ * @throws the signal reason when aborted, or an AttachmentError when verification fails.
  */
+export async function readImageFile(
+  root: string,
+  ref: ImageAttachmentRef,
+  signal?: AbortSignal,
+): Promise<StoredImageAttachment> {
+  signal?.throwIfAborted()
+  const sha256 = ensureReference(ref)
+  let data: Uint8Array
+  try {
+    data = new Uint8Array(await readFile(normalizedImagePath(root, ref), { signal }))
+  } catch (error) {
+    signal?.throwIfAborted()
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') throw new AttachmentError('Attachment object is missing.', 'ATTACHMENT_NOT_FOUND')
+    throw new AttachmentError('Unable to read image attachment.', 'ATTACHMENT_READ_FAILED', { cause: error })
+  }
+  signal?.throwIfAborted()
+  if (digest(data) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+  // The digest proves these are the exact bytes admission fully decoded, so
+  // the read path only re-derives the header fields (no raster decode, no
+  // per-request pixel amplification on history replay).
+  const metadata = await probeImage(data)
+  signal?.throwIfAborted()
+  if (metadata.mediaType !== ref.mediaType || data.byteLength !== ref.bytes
+    || metadata.width !== ref.width || metadata.height !== ref.height) {
+    throw new AttachmentError('Stored attachment metadata does not match its reference.', 'ATTACHMENT_CORRUPT')
+  }
+  return { ref, data }
+}
+
+
+async function publishPreparedObject<R extends PreparedRef>(
+  root: string,
+  prepared: { readonly data: Uint8Array; readonly ref: R },
+  persistFailureMessage: string,
+): Promise<R> {
+  const normalized = prepared.data
+  const sha256 = ensureReference(prepared.ref)
+  if (digest(normalized) !== sha256 || normalized.byteLength !== prepared.ref.bytes) {
+    throw new AttachmentError('Prepared attachment bytes do not match their reference.', 'ATTACHMENT_CORRUPT')
+  }
+  const bucket = join(root, 'objects', sha256.slice(0, 2))
+  const staging = join(root, 'tmp')
+  const boundary = await ensureDurableHome(dirname(dirname(resolve(root))))
+  await ensureDurableDirectory(bucket, boundary)
+  await ensureDurableDirectory(staging, boundary)
+  const temporary = join(staging, randomUUID())
+  const target = objectPath(root, sha256)
+  let handle
+  try {
+    handle = await open(temporary, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600)
+    await handle.writeFile(normalized)
+    await handle.sync()
+    await handle.close()
+    handle = undefined
+    try {
+      await link(temporary, target)
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
+      const existing = new Uint8Array(await readFile(target))
+      if (digest(existing) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+    }
+    await unlink(temporary)
+    await syncDirectory(bucket)
+    await syncDirectory(join(root, 'objects'))
+  } catch (error) {
+    if (handle !== undefined) await handle.close().catch(() => {})
+    await unlink(temporary).catch((cleanupError: unknown) => {
+      if (!(cleanupError instanceof Error && 'code' in cleanupError && cleanupError.code === 'ENOENT')) throw cleanupError
+    })
+    if (error instanceof AttachmentError) throw error
+    throw new AttachmentError(persistFailureMessage, 'ATTACHMENT_WRITE_FAILED', { cause: error })
+  }
+  return prepared.ref
+}
+
 async function readObjectBytes(
   root: string,
   sha256: string,
@@ -315,36 +387,6 @@ async function readObjectBytes(
     throw new AttachmentError(`Unable to read ${media} attachment.`, 'ATTACHMENT_READ_FAILED', { cause: error })
   }
   return data
-}
-
-/**
- * Read and verify one content-addressed image.
- * @param root - absolute `DSH_HOME/attachments/v1` root.
- * @param ref - reference recorded in the session log.
- * @param signal - optional cancellation for filesystem and verification work.
- * @returns verified bytes and reference.
- * @throws the signal reason when aborted, or an AttachmentError when verification fails.
- */
-export async function readImageFile(
-  root: string,
-  ref: ImageAttachmentRef,
-  signal?: AbortSignal,
-): Promise<StoredImageAttachment> {
-  signal?.throwIfAborted()
-  const sha256 = ensureReference(ref)
-  const data = await readObjectBytes(root, sha256, 'image', signal)
-  signal?.throwIfAborted()
-  if (digest(data) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
-  // The digest proves these are the exact bytes admission fully decoded, so
-  // the read path only re-derives the header fields (no raster decode, no
-  // per-request pixel amplification on history replay).
-  const metadata = await probeImage(data)
-  signal?.throwIfAborted()
-  if (metadata.mediaType !== ref.mediaType || data.byteLength !== ref.bytes
-    || metadata.width !== ref.width || metadata.height !== ref.height) {
-    throw new AttachmentError('Stored attachment metadata does not match its reference.', 'ATTACHMENT_CORRUPT')
-  }
-  return { ref, data }
 }
 
 /** Fully prepared video object, verified before any batch member is persisted. */

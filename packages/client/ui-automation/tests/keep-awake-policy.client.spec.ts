@@ -1,6 +1,6 @@
 /** Live keep-awake preference: process-local default and Host adoption. */
 import { describe, expect, it, vi } from 'vitest'
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { AutomationKeepAwakePolicy } from '../src/client/keep-awake-policy.ts'
 import { DEFAULT_KEEP_AWAKE, type AutomationSettings } from '../src/automation-settings.ts'
 

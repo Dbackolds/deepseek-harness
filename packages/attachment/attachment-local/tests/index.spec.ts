@@ -1,25 +1,22 @@
 import { Context } from '@deepseek-ai/cordis'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import sharp from 'sharp'
 import LocalAttachmentStore, {
+  DEFAULT_NORMALIZED_IMAGE_MAX_BYTES,
+  DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION,
+  DEFAULT_NORMALIZED_IMAGE_MAX_PIXELS,
   DEFAULT_IMAGE_COMPRESSION_CONCURRENCY,
   DEFAULT_MAX_IMAGE_BYTES,
+  DEFAULT_MAX_IMAGE_DIMENSION,
   DEFAULT_MAX_IMAGE_PIXELS,
   DEFAULT_MAX_IMAGES_PER_MESSAGE,
   DEFAULT_MAX_MESSAGE_IMAGE_BYTES,
-  DEFAULT_MAX_MESSAGE_VIDEO_BYTES,
-  DEFAULT_MAX_VIDEO_BYTES,
-  DEFAULT_MAX_VIDEOS_PER_MESSAGE,
-  DEFAULT_NORMALIZED_IMAGE_MAX_BYTES,
-  DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION,
 } from '../src/index.ts'
-import { MP4, MKV } from './video-fixtures.ts'
-
-const VIDEO = { data: MP4, mediaType: 'video/mp4' as const }
 
 describe('local attachment service', () => {
   it('resolves every omitted admission limit explicitly', () => {
@@ -28,38 +25,36 @@ describe('local attachment service', () => {
     expect(DEFAULT_MAX_IMAGES_PER_MESSAGE).toBe(20)
     expect(DEFAULT_MAX_MESSAGE_IMAGE_BYTES).toBe(200 * 1024 * 1024)
     expect(DEFAULT_MAX_IMAGE_PIXELS).toBe(64_000_000)
+    expect(DEFAULT_MAX_IMAGE_DIMENSION).toBe(8192)
     expect(service.imageLimits).toEqual({
       maxImageBytes: DEFAULT_MAX_IMAGE_BYTES,
       maxImagesPerMessage: DEFAULT_MAX_IMAGES_PER_MESSAGE,
       maxMessageImageBytes: DEFAULT_MAX_MESSAGE_IMAGE_BYTES,
       maxImagePixels: DEFAULT_MAX_IMAGE_PIXELS,
+      maxImageDimension: DEFAULT_MAX_IMAGE_DIMENSION,
       mediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
     })
     expect(service.normalizationPolicy).toEqual({
+      maxPixels: DEFAULT_NORMALIZED_IMAGE_MAX_PIXELS,
       maxDimension: DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION,
       maxBytes: DEFAULT_NORMALIZED_IMAGE_MAX_BYTES,
     })
     expect(service.imageCompressionConcurrency).toBe(DEFAULT_IMAGE_COMPRESSION_CONCURRENCY)
-  })
-
-  it('publishes an explicit per-side admission cap when configured', () => {
-    const service = new LocalAttachmentStore(new Context(), { maxImageDimension: 4096 })
-    expect(service.imageLimits.maxImageDimension).toBe(4096)
-  })
-
-  it('admits a source whose long side exceeds the former default per-side cap', async () => {
-    const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-wide-source-'))
-    try {
-      const service = new LocalAttachmentStore(new Context(), { dshHome })
-      const data = new Uint8Array(await sharp({
-        create: { width: 9000, height: 16, channels: 3, background: { r: 1, g: 2, b: 3 } },
-      }).png().toBuffer())
-      await expect(service.saveImage({ data, mediaType: 'image/png' })).resolves.toMatchObject({
-        originalDimensions: { width: 9000, height: 16 },
-      })
-    } finally {
-      await rm(dshHome, { recursive: true, force: true })
+    const ref = {
+      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      mediaType: 'image/png' as const,
+      bytes: 1,
+      width: 1,
+      height: 1,
     }
+    expect(service.imageHostPath(ref)).toBe(join(
+      service.root,
+      'objects',
+      'aa',
+      'a'.repeat(64),
+    ))
+    expect(() => service.imageHostPath({ ...ref, attachmentId: AttachmentId('invalid') }))
+      .toThrow(expect.objectContaining({ code: 'INVALID_ATTACHMENT_REF' }))
   })
 
   it('resolves and validates the instance image-compression concurrency', () => {
@@ -68,19 +63,6 @@ describe('local attachment service', () => {
       expect(() => new LocalAttachmentStore(new Context(), { imageCompressionConcurrency }))
         .toThrow(/imageCompressionConcurrency must be an integer from 1 through 8/)
     }
-  })
-
-  it('resolves every omitted video admission limit explicitly', () => {
-    const service = new LocalAttachmentStore(new Context(), {})
-    expect(DEFAULT_MAX_VIDEO_BYTES).toBe(100 * 1024 * 1024)
-    expect(DEFAULT_MAX_VIDEOS_PER_MESSAGE).toBe(2)
-    expect(DEFAULT_MAX_MESSAGE_VIDEO_BYTES).toBe(200 * 1024 * 1024)
-    expect(service.videoLimits).toEqual({
-      maxVideoBytes: DEFAULT_MAX_VIDEO_BYTES,
-      maxVideosPerMessage: DEFAULT_MAX_VIDEOS_PER_MESSAGE,
-      maxMessageVideoBytes: DEFAULT_MAX_MESSAGE_VIDEO_BYTES,
-      mediaTypes: ['video/mp4', 'video/x-matroska', 'video/quicktime'],
-    })
   })
 
   it('saves and reads through the service boundary', async () => {
@@ -93,6 +75,18 @@ describe('local attachment service', () => {
       ))
       const ref = await service.saveImage({ data, mediaType: 'image/png' })
       await expect(service.readImage(ref)).resolves.toEqual({ ref, data })
+      const hostPath = service.imageHostPath(ref)
+      expect(hostPath).toBe(join(
+        dshHome,
+        'attachments',
+        'v1',
+        'objects',
+        String(ref.attachmentId).slice('sha256:'.length, 'sha256:'.length + 2),
+        String(ref.attachmentId).slice('sha256:'.length),
+      ))
+      await expect(readFile(hostPath)).resolves.toEqual(Buffer.from(data))
+      const request = await service.readImageRequest(ref, { maxPixels: 1, maxBytes: 1024 })
+      expect(request).not.toHaveProperty('access')
     } finally {
       await rm(dshHome, { recursive: true, force: true })
     }
@@ -144,15 +138,15 @@ describe('local attachment service', () => {
   it('prepares every batch member before any write', async () => {
     const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-batch-'))
     try {
-      const service = new LocalAttachmentStore(new Context(), { dshHome, normalizedImageMaxBytes: 1 })
+      const service = new LocalAttachmentStore(new Context(), { dshHome })
       const valid = Uint8Array.from(Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC',
         'base64',
       ))
       await expect(service.saveImages([
         { data: valid, mediaType: 'image/png' },
-        { data: valid, mediaType: 'image/png' },
-      ])).rejects.toMatchObject({ code: 'IMAGE_TOO_LARGE' })
+        { data: Uint8Array.of(1, 2, 3), mediaType: 'image/png' },
+      ])).rejects.toThrow(/Unsupported or malformed image data/)
       expect(existsSync(service.root)).toBe(false)
     } finally {
       await rm(dshHome, { recursive: true, force: true })
@@ -173,78 +167,6 @@ describe('local attachment service', () => {
       await expect(limited.validateImage({ data: valid, mediaType: 'image/png' }))
         .rejects.toMatchObject({ code: 'IMAGE_TOO_LARGE' })
       await expect(service.validateImage({ data: valid, mediaType: 'image/png' })).resolves.toBeUndefined()
-      expect(existsSync(service.root)).toBe(false)
-    } finally {
-      await rm(dshHome, { recursive: true, force: true })
-    }
-  })
-
-  it('saves and reads a video through the service boundary', async () => {
-    const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-video-service-'))
-    try {
-      const service = new LocalAttachmentStore(new Context(), { dshHome })
-      const ref = await service.saveVideo({ data: MP4, mediaType: 'video/mp4', name: 'clip.mp4' })
-      expect(ref).toMatchObject({ mediaType: 'video/mp4', bytes: MP4.byteLength, name: 'clip.mp4' })
-      await expect(service.readVideo(ref)).resolves.toEqual({ ref, data: MP4 })
-    } finally {
-      await rm(dshHome, { recursive: true, force: true })
-    }
-  })
-
-  it('commits a fully prepared video batch in input order', async () => {
-    const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-video-batch-'))
-    try {
-      const service = new LocalAttachmentStore(new Context(), { dshHome })
-      const refs = await service.saveVideos([
-        { data: MP4, mediaType: 'video/mp4', name: 'first.mp4' },
-        { data: MKV, mediaType: 'video/x-matroska', name: 'second.mkv' },
-      ])
-
-      expect(refs.map(ref => [ref.name, ref.mediaType])).toEqual([
-        ['first.mp4', 'video/mp4'],
-        ['second.mkv', 'video/x-matroska'],
-      ])
-      await expect(Promise.all(refs.map(ref => service.readVideo(ref)))).resolves.toHaveLength(2)
-    } finally {
-      await rm(dshHome, { recursive: true, force: true })
-    }
-  })
-
-  it('prepares every video batch member before any write', async () => {
-    const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-video-prepare-'))
-    try {
-      const service = new LocalAttachmentStore(new Context(), { dshHome })
-      await expect(service.saveVideos([VIDEO, { data: Uint8Array.of(1, 2, 3), mediaType: 'video/mp4' }]))
-        .rejects.toMatchObject({ code: 'INVALID_VIDEO' })
-      expect(existsSync(service.root)).toBe(false)
-    } finally {
-      await rm(dshHome, { recursive: true, force: true })
-    }
-  })
-
-  it('applies configured video admission limits', async () => {
-    const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-video-limits-'))
-    try {
-      const capped = new LocalAttachmentStore(new Context(), { dshHome, maxVideoBytes: 1 })
-      await expect(capped.saveVideo(VIDEO)).rejects.toMatchObject({ code: 'VIDEO_TOO_LARGE' })
-
-      const counted = new LocalAttachmentStore(new Context(), { dshHome, maxVideosPerMessage: 1 })
-      await expect(counted.saveVideos([VIDEO, VIDEO])).rejects.toMatchObject({ code: 'TOO_MANY_VIDEOS' })
-
-      const aggregate = new LocalAttachmentStore(new Context(), { dshHome, maxMessageVideoBytes: 2 })
-      await expect(aggregate.saveVideos([VIDEO, VIDEO])).rejects.toMatchObject({ code: 'VIDEOS_TOO_LARGE' })
-    } finally {
-      await rm(dshHome, { recursive: true, force: true })
-    }
-  })
-
-  it('validates videos without persisting', async () => {
-    const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-video-validate-'))
-    try {
-      const service = new LocalAttachmentStore(new Context(), { dshHome })
-      await expect(service.validateVideo({ data: Uint8Array.of(1, 2, 3), mediaType: 'video/mp4' }))
-        .rejects.toMatchObject({ code: 'INVALID_VIDEO' })
-      await expect(service.validateVideo(VIDEO)).resolves.toBeUndefined()
       expect(existsSync(service.root)).toBe(false)
     } finally {
       await rm(dshHome, { recursive: true, force: true })

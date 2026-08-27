@@ -84,7 +84,7 @@ export function isMarketplaceEntry(id: string, moduleName: string): boolean {
 export const CLIENT_SKELETON_PACKAGES = new Set([
   '@deepseek-ai/dsh-client-connection',
   '@deepseek-ai/dsh-client-modules',
-  '@deepseek-ai/dsh-client-runtime',
+  '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-hmr',
   '@deepseek-ai/dsh-api-remotes',
   '@deepseek-ai/dsh-cordis-client-runner',

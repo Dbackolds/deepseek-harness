@@ -1,7 +1,7 @@
 /** Selected-rule settings and history panes. */
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { draftToUpdate, formatNextAt, ruleToDraft, type AutomationDraft } from './format.ts'
 import type { AutomationKey } from './locales.ts'
 import type { AutomationListedRule, AutomationRunView, AutomationState, AutomationStore } from './store.ts'

@@ -9,20 +9,21 @@
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 // Type-only imports: a plugin-to-plugin value import is a bundle purity
 // error, so scope resolution goes through the sessions service (scopeOf
 // method) instead of the standalone helper.
-import type { ISessions, SessionFace, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
-  SubmitImageAttachment, SubmitOutcome, SubmitVideoAttachment,
-} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
-import type {
-  ImageAttachmentRef, ImageMediaType, VideoAttachmentRef, VideoMediaType,
-} from '@deepseek-ai/dsh-attachment'
+  ISessions, PendingSubmissionRetirement, SessionFace,
+} from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ComposerAttachment } from './contract/slots.ts'
 import type { QueueAction, QueueItemId } from './contract/queue.ts'
-import type { ComposerBlocks } from './input/blocks.ts'
-import type { DraftAttachmentId, SessionInputResolver } from './input/contract.ts'
+import type { ComposerBlocks } from './contract/composer-blocks.ts'
+import type {
+  DraftAttachmentId, SessionInputResolver, SubmitImageAttachment, SubmitOutcome,
+} from './contract/input.ts'
 import type { InputSubmitMode } from './contract/composer-submission.ts'
 
 /**
@@ -45,16 +46,7 @@ export interface IConversation {
    */
   send(text: string): Promise<void>
   /**
-   * Rewrite a settled user prompt in this same session and start a new turn
-   * from the replacement. Failures also land in promptError.
-   * @param atSeq - current-surface `user/message` seq being edited.
-   * @param text - replacement text, sent verbatim as one text block.
-   * @returns completion; business failures reject.
-   */
-  rewrite(atSeq: number, text: string): Promise<void>
-  /**
-   * Apply one text edit, remove, or strict steer operation to a pending queue occurrence.
-   * An edit payload is one text block; the host keeps already-admitted non-text blocks.
+   * Apply one edit, remove, or strict steer operation to a pending queue occurrence.
    * @param itemId - agent-owned inbox occurrence identity.
    * @param action - requested queue operation.
    * @returns completion; converged strict-steer races resolve, while other failures reject.
@@ -73,19 +65,69 @@ export interface IConversation {
 }
 
 /** Create one browser-only draft descriptor; only its id enters input state. */
-function browserDraftAttachment(file: File, kind: 'image' | 'video'): ComposerAttachment {
+function browserDraftAttachment(file: File): ComposerAttachment {
   return {
-    kind,
-    id: crypto.randomUUID() as DraftAttachmentId,
+    kind: 'image',
+    id: randomUUID() as DraftAttachmentId,
     previewUrl: URL.createObjectURL(file),
     file,
   }
 }
 
-interface MediaUrlEntry {
-  readonly sessionId: SessionId
-  readonly generation: number
-  readonly pending: Promise<string>
+/**
+ * Fill the draft's intrinsic dimensions once the browser parses the image
+ * header (a metadata read off the preview URL, not a full decode). Failures
+ * and non-browser runtimes leave them absent — consumers size those images
+ * from CSS constraints instead. The descriptors stay registry-owned; submit
+ * reads the dimensions into an immutable echo snapshot, so this late write
+ * does not require a store notification.
+ */
+function probeDimensions(attachment: ComposerAttachment): void {
+  if (typeof Image !== 'function') return
+  const probe = new Image()
+  probe.onload = () => {
+    attachment.width = probe.naturalWidth
+    attachment.height = probe.naturalHeight
+  }
+  probe.src = attachment.previewUrl
+}
+
+/** Give the echo one paint opportunity without letting a throttled frame clock block admission. */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        setTimeout(resolve, 0)
+        return
+      }
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(fallback)
+        setTimeout(resolve, 0)
+      }
+      const fallback = setTimeout(finish, 100)
+      requestAnimationFrame(finish)
+    } else {
+      setTimeout(resolve, 0)
+    }
+  })
+}
+
+/** Native canonical base64 of one browser file (FileReader data-URL encode; no main-thread byte loop). */
+function base64Of(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = reader.result as string
+      resolve(url.slice(url.indexOf(',') + 1))
+    }
+    reader.onerror = () => {
+      reject(reader.error ?? new Error('conversation: image read failed'))
+    }
+    reader.readAsDataURL(file)
+  })
 }
 
 /** Unsupported browser-declared image type, localized by the UI boundary. */
@@ -101,19 +143,6 @@ export class UnsupportedImageMediaTypeError extends Error {
   }
 }
 
-/** Unsupported browser-declared video type, localized by the UI boundary. */
-export class UnsupportedVideoMediaTypeError extends Error {
-  /** Browser-declared MIME value, possibly empty. */
-  readonly mediaType: string
-
-  /** @param mediaType - Browser-declared MIME value, possibly empty. */
-  constructor(mediaType: string) {
-    super(`unsupported video media type: ${mediaType || '(empty)'}`)
-    this.name = 'UnsupportedVideoMediaTypeError'
-    this.mediaType = mediaType
-  }
-}
-
 /** Scope-addressed conversation service (root singleton, provided as `conversation`). */
 export class ConversationController extends Service implements IConversation {
   /** The per-session input machine registry (SessionInputResolver face). */
@@ -121,10 +150,6 @@ export class ConversationController extends Service implements IConversation {
   /** The per-session composer-block registry. */
   readonly blocks: ComposerBlocks
   private readonly draftAttachments = new Map<DraftAttachmentId, ComposerAttachment>()
-  private readonly mediaUrls = new Map<string, MediaUrlEntry>()
-  private readonly mediaGenerations = new Map<SessionId, number>()
-  private readonly createdMediaUrls = new Set<string>()
-  private disposed = false
 
   /**
    * @param ctx - owning root context (the plugin apply context; the service
@@ -138,13 +163,11 @@ export class ConversationController extends Service implements IConversation {
     this.input = config.input
     this.blocks = config.blocks
     ctx.effect(() => () => {
-      this.disposed = true
-      for (const url of this.createdMediaUrls) revokePreview(url)
-      this.createdMediaUrls.clear()
+      for (const attachment of this.draftAttachments.values()) {
+        revokePreview(attachment.previewUrl)
+      }
       this.draftAttachments.clear()
-      this.mediaUrls.clear()
-      this.mediaGenerations.clear()
-    }, 'conversation attachment URL cache')
+    }, 'conversation draft attachments')
   }
 
   /**
@@ -160,23 +183,15 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /**
-   * Rewrite a settled user prompt in the scoped session. Business failures
-   * also land in the session snapshot's promptError.
-   * @param atSeq - current-surface `user/message` seq being edited.
-   * @param text - replacement text, sent verbatim as one text block.
-   */
-  async rewrite(atSeq: number, text: string): Promise<void> {
-    const session = this.scopedSession('rewrite')
-    const result = await session.rewrite(atSeq, [{ type: 'text', text }])
-    if (!result.ok) throw new Error(`conversation.rewrite failed: ${result.error.code}: ${result.error.message}`)
-  }
-
-  /**
-   * Submit ordered draft images and videos with text through one host admission.
+   * Submit ordered draft images with text through one host admission. A local
+   * submission echo enters the session snapshot synchronously; serialization
+   * and the prompt round-trip start after the browser can paint it. On the
+   * echo's observed retirement the draft images hand their preview URLs to
+   * the durable image cache and leave the registry; on failure they stay
+   * registered so the composer can restore them.
    * @param session - target session.
    * @param text - serialized prompt text.
-   * @param imageIds - ordered draft-local image ids.
-   * @param videoIds - ordered draft-local video ids.
+   * @param imageIds - ordered draft-local attachment ids.
    * @param mode - queue or steer delivery selected by composer policy.
    * @param signal - optional cancellation for the complete Host admission.
    * @returns the Host admission outcome; local attachment preparation failures reject.
@@ -185,7 +200,6 @@ export class ConversationController extends Service implements IConversation {
     session: SessionFace,
     text: string,
     imageIds: readonly DraftAttachmentId[],
-    videoIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal?: AbortSignal,
   ): Promise<SubmitOutcome> {
@@ -193,19 +207,41 @@ export class ConversationController extends Service implements IConversation {
     if (attachments.length !== imageIds.length) {
       throw new Error('conversation.sendSession: one or more draft images are no longer available')
     }
-    const videos = this.draftVideos(videoIds)
-    if (videos.length !== videoIds.length) {
-      throw new Error('conversation.sendSession: one or more draft videos are no longer available')
+    if (session.getSnapshot().subagent !== null) {
+      const uploaded = await this.serializeImages(attachments.map(attachment => attachment.file))
+      const content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
+      const result = await session.prompt(content, mode, signal)
+      return result.ok ? { kind: 'success' } : { kind: 'error' }
     }
-    const [uploadedImages, uploadedVideos] = await Promise.all([
-      this.serializeImages(attachments.map(attachment => attachment.file)),
-      this.serializeVideos(videos.map(video => video.file)),
-    ])
-    const content = [...uploadedImages, ...uploadedVideos, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
-    const result = await session.prompt(content, mode, signal)
+    let finishRetirement: ((retirement: PendingSubmissionRetirement) => void) | undefined
+    const retirement = attachments.length === 0
+      ? undefined
+      : new Promise<PendingSubmissionRetirement>((resolve) => { finishRetirement = resolve })
+    const submission = session.beginSubmission({
+      text,
+      images: attachments.map(attachment => ({
+        previewUrl: attachment.previewUrl,
+        ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+        ...(attachment.width === undefined ? {} : { width: attachment.width }),
+        ...(attachment.height === undefined ? {} : { height: attachment.height }),
+      })),
+      onRetire: (settlement) => {
+        this.settleSubmittedImages(session.sessionId, attachments, settlement)
+        finishRetirement?.(settlement)
+      },
+    })
+    let content: Parameters<SessionFace['prompt']>[0]
+    try {
+      await nextPaint()
+      const uploaded = await this.serializeImages(attachments.map(attachment => attachment.file))
+      content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
+    } catch (error) {
+      submission.abandon()
+      throw error
+    }
+    const result = await session.prompt(content, mode, signal, submission.requestId)
     if (!result.ok) return { kind: 'error' }
-    this.releaseDraftImages(attachments)
-    this.releaseDraftVideos(videos)
+    if (retirement !== undefined && (await retirement).reason !== 'observed') return { kind: 'error' }
     return { kind: 'success' }
   }
 
@@ -217,9 +253,9 @@ export class ConversationController extends Service implements IConversation {
   createDraftImages(files: readonly File[]): readonly ComposerAttachment[] {
     for (const file of files) imageMediaType(file.type)
     return files.map((file) => {
-      const attachment = browserDraftAttachment(file, 'image')
+      const attachment = browserDraftAttachment(file)
       this.draftAttachments.set(attachment.id, attachment)
-      this.createdMediaUrls.add(attachment.previewUrl)
+      probeDimensions(attachment)
       return attachment
     })
   }
@@ -261,7 +297,6 @@ export class ConversationController extends Service implements IConversation {
     const attachment = this.draftAttachments.get(id)
     if (attachment === undefined) return
     this.draftAttachments.delete(id)
-    this.createdMediaUrls.delete(attachment.previewUrl)
     revokePreview(attachment.previewUrl)
   }
 
@@ -271,155 +306,6 @@ export class ConversationController extends Service implements IConversation {
    */
   releaseDraftImages(attachments: readonly ComposerAttachment[]): void {
     for (const attachment of attachments) this.releaseDraftImage(attachment.id)
-  }
-
-  /**
-   * Create runtime-only draft videos and their object URLs.
-   * @param files - browser files to register after container-type validation.
-   * @returns ordered draft descriptors.
-   */
-  createDraftVideos(files: readonly File[]): readonly ComposerAttachment[] {
-    for (const file of files) videoMediaType(file.type)
-    return files.map((file) => {
-      const attachment = browserDraftAttachment(file, 'video')
-      this.draftAttachments.set(attachment.id, attachment)
-      this.createdMediaUrls.add(attachment.previewUrl)
-      return attachment
-    })
-  }
-
-  /**
-   * Resolve ordered input-state ids to runtime-owned draft videos.
-   * @param ids - draft video ids.
-   * @returns descriptors that remain live, in requested order.
-   */
-  draftVideos(ids: readonly DraftAttachmentId[]): readonly ComposerAttachment[] {
-    const videos: ComposerAttachment[] = []
-    for (const id of ids) {
-      const attachment = this.draftAttachments.get(id)
-      if (attachment !== undefined) videos.push(attachment)
-    }
-    return videos
-  }
-
-  /**
-   * Release one browser-owned draft video and preview URL.
-   * @param id - draft video id.
-   */
-  releaseDraftVideo(id: DraftAttachmentId): void {
-    this.releaseDraftImage(id)
-  }
-
-  /**
-   * Release a set of browser-owned draft videos.
-   * @param videos - descriptors to release.
-   */
-  releaseDraftVideos(videos: readonly ComposerAttachment[]): void {
-    for (const video of videos) this.releaseDraftVideo(video.id)
-  }
-
-  /**
-   * Resolve and cache one session-authorized historical media URL (image or
-   * video over one id-keyed cache).
-   * @param sessionId - owning session authorization scope.
-   * @param attachmentId - durable attachment id.
-   * @param op - the failing operation's name for diagnostics.
-   * @param load - the session read producing the authorized URL.
-   * @returns browser URL valid until its rendered session is released.
-   */
-  private resolveMediaUrl(
-    sessionId: SessionId,
-    attachmentId: string,
-    op: 'resolveImage' | 'resolveVideo',
-    load: () => Promise<string>,
-  ): Promise<string> {
-    if (this.disposed) return Promise.reject(new Error(`conversation.${op}: service is disposed`))
-    const key = `${sessionId}:${attachmentId}`
-    const cached = this.mediaUrls.get(key)
-    if (cached !== undefined) return cached.pending
-    const generation = this.mediaGenerations.get(sessionId) ?? 0
-    const pending = load()
-      .then((url) => {
-        if (this.disposed) throw new Error(`conversation.${op}: service was disposed before loading completed`)
-        if ((this.mediaGenerations.get(sessionId) ?? 0) !== generation) {
-          throw new Error('historical media scope was released before loading completed')
-        }
-        this.createdMediaUrls.add(url)
-        return url
-      })
-      .catch((error: unknown) => {
-        if (this.mediaUrls.get(key)?.generation === generation) this.mediaUrls.delete(key)
-        throw error
-      })
-    this.mediaUrls.set(key, { sessionId, generation, pending })
-    return pending
-  }
-
-  private static mediaObjectUrl(bytes: Uint8Array<ArrayBuffer>, mediaType: string): string {
-    if (typeof URL.createObjectURL !== 'function') {
-      return `data:${mediaType};base64,${bytesToBase64(bytes)}`
-    }
-    return URL.createObjectURL(new Blob([bytes.buffer], { type: mediaType }))
-  }
-
-  /**
-   * Resolve and cache one session-authorized historical image URL.
-   * @param sessionId - owning session authorization scope.
-   * @param attachment - durable image reference.
-   * @returns browser URL valid until its rendered session is released.
-   */
-  resolveImage(sessionId: SessionId, attachment: ImageAttachmentRef): Promise<string> {
-    const session = this.requireSessions().binding(sessionId)?.session
-    if (session === undefined) {
-      return Promise.reject(new Error(`conversation.resolveImage: unknown session "${sessionId}"`))
-    }
-    return this.resolveMediaUrl(sessionId, String(attachment.attachmentId), 'resolveImage', async () => {
-      const result = await session.readAttachment(attachment.attachmentId)
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-      return ConversationController.mediaObjectUrl(
-        Uint8Array.from(result.value.data),
-        result.value.attachment.mediaType,
-      )
-    })
-  }
-
-  /**
-   * Resolve and cache one session-authorized historical video URL.
-   * @param sessionId - owning session authorization scope.
-   * @param attachment - durable video reference.
-   * @returns browser URL valid until its rendered session is released.
-   */
-  resolveVideo(sessionId: SessionId, attachment: VideoAttachmentRef): Promise<string> {
-    const session = this.requireSessions().binding(sessionId)?.session
-    if (session === undefined) {
-      return Promise.reject(new Error(`conversation.resolveVideo: unknown session "${sessionId}"`))
-    }
-    return this.resolveMediaUrl(sessionId, String(attachment.attachmentId), 'resolveVideo', async () => {
-      const result = await session.readAttachment(attachment.attachmentId)
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-      return ConversationController.mediaObjectUrl(
-        Uint8Array.from(result.value.data),
-        result.value.attachment.mediaType,
-      )
-    })
-  }
-
-  /**
-   * Release every historical media URL owned by one rendered session.
-   * @param sessionId - rendered session scope.
-   */
-  releaseSessionImages(sessionId: SessionId): void {
-    this.mediaGenerations.set(sessionId, (this.mediaGenerations.get(sessionId) ?? 0) + 1)
-    for (const [key, entry] of this.mediaUrls) {
-      if (entry.sessionId !== sessionId) continue
-      this.mediaUrls.delete(key)
-      void entry.pending.then((url) => {
-        if (!this.createdMediaUrls.delete(url)) return
-        revokePreview(url)
-      }, () => {
-        // A failed or invalidated load owns no object URL.
-      })
-    }
   }
 
   /** Apply one operation to a pending queue occurrence. */
@@ -472,30 +358,41 @@ export class ConversationController extends Service implements IConversation {
     return sessions
   }
 
+  /**
+   * Settle one submission's draft images when its echo retires. Observed:
+   * each image leaves the registry, handing its preview URL to the durable
+   * image cache (seeded under the admitted reference so the transcript node
+   * renders immediately while the cache reads canonical bytes) or revoking it
+   * when the cache already holds that reference. Failed: nothing changes;
+   * the ids stay registered for the composer's rail restore.
+   */
+  private settleSubmittedImages(
+    sessionId: SessionId,
+    attachments: readonly ComposerAttachment[],
+    retirement: PendingSubmissionRetirement,
+  ): void {
+    if (retirement.reason !== 'observed') return
+    const uiConversation = this.ctx.get('uiConversation')
+    attachments.forEach((attachment, index) => {
+      const live = this.draftAttachments.get(attachment.id)
+      if (live === undefined) return
+      this.draftAttachments.delete(attachment.id)
+      const ref = retirement.attachments[index]
+      if (ref !== undefined && uiConversation?.seedImageUrl(sessionId, ref, attachment.previewUrl) === true) return
+      revokePreview(attachment.previewUrl)
+    })
+  }
+
   /** Convert browser files to canonical base64 prompt parts. */
   private serializeImages(images: readonly File[]): Promise<Parameters<SessionFace['prompt']>[0]> {
     return Promise.all(images.map(async file => ({ type: 'image' as const, ...await this.encodeImage(file) })))
-  }
-
-  /** Convert browser video files to canonical base64 prompt parts. */
-  private serializeVideos(videos: readonly File[]): Promise<Parameters<SessionFace['prompt']>[0]> {
-    return Promise.all(videos.map(async file => ({ type: 'video' as const, ...await this.encodeVideo(file) })))
   }
 
   /** Canonical base64 wire form of one browser image file. */
   private async encodeImage(file: File): Promise<SubmitImageAttachment> {
     return {
       mediaType: imageMediaType(file.type),
-      data: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
-      ...(file.name === '' ? {} : { name: file.name }),
-    }
-  }
-
-  /** Canonical base64 wire form of one browser video file. */
-  private async encodeVideo(file: File): Promise<SubmitVideoAttachment> {
-    return {
-      mediaType: videoMediaType(file.type),
-      data: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
+      data: await base64Of(file),
       ...(file.name === '' ? {} : { name: file.name }),
     }
   }
@@ -511,26 +408,6 @@ function imageMediaType(value: string): ImageMediaType {
     default:
       throw new UnsupportedImageMediaTypeError(value)
   }
-}
-
-function videoMediaType(value: string): VideoMediaType {
-  switch (value) {
-    case 'video/mp4':
-    case 'video/x-matroska':
-    case 'video/quicktime':
-      return value
-    default:
-      throw new UnsupportedVideoMediaTypeError(value)
-  }
-}
-
-function bytesToBase64(data: Uint8Array): string {
-  let binary = ''
-  const chunk = 0x8000
-  for (let offset = 0; offset < data.length; offset += chunk) {
-    binary += String.fromCharCode(...data.subarray(offset, offset + chunk))
-  }
-  return btoa(binary)
 }
 
 function revokePreview(url: string): void {

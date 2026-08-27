@@ -2,15 +2,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
-  SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceListState, WorkspaceView,
-} from '@deepseek-ai/dsh-client-runtime/client'
+  WorkspaceId, WorkspaceSnapshot, WorkspaceView,
+} from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
 import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
 import { UNGROUPED_KEY } from '../src/client/tree.ts'
-import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
+import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -35,13 +38,14 @@ const sessionState = (items: readonly SessionSummary[], overrides: Partial<Sessi
   ...overrides,
 })
 const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView => ({
-  workspaceId: wid(id), path: `/projects/${id}`, folders: [], title,
+  workspaceId: wid(id), path: `/projects/${id}`, title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
-const workspaceState = (items: readonly WorkspaceView[], archivedSessionIds: readonly SessionId[] = []): WorkspaceListState => ({
-  items, archivedSessionIds, hiddenWorkspaceIds: [], state: 'idle', phase: 'ready', error: null, baselinesReady: true,
-  recentWorkspaceId: items[0]?.workspaceId,
-})
+const workspaceState = (
+  items: readonly WorkspaceView[],
+  archivedSessionIds: readonly SessionId[] = [],
+): WorkspaceSnapshot => ({ items, archivedSessionIds, state: 'idle', phase: 'ready', error: null })
+const noPendingInteraction: SessionPendingInteractionSnapshot = new Map()
 function hook<T>(snapshot: T) {
   return function select<S>(selector: (state: T) => S): S { return selector(snapshot) }
 }
@@ -64,30 +68,24 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     wide: true,
     expandSidebar: vi.fn(),
     useSessions: hook(sessionState([])),
+    useSessionPendingInteraction: hook(noPendingInteraction),
     useWorkspaces: hook(workspaceState([])),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     startSession: vi.fn(),
     open: vi.fn(),
-    openPath: vi.fn(async () => {}),
-    markUnread: vi.fn(async () => {}),
-    openSplit: vi.fn(),
     searchSessions: vi.fn(async () => ({ items: [], hasMore: false })),
     searchResultLimit: 20,
     renameSession: vi.fn(async () => {}),
     forkSession: vi.fn(),
     renameWorkspace: vi.fn(async () => {}),
     deleteWorkspace: vi.fn(async () => {}),
-    hideWorkspace: vi.fn(async () => {}),
-    showWorkspace: vi.fn(async () => {}),
-    addWorkspaceFolder: vi.fn(async () => workspace('created', [])),
-    removeWorkspaceFolder: vi.fn(async () => workspace('created', [])),
     archiveSession: vi.fn(async () => {}),
     insertWorkspaceBefore: vi.fn(async () => {}),
     insertSessionBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
-    useHostDescription: selector => selector(undefined),
+    useConnectionGeneration: selector => selector(undefined),
     renderSlot: ((_name: string, owner: { open: boolean }) => (owner.open ? <div data-testid="directory-flow" /> : null)) as never,
     t,
     ...overrides,
@@ -103,22 +101,6 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
-  it('restores the Pinned heading from persisted Session ids', () => {
-    const store = createWorkspaceViewStore().create()
-    store.actions.pinSession('keep-me')
-    store.actions.setGroupExpanded('alpha', true)
-    mount({
-      useSessions: hook(sessionState([summary('keep-me', 2), summary('other', 1)])),
-      useWorkspaces: hook(workspaceState([workspace('alpha', ['keep-me', 'other'])])),
-      useStore: bindSnapshotSelector(store),
-      actions: store.actions,
-    })
-    expect(screen.getByRole('button', { name: '置顶' })).toBeTruthy()
-    const rows = screen.getAllByRole('treeitem').map(row => row.textContent)
-    expect(rows[0]).toContain('keep-me')
-    expect(rows.some(text => text?.includes('other'))).toBe(true)
-  })
-
   it('workspace hover card shows a POSIX home descendant as ~', () => {
     vi.useFakeTimers()
     try {
@@ -128,11 +110,9 @@ describe('WorkspaceBrowser', () => {
           path: '/home/u/Documents/project',
           title: 'Project',
         }])),
-        useHostDescription: selector => selector({
-          version: '0', cwd: '/tmp', attachedSessions: 0, home: '/home/u', canOpenPath: false,
-        }),
+        useConnectionGeneration: selector => selector({ id: 1, host: { home: '/home/u' } }),
       })
-      fireEvent.pointerEnter(screen.getByText('Project').closest('[role="treeitem"]')!.parentElement as HTMLElement)
+      fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
       act(() => { vi.advanceTimersByTime(500) })
       expect(screen.getByText('~/Documents/project')).toBeTruthy()
     } finally {
@@ -145,7 +125,6 @@ describe('WorkspaceBrowser', () => {
       ...workspaceState([]),
       phase: 'pending' as const,
       state: 'loading' as const,
-      baselinesReady: false,
     }
     const b = mount({ useWorkspaces: hook(pending) })
     act(() => {
@@ -175,15 +154,12 @@ describe('WorkspaceBrowser', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     expect(screen.getByText('分组方式')).toBeTruthy() // the menu heading label
-    expect(screen.getByText('空工作区')).toBeTruthy()
-    expect(screen.getAllByRole('separator')).toHaveLength(3)
+    expect(screen.getByRole('separator')).toBeTruthy()
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      '按工作区', '单列表', '手动排序', '最近更新', '按状态分区', '不分区', '自动隐藏', '始终显示',
+      '按工作区', '单列表', '手动排序', '最近更新',
     ])
     expect(screen.getByRole('menuitem', { name: '按工作区' }).querySelector('svg')).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: '手动排序' }).querySelector('svg')).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: '始终显示' }).querySelector('svg')).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: '自动隐藏' }).querySelector('svg')).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
     // Store-driven flip: title changes, rows flatten newest-first, headers gone.
     expect(b.store.getSnapshot().groupBy).toBe('flat')
@@ -297,6 +273,79 @@ describe('WorkspaceBrowser', () => {
     expect(b.store.getSnapshot().groupExpansion).toEqual({ alpha: true })
     expect(screen.queryByText('session-6')).toBeNull()
     expect(screen.getByRole('button', { name: '展开其余 2 个会话' })).toBeTruthy()
+  })
+
+  it('keeps the blank New Session outside the five-row folding quota', () => {
+    const ordinary = Array.from({ length: 6 }, (_, index) => summary(`session-${index + 1}`, 6 - index))
+    const blank = summary('blank', 7, { blank: true })
+    const b = mount({
+      useSessions: hook(sessionState([blank, ...ordinary], { current: blank.id })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', [blank.id, ...ordinary.map(item => item.id)])])),
+    })
+    expect(screen.getByText('新会话')).toBeTruthy()
+    for (const item of ordinary.slice(0, 5)) expect(screen.getByText(item.displayTitle)).toBeTruthy()
+    expect(screen.queryByText('session-6')).toBeNull()
+    expect(screen.getByRole('button', { name: '展开其余 1 个会话' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '展开其余 1 个会话' }))
+    expect(screen.getByText('session-6')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '收起' }))
+    expect(screen.queryByText('session-6')).toBeNull()
+
+    rerender(b, {
+      useSessions: hook(sessionState([{ ...blank, blank: false }, ...ordinary], { current: blank.id })),
+    })
+    expect(screen.getByText('blank')).toBeTruthy()
+    expect(screen.queryByText('session-5')).toBeNull()
+    expect(screen.getByRole('button', { name: '展开其余 2 个会话' })).toBeTruthy()
+  })
+
+  it('anchors collapsed drags before hidden rows so the source stays visible', async () => {
+    const ordinary = Array.from({ length: 6 }, (_, index) => summary(`session-${index + 1}`, 6 - index))
+    const blank = summary('blank', 7, { blank: true })
+    const insertSessionBefore = vi.fn(async () => {})
+    const b = mount({
+      useSessions: hook(sessionState([blank, ...ordinary], { current: blank.id })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', [blank.id, ...ordinary.map(item => item.id)])])),
+      insertSessionBefore,
+    })
+    await waitFor(() => {
+      expect(b.store.getSnapshot().sessionOrderByAccount.alpha)
+        .toEqual(['blank', 'session-1', 'session-2', 'session-3', 'session-4', 'session-5', 'session-6'])
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '展开其余 1 个会话' }))
+    const blankRow = screen.getByText('新会话').closest('[role="treeitem"]') as HTMLElement
+    const session6 = screen.getByText('session-6').closest('[role="treeitem"]') as HTMLElement
+    session6.getBoundingClientRect = () => ({
+      top: 200, bottom: 234, left: 0, right: 200, width: 200, height: 34,
+      x: 0, y: 200, toJSON: () => ({}),
+    })
+    fireEvent.dragStart(blankRow, { dataTransfer: dragData() })
+    fireDrag(session6, 'drop', 230)
+    expect(b.store.getSnapshot().sessionOrderByAccount.alpha)
+      .toEqual(['session-1', 'session-2', 'session-3', 'session-4', 'session-5', 'session-6', 'blank'])
+
+    insertSessionBefore.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: '收起' }))
+    const collapsedBlank = screen.getByText('新会话').closest('[role="treeitem"]') as HTMLElement
+    collapsedBlank.getBoundingClientRect = () => ({
+      top: 200, bottom: 234, left: 0, right: 200, width: 200, height: 34,
+      x: 0, y: 200, toJSON: () => ({}),
+    })
+    const session5 = screen.getByText('session-5').closest('[role="treeitem"]') as HTMLElement
+    fireEvent.dragStart(session5, { dataTransfer: dragData() })
+    fireDrag(collapsedBlank, 'drop', 205)
+    expect(insertSessionBefore).not.toHaveBeenCalled()
+
+    const session4 = screen.getByText('session-4').closest('[role="treeitem"]') as HTMLElement
+    fireEvent.dragStart(session4, { dataTransfer: dragData() })
+    fireDrag(collapsedBlank, 'drop', 205)
+    expect(b.store.getSnapshot().sessionOrderByAccount.alpha)
+      .toEqual(['session-1', 'session-2', 'session-3', 'session-5', 'session-4', 'session-6', 'blank'])
+    expect(insertSessionBefore).toHaveBeenCalledWith(wid('alpha'), sid('session-4'), sid('session-6'))
+    expect(screen.getByText('session-4')).toBeTruthy()
+    expect(screen.queryByText('session-6')).toBeNull()
   })
 
   it('shares one editable order across modes and promotes only while Last updated is active', async () => {
@@ -435,35 +484,18 @@ describe('WorkspaceBrowser', () => {
     expect(startSession).toHaveBeenCalledWith(wid('alpha'))
   })
 
-  it('auto-expands Chat for a loose current session; its header has no menu and its ＋ starts a No Repo session', () => {
+  it('auto-expands the Ungrouped bucket for a loose current session; its header has no menu and its ＋ is inert', () => {
     const startSession = vi.fn()
-    const noRepo = {
-      ...workspace('no-repo', []),
-      title: 'No Repo',
-      path: '/root/.dsh/no-repo',
-    }
     mount({
       useSessions: hook(sessionState([summary('loose', 1)], { current: sid('loose') })),
-      useWorkspaces: hook(workspaceState([workspace('alpha', []), noRepo])),
-      startSession,
-    })
-    expect(screen.getByText('loose')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '工作区“聊天”的操作' })).toBeNull()
-    expect(screen.queryByText('No Repo')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '在“聊天”中新建会话' }))
-    expect(startSession).toHaveBeenCalledWith(wid('no-repo'))
-  })
-
-  it('starts an unscoped Chat session when No Repo is not listed', () => {
-    const startSession = vi.fn()
-    mount({
-      useSessions: hook(sessionState([])),
       useWorkspaces: hook(workspaceState([workspace('alpha', [])])),
       startSession,
     })
-    expect(screen.getByText('聊天')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '在“聊天”中新建会话' }))
-    expect(startSession).toHaveBeenCalledWith(undefined)
+    // The loose session's group is UNGROUPED_KEY: expanded by the effect.
+    expect(screen.getByText('loose')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '工作区“未分组”的操作' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '在“未分组”中新建会话' }))
+    expect(startSession).not.toHaveBeenCalled()
   })
 
   it('keeps an already-expanded group when the selection moves within it', () => {
@@ -481,38 +513,34 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('b')).toBeNull()
   })
 
-  it('keeps blank sessions off the list until the first accepted prompt, excluded from search', () => {
+  it('shows only the current blank session as the localized New Session, excluded from search', () => {
     const currentBlank = summary('alpha-blank', 9, { blank: true })
     const staleBlank = summary('beta-blank', 8, { blank: true })
     const sessions = sessionState(
-      [currentBlank, staleBlank, summary('alpha-s', 2)],
+      [currentBlank, staleBlank],
       { current: currentBlank.id },
     )
     const b = mount({
       useSessions: hook(sessions),
       useWorkspaces: hook(workspaceState([
-        workspace('alpha', ['alpha-blank', 'alpha-s']), workspace('beta', ['beta-blank']),
+        workspace('alpha', ['alpha-blank']), workspace('beta', ['beta-blank']),
       ])),
     })
-    expect(screen.getByText('alpha-s')).toBeTruthy()
-    expect(screen.queryByText('新会话')).toBeNull()
+    expect(screen.getByText('新会话')).toBeTruthy()
     expect(screen.queryByText('alpha-blank')).toBeNull()
     expect(screen.queryByText('beta-blank')).toBeNull()
-    expect(screen.getByText('聊天')).toBeTruthy()
 
     rerender(b, { useSessions: hook({ ...sessions, current: staleBlank.id }) })
-    expect(screen.queryByText('新会话')).toBeNull()
+    expect(screen.getAllByText('新会话')).toHaveLength(1)
     b.store.actions.setGroupBy('flat')
     rerender(b, {})
-    expect(screen.queryByText('新会话')).toBeNull()
+    expect(screen.getAllByText('新会话')).toHaveLength(1)
     // Search excludes blank rows entirely — neither the canonical stored
     // title nor the localized display label participates in matching.
     fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: 'new session' } })
     expect(screen.queryByText('新会话')).toBeNull()
     fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: '新会话' } })
     expect(screen.queryByText('新会话')).toBeNull()
-    fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: 'alpha-blank' } })
-    expect(screen.queryByText('alpha-blank')).toBeNull()
   })
 
   it('promotes the blank selected by New Session in its grouped and flat orders', async () => {
@@ -541,7 +569,7 @@ describe('WorkspaceBrowser', () => {
     })
     b.store.actions.setGroupBy('flat')
     await waitFor(() => {
-      expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY]).toEqual(['mid', 'old'])
+      expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY]).toEqual(['blank', 'mid', 'old'])
     })
   })
 
@@ -559,16 +587,15 @@ describe('WorkspaceBrowser', () => {
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['blank', 'old', 'mid'])
     })
-    expect(screen.queryByText('新会话')).toBeNull()
-    const old = screen.getByText('old').closest('[role="treeitem"]') as HTMLElement
+    const blank = screen.getByText('新会话').closest('[role="treeitem"]') as HTMLElement
     const mid = screen.getByText('mid').closest('[role="treeitem"]') as HTMLElement
     mid.getBoundingClientRect = () => ({
       top: 150, bottom: 184, left: 0, right: 200, width: 200, height: 34, x: 0, y: 150, toJSON: () => ({}),
     })
-    fireEvent.dragStart(old, { dataTransfer: dragData() })
+    fireEvent.dragStart(blank, { dataTransfer: dragData() })
     fireDrag(mid, 'drop', 180)
-    expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['blank', 'mid', 'old'])
-    expect(insertSessionBefore).toHaveBeenCalledWith(wid('alpha'), sid('old'), undefined)
+    expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['old', 'mid', 'blank'])
+    expect(insertSessionBefore).toHaveBeenCalledWith(wid('alpha'), sid('blank'), undefined)
 
     rerender(b, {
       useSessions: hook(sessionState([
@@ -578,10 +605,8 @@ describe('WorkspaceBrowser', () => {
       ], { current: sid('blank') })),
     })
     await waitFor(() => {
-      expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['blank', 'mid', 'old'])
+      expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['old', 'mid', 'blank'])
     })
-    expect(screen.getByText('blank')).toBeTruthy()
-    expect(screen.queryByText('新会话')).toBeNull()
   })
 
   it('shows local metadata matches immediately, then clears back to the grouped tree', async () => {
@@ -800,45 +825,11 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
-  it('auto-hides empty project Workspaces from the grouped list without Host hide', () => {
-    const hideWorkspace = vi.fn(async () => {})
-    const blank = { ...summary('blank', 1), blank: true }
-    const b = mount({
-      useSessions: hook(sessionState([blank], { current: blank.id })),
-      useWorkspaces: hook(workspaceState([
-        workspace('empty', []),
-        workspace('current-blank', ['blank']),
-      ])),
-      hideWorkspace,
-    })
-    expect(screen.getByText('empty')).toBeTruthy()
-    expect(screen.getByText('current-blank')).toBeTruthy()
-    expect(screen.getByText('聊天')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '自动隐藏' }))
-    expect(b.store.getSnapshot().emptyWorkspaces).toBe('hide')
-    expect(hideWorkspace).not.toHaveBeenCalled()
-    expect(screen.queryByText('empty')).toBeNull()
-    expect(screen.queryByText('已隐藏')).toBeNull()
-    expect(screen.getByText('current-blank')).toBeTruthy()
-    expect(screen.getByText('聊天')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '始终显示' }))
-    expect(b.store.getSnapshot().emptyWorkspaces).toBe('show')
-    expect(hideWorkspace).not.toHaveBeenCalled()
-    expect(screen.getByText('empty')).toBeTruthy()
-    expect(screen.getByText('current-blank')).toBeTruthy()
-    expect(screen.getByText('聊天')).toBeTruthy()
-  })
-
-  it('keeps Chat in grouped mode, shows the no-sessions empty state in flat mode, and resolves an empty search', async () => {
+  it('shows the no-sessions empty state in both modes and resolves an empty search', async () => {
     vi.useFakeTimers()
     try {
       const b = mount()
-      expect(screen.getByText('聊天')).toBeTruthy()
-      expect(screen.queryByText('暂无会话')).toBeNull()
+      expect(screen.getByText('暂无会话')).toBeTruthy()
       b.store.actions.setGroupBy('flat')
       rerender(b, {})
       expect(screen.getByText('暂无会话')).toBeTruthy()
@@ -1039,7 +1030,7 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([])),
       insertSessionBefore,
     })
-    fireEvent.click(screen.getByText('聊天'))
+    fireEvent.click(screen.getByText('未分组'))
 
     const dragAfter = (sourceTitle: string, targetTitle: string): void => {
       const source = screen.getByText(sourceTitle).closest('[role="treeitem"]') as HTMLElement
@@ -1254,7 +1245,7 @@ describe('WorkspaceBrowser', () => {
     const dialog = screen.getByRole('dialog', { name: '删除工作区' })
     expect(dialog.textContent).toContain('将把“Alpha”从工作区列表中移除')
     expect(dialog.textContent).toContain('文件夹与会话记录会保留')
-    expect(dialog.textContent).toContain('其会话将显示在“聊天”下')
+    expect(dialog.textContent).toContain('其会话将显示在“未分组”下')
 
     const confirm = screen.getByRole<HTMLButtonElement>('button', { name: '删除工作区' })
     fireEvent.click(confirm)

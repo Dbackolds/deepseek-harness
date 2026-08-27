@@ -11,7 +11,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { CallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -155,7 +155,7 @@ let callCounter = 0
 function call(ctx: Context, name: string, args: unknown, agent?: object) {
   return ctx.tools.execute({
     signal: testToolSignal,
-    callId: CallId(`vid-call-${++callCounter}`),
+    callId: ToolCallId(`vid-call-${++callCounter}`),
     name,
     arguments: args,
     ...agent ? { agent: agent as never } : {},
@@ -582,7 +582,7 @@ describe('registration surface', () => {
   it('declares read_video parallel-safe and presents a read-family card', async () => {
     const ctx = await setup()
     expect(ctx.tools.executionMode({
-      signal: testToolSignal, callId: CallId('vid-parallel'), name: 'read_video', arguments: { file_path: 'a.mp4' },
+      signal: testToolSignal, callId: ToolCallId('vid-parallel'), name: 'read_video', arguments: { file_path: 'a.mp4' },
     })).toEqual({ kind: 'parallel' })
     expect(ctx.tools.get('read_video')?.presentCall?.({ file_path: 'shot.mp4' })).toEqual({
       card: 'generic',

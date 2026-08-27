@@ -7,15 +7,12 @@
  * Session-list streaming (titles, jobs, subagent activity) does not reload.
  */
 
-import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
-import {
-  createSnapshotStore, type SessionId, type SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** Host git.describe snapshot, mirrored locally so the chip stays off the host package. */
-type SessionGitView = Awaited<ReturnType<IApiClient['git']['describe']>> extends { result: infer R }
-  ? R extends { ok: true; value: infer V } ? V : never
-  : never
+type SessionGitView = Awaited<ReturnType<NonNullable<ClientRemote['git']>['describe']>>
 
 /** Hero-chip snapshot. */
 export interface GitBranchSeatState {
@@ -53,7 +50,7 @@ export class GitBranchSeatController {
   private abort: AbortController | undefined
 
   constructor(
-    private readonly api: Pick<IApiClient, 'git'>,
+    private readonly api: Pick<ClientRemote, 'git'>,
     /** The session the hero is showing, when there is one. */
     private readonly currentSessionId: () => SessionId | undefined,
     /** Workspace the new-session screen is aimed at, when no session is current. */
@@ -161,7 +158,7 @@ export class GitBranchSeatController {
   }
 
   private async mutate(
-    run: (sessionId: SessionId) => ReturnType<IApiClient['git']['checkout']>,
+    run: (sessionId: SessionId) => ReturnType<ClientRemote['git']['checkout']>,
   ): Promise<void> {
     const sessionId = this.currentSessionId()
     if (sessionId === undefined || this.store.getSnapshot().busy) return

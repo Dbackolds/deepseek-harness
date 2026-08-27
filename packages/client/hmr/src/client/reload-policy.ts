@@ -2,9 +2,8 @@
  * Client-plugin reload policy. It owns the live auto-reload preference the
  * Settings row and the SSE driver both read.
  */
-import {
-  createSnapshotStore, type SettingsScope, type SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { AUTO_RELOAD_FIELD, DEFAULT_AUTO_RELOAD } from '../hmr-settings.ts'
 import type { ClientHmrSettings } from '../hmr-settings.ts'
 

@@ -4,26 +4,26 @@
  * next list, pushed or refetched.
  */
 
-import type { IApiClient, RpcResponse, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientRemote, RpcResponse, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** Wire view of one Automation rule, as the list RPC returns it. */
 export type AutomationRuleView = Awaited<
-  ReturnType<IApiClient['automation']['list']>
+  ReturnType<ClientRemote['automation']['list']>
 > extends RpcResponse<infer Value>
   ? Value extends { items: readonly (infer Item)[] } ? Item : never
   : never
 
 /** Create payload accepted by the Host Automation wire. */
-export type AutomationCreateInput = Parameters<IApiClient['automation']['create']>[0]
+export type AutomationCreateInput = Parameters<ClientRemote['automation']['create']>[0]
 
 /** Sparse update payload accepted by the Host Automation wire. */
-export type AutomationUpdateInput = Omit<Parameters<IApiClient['automation']['update']>[0], 'id'>
+export type AutomationUpdateInput = Omit<Parameters<ClientRemote['automation']['update']>[0], 'id'>
 
 /** One fire attempt as the listRuns RPC returns it. */
 export type AutomationRunView = Awaited<
-  ReturnType<IApiClient['automation']['listRuns']>
+  ReturnType<ClientRemote['automation']['listRuns']>
 > extends RpcResponse<infer Value>
   ? Value extends { items: readonly (infer Item)[] } ? Item : never
   : never
@@ -105,7 +105,7 @@ export class AutomationStore {
    * @param listedSessionWaitMs - how long a started fire waits for the list.
    */
   constructor(
-    private readonly api: Pick<IApiClient, 'automation'>,
+    private readonly api: Pick<ClientRemote, 'automation'>,
     private readonly sessions: AutomationSessions,
     private readonly listedSessionWaitMs: number = LISTED_SESSION_WAIT_MS,
   ) {}

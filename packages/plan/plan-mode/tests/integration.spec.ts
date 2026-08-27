@@ -6,8 +6,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import PlanModeController, { foldPlanMode, PLAN_APPROVED_KICKOFF } from '@deepseek-ai/dsh-plan-mode'
-import UserQuestionService from '@deepseek-ai/dsh-user-questions'
+import PlanModeController, { foldPlanMode } from '@deepseek-ai/dsh-plan-mode'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
 const PLAN_CONFIG = { section: 'Test plan mode instructions.' }
@@ -176,47 +175,6 @@ describe('plan mode through the agent loop', () => {
     const notice = log.find(event => event.type === 'user/message' && event.data.source.kind === 'plugin')
     expect(notice?.type === 'user/message' && notice.data.content).toEqual([
       { type: 'text', text: 'The user switched this session to plan mode.' },
-    ])
-  })
-
-  it('an approved review injects the kickoff and the next step implements without waiting', async () => {
-    const adapter = new MockAdapter([
-      toolCallResponse('call-exit', 'exit_plan_mode', { plan: '# Ship it\n\nWrite the file.' }),
-      (request) => {
-        expect(request.system).not.toContain(PLAN_CONFIG.section)
-        const texts = request.messages.flatMap(message =>
-          message.content.flatMap(block => block.type === 'text' ? [block.text] : []))
-        expect(texts).toContain(PLAN_APPROVED_KICKOFF)
-        return textResponse('Implementing the approved plan.')
-      },
-    ])
-    const ctx = await harness(adapter)
-    await ctx.plugin(UserQuestionService)
-    ctx.userQuestions.registerProvider({
-      ask: () => Promise.resolve({ answers: [{ id: 'plan-review', selected: ['Approve'] }] }),
-    })
-    const agent = ctx.agentLoop.create(SessionId('it-plan-approve-kickoff'), { provider: 'mock', model: 'mock' })
-    ctx.planMode.set(agent, true)
-
-    agent.followup(createUserMessage({
-      content: [{ type: 'text', text: 'plan the write' }],
-      source: { kind: 'user' },
-    }))
-    await waitForIdle(ctx, agent)
-
-    expect(adapter.requests).toHaveLength(2)
-    expect(adapter.requests[0]?.system).toContain(PLAN_CONFIG.section)
-    expect(adapter.requests[1]?.system).not.toContain(PLAN_CONFIG.section)
-    expect(foldPlanMode(agent.session.events)).toBe(false)
-    const kickoff = agent.session.events.find(event =>
-      event.type === 'user/message'
-      && event.data.source.kind === 'plugin'
-      && event.data.source.plugin === 'plan-mode')
-    expect(kickoff?.type === 'user/message' && kickoff.data.content).toEqual([
-      { type: 'text', text: PLAN_APPROVED_KICKOFF },
-    ])
-    expect(findEvent(agent.session.events, 'assistant/message', 'last').data.message.content).toEqual([
-      { type: 'text', text: 'Implementing the approved plan.' },
     ])
   })
 })

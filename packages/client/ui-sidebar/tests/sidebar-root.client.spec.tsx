@@ -2,51 +2,33 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
-  SidebarAutomationOwnerProps, SidebarFooterActionOwnerProps, SidebarRootComponentProps,
-  SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
+  SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
+  SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
 import { en } from '../src/client/locales.ts'
+import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 
 // English-dictionary translate stub: the shell renders the same copy the
 // assertions below query by accessible name.
-const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
+const t: SidebarRootComponentProps['t'] = key =>
+  (en as Record<string, string>)[key] ?? (commonEn as Record<string, string>)[key] ?? key
 
 afterEach(() => {
   cleanup()
   vi.unstubAllEnvs()
-  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
 // The shell never reads the global hooks itself, but they ride the standard
 // props share; stub them as never-called functions.
-const neverWorkspaces = (() => { throw new Error('shell must not read workspaces') }) as never
+const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
+type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSessionPendingInteraction']>[0]>[0]
+const noAttention: AttentionSnapshot = new Map()
+const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
 
-function sessionsHook(completedIds: readonly string[] = []): SidebarRootComponentProps['useSessions'] {
-  const byId = Object.fromEntries(completedIds.map(id => [id, { completed: true }])) as SessionListState['byId']
-  return select => select({
-    ids: completedIds as SessionListState['ids'],
-    byId,
-    current: undefined,
-    phase: 'ready',
-    subagentsByParent: {},
-    jobsBySession: {},
-    currentAddress: undefined,
-  })
-}
-
-function mountShell({
-  collapsed = false,
-  width = 300,
-  completedIds = [],
-}: {
-  collapsed?: boolean
-  width?: number
-  completedIds?: readonly string[]
-} = {}) {
+function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
@@ -54,21 +36,18 @@ function mountShell({
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
   const brandMark = <span data-testid="custom-brand-mark">M</span>
   const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
-  let current = { collapsed, width, completedIds }
+  let current = { collapsed, width }
   const root = () => (
     <SidebarRoot
       collapsed={current.collapsed} width={current.width}
-      useSessions={sessionsHook(current.completedIds)} useWorkspaces={neverWorkspaces}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
-        owner: SidebarAutomationOwnerProps | SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
+        owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
       ) => {
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
-        if (key === 'sidebar.automation') {
-          return <div data-testid="automation-seat" data-wide={(owner as SidebarAutomationOwnerProps).wide} />
-        }
         if (key === 'sidebar.settings') {
           settingsOwner = owner
           return <div data-testid="settings-seat" data-wide={owner.wide} />
@@ -117,25 +96,52 @@ describe('SidebarRoot shell', () => {
     expect(b.startSession).toHaveBeenCalledTimes(2)
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
-    expect(screen.getAllByRole('button', { name: 'New session' }).some(
-      el => el.hasAttribute('data-dsh-sidebar-new-session'),
-    )).toBe(true)
-    expect(screen.getByTestId('automation-seat').closest('[data-dsh-sidebar-actions]')).toBeTruthy()
   })
 
   it('renders generic brand fallbacks when no package fills the slots', () => {
     vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
+    vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
     const { container } = render(<SidebarRoot
       collapsed={false} width={300}
-      useSessions={sessionsHook()} useWorkspaces={neverWorkspaces}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
     />)
 
     expect(screen.getByText('DSH Local Build')).toBeTruthy()
-    expect(screen.getByText('0123456')).toBeTruthy()
+    expect(screen.getByText('1.2.3-rc.4-0123456-dirty')).toBeTruthy()
     expect(container.querySelector('svg')).not.toBeNull()
+  })
+
+  it.each([
+    [{ DSH_CLIENT_VERSION: '1.2.3' }, '1.2.3'],
+    [{ DSH_CLIENT_COMMIT_HASH: 'abcdef0', DSH_CLIENT_VERSION: '1.2.3' }, '1.2.3-abcdef0'],
+  ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
+    for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
+    render(<SidebarRoot
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
+        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+    />)
+
+    expect(screen.getByText('DSH Local Build')).toBeTruthy()
+    expect(screen.getByText(expected)).toBeTruthy()
+  })
+
+  it('retains the local-build fallback without complete build metadata', () => {
+    render(<SidebarRoot
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
+        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+    />)
+
+    expect(screen.getByText('DSH Local Build')).toBeTruthy()
   })
 
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
@@ -168,31 +174,5 @@ describe('SidebarRoot shell', () => {
     const b = mountShell({ collapsed: true })
     expect(b.regionOwner().wide).toBe(false)
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
-  })
-
-  it('does not draw an in-page Completed count on the wordmark', () => {
-    mountShell({ completedIds: ['a', 'b'] })
-    expect(screen.queryByText('2')).toBeNull()
-  })
-
-  it('publishes the unread Completed count to the desktop Host', () => {
-    const setCompletedUnread = vi.fn()
-    vi.stubGlobal('dshDesktop', { setCompletedUnread })
-    const b = mountShell()
-    expect(setCompletedUnread).toHaveBeenCalledWith(0)
-    b.rerender({ completedIds: ['done-1'] })
-    expect(setCompletedUnread).toHaveBeenCalledWith(1)
-    b.rerender({ completedIds: ['done-1', 'done-2'] })
-    expect(setCompletedUnread).toHaveBeenCalledWith(2)
-    b.rerender({ completedIds: [] })
-    expect(setCompletedUnread).toHaveBeenCalledWith(0)
-  })
-
-  it('keeps the shell when the desktop Host rejects the dock update', () => {
-    vi.stubGlobal('dshDesktop', {
-      setCompletedUnread: () => { throw new Error('dock unavailable') },
-    })
-    expect(() => { mountShell({ completedIds: ['done-1'] }) }).not.toThrow()
-    expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(2)
   })
 })

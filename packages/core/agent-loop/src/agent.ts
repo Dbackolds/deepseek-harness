@@ -49,7 +49,12 @@ type StepEndReason = Extract<TurnEndReason, { kind: 'completed' | 'max-tokens' }
 
 type PreparedStep =
   | { kind: 'reject' }
-  | { kind: 'enter'; messages: UserMessage[]; assembly: PromptAssembly }
+  | {
+    kind: 'enter'
+    messages: UserMessage[]
+    startsRequestSeries?: true
+    assembly: PromptAssembly
+  }
 
 /** Remove adapter-derived values before plugins propose the next request config. */
 function requestProposal(header: EpochHeader): LlmCallConfig {
@@ -75,10 +80,9 @@ export class ReactLoopAgent implements Agent {
 
   /** Whether this loop instance has appended its initial/resume request anchor. */
   private requestHeaderLogged = false
-  /**
-   * When set, the next idle wake opens a turn from the current surface even
-   * if the first pre-step claims no inbox messages.
-   */
+  /** Surface generation of the preceding built request. */
+  private requestSurfaceGeneration: number | undefined
+  /** Host rewrite continuation: start a turn from the current surface with no inbox claim. */
   private surfaceContinuation = false
   private readonly runtimeContext: RuntimeContextProjection
 
@@ -284,8 +288,7 @@ export class ReactLoopAgent implements Agent {
         }
         if (turnEnds && decision.messages.length === 0) break
         // A removed waking message or an enter decision rewritten to empty
-        // still owns the initial turn boundary, but it spends no model call
-        // unless this wake continues from a same-session surface rewrite.
+        // still owns the initial turn boundary, but it spends no model call.
         if (phase.step === 0 && decision.messages.length === 0) {
           const continuation = this.surfaceContinuation
           this.surfaceContinuation = false
@@ -305,7 +308,7 @@ export class ReactLoopAgent implements Agent {
           }
           // max-tokens is sticky: once any step hits the ceiling, later steps
           // that complete normally must not downgrade the turn outcome.
-          const stepEnd = await this.step(decision.assembly)
+          const stepEnd = await this.step(decision.assembly, decision.startsRequestSeries === true)
           // max-tokens stays sticky: a later completed step must not
           // downgrade the turn outcome.
           if (turnEnds === null || turnEnds.kind !== 'max-tokens') turnEnds = stepEnd
@@ -350,7 +353,7 @@ export class ReactLoopAgent implements Agent {
     return true
   }
 
-  private async step(assembly: PromptAssembly): Promise<StepEndReason | null> {
+  private async step(assembly: PromptAssembly, startsRequestSeries: boolean): Promise<StepEndReason | null> {
     /* v8 ignore next -- private callers establish the running phase before executing a step */
     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": step outside running phase`)
     const { turn, step, abort: { signal } } = this.phase
@@ -358,9 +361,18 @@ export class ReactLoopAgent implements Agent {
     const system = renderPrompt(assembly)
 
     while (true) {
+      const surfaceGeneration = this.session.surface.replaceGeneration
       const { request, preparedCall } = await this.buildRequest(
-        turn, step, assembly.tools, system, this.session.deriveMessages(), signal,
+        turn,
+        step,
+        assembly.tools,
+        system,
+        this.session.deriveMessages(),
+        startsRequestSeries,
+        surfaceGeneration,
+        signal,
       )
+      startsRequestSeries = false
       const assembler = new BlockAssembler()
       const chunkSeqs: number[] = []
       try {
@@ -450,6 +462,8 @@ export class ReactLoopAgent implements Agent {
     tools: GenerateOptions['tools'] & object,
     system: string,
     boundaryMessages: Message[],
+    startsRequestSeries: boolean,
+    surfaceGeneration: number,
     signal: AbortSignal,
   ): Promise<{ request: GenerateOptions; preparedCall?: PreparedLlmCall }> {
     const { session } = this
@@ -459,12 +473,12 @@ export class ReactLoopAgent implements Agent {
     const persistedHeader = session.requestHeader()
     const persistedConfig = persistedHeader?.config
     const route = { provider: this.options.provider ?? '', model: this.options.model ?? '' }
-    const persistedEffort = persistedConfig?.provider === route.provider
+    const persistedReasoningEffort = persistedConfig?.provider === route.provider
       && persistedConfig.model === route.model
       && persistedHeader?.adapterDefaults?.reasoningEffort !== true
       ? persistedConfig.reasoningEffort
       : undefined
-    const reasoningEffort = persistedEffort ?? this.options.reasoningEffort
+    const reasoningEffort = this.options.reasoningEffort ?? persistedReasoningEffort
     const maxTokens = this.options.maxTokens
     const seedConfig = deepFreeze(structuredClone(
       this.requestHeaderLogged
@@ -503,12 +517,21 @@ export class ReactLoopAgent implements Agent {
       ...tools.length > 0 ? { tools } : {},
     })
     const baseline = this.session.requestHeader()
+    const startsSeries = startsRequestSeries
+      || this.requestSurfaceGeneration !== surfaceGeneration
     if (!this.requestHeaderLogged) {
       this.session.append('request/header', { header, reason: baseline === undefined ? 'initial' : 'resume' })
       this.requestHeaderLogged = true
     } else if (baseline === undefined || !headerEquals(baseline, header)) {
-      this.session.append('request/header', { header, reason: 'change' })
+      this.session.append('request/header', {
+        header,
+        reason: 'change',
+        ...startsSeries ? { startsSeries: true } : {},
+      })
+    } else if (startsSeries) {
+      this.session.append('request/header', { header, reason: 'series' })
     }
+    this.requestSurfaceGeneration = surfaceGeneration
 
     const contextWindow = preparedCall?.context?.contextWindow
     const requestContext: RequestContext = {

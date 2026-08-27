@@ -23,6 +23,7 @@ import { CompressionLimiter } from './compression-limiter.ts'
 import {
   commitPreparedImageFile,
   commitPreparedVideoFile,
+  normalizedImagePath,
   prepareImageFile,
   prepareVideoFile,
   readImageFile,
@@ -48,7 +49,7 @@ export {
   validateVideoFile,
 } from './store.ts'
 export type { PreparedImageFile, PreparedVideoFile } from './store.ts'
-export { readRequestImageFile, requestImageDimensions, requestImageVariantId } from './request-image.ts'
+export { readRequestImageFile, requestImageVariantId } from './request-image.ts'
 export { readRequestVideoFile } from './request-video.ts'
 
 /** Default maximum encoded bytes for one submitted image; oversized sources are refused, not shrunk. */
@@ -59,18 +60,25 @@ export const DEFAULT_MAX_IMAGES_PER_MESSAGE = 20
 export const DEFAULT_MAX_MESSAGE_IMAGE_BYTES = 200 * 1024 * 1024
 /** Default maximum intrinsic pixels for one submitted image. */
 export const DEFAULT_MAX_IMAGE_PIXELS = 64_000_000
+/** Default per-side pixel cap for one submitted image. */
+export const DEFAULT_MAX_IMAGE_DIMENSION = 8192
 /**
- * Default long-edge target of the stored normalized image. A larger source
- * is admitted and downscaled to this edge, so admission bounds what rides
- * every later model request without refusing ordinary large sources.
+ * Default total-pixel budget of the stored normalized image. A larger source
+ * is admitted and downscaled proportionally, so admission bounds what rides
+ * every later model request without refusing ordinary large sources; extreme
+ * aspect ratios keep their short-edge resolution instead of collapsing under
+ * a long-edge rule.
  */
-export const DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION = 2048
-/** Default independent safety cap for one stored normalized image. */
+export const DEFAULT_NORMALIZED_IMAGE_MAX_PIXELS = 2048 * 2048
+/** Default long-edge cap of the stored normalized image, applied after the total-pixel budget. */
+export const DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION = 8192
+/** Default encoded-byte target for one stored normalized image. */
 export const DEFAULT_NORMALIZED_IMAGE_MAX_BYTES = 4 * 1024 * 1024
 /** Conservative default number of simultaneous native image transformations per store. */
 export const DEFAULT_IMAGE_COMPRESSION_CONCURRENCY = 2
 /** Maximum configurable native image transformations per store. */
 export const MAX_IMAGE_COMPRESSION_CONCURRENCY = 8
+
 /** Default maximum bytes for one submitted video; oversized sources are refused, not transcoded. */
 export const DEFAULT_MAX_VIDEO_BYTES = 100 * 1024 * 1024
 /** Default maximum videos in one prompt. */
@@ -90,15 +98,16 @@ export interface Config {
   maxMessageImageBytes?: number
   /** Maximum intrinsic width multiplied by height accepted for one submitted image. Default: 64,000,000. */
   maxImagePixels?: number
-  /**
-   * Maximum intrinsic width and maximum intrinsic height accepted for one
-   * submitted image. Omitted by default so source admission does not refuse
-   * images by side length; normalization still limits the stored long edge.
-   */
+  /** Maximum intrinsic width and maximum intrinsic height accepted for one submitted image. Default: 8192px. */
   maxImageDimension?: number
-  /** Long-edge pixel cap of the stored provider-independent normalized image. */
+  /** Total-pixel budget of the stored provider-independent normalized image. */
+  normalizedImageMaxPixels?: number
+  /** Long-edge pixel cap of the stored provider-independent normalized image, applied after the total-pixel budget. */
   normalizedImageMaxDimension?: number
-  /** Encoded-byte safety cap of the stored provider-independent normalized image. */
+  /**
+   * Encoded-byte target of the stored provider-independent normalized image;
+   * the smallest quality-ladder output is kept when no quality fits.
+   */
   normalizedImageMaxBytes?: number
   /** Maximum simultaneous normalization or request-image transformations in this service instance. */
   imageCompressionConcurrency?: number
@@ -179,7 +188,8 @@ export class LocalAttachmentStore extends AttachmentStore {
     maxImagesPerMessage: z.number().step(1).min(1).default(DEFAULT_MAX_IMAGES_PER_MESSAGE),
     maxMessageImageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_MESSAGE_IMAGE_BYTES),
     maxImagePixels: z.number().step(1).min(1).default(DEFAULT_MAX_IMAGE_PIXELS),
-    maxImageDimension: z.number().step(1).min(1),
+    maxImageDimension: z.number().step(1).min(1).default(DEFAULT_MAX_IMAGE_DIMENSION),
+    normalizedImageMaxPixels: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_PIXELS),
     normalizedImageMaxDimension: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION),
     normalizedImageMaxBytes: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_BYTES),
     imageCompressionConcurrency: z.number().step(1).min(1).max(MAX_IMAGE_COMPRESSION_CONCURRENCY)
@@ -208,7 +218,7 @@ export class LocalAttachmentStore extends AttachmentStore {
       maxImagesPerMessage: config.maxImagesPerMessage ?? DEFAULT_MAX_IMAGES_PER_MESSAGE,
       maxMessageImageBytes: config.maxMessageImageBytes ?? DEFAULT_MAX_MESSAGE_IMAGE_BYTES,
       maxImagePixels: config.maxImagePixels ?? DEFAULT_MAX_IMAGE_PIXELS,
-      ...config.maxImageDimension === undefined ? {} : { maxImageDimension: config.maxImageDimension },
+      maxImageDimension: config.maxImageDimension ?? DEFAULT_MAX_IMAGE_DIMENSION,
       mediaTypes: Object.freeze(['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const),
     })
     this.videoLimits = Object.freeze({
@@ -218,6 +228,7 @@ export class LocalAttachmentStore extends AttachmentStore {
       mediaTypes: Object.freeze(['video/mp4', 'video/x-matroska', 'video/quicktime'] as const),
     })
     this.normalizationPolicy = Object.freeze({
+      maxPixels: config.normalizedImageMaxPixels ?? DEFAULT_NORMALIZED_IMAGE_MAX_PIXELS,
       maxDimension: config.normalizedImageMaxDimension ?? DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION,
       maxBytes: config.normalizedImageMaxBytes ?? DEFAULT_NORMALIZED_IMAGE_MAX_BYTES,
     })
@@ -256,6 +267,10 @@ export class LocalAttachmentStore extends AttachmentStore {
 
   async readImage(ref: ImageAttachmentRef, signal?: AbortSignal): Promise<StoredImageAttachment> {
     return readImageFile(this.root, ref, signal)
+  }
+
+  override imageHostPath(ref: ImageAttachmentRef): string {
+    return normalizedImagePath(this.root, ref)
   }
 
   override async readImageRequest(
@@ -306,12 +321,15 @@ export class LocalAttachmentStore extends AttachmentStore {
       operation = undefined
     }
     if (operation === undefined) {
-      const shared = new SharedRequest<RequestImageAttachment>(sharedSignal => this.compression.run(async () => readRequestImageFile(
-        this.root,
-        stored ?? await this.readImage(ref, sharedSignal),
-        policy,
-        sharedSignal,
-      )))
+      const shared = new SharedRequest<RequestImageAttachment>(sharedSignal => this.compression.run(async () => {
+        const request = await readRequestImageFile(
+          this.root,
+          stored ?? await this.readImage(ref, sharedSignal),
+          policy,
+          sharedSignal,
+        )
+        return request
+      }))
       operation = shared
       this.requestInflight.set(key, shared)
       void shared.promise.finally(() => {

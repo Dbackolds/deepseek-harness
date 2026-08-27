@@ -15,7 +15,7 @@ Status: implemented
 返回通道是 child 收到的一条指令，而不是它需要自行发现的能力。report 包会向每个可继续进程内 child 安装两项作用域局部注册，并由同一个 disposer 撤销两者：
 
 - `report` 工具，其描述现在说明 child 要在结束前调用一次并给出自足的最终结果，并在部分进展会改变 parent 下一步动作时提前调用；
-- 一个 order 为 117 的 `tool:report` 系统提示词 section，用 child 自己的语气承载同一条义务，使从不细读工具描述的 child 仍能收到它。
+- 一个 first-party order 为 2900 的 `tool:report` 系统提示词 section，用 child 自己的语气承载同一条义务，使从不细读工具描述的 child 仍能收到它。
 
 `reportDelivery` 的默认值现在是 `wakeup`。一条被接受的报告会唤醒停驻的 parent，并开启一个普通的后续轮次。繁忙 parent 在发送时遵循 Host `subagent-delivery.reportBusy`：`steer`（默认）把报告准入到最近的后续 step；`queue` 则开启后续一轮。对于宁可让报告无人阅读也要避免轮次放大的部署，`quiet` 依旧可用，且仍永不唤醒。
 

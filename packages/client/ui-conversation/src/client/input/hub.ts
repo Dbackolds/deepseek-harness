@@ -1,25 +1,36 @@
 /**
  * InputHub: the SessionInputResolver implementation (`ctx.conversation.input`) — one
- * SessionInputShell per session, created inside the sessions provide
+ * SessionInputShell per session, created inside the uiSession provide
  * materialization (the 'input' standard-kit entry IS the
  * creation trigger) and torn down by the scope disposer (instance-and-scope
- * share one lifecycle). The hub registers the three scoped input-mutation
- * listeners on each session's actx (the sole consumer side of the ui-input-trigger
- * bail events) and owns the default-sink choreography: every session is a
+ * share one lifecycle). The hub registers the scoped input-mutation
+ * listeners on each Session context and owns the default-sink choreography: every session is a
  * real host entity, so the sink is one unconditional prompt path.
  */
-import type { ClientContext, ISessions, SessionBinding, SessionFace, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InputTriggerController, SubmitImageAttachment, SubmitOutcome } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type { Context } from '@deepseek-ai/cordis'
+import type {
+  ISessions, SessionBinding, SessionFace,
+} from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
-import { queueReadFaceOf } from '../queue/store.ts'
-import type { ComposerKeyboard, DraftAttachmentId, SessionInputResolver, SessionInput } from './contract.ts'
+import { queueReadFaceOf } from './queue-store.ts'
+import type {
+  ComposerKeyboard, DraftAttachmentId, InputTriggerController, SessionInputResolver, SessionInput,
+  SubmitImageAttachment, SubmitOutcome,
+} from '../contract/input.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
 
 /** Structural command face for per-session popup resolution. */
 interface CommandFace {
-  popupFor(actx: ClientContext): PopupDismissFace
+  popupFor(actx: Context): PopupDismissFace
+}
+
+/** Optional input-trigger service resolved without importing its implementation. */
+interface InputTriggerServiceFace {
+  /** @param actx - Session scope. @returns that Session's trigger provider. */
+  sessionOf(actx: Context): InputTriggerController
 }
 
 /** Attachment-send face resolved lazily to keep hub/service construction acyclic. */
@@ -28,13 +39,11 @@ interface ConversationAttachmentFace {
     session: SessionFace,
     text: string,
     imageIds: readonly DraftAttachmentId[],
-    videoIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal?: AbortSignal,
   ): Promise<SubmitOutcome>
   serializeDraftImages(imageIds: readonly DraftAttachmentId[]): Promise<readonly SubmitImageAttachment[]>
   releaseDraftImage(id: DraftAttachmentId): void
-  releaseDraftVideo(id: DraftAttachmentId): void
 }
 
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
@@ -46,7 +55,7 @@ export class InputHub implements SessionInputResolver {
    * @param t - conversation-namespace translate thunk (reads the active locale at call time).
    */
   constructor(
-    private readonly rootCtx: ClientContext,
+    private readonly rootCtx: Context,
     private readonly t: TranslateNS<'conversation'>,
   ) {}
 
@@ -55,7 +64,7 @@ export class InputHub implements SessionInputResolver {
    * @param actx - session-scope context.
    * @returns the resident per-session facade.
    */
-  for(actx: ClientContext): SessionInput {
+  for(actx: Context): SessionInput {
     const sessions = this.sessions()
     const id = sessions.scopeOf(actx)
     if (id === undefined) throw new Error('conversation.input.for requires a session scope')
@@ -79,7 +88,7 @@ export class InputHub implements SessionInputResolver {
       inputTriggers: () => this.controller(actx),
       popup: () => this.popup(actx),
       queue: queueReadFaceOf(session),
-      defaultSink: (text, imageIds, videoIds, mode, signal) => this.sink(session, text, imageIds, videoIds, mode, signal),
+      defaultSink: (text, imageIds, mode, signal) => this.sink(session, text, imageIds, mode, signal),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandImages: {
         serialize: ids => this.conversation().serializeDraftImages(ids),
@@ -94,7 +103,6 @@ export class InputHub implements SessionInputResolver {
         unsupportedNotice: token => this.t('command.imagesUnsupported', {
           command: token.trim().replace(/^\//u, ''),
         }),
-        videosUnsupportedNotice: () => this.t('command.videosUnsupported'),
       },
     })
     this.shells.set(id, shell)
@@ -113,13 +121,10 @@ export class InputHub implements SessionInputResolver {
       ]
       return () => {
         for (const off of offs) off()
-        const drafts = shell.snapshot.imageIds
-        const draftVideos = shell.snapshot.videoIds
-        shell.dispose()
+        const drafts = shell.dispose()
         this.shells.delete(id)
         const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
         for (const imageId of drafts) conversation?.releaseDraftImage(imageId)
-        for (const videoId of draftVideos) conversation?.releaseDraftVideo(videoId)
       }
     }, 'conversation.input: session shell')
     return shell
@@ -154,7 +159,7 @@ export class InputHub implements SessionInputResolver {
    * Resolve the optional slash controller for composer chrome that launches
    * the shared candidate menu without typing a trigger.
    * @param id - session id.
-   * @returns the resident controller, or undefined when ui-input-trigger is absent.
+   * @returns the resident controller, or undefined when no trigger provider is installed.
    */
   inputTriggers(id: SessionId): InputTriggerController | undefined {
     const actx = this.sessions().scope(id)
@@ -171,12 +176,11 @@ export class InputHub implements SessionInputResolver {
     session: SessionFace,
     text: string,
     imageIds: readonly DraftAttachmentId[],
-    videoIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal: AbortSignal,
   ): Promise<SubmitOutcome> {
-    if (text === '' && imageIds.length === 0 && videoIds.length === 0) return Promise.resolve({ kind: 'success' })
-    return this.conversation().sendSession(session, text, imageIds, videoIds, mode, signal)
+    if (text === '' && imageIds.length === 0) return Promise.resolve({ kind: 'success' })
+    return this.conversation().sendSession(session, text, imageIds, mode, signal)
   }
 
   /**
@@ -203,12 +207,12 @@ export class InputHub implements SessionInputResolver {
     }
   }
 
-  private controller(actx: ClientContext): InputTriggerController | undefined {
-    const inputTriggers = this.rootCtx.get('inputTriggers')
+  private controller(actx: Context): InputTriggerController | undefined {
+    const inputTriggers = this.rootCtx.get('inputTriggers') as InputTriggerServiceFace | undefined
     return inputTriggers?.sessionOf(actx)
   }
 
-  private popup(actx: ClientContext): PopupDismissFace | undefined {
+  private popup(actx: Context): PopupDismissFace | undefined {
     const command = this.rootCtx.get('commandUi') as CommandFace | undefined
     return command?.popupFor(actx)
   }

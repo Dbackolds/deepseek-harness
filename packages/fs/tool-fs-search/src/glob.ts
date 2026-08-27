@@ -14,8 +14,8 @@ import { sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, SearchResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
-import type {} from '@deepseek-ai/dsh-system-prompt'
-import { runRipgrep, searchRootsFor, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
+import { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
+import { runRipgrep, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
 import { globSearchMeta, searchViewFromMeta } from './presentation.ts'
 import { acceptedDirectCallValue } from './direct-call.ts'
 
@@ -85,10 +85,9 @@ export function parseGlobArgs(args: { pattern: string; path?: string }): GlobInp
  * {@link GLOB_VCS_EXCLUDES} keeps VCS metadata out.
  *
  * @param input - the validated arguments.
- * @param roots - extra workspace folders used only when `path` is omitted.
  * @returns the complete ripgrep argument vector (excluding the binary itself).
  */
-export function buildGlobCommand(input: GlobInput, roots?: readonly string[]): string[] {
+export function buildGlobCommand(input: GlobInput): string[] {
   const parts = [
     '--files',
     `--glob=${input.pattern}`,
@@ -105,7 +104,6 @@ export function buildGlobCommand(input: GlobInput, roots?: readonly string[]): s
     ]),
   ]
   if (input.path !== undefined) parts.push('--', input.path)
-  else if (roots !== undefined && roots.length > 1) parts.push('--', ...roots)
   return parts
 }
 
@@ -302,7 +300,7 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
     : 'while a larger one keeps the modification-time-ordered head.'
   ctx.systemPrompt.section({
     name: 'tool:glob',
-    order: 103,
+    order: FIRST_PARTY_SECTION_ORDER.TOOL_GLOB,
     text: 'Use the glob tool — not shell find — to discover files by path pattern. A pattern with no "/" matches basenames at any depth, so "*" matches every file in the tree rather than its top level. '
       + `Results are files only, never directories, and include hidden and ignored files: a result that fits comes back in modification-time order, ${overCapGuidance}`,
   })
@@ -323,7 +321,7 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
         description: 'Glob pattern to match file paths against (e.g. "**/*.ts", "src/**/*.test.js"). '
           + 'A pattern with no "/" matches the basename at any depth, so "*" and "*.ts" both search the whole tree; include a separator to anchor the depth.',
       },
-      path: { type: 'string', description: 'Directory to search in. Defaults to every folder in the session workspace; a relative path resolves against the current working directory.' },
+      path: { type: 'string', description: 'Directory to search in. Defaults to the session workspace; a relative path resolves against it.' },
     },
     timeoutMs: caps.timeoutMs,
     output: {
@@ -343,7 +341,7 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
     },
     async execute(args, exec) {
       const input = parseGlobArgs(args)
-      const run = await runRipgrep(ctx, exec, 'glob', buildGlobCommand(input, searchRootsFor(ctx, exec)), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
+      const run = await runRipgrep(ctx, exec, 'glob', buildGlobCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
       const root = input.path === undefined ? '.' : toWorkdirRelative(input.path, run.workdir)
       if (run.noMatches) return { root, paths: [] }
 

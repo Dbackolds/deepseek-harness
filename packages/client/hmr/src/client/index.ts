@@ -62,16 +62,11 @@
  * leaves a FAILED fiber for the shell's status projection. Both log loudly.
  */
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { PluginsEventFrame } from '../events.ts'
-import { EVENTS_ENDPOINT, RELOAD_ENDPOINT } from '../events.ts'
-import { CLIENT_HMR_SETTINGS_NAMESPACE, type ClientHmrSettings } from '../hmr-settings.ts'
-import { ClientHmrReloadPolicy } from './reload-policy.ts'
-import type { ReloadRowInjected } from './ReloadRow.tsx'
-import { ReloadRow } from './ReloadRow.tsx'
-import { en, zh, type HmrSettingsKey } from './locales.ts'
+import { EVENTS_ENDPOINT, parsePluginsEventFrame } from '../events.ts'
 
 export type { PluginsEventFrame } from '../events.ts'
 export { EVENTS_ENDPOINT, RELOAD_ENDPOINT } from '../events.ts'
@@ -144,7 +139,7 @@ export function apply(ctx: ClientContext): void {
     }),
   }, ReloadRow))
 
-  async function reload(id: string): Promise<void> {
+  async function reload(id: string, rev: string): Promise<void> {
     const entry = findEntry(loader, id)
     if (entry === undefined) {
       ctx.logger.warn(`client-hmr: rebuilt frame for unknown entry "${id}" (not in the loader tree)`)
@@ -155,7 +150,7 @@ export function apply(ctx: ClientContext): void {
     // async half while the old fiber still serves: script loading registers
     // the fresh factory with zero side effects (lazy CJS — module bodies run
     // at materialization, not execution).
-    modLoader.invalidate(id)
+    modLoader.invalidate(id, rev)
     await modLoader.prefetch(id)
 
     const oldFiber = entry.fiber
@@ -188,23 +183,15 @@ export function apply(ctx: ClientContext): void {
   const handle = (frame: PluginsEventFrame): void => {
     switch (frame.type) {
       case 'rebuilt':
-        if (!policy.autoReload.getSnapshot()) break
-        queue = queue.then(() => reload(frame.id)).catch((error: unknown) => {
-          ctx.logger.error(`client-hmr: reload of "${frame.id}" failed`)
-          ctx.logger.error(error)
-        })
-        break
-      case 'reload':
-        queue = queue.then(() => reload(frame.id)).catch((error: unknown) => {
+        queue = queue.then(() => reload(frame.id, frame.rev)).catch((error: unknown) => {
           ctx.logger.error(`client-hmr: reload of "${frame.id}" failed`)
           ctx.logger.error(error)
         })
         break
       case 'graph':
-        // Connect-time snapshot, unused. The loader's cached graph rev
-        // goes stale after rebuilds — harmless, since prefetch hits the
-        // network anyway (host serves bundles no-cache); graph rev refresh
-        // lands with the reconnect-handshake mechanism.
+        // Connect-time snapshot, unused. Each rebuilt frame carries the
+        // revision that selects the immutable single-resource combo script; the boot
+        // graph remains the initial-load record until a page reload.
         break
       default:
         // Merge-extensible frame union: unknown frame types from newer hosts
@@ -216,15 +203,20 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     const source = new EventSource(EVENTS_ENDPOINT)
     source.addEventListener('message', (event: MessageEvent<string>) => {
-      let frame: PluginsEventFrame
+      let value: unknown
       try {
-        frame = JSON.parse(event.data) as PluginsEventFrame
+        value = JSON.parse(event.data) as unknown
       } catch {
         // Wire boundary: a malformed dev-channel frame is dropped loudly.
         ctx.logger.warn(`client-hmr: unparseable event frame: ${event.data}`)
         return
       }
-      handle(frame)
+      const parsed = parsePluginsEventFrame(value)
+      if (parsed.kind === 'invalid') {
+        ctx.logger.warn(`client-hmr: invalid event frame: ${event.data}`)
+      } else if (parsed.kind === 'frame') {
+        handle(parsed.frame)
+      }
     })
     return () => { source.close() }
   }, 'client-hmr: event source')

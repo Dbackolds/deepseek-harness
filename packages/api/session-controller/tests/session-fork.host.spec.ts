@@ -1,0 +1,539 @@
+/** Session Controller fork boundaries, lineage, and inherited model routing. */
+
+import { describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
+import SessionStore from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import type { Workspace } from '@deepseek-ai/dsh-workspace'
+import {
+  createSessionTestRemote, installSessionReadTestServices, testSessionPersistence,
+} from './test-remote.ts'
+
+const sid = (id: string): SessionId => id as SessionId
+
+function request<P>(payload: P): P {
+  return payload
+}
+
+async function composed(workspaces: readonly Workspace[] = []): Promise<Context> {
+  const ctx = new Context()
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(AgentRegistry)
+  installSessionReadTestServices(ctx)
+  ctx.provide('workspaceRegistry', { list: () => workspaces } as never)
+  ctx.agents.setFactory({
+    createAgent: async (ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> => {
+      const session = ctx.sessions.create(options.sessionId, {
+        ...options.seed === undefined ? {} : { seed: [...options.seed] },
+        ...options.meta === undefined ? {} : { meta: options.meta },
+      })
+      const agent = {} as Agent
+      const agentCtx = ownerCtx.extend({ agent })
+      Object.assign(agent, { id: session.id, session, status: 'idle', ctx: agentCtx })
+      await options.setup?.(agentCtx)
+      ctx.agents.register(agent)
+      return { agent, dispose: () => Promise.resolve() }
+    },
+    resume: () => Promise.reject(new Error('fork test sources are live')),
+  })
+  return ctx
+}
+
+/** Tail turn appended after the completed ones: left open, or closed as aborted (a stopped turn). */
+type Tail = 'none' | 'open' | 'aborted'
+
+function liveAgent(
+  ctx: Context,
+  id: string,
+  turns: number,
+  tail: Tail = 'none',
+  lineage: { parentSession?: SessionId; origin?: 'subagent' | 'automation' } = {},
+): Session {
+  const session = ctx.sessions.create(sid(id), { meta: { cwd: '/proj', ...lineage } })
+  for (let turn = 1; turn <= turns; turn++) {
+    session.append('turn/start', { turn })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: `prompt ${String(turn)}` }],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    session.append('turn/end', { turn, reason: { kind: 'completed' } })
+  }
+  if (tail !== 'none') {
+    session.append('turn/start', { turn: turns + 1 })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'open prompt' }],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    if (tail === 'aborted') session.append('turn/end', {
+      turn: turns + 1,
+      reason: { kind: 'aborted', reason: { kind: 'user' } },
+    })
+  }
+  ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
+  return session
+}
+
+const remote = (ctx: Context) => createSessionTestRemote(ctx, {
+  defaultModelSelection: () => ({ provider: 'default-provider', model: 'default-model' }),
+  cwd: '/tmp',
+})
+
+describe('sessions.fork', () => {
+  it('cuts at the anchored completed turn and records lineage and cwd', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-source', 2)
+    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: 1 }))
+    expect(response.ok).toBe(true)
+    if (!response.ok) return
+    const child = ctx.sessions.get(response.value.sessionId)
+    expect(child?.events.map(event => event.type)).toEqual([
+      'turn/start', 'user/message', 'turn/end', 'session/end-seed',
+    ])
+    expect(child?.header.parentSession).toBe(source.id)
+    expect(child?.header.cwd).toBe('/proj')
+    await ctx.fiber.dispose()
+  })
+
+  it('attaches a subagent fork to its nearest workspace-owning ancestor', async () => {
+    const accounted: SessionId[] = []
+    const attachSession = vi.fn<(sessionId: SessionId) => Promise<void>>()
+      .mockResolvedValue(undefined)
+    const workspace = {
+      sessionIds: accounted,
+      attachSession,
+    } as unknown as Workspace
+    const ctx = await composed([workspace])
+    const owner = liveAgent(ctx, 'session-owner', 1)
+    accounted.push(owner.id)
+    const child = liveAgent(ctx, 'session-child', 1, 'none', {
+      parentSession: owner.id,
+      origin: 'subagent',
+    })
+    const grandchild = liveAgent(ctx, 'session-grandchild', 1, 'none', {
+      parentSession: child.id,
+      origin: 'subagent',
+    })
+    vi.spyOn(ctx.sessionQuery, 'traceSession').mockResolvedValue({
+      target: { header: grandchild.header, live: true, persisted: false },
+      ancestors: [
+        { header: child.header, live: true, persisted: false },
+        { header: owner.header, live: true, persisted: false },
+      ],
+      descendants: [],
+      complete: true,
+      root: { header: owner.header, live: true, persisted: false },
+    })
+
+    const response = await remote(ctx).fork(request({ sessionId: grandchild.id }))
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) return
+    expect(attachSession).toHaveBeenCalledWith(response.value.sessionId)
+    expect(ctx.sessions.get(response.value.sessionId)?.header).toMatchObject({
+      parentSession: grandchild.id,
+      cwd: '/proj',
+    })
+    expect(ctx.sessions.get(response.value.sessionId)?.header.origin).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
+  it('forks a persisted subagent without resuming its Agent', async () => {
+    const ctx = await composed()
+    const sourceId = sid('session-cold-subagent')
+    const parentId = sid('session-cold-parent')
+    const header: SessionHeader = {
+      version: 0,
+      id: sourceId,
+      createdAt: 1,
+      cwd: '/proj',
+      parentSession: parentId,
+      origin: 'subagent',
+    }
+    const events = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1, trigger: { kind: 'message', source: { kind: 'user' } } } },
+      {
+        type: 'user/message',
+        seq: 1,
+        time: 2,
+        data: createUserMessage({ content: [{ type: 'text', text: 'work' }], source: { kind: 'user' } }),
+        surfaceOp: 'append',
+      },
+      { type: 'turn/end', seq: 2, time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
+    ] as SessionEvent[]
+    ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
+      list: () => Promise.resolve([header]),
+      inspect: () => Promise.resolve({ meta: header, events }),
+    }) as never)
+    const resume = vi.spyOn(ctx.agents, 'resume')
+
+    const response = await remote(ctx).fork(request({ sessionId: sourceId }))
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) return
+    expect(resume).not.toHaveBeenCalled()
+    expect(ctx.agents.get(sourceId)).toBeUndefined()
+    expect(ctx.sessions.get(response.value.sessionId)?.header).toMatchObject({
+      parentSession: sourceId,
+      cwd: '/proj',
+    })
+    expect(ctx.sessions.get(response.value.sessionId)?.header.origin).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
+  it('uses the last completed turn only for omitted and past-end anchors', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-tail', 2, 'open')
+    const proxy = remote(ctx)
+    const expectedTypes = [
+      'turn/start', 'user/message', 'turn/end',
+      'turn/start', 'user/message', 'turn/end',
+      'session/end-seed',
+    ]
+    const omitted = await proxy.fork(request({ sessionId: source.id }))
+    expect(omitted.ok).toBe(true)
+    if (omitted.ok) {
+      expect(ctx.sessions.get(omitted.value.sessionId)?.events.map(event => event.type))
+        .toEqual(expectedTypes)
+    }
+    const pastEnd = await proxy.fork(request({ sessionId: source.id, atSeq: 999 }))
+    expect(pastEnd.ok).toBe(true)
+    if (pastEnd.ok) {
+      expect(ctx.sessions.get(pastEnd.value.sessionId)?.events.map(event => event.type))
+        .toEqual(expectedTypes)
+    }
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects invalid fork anchors before reading or creating a Session', async () => {
+    const ctx = await composed()
+    const proxy = remote(ctx)
+
+    for (const atSeq of [-1, 0.5]) {
+      await expect(proxy.fork(request({ sessionId: sid('missing'), atSeq })))
+        .resolves.toMatchObject({ ok: false, error: { code: 'bad-request' } })
+    }
+    expect(ctx.sessions.list()).toEqual([])
+    await ctx.fiber.dispose()
+  })
+
+  it('cuts through an aborted turn: stopped is closed, not open', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-aborted', 1, 'aborted')
+    // What a stopped message's fork button anchors on: the frozen node sits
+    // one event before its turn/end, floored client-side to that event's seq.
+    const anchor = (source.events.at(-1)?.seq ?? 0) - 1
+    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
+    expect(response.ok).toBe(true)
+    if (!response.ok) return
+    expect(ctx.sessions.get(response.value.sessionId)?.events.map(event => event.type)).toEqual([
+      'turn/start', 'user/message', 'turn/end',
+      'turn/start', 'user/message', 'turn/end',
+      'session/end-seed',
+    ])
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects an in-log anchor whose turn is still open', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-open', 1, 'open')
+    const anchor = source.events.at(-1)?.seq ?? 0
+    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'fork-unavailable', details: { sessionId: source.id } },
+    })
+    if (!response.ok) expect(response.error.message).toMatch(/has not completed/)
+    await ctx.fiber.dispose()
+  })
+
+  it('installs the latest logged model selection before the child can run', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-routed', 1)
+    source.append('request/header', {
+      header: {
+        config: {
+          provider: 'inherited-provider',
+          model: 'inherited-model',
+          reasoningEffort: ReasoningEffortId('high'),
+        },
+      },
+      reason: 'initial',
+    })
+    const response = await remote(ctx).fork(request({ sessionId: source.id }))
+    expect(response.ok).toBe(true)
+    if (!response.ok) return
+    const child = ctx.agents.get(response.value.sessionId)
+    if (child === undefined) throw new Error('fork did not publish the child agent')
+    const assembly = await child.ctx.systemPrompt.assemble()
+    expect(assembly.variables).toMatchObject({
+      provider: 'inherited-provider',
+      model: 'inherited-model',
+    })
+    const fallback: LlmCallConfig = { provider: 'default-provider', model: 'default-model' }
+    await expect(agentEvents(child.ctx, child).waterfall(
+      'agent/request', { turn: 1, step: 0, signal: new AbortController().signal }, () => Promise.resolve(fallback),
+    )).resolves.toMatchObject({
+      provider: 'inherited-provider',
+      model: 'inherited-model',
+      reasoningEffort: 'high',
+    })
+    await ctx.fiber.dispose()
+  })
+})
+
+describe('sessions.rewrite', () => {
+  it('replaces the current-surface user prompt and wakes continueFromSurface', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite', 2)
+    const continueFromSurface = vi.fn()
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface,
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const sessions = remote(ctx)
+    const userSeqs = source.events.filter(event => event.type === 'user/message').map(event => event.seq)
+    const atSeq = userSeqs[0]
+    if (atSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const beforeTail = source.surface.nodes.at(-1)
+    const response = await sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response).toEqual({ ok: true, value: { accepted: true } })
+    expect(continueFromSurface).toHaveBeenCalledTimes(1)
+    const replacement = source.events.at(-1)
+    expect(replacement?.type).toBe('user/message')
+    if (replacement?.type !== 'user/message') return
+    expect(replacement.surfaceOp).toEqual({ op: 'replace', start: atSeq, end: beforeTail })
+    expect(replacement.data.content).toEqual([{ type: 'text', text: 'rewritten' }])
+    expect(source.surface.nodes).toEqual([replacement.seq])
+    const again = await sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq,
+      content: [{ type: 'text', text: 'again' }],
+    }))
+    expect(again).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a seq that is not a current-surface user prompt', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-missing', 1)
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const sessions = remote(ctx)
+    const response = await sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: 99,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    const turnEnd = source.events.find(event => event.type === 'turn/end')?.seq
+    if (turnEnd === undefined) throw new Error('turn/end missing')
+    const notUser = await sessions.rewrite(request({
+      sessionId: source.id,
+      atSeq: turnEnd,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(notUser).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects an invalid client time zone before touching the session', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-zone', 1)
+    const response = await remote(ctx).rewrite(request({
+      sessionId: source.id,
+      atSeq: 1,
+      content: [{ type: 'text', text: 'rewritten' }],
+      clientTimeZone: 'CST',
+    }))
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-time-zone', details: { value: 'CST' } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a composition whose Agent cannot continue from the surface', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-no-continue', 1)
+    const response = await remote(ctx).rewrite(request({
+      sessionId: source.id,
+      atSeq: 1,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects when the Agent is still running after cancel', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-busy', 1)
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      status: 'running',
+      continueFromSurface: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const response = await remote(ctx).rewrite(request({
+      sessionId: source.id,
+      atSeq: 1,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a plugin user message even when it is on the current surface', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-plugin', 1)
+    source.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'plugin context' }],
+      source: { kind: 'plugin', plugin: 'foreign' },
+    }), { surfaceOp: 'append' })
+    const pluginSeq = source.events.at(-1)?.seq
+    if (pluginSeq === undefined) throw new Error('plugin message missing')
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const response = await remote(ctx).rewrite(request({
+      sessionId: source.id,
+      atSeq: pluginSeq,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps admitted images when the rewrite payload is text-only', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-image', 0)
+    source.append('turn/start', { turn: 1 })
+    source.append('user/message', createUserMessage({
+      content: [
+        { type: 'image', attachment: { attachmentId: AttachmentId('att-keep'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+        { type: 'text', text: 'caption' },
+      ],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const continueFromSurface = vi.fn()
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface,
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const response = await remote(ctx).rewrite(request({
+      sessionId: source.id,
+      atSeq: userSeq,
+      content: [{ type: 'text', text: 'new caption' }],
+      clientTimeZone: 'UTC',
+    }))
+    expect(response).toEqual({ ok: true, value: { accepted: true } })
+    const replacement = source.events.at(-1)
+    expect(replacement?.type).toBe('user/message')
+    if (replacement?.type !== 'user/message') return
+    expect(replacement.data.content).toEqual([
+      { type: 'image', attachment: { attachmentId: AttachmentId('att-keep'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+      { type: 'text', text: 'new caption' },
+    ])
+    expect(replacement.data.source).toMatchObject({ kind: 'user', clientTimeZone: 'UTC' })
+    await ctx.fiber.dispose()
+  })
+
+  it('maps an image rewrite without an LLM registry to rewrite-unavailable', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-image-fail', 1)
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const response = await remote(ctx).rewrite(request({
+      sessionId: source.id,
+      atSeq: userSeq,
+      content: [
+        { type: 'image', mediaType: 'image/png', data: 'AQ==' },
+        { type: 'text', text: 'caption' },
+      ],
+    }))
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('maps a continueFromSurface throw to rewrite-unavailable', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-rewrite-throw', 1)
+    const agent = ctx.agents.get(source.id)
+    if (agent === undefined) throw new Error('rewrite source agent missing')
+    Object.assign(agent, {
+      continueFromSurface: () => { throw new Error('wake failed') },
+      cancel: vi.fn(),
+      whenIdle: () => Promise.resolve(),
+    })
+    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
+    const response = await remote(ctx).rewrite(request({
+      sessionId: source.id,
+      atSeq: userSeq,
+      content: [{ type: 'text', text: 'rewritten' }],
+    }))
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+    })
+    await ctx.fiber.dispose()
+  })
+})

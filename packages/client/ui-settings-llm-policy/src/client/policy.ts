@@ -3,7 +3,7 @@
  */
 import {
   createSnapshotStore, type SettingsScope, type SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client'
+} from '@deepseek-ai/dsh-client-store'
 import {
   DEFAULT_MAX_RETRIES,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,

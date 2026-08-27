@@ -1,7 +1,7 @@
 /** General Settings rows for the product-wide retry budget and stream-idle timeout. */
 
 import { useEffect, useState } from 'react'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { LlmPolicySettingsKey } from './locales.ts'
 import css from './LlmPolicyRow.module.css'

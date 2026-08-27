@@ -9,7 +9,7 @@ function assert(cond: unknown, message: string): void {
 }
 
 const other = {
-  options: { name: '@deepseek-ai/dsh-client-runtime' },
+  options: { name: '@deepseek-ai/dsh-client-store' },
   ctx: { registry: { delete() {} } },
   async refresh() {},
 }
@@ -56,7 +56,7 @@ const skipped = await reloadMarketplacePage({})
 assert(skipped === 'skipped', 'missing loader skips instead of swapping the whole table')
 assert(
   selectPageReloadIds([
-    '@deepseek-ai/dsh-client-runtime',
+    '@deepseek-ai/dsh-client-store',
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-conversation',
     MARKETPLACE_CLIENT_PACKAGE,

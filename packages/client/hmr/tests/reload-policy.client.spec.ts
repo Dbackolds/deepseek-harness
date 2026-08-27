@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { ClientHmrReloadPolicy } from '../src/client/reload-policy.ts'
 import { DEFAULT_AUTO_RELOAD, type ClientHmrSettings } from '../src/hmr-settings.ts'
 

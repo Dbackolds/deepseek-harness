@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, CallId, LlmError, ReasoningEffortId, StreamChunk  } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ToolCallId, LlmError, ReasoningEffortId, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
@@ -77,30 +77,32 @@ describe('agent loop', () => {
     expect(adapter.requests[0]?.maxTokens).toBe(256)
   })
 
-  it('seeds a valid AgentOptions.reasoningEffort into the first model request', async () => {
-    const adapter = new MockAdapter([textResponse('effort')], {
-      efforts: [{ id: ReasoningEffortId('xhigh'), name: 'Extra high' }],
+  it('seeds an AgentOptions reasoning effort into the first model request', async () => {
+    const effort = ReasoningEffortId('high')
+    const adapter = new MockAdapter([textResponse('reasoned')], {
+      efforts: [{ id: effort, name: 'High' }],
+      defaultEffort: effort,
     })
     const ctx = await harness(adapter)
     const agent = ctx.agentLoop.create(
-      SessionId('valid-reasoning-effort'),
-      { provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('xhigh') },
+      SessionId('configured-reasoning-effort'),
+      { provider: 'mock', model: 'mock', reasoningEffort: effort },
     )
 
     send(agent, 'use the configured reasoning effort')
     await waitForIdle(ctx, agent)
 
-    expect(adapter.requests[0]?.reasoningEffort).toBe(ReasoningEffortId('xhigh'))
+    expect(adapter.requests[0]?.reasoningEffort).toBe(effort)
   })
 
-  it('rejects an empty AgentOptions.reasoningEffort before publication', async () => {
-    const ctx = await harness(new MockAdapter([]))
-    expect(() => ctx.agentLoop.create(
-      SessionId('invalid-reasoning-effort'),
-      { provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('') },
-    )).toThrow('agent reasoningEffort must be a non-empty string')
-    expect(ctx.agents.list()).toEqual([])
-    expect(ctx.sessions.list()).toEqual([])
+  it('validates reasoning effort in declarative agent config', () => {
+    const effort = ReasoningEffortId('high')
+    expect(AgentLoop.Config({
+      agents: [{ id: 'configured-agent', reasoningEffort: effort }],
+    }).agents[0]?.reasoningEffort).toBe(effort)
+    expect(() => AgentLoop.Config({
+      agents: [{ id: 'configured-agent', reasoningEffort: ReasoningEffortId('') }],
+    })).toThrow()
   })
 
   it('cancels queued wakeup work together with an active maintenance task', async () => {
@@ -282,69 +284,6 @@ describe('agent loop', () => {
     expect(request!.tools?.map(t => t.name)).toEqual(['noop'])
   })
 
-  it('replaces every assembled system section with a model systemPrompt', async () => {
-    const adapter = new MockAdapter(
-      [textResponse('ok')],
-      undefined,
-      undefined,
-      'You replace the assembled prompt on {{model}}.',
-    )
-    const ctx = await harness(adapter, 'You are a test agent on {{model}}.')
-    ctx.systemPrompt.section({ name: 'tool:noop', order: 100, text: 'Use the noop tool wisely.' })
-    const agent = ctx.agentLoop.create(SessionId('a-model-prompt'), { provider: 'mock', model: 'mock' })
-
-    send(agent, 'hi')
-    await waitForIdle(ctx, agent)
-
-    expect(adapter.requests[0]!.system).toBe('You replace the assembled prompt on mock.')
-  })
-
-  it('lets a complete persona win over a model systemPrompt', async () => {
-    const adapter = new MockAdapter(
-      [textResponse('ok')],
-      undefined,
-      undefined,
-      'You replace the assembled prompt on {{model}}.',
-    )
-    const ctx = await harness(adapter, 'You are a test agent on {{model}}.')
-    const handle = await ctx.agents.create({
-      sessionId: SessionId('a-complete-persona'),
-      agentOptions: { provider: 'mock', model: 'mock' },
-      setup: (agentCtx) => {
-        agentCtx.systemPrompt.section({
-          name: 'deployment:persona',
-          order: 0,
-          text: 'Only this.',
-          complete: true,
-        })
-      },
-    })
-
-    send(handle.agent, 'hi')
-    await waitForIdle(ctx, handle.agent)
-
-    expect(adapter.requests[0]!.system).toBe('Only this.')
-  })
-
-  it('keeps ordinary assembly when exact-model lookup fails', async () => {
-    let lookups = 0
-    const adapter = new class extends MockAdapter {
-      override resolveModel(provider: string, model: string) {
-        lookups += 1
-        // Assemble looks up first; a later prepareCall still needs metadata.
-        if (lookups === 1) return Promise.reject(new LlmError('no metadata', 'NO_ADAPTER'))
-        return super.resolveModel(provider, model)
-      }
-    }([textResponse('ok')])
-    const ctx = await harness(adapter, 'You are a test agent.')
-    const agent = ctx.agentLoop.create(SessionId('a-lookup-fail'), { provider: 'mock', model: 'mock' })
-
-    send(agent, 'hi')
-    await waitForIdle(ctx, agent)
-
-    expect(adapter.requests[0]!.system).toBe('You are an AI agent powered by DeepSeek Harness.\n\nYou are a test agent.')
-  })
-
   it('resolves {{cwd}} from the agent session workspace (factory create with meta.cwd)', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter, 'Working in {{cwd}}.')
@@ -496,7 +435,8 @@ describe('agent loop', () => {
     await waitForIdle(ctx, agent)
     expect(contextEvents()).toHaveLength(3)
     expect(adapter.requests.map(request => request.system)).toEqual(Array(5).fill(adapter.requests[0]?.system))
-    expect(agent.session.events.filter(event => event.type === 'request/header')).toHaveLength(1)
+    expect(agent.session.events.flatMap(event =>
+      event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial'])
   })
 
   it('re-emits unchanged runtime context when a surface replacement removed the retained snapshot', async () => {
@@ -1141,7 +1081,7 @@ describe('agent loop', () => {
   })
 
   it('does not dispatch tool calls from a max-tokens-truncated step', async () => {
-    const callId = CallId('c1')
+    const callId = ToolCallId('c1')
     const adapter = new MockAdapter([[
       { type: 'block-start', index: 0, blockType: 'tool-call' },
       { type: 'tool-call-delta', index: 0, id: callId, name: 'echo', argumentsDelta: '{"text":"x"}' },
@@ -1196,7 +1136,7 @@ describe('agent loop', () => {
   it('appends an empty completion anchor for a max-tokens step with no usage', async () => {
     // The truncated tool call is dropped from durable content, while the
     // successful provider call still needs an exact replay anchor.
-    const callId = CallId('c1')
+    const callId = ToolCallId('c1')
     const adapter = new MockAdapter([[
       { type: 'block-start', index: 0, blockType: 'tool-call' },
       { type: 'tool-call-delta', index: 0, id: callId, name: 'echo', argumentsDelta: '{"text":"x"}' },
@@ -1274,7 +1214,7 @@ describe('agent loop', () => {
   })
 
   it('keeps safe max-tokens assistant content while dropping truncated tool calls', async () => {
-    const callId = CallId('c1')
+    const callId = ToolCallId('c1')
     const adapter = new MockAdapter([[
       { type: 'block-start', index: 0, blockType: 'text' },
       { type: 'text-delta', index: 0, text: 'partial text' },
@@ -1518,7 +1458,11 @@ describe('agent loop', () => {
   })
 
   it('creates agents from config on startup', async () => {
-    const adapter = new MockAdapter([textResponse('from config')])
+    const effort = ReasoningEffortId('high')
+    const adapter = new MockAdapter([textResponse('from config')], {
+      efforts: [{ id: effort, name: 'High' }],
+      defaultEffort: effort,
+    })
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
@@ -1526,7 +1470,7 @@ describe('agent loop', () => {
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, {
-      agents: [{ id: SessionId('config-agent'), provider: 'mock', model: 'mock' }],
+      agents: [{ id: SessionId('config-agent'), provider: 'mock', model: 'mock', reasoningEffort: effort }],
     })
     ctx.llm.registerAdapter(['mock'], adapter)
 
@@ -1540,6 +1484,9 @@ describe('agent loop', () => {
     send(agent, 'hi')
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(1)
+    expect(adapter.requests[0]?.reasoningEffort).toBe(effort)
+    const header = agent.session.events.find(event => event.type === 'request/header')
+    expect(header?.type === 'request/header' && header.data.header.config.reasoningEffort).toBe(effort)
   })
 
   it('attaches config agent cwd to the fresh session header', async () => {

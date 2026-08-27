@@ -2,9 +2,11 @@
  * `dsh plugin --profile <name> <args...>` — profile plugin management as a
  * thin pnpm forwarder: initialize the profile on first use, run
  * `pnpm <args...>` in the profile directory, then reconcile the
- * `dsh.profile.bundles` layer list against the installed state. Path
- * anchoring stays here because it is a CLI argv concern; the install,
- * reconcile, and patch helpers live on `@deepseek-ai/dsh-app-boot`.
+ * `dsh.profile.bundles` layer list against the installed state (a dependency
+ * resolving to a package that declares `dsh.bundle` joins the layer stack; a
+ * removed or bundle-less dependency leaves it). Reconciling by installed
+ * state, not by dependency diff, means `update` activates a package that
+ * gained its `dsh.bundle` declaration in a newer version.
  * @module @deepseek-ai/dsh/plugin
  */
 
@@ -15,13 +17,78 @@ import {
   initProfile,
   PROFILE_TEMPLATES,
   readProfileManifest,
-  reconcileProfilePlugins,
-  resolveProfileDir,
   runProfilePnpm,
+  resolveBundleDir,
+  resolveProfileDir,
+  writeProfileManifest,
+  type ProfileManifest,
 } from '@deepseek-ai/dsh-app-boot'
 import { INSTALL_ANCHOR } from './profile-boot.ts'
 
 const NAME = 'dsh'
+
+/**
+ * Whether a resolved dependency exports a profile patch, i.e. is a bundle.
+ * @param packageName - the dependency's package name.
+ * @param profileDir - the profile directory (resolution anchor).
+ * @returns true when the package manifest declares `dsh.bundle`.
+ */
+function exportsPatch(packageName: string, profileDir: string): boolean {
+  let dir: string
+  try {
+    dir = resolveBundleDir(NAME, packageName, INSTALL_ANCHOR, profileDir)
+  } catch {
+    return false // pnpm reported success yet the package is unresolvable — treat as plain
+  }
+  const manifest = readProfileManifest(NAME, dir)
+  return manifest.dsh?.bundle?.patch !== undefined
+}
+
+/**
+ * Reconcile `dsh.profile.bundles` against the installed state: pnpm has
+ * already written the real installed names (so a git/path/tarball/alias spec
+ * on the command line reconciles by its true package name) and materialized
+ * the packages. A dependency that resolves to a `dsh.bundle`-declaring
+ * package joins the layer stack (appended in dependency order); a
+ * dependency-listed name that no longer does — removed, or the installed
+ * version dropped the declaration — leaves it. In-box bundles from the
+ * profile template are not dependencies and are never touched. Warns once
+ * per newly-added bundle-less dependency (a plain library is fine; the
+ * warning is orientation).
+ */
+function reconcilePlugins(before: ProfileManifest, profileDir: string): void {
+  const after = readProfileManifest(NAME, profileDir)
+  const beforeDeps = new Set(Object.keys(before.dependencies ?? {}))
+  const dependencies = Object.keys(after.dependencies ?? {})
+  const plugins = after.dsh?.profile?.bundles ?? []
+  let changed = false
+  for (const packageName of dependencies) {
+    const isBundle = exportsPatch(packageName, profileDir)
+    if (isBundle && !plugins.includes(packageName)) {
+      plugins.push(packageName)
+      changed = true
+    } else if (!isBundle && !beforeDeps.has(packageName)) {
+      process.stderr.write(
+        `${NAME}: warning: ${packageName} declares no dsh.bundle — installed as a plain dependency, not a profile layer `
+        + '(a later update that gains one activates it automatically)\n',
+      )
+    }
+  }
+  const dependencySet = new Set(dependencies)
+  for (const packageName of [...plugins]) {
+    // Only dependency-managed entries are subject to removal; template
+    // bundles (dsh-base and friends) are not dependencies.
+    const wasDependency = beforeDeps.has(packageName) || dependencySet.has(packageName)
+    const stillBundle = dependencySet.has(packageName) && exportsPatch(packageName, profileDir)
+    if (wasDependency && !stillBundle) {
+      plugins.splice(plugins.indexOf(packageName), 1)
+      changed = true
+    }
+  }
+  if (!changed) return
+  after.dsh = { ...after.dsh, profile: { ...after.dsh?.profile, bundles: plugins } }
+  writeProfileManifest(profileDir, after)
+}
 
 /**
  * Rewrite relative filesystem specs against the user's invoking directory.
@@ -53,7 +120,12 @@ function anchorPathSpec(argument: string, cwd: string): string {
 export function runPlugin(profile: string, args: readonly string[]): number {
   const dir = resolveProfileDir(profile)
   if (!existsSync(join(dir, 'package.json'))) {
-    initProfile(dir, PROFILE_TEMPLATES[profile] ?? DEFAULT_PROFILE_BUNDLES)
+    const template = PROFILE_TEMPLATES[profile]
+    initProfile(
+      dir,
+      template?.bundles ?? DEFAULT_PROFILE_BUNDLES,
+      template?.patchReload,
+    )
     process.stderr.write(`${NAME}: initialized profile ${profile} at ${dir}\n`)
   }
   const before = readProfileManifest(NAME, dir)
@@ -66,13 +138,9 @@ export function runPlugin(profile: string, args: readonly string[]): number {
     process.stderr.write(`${NAME}: pnpm not found on PATH — install pnpm to manage profile plugins\n`)
     return 127
   }
-  if (result.exitCode === 0) {
-    reconcileProfilePlugins({
-      binName: NAME,
-      installAnchor: INSTALL_ANCHOR,
-      profileDir: dir,
-      before,
-    })
+  const exitCode = result.exitCode
+  if (exitCode === 0) {
+    reconcilePlugins(before, dir)
   } else {
     // pnpm's own diagnostics name pnpm-workspace.yaml without saying WHICH
     // one; the profile owns it, and the commonest failure here is pnpm ≥10
@@ -85,5 +153,5 @@ export function runPlugin(profile: string, args: readonly string[]): number {
       )
     }
   }
-  return result.exitCode
+  return exitCode
 }

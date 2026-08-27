@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
@@ -79,7 +79,7 @@ let calls = 0
 function callTool(ctx: Context, name: string, args: unknown) {
   return ctx.tools.execute({
     signal: new AbortController().signal,
-    callId: CallId('call-' + String(++calls)),
+    callId: ToolCallId('call-' + String(++calls)),
     name,
     arguments: args,
   })

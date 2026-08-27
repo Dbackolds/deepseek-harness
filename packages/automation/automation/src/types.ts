@@ -155,3 +155,24 @@ declare module '@deepseek-ai/dsh-session/types' {
     'automation/start': AutomationStartEvent
   }
 }
+
+/** Listing of Host-owned Automation rules. */
+export interface AutomationListValue {
+  readonly items: readonly AutomationRuleView[]
+}
+
+/** One Host-owned Automation rule. */
+export interface AutomationRuleValue {
+  readonly rule: AutomationRuleView
+}
+
+/** One Host-owned Automation fire attempt. */
+export interface AutomationRunValue {
+  readonly run: AutomationRunRecord
+}
+
+/** Confirmation that one Automation rule was deleted. */
+export interface AutomationDeleteValue {
+  readonly id: string
+  readonly deleted: boolean
+}

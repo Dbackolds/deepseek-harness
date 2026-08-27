@@ -1,9 +1,8 @@
 /**
  * Live busy-state delivery preference used by the Subagents Behavior group.
  */
-import {
-  createSnapshotStore, type SettingsScope, type SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   DEFAULT_SUBAGENT_BUSY_DELIVERY, JOB_BUSY_FIELD, REPORT_BUSY_FIELD, SETTLEMENT_BUSY_FIELD,
 } from '../delivery-settings.ts'

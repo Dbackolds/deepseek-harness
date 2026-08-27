@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@deepseek-ai/schemastery'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
-import type { RpcResponse, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { JsonValue, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import { ModelsSection, providerCopy } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
@@ -33,29 +33,33 @@ const PiAiConfig = Schema.object({
       name: Schema.string(),
       contextWindow: Schema.number(),
       maxTokens: Schema.number(),
-      api: Schema.union(PROTOCOLS),
-      apiKeyEnv: Schema.string().role('credential-ref'),
     })),
     reasoning: Schema.union(['off', 'high']),
   })),
 })
 
-let nextRpc = 0
-function ok<T>(value: T): RpcResponse<T> {
-  return { rpcId: `r-${nextRpc++}` as never, result: { ok: true, value } }
+function ok<T>(value: T) {
+  return { ok: true as const, value }
 }
-function fail<T>(message: string, code: string): RpcResponse<T> {
-  return { rpcId: `r-${nextRpc++}` as never, result: { ok: false, error: { code, message, details: {} } as never } }
+function fail(message: string, code: string) {
+  return { ok: false as const, error: { code, message, details: {} } }
+}
+/** Credentials answers over the Remote carrier, which has no envelope. */
+function remoteOk<T>(value: T) {
+  return { ok: true as const, value }
+}
+function remoteFail(message: string, code = 'credential-rejected') {
+  return { ok: false as const, error: { code, message, details: {} } }
 }
 
 function piAiNamespace(
-  providers: Record<string, unknown>,
-  userProviders: Record<string, unknown> = providers,
-  baseProviders: Record<string, unknown> = {},
+  providers: Record<string, JsonValue>,
+  userProviders: Record<string, JsonValue> = providers,
+  baseProviders: Record<string, JsonValue> = {},
 ): SettingsNamespaceView {
   return {
     ns: 'llm-pi-ai',
-    schema: JSON.parse(JSON.stringify(PiAiConfig.toJSON())) as unknown,
+    schema: JSON.parse(JSON.stringify(PiAiConfig.toJSON())) as JsonValue,
     // `value` is the effective section; `user` is only the layer this page
     // writes. They differ whenever a composition `base` supplies something.
     value: { providers },
@@ -68,11 +72,11 @@ function piAiNamespace(
 }
 
 function scriptedFace(options: {
-  providers?: Record<string, unknown>
+  providers?: Record<string, JsonValue>
   /** User layer, when it differs from the effective section. */
-  userProviders?: Record<string, unknown>
+  userProviders?: Record<string, JsonValue>
   /** Composition layer, for a route a `cordis.yml` pins rather than the page. */
-  baseProviders?: Record<string, unknown>
+  baseProviders?: Record<string, JsonValue>
   /** Routes the adapter reports as hand-declared; the rest come back as shipped. */
   declaredRoutes?: readonly string[]
   discover?: ReturnType<typeof vi.fn>
@@ -83,34 +87,33 @@ function scriptedFace(options: {
     openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy.example/v1' },
   }
   const namespace = piAiNamespace(providers, options.userProviders ?? providers, options.baseProviders ?? {})
-  const discover = options.discover ?? vi.fn(() => Promise.resolve(ok({ models: [] })))
-  const mutate = options.mutate ?? vi.fn(() => Promise.resolve(ok(namespace)))
-  const set = options.set ?? vi.fn(() => Promise.resolve(ok({})))
+  const discover = options.discover ?? vi.fn(() => Promise.resolve(ok([])))
+  const mutate = options.mutate ?? vi.fn(() => Promise.resolve(remoteOk(namespace)))
+  const set = options.set ?? vi.fn(() => Promise.resolve(remoteOk(undefined)))
   const face = {
     llm: {
-      providers: vi.fn(() => Promise.resolve(ok({
-        providers: Object.keys(providers).map(provider => ({
+      listProviders: vi.fn(() => Promise.resolve(ok(
+        Object.keys(providers).map(provider => ({ id: provider, name: provider })),
+      ))),
+      listConfigurableProviders: vi.fn(() => Promise.resolve(ok(
+        Object.keys(providers).map(provider => ({
           provider,
           displayName: provider,
           settingsNs: 'llm-pi-ai',
           settingsPath: ['providers', provider],
-          active: true,
           declared: options.declaredRoutes?.includes(provider) ?? false,
         })),
-      }))),
-      models: vi.fn(() => Promise.resolve(ok({ groups: [], failures: [] }))),
+      ))),
       discoverModels: discover,
     },
     settings: {
-      describe: vi.fn(() => Promise.resolve(ok({ writable: true, namespaces: [namespace] }))),
-      update: vi.fn(),
-      replace: vi.fn(),
+      describe: vi.fn(() => Promise.resolve(remoteOk({ writable: true, namespaces: [namespace] }))),
       mutate,
     },
     credentials: {
-      describe: vi.fn((payload: { refs: string[] }) => Promise.resolve(ok({
-        credentials: Object.fromEntries(payload.refs.map(ref => [ref, { configured: false, writable: true }])),
-      }))),
+      describe: vi.fn((refs: string[]) => Promise.resolve(remoteOk(
+        Object.fromEntries(refs.map(ref => [ref, { configured: false, writable: true }])),
+      ))),
       set,
       unset: vi.fn(),
     },
@@ -129,16 +132,21 @@ interface MutateCall {
 
 /** The first interrogation payload; fails the case when nothing was asked. */
 function firstProbe(discover: ReturnType<typeof vi.fn>): unknown {
-  const call = (discover.mock.calls as unknown as [unknown][])[0]?.[0]
+  const call = (discover.mock.calls as unknown as [string, Record<string, unknown>][])[0]
   if (call === undefined) throw new Error('no interrogation was recorded')
-  return call
+  return { settingsNs: call[0], ...call[1] }
 }
 
-/** The first recorded settings write; fails the case when nothing was written. */
+/**
+ * The first recorded settings write, as one record. The Remote method takes
+ * three positional arguments; the cases read the write as a whole, so the
+ * regrouping lives here rather than in every assertion.
+ */
 function firstMutate(mutate: ReturnType<typeof vi.fn>): MutateCall {
-  const call = mutate.mock.calls[0]?.[0] as MutateCall | undefined
+  const call = mutate.mock.calls[0] as [string, MutateCall['ops'], number | undefined] | undefined
   if (call === undefined) throw new Error('no settings write was recorded')
-  return call
+  const [ns, ops, expectedRevision] = call
+  return { ns, ops, ...expectedRevision === undefined ? {} : { expectedRevision } }
 }
 
 async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
@@ -152,31 +160,20 @@ async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
     api: scripted.face as never,
     schema: settingsSchema,
     t,
+    renderSlot: () => null,
   }
   render(<ModelsSection {...injected} />)
   return { ...scripted, controller }
 }
 
-/** Open the editor of one configured row or setup card and expand its customized fold. */
+/** Open the editor of one configured row and expand its customized fold. */
 function openEditor(provider: string): void {
   const row = screen.getByText(provider).closest('li')
   if (row === null) throw new Error(`no row for ${provider}`)
-  const edit = [...row.querySelectorAll('button')].find(button => button.textContent === en.edit)
-  if (edit !== undefined) {
-    fireEvent.click(edit)
-  } else {
-    const details = row.querySelector('details')
-    if (details === null) throw new Error(`no "${en.edit}" button`)
-    if (!details.open) {
-      const title = details.querySelector('summary')
-      if (title === null) throw new Error(`${provider} setup summary missing`)
-      fireEvent.click(title)
-      details.open = true
-    }
-  }
-  const customized = [...row.querySelectorAll('summary')].find(node => node.textContent === en.customized)
-  if (customized === undefined) throw new Error('no customized fold')
-  fireEvent.click(customized)
+  fireEvent.click(within_(row, en.edit))
+  const summary = document.querySelector('summary')
+  if (summary === null) throw new Error('no customized fold')
+  fireEvent.click(summary)
 }
 
 /** Open one model row's advanced fold, where the capacities live. */
@@ -203,7 +200,7 @@ describe('protocolChoices', () => {
     const { namespace } = scriptedFace()
     expect(protocolChoices(namespace, settingsSchema)).toEqual(PROTOCOLS)
     expect(protocolChoices(undefined, settingsSchema)).toEqual([])
-    const plain = { ...namespace, schema: JSON.parse(JSON.stringify(Schema.object({}).toJSON())) as unknown }
+    const plain = { ...namespace, schema: JSON.parse(JSON.stringify(Schema.object({}).toJSON())) as JsonValue }
     expect(protocolChoices(plain, settingsSchema)).toEqual([])
     await Promise.resolve()
   })
@@ -228,57 +225,6 @@ describe('model list editing', () => {
       ns: 'llm-pi-ai',
       expectedRevision: 3,
       ops: [{ op: 'set', path: ['providers', 'openai', 'models'], value: [{ id: 'acme-large', contextWindow: 65_536 }] }],
-    })
-  })
-
-  it('writes image input from the row checkbox and drops it when unchecked', async () => {
-    const { mutate } = await mountSection({
-      providers: {
-        openai: {
-          baseURL: 'https://proxy.example/v1',
-          models: [{ id: 'seeing', input: ['text', 'image'] }, { id: 'bare' }],
-        },
-      },
-    })
-    openEditor('openai')
-
-    const seeing = screen.getByLabelText<HTMLInputElement>(`${en.modelImageInput} 1`)
-    const bare = screen.getByLabelText<HTMLInputElement>(`${en.modelImageInput} 2`)
-    expect(seeing.checked).toBe(true)
-    expect(bare.checked).toBe(false)
-
-    fireEvent.click(seeing)
-    fireEvent.click(bare)
-    fireEvent.click(screen.getByText(en.apply))
-
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    // Checking writes the claim a hand-declared vision model needs; unchecking
-    // drops the field rather than storing `[text]`, so a catalog model whose
-    // gateway already serves images keeps that answer.
-    expect(firstMutate(mutate).ops[0]?.value).toEqual([
-      { id: 'seeing' },
-      { id: 'bare', input: ['text', 'image'] },
-    ])
-  })
-
-  it('writes a pi-ai systemPrompt and drops an emptied one', async () => {
-    const { mutate } = await mountSection()
-    openEditor('openai')
-    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
-    expandModel(1)
-    fireEvent.change(screen.getByLabelText(`${en.modelSystemPrompt} 1`), {
-      target: { value: 'You replace the assembled prompt.' },
-    })
-    fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    expect(firstMutate(mutate)).toMatchObject({
-      ns: 'llm-pi-ai',
-      ops: [{
-        op: 'set',
-        path: ['providers', 'openai', 'models'],
-        value: [{ id: 'acme-large', systemPrompt: 'You replace the assembled prompt.' }],
-      }],
     })
   })
 
@@ -494,7 +440,7 @@ describe('capacity spellings', () => {
 
 describe('endpoint interrogation', () => {
   it('asks the endpoint the form shows, with a key that is not yet stored', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({ models: [{ id: 'acme-large', contextWindow: 65_536 }] })))
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'acme-large', contextWindow: 65_536 }])))
     await mountSection({ discover })
     openEditor('openai')
 
@@ -514,7 +460,7 @@ describe('endpoint interrogation', () => {
   })
 
   it('carries the protocol the profile already names', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({ models: [] })))
+    const discover = vi.fn(() => Promise.resolve(ok([])))
     await mountSection({
       discover,
       providers: { openai: { baseURL: 'https://proxy.example/v1', api: 'openai-responses' } },
@@ -533,18 +479,9 @@ describe('endpoint interrogation', () => {
   })
 
   it('adopts only the picked candidates, keeping a row the user already tuned', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({
-      models: [
-        { id: 'kept', contextWindow: 999 },
-        {
-          id: 'fresh',
-          contextWindow: 4096,
-          name: 'Fresh',
-          reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
-          supportsReasoningEffort: true,
-        },
-      ],
-    })))
+    const discover = vi.fn(() => Promise.resolve(ok([
+      { id: 'kept', contextWindow: 999 }, { id: 'fresh', contextWindow: 4096, name: 'Fresh' },
+    ])))
     const { mutate } = await mountSection({
       discover,
       providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'kept', contextWindow: 111 }] } },
@@ -554,8 +491,7 @@ describe('endpoint interrogation', () => {
     fireEvent.click(screen.getByText(en.fetchModels))
     await screen.findByText(en.fetchTitle)
     // The already-configured row starts unchecked; the new one starts checked.
-    const dialog = await screen.findByRole('dialog')
-    const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
     expect(boxes.map(box => box.checked)).toEqual([false, true])
     fireEvent.click(screen.getByText(en.fetchAdopt))
 
@@ -563,141 +499,8 @@ describe('endpoint interrogation', () => {
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
     expect(firstMutate(mutate).ops[0]?.value).toEqual([
       { id: 'kept', contextWindow: 111 },
-      {
-        id: 'fresh',
-        contextWindow: 4096,
-        name: 'Fresh',
-        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
-        compat: { supportsReasoningEffort: true },
-      },
+      { id: 'fresh', contextWindow: 4096, name: 'Fresh' },
     ])
-  })
-
-  it('fills missing thinking levels on an already-configured row without rewriting its capacities', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{
-        id: 'kept',
-        contextWindow: 999,
-        reasoningEfforts: { low: 'low', high: 'high' },
-        supportsReasoningEffort: true,
-      }],
-    })))
-    const { mutate } = await mountSection({
-      discover,
-      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'kept', contextWindow: 111 }] } },
-    })
-    openEditor('openai')
-
-    fireEvent.click(screen.getByText(en.fetchModels))
-    await screen.findByText(en.fetchTitle)
-    const dialog = await screen.findByRole('dialog')
-    const box = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
-    if (box === null) throw new Error('expected a candidate checkbox')
-    fireEvent.click(box)
-    fireEvent.click(screen.getByText(en.fetchAdopt))
-
-    fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    expect(firstMutate(mutate).ops[0]?.value).toEqual([{
-      id: 'kept',
-      contextWindow: 111,
-      reasoningEfforts: { low: 'low', high: 'high' },
-      compat: { supportsReasoningEffort: true },
-    }])
-  })
-
-  it('does not overwrite a hand-tuned reasoning declaration on a later fetch', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{
-        id: 'kept',
-        reasoningEfforts: { high: 'high' },
-        supportsReasoningEffort: false,
-      }],
-    })))
-    const { mutate } = await mountSection({
-      discover,
-      providers: {
-        openai: {
-          baseURL: 'https://proxy.example/v1',
-          models: [{ id: 'kept', reasoningEfforts: { off: null, max: 'ultra' } }],
-        },
-      },
-    })
-    openEditor('openai')
-
-    fireEvent.click(screen.getByText(en.fetchModels))
-    await screen.findByText(en.fetchTitle)
-    const dialog = await screen.findByRole('dialog')
-    const box = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
-    if (box === null) throw new Error('expected a candidate checkbox')
-    fireEvent.click(box)
-    fireEvent.click(screen.getByText(en.fetchAdopt))
-
-    expect(screen.queryByRole('dialog', { name: en.fetchTitle })).toBeNull()
-    expect(mutate).not.toHaveBeenCalled()
-  })
-
-  it('keeps an existing compat object when it only fills missing thinking levels', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{
-        id: 'kept',
-        reasoningEfforts: { high: 'high' },
-        supportsReasoningEffort: true,
-      }],
-    })))
-    const { mutate } = await mountSection({
-      discover,
-      providers: {
-        openai: {
-          baseURL: 'https://proxy.example/v1',
-          models: [{ id: 'kept', contextWindow: 111, compat: { thinkingFormat: 'openai' } }],
-        },
-      },
-    })
-    openEditor('openai')
-
-    fireEvent.click(screen.getByText(en.fetchModels))
-    await screen.findByText(en.fetchTitle)
-    const dialog = await screen.findByRole('dialog')
-    const box = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
-    if (box === null) throw new Error('expected a candidate checkbox')
-    fireEvent.click(box)
-    fireEvent.click(screen.getByText(en.fetchAdopt))
-
-    fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    expect(firstMutate(mutate).ops[0]?.value).toEqual([{
-      id: 'kept',
-      contextWindow: 111,
-      reasoningEfforts: { high: 'high' },
-      compat: { thinkingFormat: 'openai', supportsReasoningEffort: true },
-    }])
-  })
-
-  it('does not fill efforts when the row already named a reasoning-dispatch switch', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{ id: 'kept', reasoningEfforts: { high: 'high' }, supportsReasoningEffort: true }],
-    })))
-    const { mutate } = await mountSection({
-      discover,
-      providers: {
-        openai: {
-          baseURL: 'https://proxy.example/v1',
-          models: [{ id: 'kept', compat: { supportsReasoningEffort: false } }],
-        },
-      },
-    })
-    openEditor('openai')
-
-    fireEvent.click(screen.getByText(en.fetchModels))
-    await screen.findByText(en.fetchTitle)
-    const dialog = await screen.findByRole('dialog')
-    const box = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
-    if (box === null) throw new Error('expected a candidate checkbox')
-    fireEvent.click(box)
-    fireEvent.click(screen.getByText(en.fetchAdopt))
-
-    expect(mutate).not.toHaveBeenCalled()
   })
 
   it('keeps the rows editable when the provider cannot be interrogated', async () => {
@@ -715,7 +518,7 @@ describe('endpoint interrogation', () => {
   })
 
   it('reports an empty listing and a rejected transport', async () => {
-    const empty = vi.fn(() => Promise.resolve(ok({ models: [] })))
+    const empty = vi.fn(() => Promise.resolve(ok([])))
     await mountSection({ discover: empty })
     openEditor('openai')
     fireEvent.click(screen.getByText(en.fetchModels))
@@ -730,7 +533,7 @@ describe('endpoint interrogation', () => {
   })
 
   it('can be asked for a configured route even with no endpoint', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({ models: [{ id: 'from-registry' }] })))
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'from-registry' }])))
     await mountSection({ discover, providers: { openai: {} } })
     openEditor('openai')
 
@@ -782,7 +585,7 @@ describe('endpoint interrogation', () => {
   })
 
   it('closes the picker without adopting anything on cancel', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({ models: [{ id: 'fresh' }] })))
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'fresh' }])))
     const { mutate } = await mountSection({ discover })
     openEditor('openai')
 
@@ -796,16 +599,15 @@ describe('endpoint interrogation', () => {
   })
 
   it('toggles a candidate off and back on before adopting', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{ id: 'a' }, { id: 'b', maxTokens: 2048 }],
-    })))
+    const discover = vi.fn(() => Promise.resolve(ok([
+      { id: 'a' }, { id: 'b', maxTokens: 2048 },
+    ])))
     const { mutate } = await mountSection({ discover })
     openEditor('openai')
 
     fireEvent.click(screen.getByText(en.fetchModels))
     await screen.findByText(en.fetchTitle)
-    const dialog = screen.getByRole('dialog')
-    const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
     const first = boxes[0] as HTMLInputElement
     fireEvent.click(first)
     fireEvent.click(first)
@@ -818,9 +620,9 @@ describe('endpoint interrogation', () => {
   })
 
   it('selects and clears every discovered candidate in one action', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
-    })))
+    const discover = vi.fn(() => Promise.resolve(ok([
+      { id: 'a' }, { id: 'b' }, { id: 'c' },
+    ])))
     await mountSection({ discover })
     openEditor('openai')
 
@@ -862,15 +664,12 @@ describe('provider rows', () => {
 
   it('shows no tag when the adapter draws no catalog distinction', async () => {
     const scripted = scriptedFace({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
-    scripted.face.llm.providers = vi.fn(() => Promise.resolve(ok({
-      providers: [{
-        provider: 'openai',
-        displayName: 'openai',
-        settingsNs: 'llm-pi-ai',
-        settingsPath: ['providers', 'openai'],
-        active: true,
-      }],
-    }))) as never
+    scripted.face.llm.listConfigurableProviders = vi.fn(() => Promise.resolve(ok([{
+      provider: 'openai',
+      displayName: 'openai',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'openai'],
+    }]))) as never
     const controller = new ModelsSettingsStore(
       scripted.face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(scripted.face as never))
     await controller.load()
@@ -880,6 +679,7 @@ describe('provider rows', () => {
       api={scripted.face as never}
       schema={settingsSchema}
       t={t}
+      renderSlot={() => null}
     />)
 
     // Absent is "unknown", never "shipped": an adapter that answers nothing
@@ -941,7 +741,7 @@ describe('hand-declared providers', () => {
       // meanwhile makes this a conflict rather than an overwrite.
       expectedRevision: 7,
     })
-    expect(set).toHaveBeenCalledWith({ ref: 'ACME_GATEWAY_API_KEY', value: 'gw-key' })
+    expect(set).toHaveBeenCalledWith('ACME_GATEWAY_API_KEY', 'gw-key')
   })
 
   it('scopes each card to fields a provider can actually own', async () => {
@@ -958,11 +758,12 @@ describe('hand-declared providers', () => {
     expect(fields()).toEqual([en.customRoute, en.customDisplayName, en.baseUrl, en.customApi, en.keyInput])
     cleanup()
 
-    // A shipped route still offers a default protocol; each model can override
-    // it, so the route-level field no longer hides the catalog's mix.
+    // A shipped route's models each carry their own protocol, so its editor
+    // offers no route-level protocol to override them with.
     await mountSection({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
     openEditor('openai')
-    expect(fields()).toEqual([en.keyInput, en.baseUrl, en.customApi])
+    fireEvent.click(screen.getByText(en.customized))
+    expect(fields()).toEqual([en.keyInput, en.baseUrl])
     cleanup()
 
     // A hand-declared route named its own protocol at creation, so editing it
@@ -1016,24 +817,21 @@ describe('hand-declared providers', () => {
   })
 
   it('names the provider as the refreshed directory reports it after a rename', async () => {
-    // The status line used to echo the target captured when the card opened,
-    // which never lied while the name could not change. It can now.
+    // A name can change after the card opens, so the saved status reads the
+    // refreshed directory name rather than the target captured at open.
     const { face } = await mountSection({
       providers: { 'acme-gateway': { displayName: 'Acme Gateway', api: 'openai-completions' } },
       declaredRoutes: ['acme-gateway'],
     })
     // The reload after the write answers with the renamed route, exactly as
     // the adapter re-registers it.
-    face.llm.providers = vi.fn(() => Promise.resolve(ok({
-      providers: [{
-        provider: 'acme-gateway',
-        displayName: 'Acme 网关',
-        settingsNs: 'llm-pi-ai',
-        settingsPath: ['providers', 'acme-gateway'],
-        active: true,
-        declared: true,
-      }],
-    })))
+    face.llm.listConfigurableProviders = vi.fn(() => Promise.resolve(ok([{
+      provider: 'acme-gateway',
+      displayName: 'Acme 网关',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'acme-gateway'],
+      declared: true,
+    }])))
     openEditor('acme-gateway')
 
     fireEvent.change(screen.getByLabelText(en.customDisplayName), { target: { value: 'Acme 网关' } })
@@ -1107,8 +905,8 @@ describe('hand-declared providers', () => {
 
   it('retries only the key after the profile landed, and reports the provider on cancel', async () => {
     const set = vi.fn()
-      .mockResolvedValueOnce(fail('credential store is read-only', 'credential-rejected'))
-      .mockResolvedValueOnce(ok({}))
+      .mockResolvedValueOnce(remoteFail('credential store is read-only'))
+      .mockResolvedValueOnce(remoteOk(undefined))
     const { mutate, onClose } = mountCard({}, { set })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
@@ -1123,7 +921,7 @@ describe('hand-declared providers', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(mutate).toHaveBeenCalledTimes(1)
     // The key is stored trimmed, matching the editor.
-    expect(set).toHaveBeenNthCalledWith(1, { ref: 'ACME_API_KEY', value: 'gw-key' })
+    expect(set).toHaveBeenNthCalledWith(1, 'ACME_API_KEY', 'gw-key')
 
     // The provider exists now, so the fields describing it are settled and
     // only the key can still be corrected.
@@ -1138,11 +936,11 @@ describe('hand-declared providers', () => {
     // first write superseded, so the Host would answer settings-conflict and
     // the key could never be stored from here at all.
     expect(mutate).toHaveBeenCalledTimes(1)
-    expect(set).toHaveBeenNthCalledWith(2, { ref: 'ACME_API_KEY', value: 'gw-key-2' })
+    expect(set).toHaveBeenNthCalledWith(2, 'ACME_API_KEY', 'gw-key-2')
   })
 
   it('reports the created provider when cancelled after its profile landed', async () => {
-    const set = vi.fn().mockResolvedValue(fail('nope', 'credential-rejected'))
+    const set = vi.fn().mockResolvedValue(remoteFail('nope'))
     const { onClose } = mountCard({}, { set })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
@@ -1328,7 +1126,7 @@ describe('hand-declared providers', () => {
   })
 
   it('surfaces a refused write and a rejected transport without closing', async () => {
-    const refused = vi.fn(() => Promise.resolve(fail('read-only settings', 'settings-rejected')))
+    const refused = vi.fn(() => Promise.resolve(remoteFail('read-only settings', 'settings-rejected')))
     const { onClose } = mountCard({ api: { ...scriptedFace({ mutate: refused }).face } as never })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
@@ -1356,7 +1154,7 @@ describe('hand-declared providers', () => {
   })
 
   it('reports a stored profile whose key write was refused', async () => {
-    const set = vi.fn(() => Promise.resolve(fail('credential is read-only', 'credential-rejected')))
+    const set = vi.fn(() => Promise.resolve(remoteFail('credential is read-only')))
     const { onClose } = mountCard({ api: { ...scriptedFace({ set }).face } as never })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
@@ -1390,41 +1188,6 @@ describe('hand-declared providers', () => {
       baseURL: 'https://acme.test/v1',
       models: [{ id: 'm' }],
     })
-  })
-
-  it('lets each model name its own protocol and share or split keys', async () => {
-    const { mutate, set, onClose } = mountCard()
-
-    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
-    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'openai-completions' } })
-    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'shared-key' } })
-    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'chat' } })
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'claude' } })
-    fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} 1`))
-    fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} 2`))
-    fireEvent.change(screen.getByLabelText(`${en.modelApi} 1`), { target: { value: 'openai-responses' } })
-    fireEvent.change(screen.getByLabelText(`${en.modelApi} 2`), { target: { value: 'anthropic-messages' } })
-    fireEvent.change(screen.getByLabelText(`${en.modelKeyInput} 1`), { target: { value: 'shared-key' } })
-    fireEvent.change(screen.getByLabelText(`${en.modelKeyInput} 2`), { target: { value: 'other-key' } })
-    fireEvent.click(screen.getByText(en.create))
-
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
-    expect(firstMutate(mutate).ops[0]?.value).toEqual({
-      apiKeyEnv: 'ACME_API_KEY',
-      api: 'openai-completions',
-      baseURL: 'https://acme.test/v1',
-      models: [
-        { id: 'chat', api: 'openai-responses' },
-        { id: 'claude', api: 'anthropic-messages', apiKeyEnv: 'ACME_CLAUDE_API_KEY' },
-      ],
-    })
-    expect(set.mock.calls.map(call => call[0])).toEqual([
-      { ref: 'ACME_API_KEY', value: 'shared-key' },
-      { ref: 'ACME_CLAUDE_API_KEY', value: 'other-key' },
-    ])
   })
 
   it('offers no protocol when the namespace declares none', () => {
@@ -1604,7 +1367,7 @@ describe('API key field', () => {
     fireEvent.click(screen.getByText(en.apply))
 
     await waitFor(() => { expect(set).toHaveBeenCalled() })
-    expect((set.mock.calls[0]?.[0] as { value: string }).value).toBe('sk-abc')
+    expect(set.mock.calls[0]?.[1]).toBe('sk-abc')
   })
 
   it('blocks the interrogation too, rather than spending a round trip on a refused key', async () => {

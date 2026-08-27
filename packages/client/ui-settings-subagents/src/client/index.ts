@@ -6,7 +6,7 @@
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { SUBAGENT_DELIVERY_SETTINGS_NAMESPACE } from '../delivery-settings.ts'
 import type { SubagentDeliverySettings } from '../delivery-settings.ts'
 import { SubagentDeliveryPolicy } from './delivery-policy.ts'

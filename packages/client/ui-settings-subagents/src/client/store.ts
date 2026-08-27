@@ -3,8 +3,8 @@
  * `user-subagents` namespace.
  */
 
-import type { IApiClient, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientRemote, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** Settings namespace this page reads and writes. */
 export const USER_SUBAGENTS_NS = 'user-subagents'
@@ -127,7 +127,7 @@ export class SubagentsStore {
   private view: SettingsNamespaceView | undefined
 
   /** @param api - Settings wire face. */
-  constructor(private readonly api: Pick<IApiClient, 'settings'>) {}
+  constructor(private readonly api: Pick<ClientRemote, 'settings'>) {}
 
   /**
    * Refresh the namespace. Latest request wins.

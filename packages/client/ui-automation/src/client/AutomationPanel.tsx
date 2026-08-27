@@ -8,7 +8,8 @@ import {
   Button, IconClockOutline16, IconCloseOutline16, IconPlayOutline16, IconPlusOutline16,
   IconRefreshOutline16, IconTrashOutline16, IconWarningOutline16, Input, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SnapshotStore, WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import {
