@@ -14,7 +14,7 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
-import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
@@ -41,7 +41,11 @@ const THINK_LABEL = 'Acme Think · High'
 const FLASH_LABEL = 'Acme Flash'
 
 const THINK_HEADER = {
-  config: { provider: 'acme-gateway', model: 'acme-think', reasoningEffort: 'high' },
+  config: {
+    provider: 'acme-gateway',
+    model: 'acme-think',
+    reasoningEffort: ReasoningEffortId('high'),
+  },
 }
 const FLASH_HEADER = {
   config: { provider: 'acme-gateway', model: 'acme-flash' },
@@ -60,10 +64,7 @@ const USAGE = { inputTokens: 12, outputTokens: 3, cacheReadTokens: 96 } as const
  */
 function routeSwitchFixture(headerLine: string): string {
   const session = Session.create(SessionId('model-identity-source'))
-  session.append('turn/start', {
-    turn: 1,
-    trigger: { kind: 'message', source: { kind: 'user', rpcId: '{{rpcId}}' } },
-  })
+  session.append('turn/start', { turn: 1 })
   const first = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: PROMPT_ONE }],
     source: { kind: 'user' },
@@ -87,10 +88,7 @@ function routeSwitchFixture(headerLine: string): string {
   }, { surfaceOp: 'append' })
   session.append('step/end', { turn: 1, step: 1 })
   session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-  session.append('turn/start', {
-    turn: 2,
-    trigger: { kind: 'message', source: { kind: 'user', rpcId: '{{rpcId}}' } },
-  })
+  session.append('turn/start', { turn: 2 })
   session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: PROMPT_TWO }],
     source: { kind: 'user' },

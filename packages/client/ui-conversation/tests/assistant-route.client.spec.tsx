@@ -226,7 +226,12 @@ describe('chat fold per-step request identity', () => {
       current: new Map(),
     }) as unknown as Parameters<NonNullable<typeof chatRequestHeaderDefinition.buildViewNode>>[0]
 
-    expect(() => chatRequestHeaderDefinition.start(context(undefined), match(1, 'turn/start', { turn: 1 })))
+    const reader = { previous: () => undefined }
+    expect(() => chatRequestHeaderDefinition.start(
+      context(undefined),
+      match(1, 'turn/start', { turn: 1 }),
+      reader,
+    ))
       .toThrow('chat-request-header start requires request/header')
     const state: ChatRequestHeaderChatData = {
       seq: 3,
@@ -255,6 +260,20 @@ type RouteRenderSlot = PropsRenderSlots<'conversation.chat.assistantRoute'>['ren
 afterEach(cleanup)
 
 function routeNode(over: Partial<AssistantChatData> = {}): ChatNode<'assistant-step'> {
+  const {
+    finalNode: finalOver,
+    ...rest
+  } = over
+  const baseFinal: NonNullable<AssistantChatData['finalNode']> = {
+    kind: 'assistant',
+    seq: 4,
+    messageId: 'assistant-1' as never,
+    time: 4_000,
+    turn: 1,
+    step: 1,
+    blocks: [{ kind: 'text', text: 'settled answer' }],
+    provenance: { provider: 'prov-a', model: 'model-a' },
+  }
   return {
     key: 'fixture:assistant:1:1',
     id: '1:1',
@@ -269,19 +288,18 @@ function routeNode(over: Partial<AssistantChatData> = {}): ChatNode<'assistant-s
       step: 1,
       blocks: [{ kind: 'text', text: 'settled answer' }],
       time: 4_000,
-      finalNode: {
-        kind: 'assistant',
-        seq: 4,
-        messageId: 'assistant-1' as never,
-        time: 4_000,
-        turn: 1,
-        step: 1,
-        blocks: [{ kind: 'text', text: 'settled answer' }],
-        provenance: { provider: 'prov-a', model: 'model-a' },
-      },
-      ...over,
+      ...(finalOver === undefined && !('finalNode' in over)
+        ? { finalNode: baseFinal }
+        : finalOver === undefined ? {} : { finalNode: finalOver }),
+      ...rest,
     },
   }
+}
+
+function unlabelledNode(): ChatNode<'assistant-step'> {
+  const node = routeNode()
+  const { finalNode: _dropped, ...rest } = node.data
+  return { ...node, data: rest }
 }
 
 describe('assistant clock-line slot', () => {
@@ -294,14 +312,18 @@ describe('assistant clock-line slot', () => {
     }) as unknown as RouteRenderSlot
     const view = render(
       <AssistantNodeView
-        node={routeNode({ requestConfig: CONFIG_A })}
-        useTurnData={() => undefined}
-        openFile={() => {}}
-        renderMessageImages={renderMessageImages}
-        fileMentions={() => undefined}
-        renderSlot={renderSlot}
-        SessionProvider={() => null}
-        t={t}
+        {...({
+          node: routeNode({ requestConfig: CONFIG_A }),
+          useTurnData: () => undefined,
+          openFile: () => {},
+          inspectCall: () => {},
+          forkAt: () => {},
+          renderMessageImages,
+          fileMentions: () => undefined,
+          renderSlot,
+          SessionProvider: () => null,
+          t,
+        } as unknown as React.ComponentProps<typeof AssistantNodeView>)}
       />,
     )
     expect(owners).toEqual([
@@ -323,14 +345,18 @@ describe('assistant clock-line slot', () => {
     const renderSlot = vi.fn(() => <span data-testid="route-line" />)
     const view = render(
       <AssistantNodeView
-        node={routeNode({ finalNode: undefined })}
-        useTurnData={() => undefined}
-        openFile={() => {}}
-        renderMessageImages={renderMessageImages}
-        fileMentions={() => undefined}
-        renderSlot={renderSlot}
-        SessionProvider={() => null}
-        t={t}
+        {...({
+          node: unlabelledNode(),
+          useTurnData: () => undefined,
+          openFile: () => {},
+          inspectCall: () => {},
+          forkAt: () => {},
+          renderMessageImages,
+          fileMentions: () => undefined,
+          renderSlot,
+          SessionProvider: () => null,
+          t,
+        } as unknown as React.ComponentProps<typeof AssistantNodeView>)}
       />,
     )
     expect(renderSlot).not.toHaveBeenCalled()
@@ -344,14 +370,18 @@ describe('assistant clock-line slot', () => {
     const renderSlot = vi.fn(() => null) as unknown as RouteRenderSlot
     const view = render(
       <AssistantNodeView
-        node={routeNode({ requestConfig: CONFIG_A })}
-        useTurnData={() => undefined}
-        openFile={() => {}}
-        renderMessageImages={renderMessageImages}
-        fileMentions={() => undefined}
-        renderSlot={renderSlot}
-        SessionProvider={() => null}
-        t={t}
+        {...({
+          node: routeNode({ requestConfig: CONFIG_A }),
+          useTurnData: () => undefined,
+          openFile: () => {},
+          inspectCall: () => {},
+          forkAt: () => {},
+          renderMessageImages,
+          fileMentions: () => undefined,
+          renderSlot,
+          SessionProvider: () => null,
+          t,
+        } as unknown as React.ComponentProps<typeof AssistantNodeView>)}
       />,
     )
     expect(renderSlot).toHaveBeenCalledTimes(1)
