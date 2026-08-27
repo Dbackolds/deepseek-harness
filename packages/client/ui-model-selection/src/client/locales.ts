@@ -27,7 +27,8 @@ export const zh = {
   'empty.models': '没有可用的模型。',
   'blocked.composer': '当前模型不可用，请先选择模型',
   'empty.efforts': '当前模型未提供推理等级。',
-  'identity.title': '当前请求路由：{route}',
+  'identity.headerTitle': '最近一次已发出请求：{route}',
+  'identity.stepTitle': '该步请求路由：{route}',
 } satisfies Record<string, string>
 
 /** The model namespace key union. */
@@ -52,5 +53,6 @@ export const en = {
   'empty.models': 'No models available.',
   'blocked.composer': 'This model is unavailable — select one to continue',
   'empty.efforts': 'This model provides no reasoning effort levels.',
-  'identity.title': 'Current request route: {route}',
+  'identity.headerTitle': 'Last dispatched request: {route}',
+  'identity.stepTitle': 'Step request route: {route}',
 } satisfies Record<ModelKey, string>

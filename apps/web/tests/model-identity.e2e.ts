@@ -184,7 +184,7 @@ describe.skipIf(MODE === 'record')('web e2e: model identity labels read the sess
     expect(await banner.getByText('Standard mode', { exact: true }).count()).toBe(1)
     expect(await banner.getByText('DeepSeek-V4-Flash').count()).toBe(0)
     expect(
-      await banner.locator('[title="Current request route: acme-gateway / acme-flash"]').count(),
+      await banner.locator('[title="Last dispatched request: acme-gateway / acme-flash"]').count(),
     ).toBe(1)
     // The composer trigger honestly reports the resumed session's current
     // selection (the host derives it from the log too), so the split the chip
@@ -201,7 +201,7 @@ describe.skipIf(MODE === 'record')('web e2e: model identity labels read the sess
       .toContain('Acme Think')
     expect(await trigger.getAttribute('aria-label')).not.toContain('Acme Flash')
     expect(
-      await banner.locator('[title="Current request route: acme-gateway / acme-flash"]').count(),
+      await banner.locator('[title="Last dispatched request: acme-gateway / acme-flash"]').count(),
     ).toBe(1)
 
     // (b) Each assistant row's clock line names THAT step's route: the
@@ -210,10 +210,10 @@ describe.skipIf(MODE === 'record')('web e2e: model identity labels read the sess
     await expect.poll(() => routeLines.allTextContents(), { timeout: 10_000 })
       .toEqual([THINK_LABEL, FLASH_LABEL])
     expect(
-      await routeLines.locator('[title="Current request route: acme-gateway / acme-think"]').count(),
+      await routeLines.locator('[title="Step request route: acme-gateway / acme-think"]').count(),
     ).toBe(1)
     expect(
-      await routeLines.locator('[title="Current request route: acme-gateway / acme-flash"]').count(),
+      await routeLines.locator('[title="Step request route: acme-gateway / acme-flash"]').count(),
     ).toBe(1)
   }, 60_000)
 

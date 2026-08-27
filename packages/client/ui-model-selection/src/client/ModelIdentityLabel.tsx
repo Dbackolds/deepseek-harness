@@ -63,10 +63,10 @@ export function ModelIdentityLabel({ useProjection, useDirectory, load, t }: Mod
   return (
     <span
       className={css.label}
-      title={t('identity.title', { route: `${route.provider} / ${route.model}` })}
+      title={t('identity.headerTitle', { route: `${route.provider} / ${route.model}` })}
     >
       <span className={css.name}>{label.name}</span>
-      {label.effort !== undefined && <span className={css.effort}>{`· ${label.effort}`}</span>}
+      {label.effort !== undefined && <span className={css.effort}>{` · ${label.effort}`}</span>}
     </span>
   )
 }

@@ -101,8 +101,13 @@ async function bench() {
     id: string | undefined
     order: number | undefined
   }>()
+  const slotDisposers: Array<() => void> = []
   ctx.provide('slots', {
-    inject(_name: string, callback: () => () => void) { return callback() },
+    inject(_name: string, callback: () => () => void) {
+      const dispose = callback()
+      slotDisposers.push(dispose)
+      return dispose
+    },
     register(options: {
       name: string
       locale?: string
@@ -143,7 +148,7 @@ async function bench() {
     return handle
   }
   return {
-    ctx, fiber, mint, calls,
+    ctx, fiber, mint, calls, seats, slotDisposers,
     contribution: () => contribution!,
     seat: () => seats.get('conversation.input.model')! as {
       inject: ((sessionId: SessionId) => ModelSelectInjected) | undefined
@@ -368,6 +373,17 @@ describe('ui-model-selection dual entry', () => {
     await Promise.resolve()
     expect(b.calls.models).toBe(1)
     expect(headerFace.hooks.directory.getSnapshot().groups).toHaveLength(1)
+  })
+
+  it('drops both identity seats when their registrations dispose', async () => {
+    const b = await bench()
+    expect(b.headerSeat()).toBeDefined()
+    expect(b.routeSeat()).toBeDefined()
+    expect(b.slotDisposers.length).toBeGreaterThanOrEqual(2)
+    for (const dispose of b.slotDisposers) dispose()
+    expect(b.headerSeat()).toBeUndefined()
+    expect(b.routeSeat()).toBeUndefined()
+    expect(b.seats.get('conversation.input.model')).toBeUndefined()
   })
 
   it('withholds identity-label load priming from addressed subagent sessions', async () => {

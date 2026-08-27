@@ -4,7 +4,7 @@
 .label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   max-width: 220px;
   padding: 0 6px;
   height: 22px;
@@ -23,7 +23,8 @@
   text-overflow: ellipsis;
 }
 
-/* Effort segment beside the name: caption tone, the composer trigger's split. */
+/* Effort segment: caption tone. Leading " · " is in the text so chip
+   textContent matches formatRouteLabel (`Name · High`) with gap: 0. */
 .effort {
   flex: none;
   color: var(--dsw-alias-label-caption);

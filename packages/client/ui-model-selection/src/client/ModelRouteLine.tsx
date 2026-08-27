@@ -59,7 +59,7 @@ export function ModelRouteLine({
     { groups }, identity.provider, identity.model, requestConfig?.reasoningEffort,
   )
   return (
-    <span title={t('identity.title', { route: `${identity.provider} / ${identity.model}` })}>
+    <span title={t('identity.stepTitle', { route: `${identity.provider} / ${identity.model}` })}>
       {formatRouteLabel(label)}
     </span>
   )

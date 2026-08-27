@@ -72,28 +72,27 @@ afterEach(cleanup)
 describe('ModelIdentityLabel (session header chip)', () => {
   it('renders the catalog display name and the effort segment of the last dispatched route', () => {
     renderLabel({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high' })
-    const chip = screen.getByTitle(zh['identity.title'].replace('{route}', 'deepseek-official / deepseek-v4-flash'))
-    expect(chip.textContent).toBe('DeepSeek-V4-Flash· High')
-    // Effort segment is its own muted span, the trigger's split.
-    expect(chip.querySelector(':scope > span:last-child')?.textContent).toBe('· High')
+    const chip = screen.getByTitle(zh['identity.headerTitle'].replace('{route}', 'deepseek-official / deepseek-v4-flash'))
+    expect(chip.textContent).toBe('DeepSeek-V4-Flash · High')
+    expect(chip.querySelector(':scope > span:last-child')?.textContent).toBe(' · High')
   })
 
   it('falls back to the raw model and effort ids when the catalog misses', () => {
     renderLabel({ provider: 'other-provider', model: 'unlisted-model', reasoningEffort: 'weird' })
     // A route serving a model it stopped advertising is real: raw ids, not blank.
-    expect(screen.getByTitle(zh['identity.title'].replace('{route}', 'other-provider / unlisted-model')).textContent)
-      .toBe('unlisted-model· weird')
+    expect(screen.getByTitle(zh['identity.headerTitle'].replace('{route}', 'other-provider / unlisted-model')).textContent)
+      .toBe('unlisted-model · weird')
   })
 
   it('omits the effort segment when the logged header carried none', () => {
     renderLabel({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
-    expect(screen.getByTitle(zh['identity.title'].replace('{route}', 'deepseek-official / deepseek-v4-pro')).textContent)
+    expect(screen.getByTitle(zh['identity.headerTitle'].replace('{route}', 'deepseek-official / deepseek-v4-pro')).textContent)
       .toBe('DeepSeek-V4-Pro')
   })
 
   it('renders the raw effort id when the model exists but the vocabulary lacks the level', () => {
     renderLabel({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'extreme' })
-    expect(screen.getByTitle(/deepseek-v4-flash/).textContent).toBe('DeepSeek-V4-Flash· extreme')
+    expect(screen.getByTitle(/deepseek-v4-flash/).textContent).toBe('DeepSeek-V4-Flash · extreme')
   })
 
   it('renders nothing before the first request header and while the projection is absent', () => {

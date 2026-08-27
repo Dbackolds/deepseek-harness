@@ -166,6 +166,26 @@ describe('chat fold per-step request identity', () => {
     }
   })
 
+  it('stamps requestConfig onto an interrupted step that has no message.source', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      header(3, CONFIG_A, 'initial'),
+      at(4, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'partial' },
+      }),
+      at(5, 'step/end', { turn: 1, step: 1 }),
+      at(6, 'turn/end', { turn: 1, reason: { kind: 'aborted' } }),
+    ])
+    const steps = assistantSteps(value)
+    expect(steps).toHaveLength(1)
+    expect(steps[0]?.finalNode?.provenance).toBeUndefined()
+    expect(steps[0]?.requestConfig).toMatchObject({ provider: 'prov-a', model: 'model-a' })
+    expect(steps[0]?.status).toBe('interrupted')
+  })
+
   it('leaves requestConfig undefined for a step predating every header', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
@@ -339,6 +359,33 @@ describe('assistant clock-line slot', () => {
     expect(line.parentElement?.parentElement).toBe(column)
     expect(column?.children[0]).toBe(clock)
     expect(column?.children[1]).toBe(line.parentElement)
+  })
+
+  it('dispatches the slot from requestConfig when the synthetic node has no provenance', () => {
+    const owners: AssistantRouteOwnerProps[] = []
+    const renderSlot = ((key: string, owner: AssistantRouteOwnerProps) => {
+      expect(key).toBe('conversation.chat.assistantRoute')
+      owners.push(owner)
+      return <span data-testid="route-line">{owner.requestConfig?.model}</span>
+    }) as unknown as RouteRenderSlot
+    const view = render(
+      <AssistantNodeView
+        {...({
+          node: routeNode({ requestConfig: CONFIG_A, finalNode: undefined }),
+          useTurnData: () => undefined,
+          openFile: () => {},
+          inspectCall: () => {},
+          forkAt: () => {},
+          renderMessageImages,
+          fileMentions: () => undefined,
+          renderSlot,
+          SessionProvider: () => null,
+          t,
+        } as unknown as React.ComponentProps<typeof AssistantNodeView>)}
+      />,
+    )
+    expect(owners).toEqual([{ requestConfig: CONFIG_A }])
+    expect(view.getByTestId('route-line').textContent).toBe('model-a')
   })
 
   it('keeps the flow unlabeled while no request identity exists', () => {
