@@ -34,7 +34,7 @@ function headerEvent(
   model: string,
   reason: 'initial' | 'resume' | 'change' = 'initial',
   reasoningEffort?: string,
-): { header: { config: { provider: string; model: string; reasoningEffort?: string } }; reason: 'initial' | 'resume' | 'change' } {
+): { header: { config: { provider: string; model: string; reasoningEffort?: ReasoningEffortId } }; reason: 'initial' | 'resume' | 'change' } {
   return {
     header: {
       config: {
