@@ -25,6 +25,7 @@
 |---|---|---|
 | [`session-projection/`](session-projection/README.zh.md) | 定义并驱动会话投影单元 | `ctx.sessionProjections` |
 | [`session-projection-cache/`](session-projection-cache/README.zh.md) | 持久化并恢复投影检查点 | `ctx.sessionProjectionCache` |
+| [`session-route/`](session-route/README.zh.md) | 提供最近一次已发出请求的路由（`requestRoute` 单元） | 注册到 `ctx.sessionProjections` |
 | [`session-stats/`](session-stats/README.zh.md) | 提供全日志会话计数与墙钟时间（`sessionStats` 单元） | 注册到 `ctx.sessionProjections` |
 
 ## 标题
