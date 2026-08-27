@@ -371,7 +371,7 @@ describe('assistant clock-line slot', () => {
     const view = render(
       <AssistantNodeView
         {...({
-          node: routeNode({ requestConfig: CONFIG_A, finalNode: undefined }),
+          node: { ...unlabelledNode(), data: { ...unlabelledNode().data, requestConfig: CONFIG_A } },
           useTurnData: () => undefined,
           openFile: () => {},
           inspectCall: () => {},
