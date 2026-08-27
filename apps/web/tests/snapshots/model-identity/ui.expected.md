@@ -1,0 +1,55 @@
+- banner:
+  - navigation "Session hierarchy":
+    - button "Model route switch" [disabled]
+  - img
+  - text: Standard mode Acme Flash
+  - button "Session log":
+    - text: Session log
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- time: 7/25 {{clock}}
+- text: Reply with the single word ALPHA and stop.
+- button "Copy":
+  - img
+- tooltip "Copy"
+- button "Edit message":
+  - img
+- paragraph: ALPHA
+- time: 7/25 {{clock}}
+- text: Acme Think · High Ran for {{duration}}
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- time: 7/25 {{clock}}
+- text: Reply with the single word BETA and stop.
+- button "Copy":
+  - img
+- button "Edit message":
+  - img
+- paragraph: BETA
+- time: 7/25 {{clock}}
+- text: Acme Flash Ran for {{duration}}
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- textbox "Message the agent"
+- button "Commands":
+  - img
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current Acme Think, reasoning effort Default":
+  - text: Acme Think Default
+  - img
+- button "Send message" [disabled]
+- text: 2 turns · 2 steps LLM {{duration}} Cache hit 89% Input 216 tok · Output 6 tok
