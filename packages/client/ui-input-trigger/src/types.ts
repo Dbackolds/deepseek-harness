@@ -58,6 +58,16 @@ export interface SubmitImageAttachment {
   readonly name?: string
 }
 
+/** Base64-encoded composer video before its prompt-part promotion. */
+export interface SubmitVideoAttachment {
+  /** Declared container media type; the host verifies it against the decoded bytes. */
+  readonly mediaType: 'video/mp4' | 'video/x-matroska' | 'video/quicktime'
+  /** Canonical base64 encoding of the video bytes. */
+  readonly data: string
+  /** Optional display name; never interpreted as a path. */
+  readonly name?: string
+}
+
 /**
  * Command-mode entry credential. Pure data + a closure method — no class, no
  * cross-package runtime value (client bundle purity).

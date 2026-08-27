@@ -1,6 +1,6 @@
 /** Conversation slot declarations and their composed component props. */
 import type { ReactNode, RefObject } from 'react'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
   InjectFace, MaybeSnapshotSelectorHook, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
   SlotHookFactory, SnapshotSelectorHook,
@@ -22,9 +22,9 @@ import type { ComposerSubmitGesture, InputSubmitMode } from './composer-submissi
 import type { ChatNode, ChatNodeKind } from './chat-nodes.ts'
 import type { CallId, SelectionTarget, ViewTab } from './views.ts'
 
-/** Browser-owned image that has not crossed the durable host boundary. */
+/** Browser-owned image or video that has not crossed the durable host boundary. */
 export interface ComposerAttachment {
-  kind: 'image'
+  kind: 'image' | 'video'
   id: DraftAttachmentId
   file: File
   previewUrl: string
@@ -34,14 +34,22 @@ export interface ComposerAttachment {
 export interface ComposerAttachmentsOwnerProps {
   /** Browser-owned draft images in input order. */
   attachments: readonly ComposerAttachment[]
-  /** Whether a document-level file drop may add images now. */
+  /** Whether a document-level file drop may add attachments now. */
   canAcceptDrop: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddImages: (files: readonly File[]) => void
   /** Remove one draft image through the conversation service. */
   onRemoveImage: (id: DraftAttachmentId) => void
-  /** Display-ready limits for the drop invitation. */
+  /** Display-ready image limits for the drop invitation. */
   dropLimits?: { readonly count: number; readonly size: string } | undefined
+  /** Browser-owned draft videos in input order. */
+  videos: readonly ComposerAttachment[]
+  /** Add one dropped video batch through the composer's video validation path. */
+  onAddVideos: (files: readonly File[]) => void
+  /** Remove one draft video through the conversation service. */
+  onRemoveVideo: (id: DraftAttachmentId) => void
+  /** Display-ready video limits for the drop invitation. */
+  videoDropLimits?: { readonly count: number; readonly size: string } | undefined
 }
 
 /** Historical image group handed to the optional attachment presentation plugin. */
@@ -52,10 +60,16 @@ export interface MessageImagesOwnerProps {
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Message-side alignment. */
   align: 'start' | 'end'
+  /** Consecutive video blocks rendered as inline players below the images. */
+  videos: readonly { readonly attachment: VideoAttachmentRef }[]
+  /** Session-authorized durable video loader. */
+  loadVideo: (attachment: VideoAttachmentRef) => Promise<string>
 }
 
 /** Slot-backed renderer used by chat nodes without importing an attachment implementation. */
-export type RenderMessageImages = (owner: Omit<MessageImagesOwnerProps, 'loadImage'>) => ReactNode
+export type RenderMessageImages = (
+  owner: Omit<MessageImagesOwnerProps, 'loadImage' | 'loadVideo'>,
+) => ReactNode
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -576,6 +590,12 @@ export interface ComposerBarInjected {
   removeImage: ((id: DraftAttachmentId) => void) | undefined
   /** Resolve ordered input ids to browser-owned draft images. */
   draftImages: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined
+  /** Create previews and append video ids to the session input. */
+  addVideos: ((files: readonly File[]) => string | null) | undefined
+  /** Release one video preview and remove its id from session input. */
+  removeVideo: ((id: DraftAttachmentId) => void) | undefined
+  /** Resolve ordered input ids to browser-owned draft videos. */
+  draftVideos: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined
   /** Resolve one keyboard submission gesture against the current running state and persisted preference. */
   resolveSubmitMode: (
     running: boolean,
@@ -778,6 +798,8 @@ export interface ChatViewInjected {
   loadOlder: () => void
   /** Resolve a session-authorized historical image for inline display. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
+  /** Resolve a session-authorized historical video for inline playback. */
+  loadVideo: (attachment: VideoAttachmentRef) => Promise<string>
   /** Hand a call off to the trajectory view: write the one-shot inspect target and switch tabs. */
   inspectCall: (callId: CallId) => void
   /**

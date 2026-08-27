@@ -6,7 +6,7 @@ import { AttachmentRail } from '../AttachmentRail.tsx'
 import type { AttachmentRailItem } from '../AttachmentRail.tsx'
 import { DropOverlay } from '../DropOverlay.tsx'
 import { ImageLightbox } from '../ImageLightbox.tsx'
-import { attachmentRailLabels, dropOverlayLabels, lightboxLabels } from './labels.ts'
+import { attachmentRailLabels, dropOverlayLabels, lightboxLabels, videoRailLabels } from './labels.ts'
 import css from './ComposerAttachments.module.css'
 
 /** Rail item retaining its browser-owned attachment for callbacks. */
@@ -16,7 +16,8 @@ interface ComposerRailItem extends AttachmentRailItem {
 
 /** Draft-image rail, document drop target, and original-image preview slot entry. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits, t,
+  attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits,
+  videos, onAddVideos, onRemoveVideo, videoDropLimits, t,
 }: ComposerAttachmentsProps) {
   const [preview, setPreview] = useState<ComposerAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -62,7 +63,19 @@ export function ComposerAttachments({
       if (dataTransfer === null) return
       event.preventDefault()
       reset()
-      if (canAcceptDrop) onAddImages([...dataTransfer.files])
+      if (!canAcceptDrop) return
+      // One drop, two validation regimes: each file routes to its kind's
+      // intake, so a video lands through the videoLimits pre-check while an
+      // image keeps the image path. Foreign members ride the image intake,
+      // which announces the format problem authoritatively.
+      const files = [...dataTransfer.files]
+      const droppedImages = files.filter(file => file.type.startsWith('image/'))
+      const droppedVideos = files.filter(file => file.type.startsWith('video/'))
+      if (droppedImages.length + droppedVideos.length !== files.length) onAddImages(files)
+      else {
+        if (droppedImages.length > 0) onAddImages(droppedImages)
+        if (droppedVideos.length > 0) onAddVideos(droppedVideos)
+      }
     }
     document.addEventListener('dragenter', onDragEnter)
     document.addEventListener('dragover', onDragOver)
@@ -76,7 +89,7 @@ export function ComposerAttachments({
       document.removeEventListener('drop', onDrop)
       window.removeEventListener('dragend', reset)
     }
-  }, [canAcceptDrop, onAddImages])
+  }, [canAcceptDrop, onAddImages, onAddVideos])
 
   const railItems = useMemo<ComposerRailItem[]>(() => attachments.map(attachment => ({
     id: attachment.id,
@@ -86,12 +99,21 @@ export function ComposerAttachments({
     attachment,
   })), [attachments, t])
 
+  const videoRailItems = useMemo<ComposerRailItem[]>(() => videos.map(video => ({
+    id: video.id,
+    previewUrl: video.previewUrl,
+    alt: video.file.name || t('video.pending'),
+    removeLabel: t('video.remove', { name: video.file.name }),
+    video: true,
+    attachment: video,
+  })), [videos, t])
+
   return (
     <>
       {dragActive && (
         <DropOverlay
           disabled={!canAcceptDrop}
-          labels={dropOverlayLabels(t, canAcceptDrop, dropLimits)}
+          labels={dropOverlayLabels(t, canAcceptDrop, dropLimits, videoDropLimits)}
         />
       )}
       {railItems.length > 0 && (
@@ -101,6 +123,16 @@ export function ComposerAttachments({
             labels={attachmentRailLabels(t)}
             onOpen={(item) => { setPreview(item.attachment) }}
             onRemove={(item) => { onRemoveImage(item.attachment.id) }}
+          />
+        </div>
+      )}
+      {videoRailItems.length > 0 && (
+        <div className={css.rail}>
+          <AttachmentRail
+            items={videoRailItems}
+            labels={videoRailLabels(t)}
+            onOpen={(item) => { void item }}
+            onRemove={(item) => { onRemoveVideo(item.attachment.id) }}
           />
         </div>
       )}

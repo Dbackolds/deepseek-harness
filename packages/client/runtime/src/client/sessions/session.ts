@@ -183,7 +183,7 @@ export class Session implements SessionFace {
 
   /**
    * Send (queue/steer passed through 1:1); failures land in the snapshot's promptError.
-   * @param content - text plus browser-owned temporary image uploads.
+   * @param content - text plus browser-owned temporary image or video uploads.
    * @param mode - queue appends after the current turn; steer interrupts it.
    * @returns the prompt result (also mirrored into promptError on failure).
    */
@@ -219,6 +219,9 @@ export class Session implements SessionFace {
           },
         }
       } else {
+        // Both attachment kinds are client-refused before the subagent
+        // transport: the subagent prompt wire carries text only, so a video
+        // part would be silently dropped rather than rejected.
         if (content.some(part => part.type === 'image')) {
           result = {
             ok: false,
@@ -226,6 +229,15 @@ export class Session implements SessionFace {
               code: 'attachment-error',
               message: 'Image input is unavailable for subagent continuations.',
               details: { reason: 'SUBAGENT_IMAGE_UNSUPPORTED' },
+            },
+          }
+        } else if (content.some(part => part.type === 'video')) {
+          result = {
+            ok: false,
+            error: {
+              code: 'attachment-error',
+              message: 'Video input is unavailable for subagent continuations.',
+              details: { reason: 'SUBAGENT_VIDEO_UNSUPPORTED' },
             },
           }
         } else {

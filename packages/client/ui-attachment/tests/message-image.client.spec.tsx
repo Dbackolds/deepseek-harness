@@ -166,6 +166,9 @@ describe('ImageGallery', () => {
         'image.loadFailed': '图片加载失败，点击重试',
         'image.preview': '原图预览',
         'image.closePreview': '关闭原图预览',
+        'video.label': '视频',
+        'video.loading': '视频加载中…',
+        'video.loadFailed': '视频加载失败，点击重试',
       }
       if (key === 'image.openOriginalLabel') {
         const label = params?.label
@@ -174,6 +177,7 @@ describe('ImageGallery', () => {
       return translated[key] ?? key
     }) as MessageImagesProps['t']
     const loadImage = vi.fn().mockResolvedValue('blob:slot-image')
+    const loadVideo = vi.fn().mockResolvedValue('blob:slot-video')
     const useSession: MessageImagesProps['useSession'] = () => {
       throw new Error('MessageImages does not read the session snapshot')
     }
@@ -198,10 +202,15 @@ describe('ImageGallery', () => {
         addImages: vi.fn(() => true),
         removeImage: vi.fn(),
         pruneImages: vi.fn(),
+        addVideos: vi.fn(() => true),
+        removeVideo: vi.fn(),
+        pruneVideos: vi.fn(),
         submit: vi.fn(),
       },
       images: [{ attachment }],
       loadImage,
+      videos: [{ attachment: videoAttachment }],
+      loadVideo,
       align: 'end',
       t,
     }
@@ -209,5 +218,17 @@ describe('ImageGallery', () => {
     await waitFor(() => { expect(view.getByAltText('history.png')).toBeTruthy() })
     expect(view.getByRole('button', { name: 'history.png，点击查看原图' })).toBeTruthy()
     expect(view.container.querySelector('[data-align="end"]')).not.toBeNull()
+    const player = await view.findByLabelText('clip.mp4', { selector: 'div' })
+    expect(player.querySelector('video')?.getAttribute('src')).toBe('blob:slot-video')
+    expect(player.querySelector('video')?.hasAttribute('controls')).toBe(true)
+    expect(loadVideo).toHaveBeenCalledWith(videoAttachment)
   })
 })
+
+/** Durable video reference driving the slot entry's video half. */
+const videoAttachment = {
+  attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
+  mediaType: 'video/mp4' as const,
+  bytes: 1024,
+  name: 'clip.mp4',
+}

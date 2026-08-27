@@ -12,12 +12,17 @@ import css from './AttachmentRail.module.css'
 export interface AttachmentRailItem {
   /** Stable identity for the React key. */
   id: string
-  /** Object or data URL rendered as the thumbnail. */
+  /** Object or data URL rendered as the thumbnail or video source. */
   previewUrl: string
   /** Image alt text (display name with the owner's fallback applied). */
   alt: string
   /** Accessible label of the item's remove control. */
   removeLabel: string
+  /**
+   * Inline playback: the item renders a `<video controls>` card instead of an
+   * image thumbnail (the draft-video chip — no lightbox in v1).
+   */
+  video?: boolean
 }
 
 /** Rail-level strings the owner resolves from its own locale namespace. */
@@ -165,15 +170,23 @@ export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, on
         onScroll={updateEdges}
       >
         {items.map(item => (
-          <div key={item.id} className={css.item}>
-            <button
-              type="button"
-              className={css.thumbnail}
-              title={labels.open}
-              onClick={() => { onOpen(item) }}
-            >
-              <img src={item.previewUrl} alt={item.alt} />
-            </button>
+          <div key={item.id} className={clsx(css.item, item.video === true && css.itemVideo)}>
+            {item.video === true
+              ? (
+                <div className={clsx(css.thumbnail, css.video)} data-video-chip>
+                  <video src={item.previewUrl} controls preload="metadata" aria-label={item.alt} />
+                </div>
+              )
+              : (
+                <button
+                  type="button"
+                  className={css.thumbnail}
+                  title={labels.open}
+                  onClick={() => { onOpen(item) }}
+                >
+                  <img src={item.previewUrl} alt={item.alt} />
+                </button>
+              )}
             <button
               type="button"
               className={css.remove}

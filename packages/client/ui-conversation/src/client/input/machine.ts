@@ -145,6 +145,7 @@ export class InputMachine {
     return {
       draft: this.draft,
       imageIds: [],
+      videoIds: [],
       draftRev: this.draftRev,
       phase: this.phase,
       ...(c

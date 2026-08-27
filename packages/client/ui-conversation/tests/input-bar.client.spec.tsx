@@ -68,6 +68,15 @@ interface BenchOptions {
     maxImageDimension: number
     mediaTypes: readonly ('image/png' | 'image/jpeg' | 'image/webp' | 'image/gif')[]
   }
+  /** The `videoLimits` projection value (absent = no attachment service). */
+  videoLimits?: {
+    maxVideoBytes: number
+    maxVideosPerMessage: number
+    maxMessageVideoBytes: number
+    mediaTypes: readonly ('video/mp4' | 'video/x-matroska' | 'video/quicktime')[]
+  }
+  /** Held draft videos resolved by the inject face. */
+  videos?: readonly ComposerAttachment[]
   draft?: string
   running?: boolean
   subagent?: Exclude<ConversationSnapshot['subagent'], null>
@@ -108,6 +117,7 @@ function bench(over?: BenchOptions) {
   const sink = vi.fn<(
     text: string,
     imageIds: readonly DraftAttachmentId[],
+    videoIds: readonly DraftAttachmentId[],
     mode: 'queue' | 'steer',
     signal: AbortSignal,
   ) => Promise<SubmitOutcome>>(() => Promise.resolve({ kind: 'success' }))
@@ -123,7 +133,7 @@ function bench(over?: BenchOptions) {
   const shell = new SessionInputShell({
     actx: SCTX,
     defaultSink: sink,
-    commandImages: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` },
+    commandImages: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported`, videosUnsupportedNotice: () => 'videos-unsupported' },
     queue: {
       getSnapshot: () => session.getSnapshot().queue,
       subscribe: fn => session.subscribe(fn),
@@ -141,8 +151,10 @@ function bench(over?: BenchOptions) {
   })
   if (over?.draft !== undefined && over.draft !== '') shell.setDraft(over.draft)
   if (over?.attachments !== undefined) shell.addImages(over.attachments.map(attachment => attachment.id))
+  if (over?.videos !== undefined) shell.addVideos(over.videos.map(video => video.id))
   const stop = vi.fn()
   const removeImage = vi.fn((id: DraftAttachmentId) => { shell.removeImage(id) })
+  const removeVideo = vi.fn((id: DraftAttachmentId) => { shell.removeVideo(id) })
   const menuLauncher = createSnapshotStore<string | null>(over?.commandMenuOpen === true ? 'command' : null)
   const slotCalls: { key: string; owner: unknown }[] = []
   const renderSlot = ((key: string, owner: object) => {
@@ -166,7 +178,9 @@ function bench(over?: BenchOptions) {
     useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
       (selector ?? (v => v))(key === 'permissions'
         ? over?.permissions
-        : key === 'plan' ? over?.plan : key === 'imageLimits' ? over?.imageLimits : undefined)),
+        : key === 'plan' ? over?.plan
+          : key === 'imageLimits' ? over?.imageLimits
+            : key === 'videoLimits' ? over?.videoLimits : undefined)),
     useInput: bindSnapshotSelector(shell.state),
     inputActions: shell.actions,
     keyboard: shell,
@@ -175,6 +189,12 @@ function bench(over?: BenchOptions) {
     draftImages: ids => ids.flatMap((id) => {
       const attachment = over?.attachments?.find(candidate => candidate.id === id)
       return attachment === undefined ? [] : [attachment]
+    }),
+    addVideos: over?.addVideos ?? (() => null),
+    removeVideo,
+    draftVideos: ids => ids.flatMap((id) => {
+      const video = over?.videos?.find(candidate => candidate.id === id)
+      return video === undefined ? [] : [video]
     }),
     resolveSubmitMode: (running, gesture, steeringAvailable) => {
       if (!running || !steeringAvailable) return 'queue'
@@ -208,7 +228,7 @@ function bench(over?: BenchOptions) {
   )!
   const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')
   return {
-    view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeImage, slotCalls,
+    view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeImage, removeVideo, slotCalls,
     menuLauncher,
     steerQueue: over?.steerQueue,
   }
@@ -368,12 +388,138 @@ describe('image draft rail', () => {
     let settle!: (outcome: SubmitOutcome) => void
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('', ['draft-1'], [], 'queue', expect.any(AbortSignal))
     expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
     await act(async () => { settle({ kind: 'success' }) })
     await vi.waitFor(() => {
       expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
     })
+  })
+
+  it('pre-checks projected video limits at intake: whole-batch refusal with product copy, none added', () => {
+    const limits = {
+      maxVideoBytes: 1024 * 1024,
+      maxVideosPerMessage: 2,
+      maxMessageVideoBytes: 2 * 1024 * 1024,
+      mediaTypes: ['video/mp4'] as const,
+    }
+    const mp4 = (bytes: number, name: string) => new File([new ArrayBuffer(bytes)], name, { type: 'video/mp4' })
+    const benchVideos = (held: readonly ComposerAttachment[] = []) => bench({
+      addVideos: vi.fn(() => null),
+      videoLimits: limits,
+      videos: held,
+    })
+    const intake = (result: ReturnType<typeof bench>, files: File[]) => {
+      act(() => { attachmentOwner(result.slotCalls).onAddVideos(files) })
+    }
+    // Count: three at once over a two-video limit → the whole batch refused.
+    const overCount = benchVideos()
+    intake(overCount, [mp4(8, 'a.mp4'), mp4(8, 'b.mp4'), mp4(8, 'c.mp4')])
+    expect(overCount.view.getByRole('alert').textContent).toContain('一条消息最多添加 2 个视频')
+    expect(overCount.props.addVideos).not.toHaveBeenCalled()
+    cleanup()
+    // Per-file bytes.
+    const overFile = benchVideos()
+    intake(overFile, [mp4(1024 * 1024 + 1, 'big.mp4')])
+    expect(overFile.view.getByRole('alert').textContent).toContain('单个视频不能超过 1MB')
+    expect(overFile.props.addVideos).not.toHaveBeenCalled()
+    cleanup()
+    // Aggregate bytes across the existing rail plus the new batch.
+    const held = {
+      kind: 'video' as const,
+      id: 'draft-v1' as DraftAttachmentId,
+      file: mp4(1024 * 1024 * 1.5, 'held.mp4'),
+      previewUrl: 'blob:held-v',
+    }
+    const overTotal = benchVideos([held])
+    intake(overTotal, [mp4(1024 * 1024, 'more.mp4')])
+    expect(overTotal.view.getByRole('alert').textContent).toContain('视频总大小超过 2MB')
+    expect(overTotal.props.addVideos).not.toHaveBeenCalled()
+    cleanup()
+    // Within every limit: the batch passes through to addVideos.
+    const within = benchVideos()
+    const fits = mp4(16, 'fits.mp4')
+    intake(within, [fits])
+    expect(within.props.addVideos).toHaveBeenCalledWith([fits])
+    expect(within.view.queryByRole('alert')).toBeNull()
+  })
+
+  it('splits a pasted media batch per kind and keeps a foreign member on the image path', () => {
+    const addImages = vi.fn(() => null)
+    const addVideos = vi.fn(() => null)
+    const image = new File([Uint8Array.of(1)], 'pixel.png', { type: 'image/png' })
+    const mp4 = new File([Uint8Array.of(2)], 'clip.mp4', { type: 'video/mp4' })
+    const { textarea } = bench({ addImages, addVideos })
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [
+          { kind: 'file', type: 'image/png', getAsFile: () => image },
+          { kind: 'file', type: 'video/mp4', getAsFile: () => mp4 },
+        ],
+        getData: () => '',
+      },
+    })
+    expect(addImages).toHaveBeenCalledWith([image])
+    expect(addVideos).toHaveBeenCalledWith([mp4])
+    cleanup()
+    const foreign = new File([Uint8Array.of(3)], 'note.pdf', { type: 'application/pdf' })
+    const mixedAddImages = vi.fn(() => null)
+    const mixedAddVideos = vi.fn(() => null)
+    const mixed = bench({ addImages: mixedAddImages, addVideos: mixedAddVideos })
+    fireEvent.paste(mixed.textarea, {
+      clipboardData: {
+        items: [
+          { kind: 'file', type: 'video/mp4', getAsFile: () => mp4 },
+          { kind: 'file', type: 'application/pdf', getAsFile: () => foreign },
+        ],
+        getData: () => '',
+      },
+    })
+    expect(mixedAddImages).toHaveBeenCalledWith([mp4, foreign])
+    expect(mixedAddVideos).not.toHaveBeenCalled()
+  })
+
+  it('sends a video-only draft through the empty-draft fast path and exposes removal', async () => {
+    const clip = {
+      kind: 'video' as const,
+      id: 'draft-v9' as DraftAttachmentId,
+      file: new File([Uint8Array.of(9)], 'clip.mp4', { type: 'video/mp4' }),
+      previewUrl: 'blob:draft-v9',
+    }
+    const extra = {
+      kind: 'video' as const,
+      id: 'draft-v10' as DraftAttachmentId,
+      file: new File([Uint8Array.of(10)], 'extra.mkv', { type: 'video/x-matroska' }),
+      previewUrl: 'blob:draft-v10',
+    }
+    const result = bench({ videos: [clip, extra] })
+    const { view, textarea, sink, removeVideo } = result
+    expect((view.getByRole('button', { name: '发送消息' }) as HTMLButtonElement).disabled).toBe(false)
+    const owner = attachmentOwner(result.slotCalls)
+    expect(owner.videos).toEqual([clip, extra])
+    act(() => { owner.onRemoveVideo('draft-v10' as DraftAttachmentId) })
+    expect(removeVideo).toHaveBeenCalledWith('draft-v10')
+    let settle!: (outcome: SubmitOutcome) => void
+    sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(sink).toHaveBeenCalledWith('', [], ['draft-v9'], 'queue', expect.any(AbortSignal))
+    await act(async () => { settle({ kind: 'success' }) })
+    await vi.waitFor(() => {
+      expect(attachmentOwner(result.slotCalls).videos).toEqual([])
+    })
+  })
+
+  it('projects display-ready video limits into the attachment slot', () => {
+    const result = bench({
+      addVideos: vi.fn(() => null),
+      videoLimits: {
+        maxVideoBytes: 100 * 1024 * 1024,
+        maxVideosPerMessage: 2,
+        maxMessageVideoBytes: 200 * 1024 * 1024,
+        mediaTypes: ['video/mp4'] as const,
+      },
+    })
+    expect(attachmentOwner(result.slotCalls).videoDropLimits).toEqual({ count: 2, size: '100MB' })
   })
 
   it('announces an image-intake rejection as a fading toast, repeatable for the same reason', () => {
@@ -468,7 +614,7 @@ describe('Enter semantics', () => {
   it('plain Enter submits queue mode through the machine; repeat and empty are suppressed', () => {
     const { textarea, sink } = bench({ draft: 'hello' })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('hello', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('hello', [], [], 'queue', expect.any(AbortSignal))
     // The submitting-phase lock, not draft emptiness, suppresses the repeat:
     // the draft is still uncleared while the sink round-trip is in flight.
     fireEvent.keyDown(textarea, { key: 'Enter', repeat: true })
@@ -496,15 +642,15 @@ describe('Enter semantics', () => {
   it('Ctrl/Meta+Enter sends normally while idle and steers while running', () => {
     const idle = bench({ draft: 'hello' })
     fireEvent.keyDown(idle.textarea, { key: 'Enter', metaKey: true })
-    expect(idle.sink).toHaveBeenCalledWith('hello', [], 'queue', expect.any(AbortSignal))
+    expect(idle.sink).toHaveBeenCalledWith('hello', [], [], 'queue', expect.any(AbortSignal))
 
     const busyCtrl = bench({ running: true, draft: 'steer with ctrl' })
     fireEvent.keyDown(busyCtrl.textarea, { key: 'Enter', ctrlKey: true })
-    expect(busyCtrl.sink).toHaveBeenCalledWith('steer with ctrl', [], 'steer', expect.any(AbortSignal))
+    expect(busyCtrl.sink).toHaveBeenCalledWith('steer with ctrl', [], [], 'steer', expect.any(AbortSignal))
 
     const busyMeta = bench({ running: true, draft: 'steer with cmd' })
     fireEvent.keyDown(busyMeta.textarea, { key: 'Enter', metaKey: true })
-    expect(busyMeta.sink).toHaveBeenCalledWith('steer with cmd', [], 'steer', expect.any(AbortSignal))
+    expect(busyMeta.sink).toHaveBeenCalledWith('steer with cmd', [], [], 'steer', expect.any(AbortSignal))
   })
 
   it('empty-draft Cmd/Ctrl+Enter steers the whole queue instead of submitting', () => {
@@ -569,7 +715,7 @@ describe('Enter semantics', () => {
     const steerQueue = vi.fn()
     const { textarea, sink } = bench({ running: true, queue: [row('q-1')], draft: '插话', steerQueue })
     fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
-    expect(sink).toHaveBeenCalledWith('插话', [], 'steer', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('插话', [], [], 'steer', expect.any(AbortSignal))
     expect(steerQueue).not.toHaveBeenCalled()
   })
 
@@ -617,7 +763,7 @@ describe('running and lock semantics', () => {
     expect(textarea.disabled).toBe(false)
     fireEvent.change(textarea, { target: { value: '排队消息2' } })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('排队消息2', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('排队消息2', [], [], 'queue', expect.any(AbortSignal))
     expect(button.getAttribute('aria-label')).toBe('停止生成')
     fireEvent.click(button)
     expect(stop).toHaveBeenCalledTimes(1)
@@ -626,17 +772,17 @@ describe('running and lock semantics', () => {
   it('running plain Enter follows the busy-state Steer preference', () => {
     const { textarea, sink } = bench({ running: true, busyEnter: 'steer', draft: '直接插话' })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('直接插话', [], 'steer', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('直接插话', [], [], 'steer', expect.any(AbortSignal))
   })
 
   it('running Cmd/Ctrl+Enter uses the opposite of the busy-state Enter preference', () => {
     const meta = bench({ running: true, busyEnter: 'steer', draft: '排到下一轮' })
     fireEvent.keyDown(meta.textarea, { key: 'Enter', metaKey: true })
-    expect(meta.sink).toHaveBeenCalledWith('排到下一轮', [], 'queue', expect.any(AbortSignal))
+    expect(meta.sink).toHaveBeenCalledWith('排到下一轮', [], [], 'queue', expect.any(AbortSignal))
 
     const ctrl = bench({ running: true, busyEnter: 'steer', draft: 'also queue' })
     fireEvent.keyDown(ctrl.textarea, { key: 'Enter', ctrlKey: true })
-    expect(ctrl.sink).toHaveBeenCalledWith('also queue', [], 'queue', expect.any(AbortSignal))
+    expect(ctrl.sink).toHaveBeenCalledWith('also queue', [], [], 'queue', expect.any(AbortSignal))
   })
 
   it('running continuable subagent keeps Send beside an independent Stop', () => {
@@ -656,7 +802,7 @@ describe('running and lock semantics', () => {
     expect(interruptButton).not.toBeNull()
     expect(textarea.disabled).toBe(false)
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('后续消息', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('后续消息', [], [], 'queue', expect.any(AbortSignal))
     fireEvent.click(interruptButton!)
     expect(stop).toHaveBeenCalledTimes(1)
   })
@@ -713,11 +859,11 @@ describe('running and lock semantics', () => {
     }
     const plain = bench({ running: true, busyEnter: 'steer', draft: 'plain', subagent })
     fireEvent.keyDown(plain.textarea, { key: 'Enter' })
-    expect(plain.sink).toHaveBeenCalledWith('plain', [], 'queue', expect.any(AbortSignal))
+    expect(plain.sink).toHaveBeenCalledWith('plain', [], [], 'queue', expect.any(AbortSignal))
 
     const accelerated = bench({ running: true, draft: 'accelerated', subagent })
     fireEvent.keyDown(accelerated.textarea, { key: 'Enter', metaKey: true })
-    expect(accelerated.sink).toHaveBeenCalledWith('accelerated', [], 'queue', expect.any(AbortSignal))
+    expect(accelerated.sink).toHaveBeenCalledWith('accelerated', [], [], 'queue', expect.any(AbortSignal))
   })
 
   it('disabled (session removed) locks the textarea and chrome', () => {
@@ -730,7 +876,7 @@ describe('running and lock semantics', () => {
   it('idle primary sends and disables on empty draft', () => {
     const { button, sink } = bench({ draft: 'go' })
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('go', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('go', [], [], 'queue', expect.any(AbortSignal))
     const empty = bench()
     expect(empty.button.disabled).toBe(true)
   })

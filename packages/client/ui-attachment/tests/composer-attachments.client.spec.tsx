@@ -31,15 +31,28 @@ const t = ((key: string, params?: Readonly<Record<string, unknown>>): string => 
     'image.scrollRight': '向右滚动图片',
     'image.dropBlocked': '当前无法添加图片',
     'image.dropTitle': '图片拖动到此处即可添加',
+    'video.pending': '待发送视频',
+    'video.label': '视频',
+    'video.scrollLeft': '向左滚动视频',
+    'video.scrollRight': '向右滚动视频',
   }
   if (key === 'image.remove') {
     const name = params?.name
     return `移除图片 ${typeof name === 'string' ? name : ''}`
   }
+  if (key === 'video.remove') {
+    const name = params?.name
+    return `移除视频 ${typeof name === 'string' ? name : ''}`
+  }
   if (key === 'image.dropDesc') {
     const count = params?.count
     const size = params?.size
     return `最多 ${typeof count === 'number' ? String(count) : ''} 张，每张 ${typeof size === 'string' ? size : ''}`
+  }
+  if (key === 'video.dropDesc') {
+    const count = params?.count
+    const size = params?.size
+    return `最多 ${typeof count === 'number' ? String(count) : ''} 个，每个 ${typeof size === 'string' ? size : ''}`
   }
   return messages[key] ?? key
 }) as ComposerAttachmentsProps['t']
@@ -53,12 +66,24 @@ function attachment(id: string, name = `${id}.png`): ComposerAttachment {
   }
 }
 
+function video(id: string, name = `${id}.mp4`): ComposerAttachment {
+  return {
+    kind: 'video',
+    id: id as ComposerAttachment['id'],
+    file: new File([Uint8Array.of(1)], name, { type: 'video/mp4' }),
+    previewUrl: `blob:${id}`,
+  }
+}
+
 function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): ComposerAttachmentsProps {
   return {
     attachments: [],
     canAcceptDrop: true,
     onAddImages: () => {},
     onRemoveImage: () => {},
+    videos: [],
+    onAddVideos: () => {},
+    onRemoveVideo: () => {},
     t,
     ...overrides,
   } as unknown as ComposerAttachmentsProps
@@ -156,5 +181,49 @@ describe('ComposerAttachments', () => {
     expect(view.getByAltText('待发送图片')).toBeTruthy()
     fireEvent.click(view.getByTitle('查看原图'))
     expect(view.getByAltText('原图')).toBeTruthy()
+  })
+
+  it('renders draft videos as inline players beside the image rail with their own removal', () => {
+    const onRemoveVideo = vi.fn()
+    const clip = video('draft-v1', 'clip.mp4')
+    const view = render(<ComposerAttachments {...props({
+      attachments: [attachment('draft-1', 'pixel.png')],
+      videos: [clip],
+      onRemoveVideo,
+    })} />)
+    const groups = view.getAllByRole('group')
+    expect(groups.map(group => group.getAttribute('aria-label'))).toEqual(['待发送图片', '待发送视频'])
+    const player = view.container.querySelector('[data-video-chip] video') as HTMLVideoElement | null
+    expect(player?.getAttribute('src')).toBe('blob:draft-v1')
+    expect(player?.hasAttribute('controls')).toBe(true)
+    fireEvent.click(view.getByRole('button', { name: '移除视频 clip.mp4' }))
+    expect(onRemoveVideo).toHaveBeenCalledWith(clip.id)
+  })
+
+  it('routes a dropped video batch to the video intake and keeps a foreign member on the image path', () => {
+    const onAddImages = vi.fn()
+    const onAddVideos = vi.fn()
+    const view = render(<ComposerAttachments {...props({
+      onAddImages,
+      onAddVideos,
+      dropLimits: { count: 20, size: '5MB' },
+      videoDropLimits: { count: 2, size: '100MB' },
+    })} />)
+    const mp4 = video('dropped').file
+    const mkv = new File([Uint8Array.of(1)], 'clip.mkv', { type: 'video/x-matroska' })
+    const dataTransfer = { types: ['Files'], files: [mp4, mkv], dropEffect: 'none' }
+    fireEvent.dragEnter(document.body, { dataTransfer })
+    expect(view.getByRole('status').textContent).toContain('最多 20 张，每张 5MB')
+    expect(view.getByRole('status').textContent).toContain('最多 2 个，每个 100MB')
+    fireEvent.drop(document.body, { dataTransfer })
+    expect(onAddVideos).toHaveBeenCalledWith([mp4, mkv])
+    expect(onAddImages).not.toHaveBeenCalled()
+
+    const foreign = new File([Uint8Array.of(1)], 'note.pdf', { type: 'application/pdf' })
+    const mixed = { types: ['Files'], files: [mp4, foreign], dropEffect: 'none' }
+    fireEvent.dragEnter(document.body, { dataTransfer: mixed })
+    fireEvent.drop(document.body, { dataTransfer: mixed })
+    expect(onAddImages).toHaveBeenCalledWith([mp4, foreign])
+    expect(onAddVideos).toHaveBeenCalledTimes(1)
   })
 })

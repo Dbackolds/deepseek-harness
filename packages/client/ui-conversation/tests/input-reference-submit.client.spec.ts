@@ -15,6 +15,7 @@ const commandImages = {
   serialize: () => Promise.resolve([]),
   release: () => {},
   unsupportedNotice: (token: string) => `${token.trim()} images-unsupported`,
+  videosUnsupportedNotice: () => 'videos-unsupported',
 }
 
 function chip(shell: SessionInputShell): void {
@@ -65,7 +66,7 @@ describe('reference submission', () => {
     restored.setDraft(mirror.mock.calls.at(-1)?.[0] as string)
     restored.submit()
     await vi.waitFor(() => {
-      expect(sink).toHaveBeenCalledWith(spacedMention, [], 'queue', expect.any(AbortSignal))
+      expect(sink).toHaveBeenCalledWith(spacedMention, [], [], 'queue', expect.any(AbortSignal))
     })
   })
 
@@ -100,7 +101,7 @@ describe('reference submission', () => {
     await vi.waitFor(() => {
       expect(shell.snapshot.phase).toBe('plain')
     })
-    expect(sink).toHaveBeenNthCalledWith(1, mention, [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenNthCalledWith(1, mention, [], [], 'queue', expect.any(AbortSignal))
     expect(shell.snapshot).toMatchObject({
       draft: '@Research ',
       occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 9 }],
@@ -114,7 +115,7 @@ describe('reference submission', () => {
     await vi.waitFor(() => {
       expect(shell.snapshot.draft).toBe('')
     })
-    expect(sink).toHaveBeenNthCalledWith(2, mention, [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenNthCalledWith(2, mention, [], [], 'queue', expect.any(AbortSignal))
     expect(shell.snapshot.occurrences).toEqual([])
     expect(serializeReference).toHaveBeenCalledTimes(2)
   })
@@ -149,7 +150,7 @@ describe('reference submission', () => {
     let signal: AbortSignal | undefined
     const shell = new SessionInputShell({
       actx: {} as ClientContext,
-      defaultSink: (_text, _imageIds, _mode, received) => {
+      defaultSink: (_text, _imageIds, _videoIds, _mode, received) => {
         signal = received
         return new Promise<SubmitOutcome>(() => {})
       },

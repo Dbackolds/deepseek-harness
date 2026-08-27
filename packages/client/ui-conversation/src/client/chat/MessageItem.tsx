@@ -24,10 +24,12 @@ type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
 function contentParts(content: readonly unknown[]): {
   text: string
   images: { attachment: UserImage['attachment'] }[]
+  videos: { attachment: UserImage['attachment'] & { mediaType: 'video/mp4' | 'video/x-matroska' | 'video/quicktime' } }[]
   rest: unknown[]
 } {
   const texts: string[] = []
   const images: { attachment: UserImage['attachment'] }[] = []
+  const videos: { attachment: UserImage['attachment'] & { mediaType: 'video/mp4' | 'video/x-matroska' | 'video/quicktime' } }[] = []
   const rest: unknown[] = []
   for (const block of content) {
     const b = block as { type?: string; text?: string; attachment?: unknown }
@@ -35,9 +37,12 @@ function contentParts(content: readonly unknown[]): {
     else if (b.type === 'image' && b.attachment !== undefined) {
       images.push({ attachment: (b as UserImage).attachment })
     }
+    else if (b.type === 'video' && b.attachment !== undefined) {
+      videos.push({ attachment: b.attachment as UserImage['attachment'] & { mediaType: 'video/mp4' | 'video/x-matroska' | 'video/quicktime' } })
+    }
     else rest.push(block)
   }
-  return { text: texts.join(''), images, rest }
+  return { text: texts.join(''), images, videos, rest }
 }
 
 function retrySeconds(milliseconds: number): number {
@@ -238,7 +243,7 @@ function UserStyleBubble({
   referenceLabels?: readonly string[]
   t: ChatViewSlotProps['t']
 }): ReactNode {
-  const { text, images, rest } = contentParts(content)
+  const { text, images, videos, rest } = contentParts(content)
   const truncated = (total: number): string => t('json.truncated', { total })
   const showBubble = !editing && (text !== '' || rest.length > 0)
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -257,7 +262,7 @@ function UserStyleBubble({
       <div className={css.userBand}>
         <MessageClock time={time} t={t} />
         <div className={css.userStack}>
-          {renderMessageImages({ images, align: 'end' })}
+          {renderMessageImages({ images, videos, align: 'end' })}
           {editing && (
             <textarea
               className={css.editor}
