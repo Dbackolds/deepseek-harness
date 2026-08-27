@@ -525,14 +525,8 @@ describe('prompt and cancel errors', () => {
       parentAvailable: true,
     })
     await session.open()
-    const videoRef = {
-      attachmentId: 'att-v' as never,
-      mediaType: 'video/mp4' as const,
-      bytes: 4,
-      name: 'clip.mp4',
-    }
     const refusedVideo = await session.prompt([
-      { type: 'video' as never, attachment: videoRef },
+      { type: 'video', mediaType: 'video/mp4', data: 'AAAA', name: 'clip.mp4' },
     ], 'queue')
     expect(refusedVideo).toMatchObject({
       ok: false,
@@ -547,13 +541,8 @@ describe('prompt and cancel errors', () => {
     })
     expect(api.callsOf('subagent.prompt')).toEqual([])
     // The image gate still refuses independently.
-    const imageRef = {
-      attachmentId: 'att-i' as never,
-      mediaType: 'image/png' as const,
-      bytes: 4, width: 1, height: 1,
-    }
     const refusedImage = await session.prompt([
-      { type: 'image' as never, attachment: imageRef },
+      { type: 'image', mediaType: 'image/png', data: 'AAAA', name: 'dot.png' },
     ], 'queue')
     expect(refusedImage).toMatchObject({
       ok: false,

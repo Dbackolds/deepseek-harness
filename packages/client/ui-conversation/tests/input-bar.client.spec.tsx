@@ -99,6 +99,7 @@ interface BenchOptions {
   rightItems?: React.ReactNode
   attachments?: readonly ComposerAttachment[]
   addImages?: (files: readonly File[]) => string | null
+  addVideos?: (files: readonly File[]) => string | null
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
   toggleCommandMenu?: (selection: { start: number; end: number }) => void

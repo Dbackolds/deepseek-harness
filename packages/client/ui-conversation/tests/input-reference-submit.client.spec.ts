@@ -75,6 +75,7 @@ describe('reference submission', () => {
     const sink = vi.fn<(
       _text: string,
       _imageIds: readonly DraftAttachmentId[],
+      _videoIds: readonly DraftAttachmentId[],
       _mode: 'queue' | 'steer',
       _signal: AbortSignal,
     ) => Promise<SubmitOutcome>>()

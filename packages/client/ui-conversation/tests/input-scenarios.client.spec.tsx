@@ -122,7 +122,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
   const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'success' }))
   const serialize = vi.fn((ids: readonly DraftAttachmentId[]) => Promise.resolve(ids.map(() => PNG)))
   const release = vi.fn()
-  const shell = new SessionInputShell({ actx, inputTriggers: () => controller, defaultSink: sink, commandImages: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` } })
+  const shell = new SessionInputShell({ actx, inputTriggers: () => controller, defaultSink: sink, commandImages: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported`, videosUnsupportedNotice: () => 'videos-unsupported' } })
   // The hub's listener wiring, verbatim.
   actx.on('slash/input-begin-command', req => shell.beginCommand(req.claim, req.span) ? true : undefined)
   actx.on('slash/input-insert-reference', req => shell.insertReference(req.reference, req.span) ? true : undefined)
@@ -159,6 +159,9 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
       file: new File([Uint8Array.of(1)], `${id}.png`, { type: 'image/png' }),
       previewUrl: `blob:${id}`,
     })),
+    addVideos: () => null,
+    removeVideo: () => {},
+    draftVideos: () => [],
     resolveSubmitMode: () => 'queue',
     toggleCommandMenu: (selection) => {
       const snapshot = shell.snapshot

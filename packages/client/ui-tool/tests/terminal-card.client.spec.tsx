@@ -470,7 +470,16 @@ describe('DetailsPanel Output section', () => {
         useSessions={bindSnapshotSelector(sessions)}
         useWorkspaces={bindSnapshotSelector(workspaces)}
         useInput={(() => { throw new Error('unused') })}
-        inputActions={{ setDraft: () => {}, addImages: () => true, removeImage: () => {}, pruneImages: () => {}, submit: () => {} }}
+        inputActions={{
+          setDraft: () => {},
+          addImages: () => true,
+          removeImage: () => {},
+          pruneImages: () => {},
+          addVideos: () => true,
+          removeVideo: () => {},
+          pruneVideos: () => {},
+          submit: () => {},
+        }}
         useProjection={(() => undefined)}
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
@@ -656,7 +665,16 @@ describe('DetailsPanel Output section', () => {
           baselinesReady: true, recentWorkspaceId: undefined,
         }))}
         useInput={(() => { throw new Error('unused') })}
-        inputActions={{ setDraft: () => {}, addImages: () => true, removeImage: () => {}, pruneImages: () => {}, submit: () => {} }}
+        inputActions={{
+          setDraft: () => {},
+          addImages: () => true,
+          removeImage: () => {},
+          pruneImages: () => {},
+          addVideos: () => true,
+          removeVideo: () => {},
+          pruneVideos: () => {},
+          submit: () => {},
+        }}
         useProjection={(() => undefined)}
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
