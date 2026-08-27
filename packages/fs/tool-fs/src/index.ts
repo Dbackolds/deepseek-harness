@@ -1,5 +1,5 @@
 /**
- * Model-facing read, read_image, write, and edit tools over `ctx.fs`. This package owns schemas, validation,
+ * Model-facing read, read_image, read_video, write, and edit tools over `ctx.fs`. This package owns schemas, validation,
  * read windows, formatting, and observation events, never a concrete provider. An optional
  * event policy supplies mutation guards; without one the tools use unconditional provider calls.
  * @module @deepseek-ai/dsh-tool-fs
@@ -12,6 +12,7 @@ import { applyReadTool, READ_LIMIT, STREAM_MIN_SIZE } from './read.ts'
 import { applyWriteTool } from './write.ts'
 import { applyEditTool } from './edit.ts'
 import { applyReadImageTool } from './read-image.ts'
+import { applyReadVideoTool } from './read-video.ts'
 import { READ_MAX_BYTES, READ_MAX_LINE_LENGTH } from './read-render.ts'
 import { FsSandboxController } from './sandbox.ts'
 
@@ -50,7 +51,7 @@ function assertPositiveInteger(name: string, value: number): void {
   }
 }
 
-/** Register the full `read`/`write`/`edit` filesystem tool suite, plus `read_image` while `attachments` is mounted. */
+/** Register the full `read`/`write`/`edit` filesystem tool suite, plus `read_image`/`read_video` while `attachments` is mounted. */
 export function apply(ctx: Context, config: Config): void {
   // schemastery (Config) has already filled every defaulted field.
   const resolved = config as ResolvedConfig
@@ -64,11 +65,13 @@ export function apply(ctx: Context, config: Config): void {
     maxBytes: resolved.readMaxBytes,
     streamMinSize: resolved.readStreamMinSize,
   })
-  // read_image is composition-conditional: without a mounted attachment store
-  // the deployment cannot durably commit image bytes, so the tool never
-  // registers; the execute body keeps a defensive re-check for direct callers.
-  ctx.inject(['attachments'], (imageCtx) => {
-    applyReadImageTool(imageCtx)
+  // read_image and read_video are composition-conditional: without a mounted
+  // attachment store the deployment cannot durably commit media bytes, so the
+  // tools never register; each execute body keeps a defensive re-check for
+  // direct callers.
+  ctx.inject(['attachments'], (mediaCtx) => {
+    applyReadImageTool(mediaCtx)
+    applyReadVideoTool(mediaCtx)
   })
   // One escalation API shared by both mutating tools: advertisement gating,
   // per-call policy resolution, and denial-marker mapping, all keyed off whether

@@ -16,7 +16,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
-import { resolveRegularReadTarget } from './read-target.ts'
+import { assertMediaCapableRoute, resolveRegularReadTarget } from './read-target.ts'
 
 /** Extensions `read_image` accepts; magic-byte validation at the attachment service stays authoritative. */
 const IMAGE_EXTENSIONS: Readonly<Record<string, ImageMediaType>> = {
@@ -77,25 +77,14 @@ export function imageMediaTypeForPath(filePath: string): ImageMediaType | undefi
 }
 
 /**
- * Enforce the strict image-capability gate for the calling route. Resolves the
- * session's latest routed provider/model (request header config, then agent
- * options) and requires the exact resolved route to declare `image` input explicitly.
+ * Enforce the strict image-capability gate for the calling route: the exact
+ * resolved route must declare `image` input explicitly.
  * @param ctx - the plugin context used to resolve the optional `llm` service.
  * @param exec - the tool-execution context supplying the calling agent.
  * @param requestedPath - the raw, not-yet-resolved path rendered in refusal messages.
  */
-export async function assertImageCapableRoute(ctx: Context, exec: ToolExecution, requestedPath: string): Promise<void> {
-  const routed = exec.agent?.session.requestHeader()?.config
-  const provider = routed?.provider ?? exec.agent?.options.provider
-  const model = routed?.model ?? exec.agent?.options.model
-  const llm = ctx.get('llm')
-  if (provider === undefined || model === undefined || llm === undefined) {
-    throw new Error(`cannot read "${requestedPath}" as an image: the current model route could not be resolved`)
-  }
-  const active = await llm.resolveModelInfo(provider, model, exec.signal)
-  if (active.inputModalities === undefined || !active.inputModalities.includes('image')) {
-    throw new Error(`cannot read "${requestedPath}" as an image: model "${model}" does not declare image input; switch to an image-capable model to read images`)
-  }
+export function assertImageCapableRoute(ctx: Context, exec: ToolExecution, requestedPath: string): Promise<void> {
+  return assertMediaCapableRoute(ctx, exec, requestedPath, 'image')
 }
 
 /**
