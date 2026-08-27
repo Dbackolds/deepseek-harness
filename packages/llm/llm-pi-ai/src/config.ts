@@ -30,10 +30,10 @@ import type { LlmDefaultPolicySettings } from '@deepseek-ai/dsh-llm-default-poli
 import {
   CACHE_CONTROL_FORMATS,
   CHAT_TEMPLATE_VARS,
+  DSH_MODALITIES,
   FAC_DISPLAY_NAME,
   FAC_PROVIDER,
   MAX_TOKENS_FIELDS,
-  MODALITIES,
   resolveRouteModels,
   shippedApi,
   shippedBaseUrl,
@@ -41,8 +41,8 @@ import {
   THINKING_LEVELS,
 } from './catalog.ts'
 import type {
+  DshModality,
   PiAiCompatProfile,
-  PiAiModality,
   PiAiModelOverride,
   PiAiModelProfile,
   PiAiReasoningEfforts,
@@ -67,6 +67,18 @@ export const DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET = 2048 * 2048
 /** Default raw encoded-byte cap before inline base64 expansion. */
 export const DEFAULT_REQUEST_IMAGE_MAX_BYTES = 1024 * 1024
 
+/**
+ * Default request-level bound on base64-encoded video payload. Every retained
+ * video is re-encoded into every request body, so an unbounded conversation
+ * eventually exceeds a provider or gateway request-size cap. Unlike images,
+ * an over-budget video is refused rather than offloaded: a placeholder cannot
+ * stand in for content the user or a tool just produced, and the failure names
+ * the payload size. The 100MiB default matches the per-video admission cap and
+ * stays under the upstream 200MB per-request limit with room for text and
+ * JSON. Deployments behind stricter gateways lower it per route.
+ */
+export const DEFAULT_MAX_REQUEST_VIDEO_BYTES = 100 * 1024 * 1024
+
 /** Context capacity assumed for a model neither configuration nor the catalog sizes. */
 export const DEFAULT_CONTEXT_WINDOW = 262_144
 
@@ -83,9 +95,10 @@ export const DEFAULT_MAX_TOKENS = 32_768
  * rejects mid-turn, after the message is durable, leaving the session
  * repeating a request that cannot succeed.
  */
-export const DEFAULT_INPUT: readonly PiAiModality[] = ['text']
+export const DEFAULT_INPUT: readonly DshModality[] = ['text']
 
 export type {
+  DshModality,
   PiAiCompatProfile,
   PiAiModality,
   PiAiModelOverride,
@@ -153,11 +166,12 @@ export interface PiAiProviderProfile {
    * `[text]`). A fallback like the capacities above, not an override: a
    * catalog model keeps the modalities the catalog records for it, and this
    * value never narrows one. A gateway serving vision models the catalog does
-   * not describe declares `[text, image]` once here instead of on every entry.
-   * Unlike an entry's list, this one may not be empty — nothing sits below it
-   * to answer instead.
+   * not describe declares `[text, image]` once here instead of on every entry;
+   * `video` is nameable the same way for a route the harness injects
+   * `video_url` for. Unlike an entry's list, this one may not be empty —
+   * nothing sits below it to answer instead.
    */
-  defaultInput?: PiAiModality[]
+  defaultInput?: DshModality[]
   /** Provider request headers; Harness attribution wins reserved names. */
   headers?: Record<string, string>
   /** Provider-neutral pi-ai reasoning level. */
@@ -181,6 +195,13 @@ export interface PiAiProviderProfile {
    * requests instead of being rejected by a request-size cap.
    */
   maxRequestImageBytes?: number
+  /**
+   * Maximum accumulated base64-encoded video payload per request. A request
+   * whose retained videos exceed it is refused with `UNSUPPORTED_CONTENT`
+   * naming the payload size — unlike images, a video is never offloaded to a
+   * placeholder mid-conversation.
+   */
+  maxRequestVideoBytes?: number
   /** Total-pixel budget for each deterministic inline request version. */
   requestImagePixelBudget?: number
   /** Raw encoded-byte cap for each deterministic inline request version. */
@@ -202,6 +223,8 @@ export interface ResolvedPiAiProviderProfile
   streamIdleTimeoutMs: number
   /** Positive request-level base64 image payload bound after defaulting. */
   maxRequestImageBytes: number
+  /** Positive request-level base64 video payload bound after defaulting. */
+  maxRequestVideoBytes: number
   /** Positive total-pixel request-version budget after defaulting. */
   requestImagePixelBudget: number
   /** Positive raw request-version byte cap after defaulting. */
@@ -312,7 +335,7 @@ const modelFields = {
   // No explicit default, unlike the route's `defaultInput`: schemastery
   // materializes `[]` for an absent array, and resolution reads that as "no
   // answer here" so the catalog entry below still applies.
-  input: z.array(z.union(MODALITIES)),
+  input: z.array(z.union(DSH_MODALITIES)),
   // The union, not a bare dict: schemastery materializes an absent dict as
   // `{}`, and absent must stay distinguishable — it means "inherit the
   // installed catalog's capability", while `false` disables reasoning.
@@ -341,7 +364,7 @@ const profile = z.object({
   compat: compatProfile,
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
   defaultMaxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
-  defaultInput: z.array(z.union(MODALITIES)).default([...DEFAULT_INPUT]),
+  defaultInput: z.array(z.union(DSH_MODALITIES)).default([...DEFAULT_INPUT]),
   headers: z.dict(z.string()),
   reasoning: z.union(THINKING_LEVELS),
   thinkingBudgets,
@@ -351,6 +374,7 @@ const profile = z.object({
   websocketConnectTimeoutMs: z.natural(),
   streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS),
   maxRequestImageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_REQUEST_IMAGE_BYTES),
+  maxRequestVideoBytes: z.number().step(1).min(1).default(DEFAULT_MAX_REQUEST_VIDEO_BYTES),
   requestImagePixelBudget: z.number().step(1).min(1).default(DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET),
   requestImageMaxBytes: z.number().step(1).min(1).default(DEFAULT_REQUEST_IMAGE_MAX_BYTES),
   retryPolicy: RetryPolicySchema,
@@ -435,6 +459,10 @@ export function resolveProfiles(
     if (!Number.isInteger(maxRequestImageBytes) || maxRequestImageBytes <= 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" maxRequestImageBytes must be a positive integer`)
     }
+    const maxRequestVideoBytes = source.maxRequestVideoBytes ?? DEFAULT_MAX_REQUEST_VIDEO_BYTES
+    if (!Number.isInteger(maxRequestVideoBytes) || maxRequestVideoBytes <= 0) {
+      throw new Error(`llm-pi-ai: provider "${provider}" maxRequestVideoBytes must be a positive integer`)
+    }
     const requestImagePixelBudget = source.requestImagePixelBudget ?? DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET
     if (!Number.isSafeInteger(requestImagePixelBudget) || requestImagePixelBudget <= 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" requestImagePixelBudget must be a positive safe integer`)
@@ -477,6 +505,7 @@ export function resolveProfiles(
       ...apiKeyEnv === undefined ? {} : { apiKeyEnv: credentialRef(apiKeyEnv) },
       streamIdleTimeoutMs,
       maxRequestImageBytes,
+      maxRequestVideoBytes,
       requestImagePixelBudget,
       requestImageMaxBytes,
       retryPolicy: resolveProviderRetryPolicy(

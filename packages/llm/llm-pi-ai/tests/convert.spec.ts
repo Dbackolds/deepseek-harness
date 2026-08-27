@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
-import type { AttachmentStore, ImageAttachmentRef, ImageRequestPolicy, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
+import type {
+  AttachmentStore,
+  ImageAttachmentRef,
+  ImageRequestPolicy,
+  RequestImageAttachment,
+  RequestVideoAttachment,
+  VideoAttachmentRef,
+} from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, CallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { AssistantMessage, AssistantMessageEvent, Usage } from '@earendil-works/pi-ai'
-import { toPiContext } from '../src/context.ts'
+import { parseRequestVideoMarker, requestVideoMarker, toPiContext } from '../src/context.ts'
 import { toPiReplayState } from '../src/replay.ts'
 import { mapStopReason, mapUsage, toStreamChunks } from '../src/stream.ts'
 
@@ -66,23 +73,44 @@ function attachmentStore(readImageRequest: (
   return { readImageRequest } as unknown as AttachmentStore
 }
 
+function videoRef(suffix = 'd'): VideoAttachmentRef {
+  return {
+    attachmentId: AttachmentId(`sha256:${suffix.repeat(64)}`),
+    mediaType: 'video/mp4',
+    bytes: 3,
+  }
+}
+
+/** Store that resolves no images; video tests never read one. */
+function videoOnlyStore(): AttachmentStore {
+  return {
+    readImageRequest: () => Promise.reject(new Error('no images expected')),
+    readVideoRequest: (ref: VideoAttachmentRef) => Promise.resolve({
+      attachment: ref,
+      data: 'QUJD',
+      mediaType: ref.mediaType,
+      bytes: ref.bytes,
+      version: 'raw-v1',
+    } satisfies RequestVideoAttachment),
+  } as unknown as AttachmentStore
+}
+
 describe('toPiContext', () => {
-  it('maps system prompt, user text, and tools', () => {
-    const context = toPiContext({
-      provider: 'deepseek',
-      model: 'deepseek-v4-flash',
-      system: 'be helpful',
-      messages: [createUserMessage({
-        content: [{ type: 'text', text: 'hi' }],
-        source: { kind: 'plugin', plugin: 'test' },
-      })],
-      tools: [{ name: 'f', description: 'F', parameters: { type: 'object', properties: {} } }],
-    })
-    expect(context.systemPrompt).toBe('be helpful')
-    expect(context.messages).toEqual([{ role: 'user', content: 'hi', timestamp: 0 }])
-    expect(context.tools).toEqual([
-      { name: 'f', description: 'F', parameters: { type: 'object', properties: {} } },
-    ])
+  it('maps system prompt, user text, and tools', () => {    const context = toPiContext({
+    provider: 'deepseek',
+    model: 'deepseek-v4-flash',
+    system: 'be helpful',
+    messages: [createUserMessage({
+      content: [{ type: 'text', text: 'hi' }],
+      source: { kind: 'plugin', plugin: 'test' },
+    })],
+    tools: [{ name: 'f', description: 'F', parameters: { type: 'object', properties: {} } }],
+  })
+  expect(context.systemPrompt).toBe('be helpful')
+  expect(context.messages).toEqual([{ role: 'user', content: 'hi', timestamp: 0 }])
+  expect(context.tools).toEqual([
+    { name: 'f', description: 'F', parameters: { type: 'object', properties: {} } },
+  ])
   })
 
   it('omits empty tools and absent system prompt', () => {
@@ -904,5 +932,150 @@ describe('toStreamChunks defensive branches', () => {
       { type: 'done', reason: 'stop', message: assistant() },
     )))
     expect(chunks[0]).toEqual({ type: 'tool-call-delta', index: 0, id: '', argumentsDelta: '{}' })
+  })
+})
+
+describe('video request markers', () => {
+  it('round-trips a marker through requestVideoMarker and parseRequestVideoMarker', () => {
+    const attachmentId = `sha256:${'d'.repeat(64)}`
+    const marker = requestVideoMarker(attachmentId)
+    expect(marker).toBe(`[dsh-video-request:${attachmentId}]`)
+    expect(parseRequestVideoMarker(marker)).toBe(attachmentId)
+  })
+
+  it('refuses partial and non-marker text', () => {
+    expect(parseRequestVideoMarker('[dsh-video-request:]')).toBeUndefined()
+    expect(parseRequestVideoMarker('[dsh-video-request:sha256:abc')).toBeUndefined()
+    expect(parseRequestVideoMarker('see [dsh-video-request:sha256:abc] please')).toBeUndefined()
+    expect(parseRequestVideoMarker('plain text')).toBeUndefined()
+  })
+
+  it('emits a standalone marker item for a user video and keeps the array content form', async () => {
+    const attachment = videoRef()
+    const context = await toPiContext({
+      provider: 'openai',
+      model: 'gpt-4.1',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'describe' }, { type: 'video', attachment }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }, videoOnlyStore())
+
+    expect(context.messages[0]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'describe' },
+        { type: 'text', text: requestVideoMarker(attachment.attachmentId) },
+      ],
+      timestamp: 0,
+    })
+  })
+
+  it('keeps image content beside a video marker in one array', async () => {
+    const image = {
+      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      mediaType: 'image/png' as const,
+      bytes: 3,
+      width: 1,
+      height: 1,
+    }
+    const video = videoRef('e')
+    const readImageRequest = vi.fn((value: ImageAttachmentRef): Promise<RequestImageAttachment> =>
+      Promise.resolve(requestVersion(value)))
+    const store = {
+      readImageRequest,
+      readVideoRequest: (ref: VideoAttachmentRef) => Promise.resolve({
+        attachment: ref,
+        data: 'QUJD',
+        mediaType: ref.mediaType,
+        bytes: ref.bytes,
+        version: 'raw-v1',
+      } satisfies RequestVideoAttachment),
+    } as unknown as AttachmentStore
+
+    const context = await toPiContext({
+      provider: 'openai',
+      model: 'gpt-4.1',
+      messages: [createUserMessage({
+        content: [
+          { type: 'text', text: 'both' },
+          { type: 'image', attachment: image },
+          { type: 'video', attachment: video },
+        ],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }, store)
+
+    expect(context.messages[0]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'both' },
+        { type: 'text', text: expect.stringContaining(`Image ${image.attachmentId}`) as string },
+        { type: 'image', data: 'AQID', mimeType: 'image/png' },
+        { type: 'text', text: requestVideoMarker(video.attachmentId) },
+      ],
+      timestamp: 0,
+    })
+  })
+
+  it('emits a marker item for a nested tool-result video', async () => {
+    const attachment = videoRef('f')
+    const context = await toPiContext({
+      provider: 'openai',
+      model: 'gpt-4.1',
+      messages: [createUserMessage({
+        content: [{
+          type: 'tool-result',
+          toolCallId: CallId('read-video'),
+          content: [{ type: 'text', text: 'read' }, { type: 'video', attachment }],
+        }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }, videoOnlyStore())
+
+    expect(context.messages[0]).toEqual({
+      role: 'toolResult',
+      toolCallId: 'read-video',
+      toolName: 'unknown',
+      content: [
+        { type: 'text', text: 'read' },
+        { type: 'text', text: requestVideoMarker(attachment.attachmentId) },
+      ],
+      isError: false,
+      timestamp: 0,
+    })
+  })
+
+  it('rejects a video in an in-history assistant or system message', async () => {
+    const attachment = videoRef('1')
+    const history = [
+      createMessage({
+        role: 'assistant',
+        content: [{ type: 'video', attachment }],
+        source: { kind: 'plugin', plugin: 'test' },
+      }),
+      createMessage({
+        role: 'system',
+        content: [{ type: 'video', attachment }],
+        source: { kind: 'plugin', plugin: 'test' },
+      }),
+    ]
+    for (const message of history) {
+      await expect(toPiContext({
+        provider: 'openai',
+        model: 'gpt-4.1',
+        messages: [message],
+      }, videoOnlyStore())).rejects.toThrow(expect.objectContaining({ code: 'UNSUPPORTED_CONTENT' }))
+    }
+  })
+
+  it('rejects structured video history when no durable resolver is supplied', () => {
+    expect(() => toPiContext({
+      provider: 'openai', model: 'gpt-4.1',
+      messages: [createUserMessage({
+        content: [{ type: 'video', attachment: videoRef('2') }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_CONTENT' }))
   })
 })

@@ -2,15 +2,28 @@ import { describe, expect, it } from 'vitest'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import {
   CallId,
+  contentHasVideo,
   createUserMessage,
   OFFLOADED_IMAGE_TEXT,
   offloadRequestImages,
   offloadRequestImagesWithPolicy,
   projectImagesForTextModel,
+  projectVideosForTextModel,
 } from '../src/index.ts'
 import type { ContentBlock } from '../src/index.ts'
 
 const source = { kind: 'plugin' as const, plugin: 'test' }
+
+function video(bytes: number): ContentBlock {
+  return {
+    type: 'video',
+    attachment: {
+      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      mediaType: 'video/mp4',
+      bytes,
+    },
+  }
+}
 
 function image(bytes: number): ContentBlock {
   return {
@@ -180,6 +193,65 @@ describe('projectImagesForTextModel', () => {
           { type: 'text', text: 'after' },
         ],
       },
+    ])
+  })
+})
+
+describe('contentHasVideo', () => {
+  it('finds direct and nested tool-result videos and ignores other content', () => {
+    expect(contentHasVideo([{ type: 'text', text: 'plain' }])).toBe(false)
+    expect(contentHasVideo([video(3)])).toBe(true)
+    expect(contentHasVideo([{
+      type: 'tool-result',
+      toolCallId: CallId('shot'),
+      content: [{ type: 'text', text: 'frames' }, video(3)],
+    }])).toBe(true)
+    expect(contentHasVideo([{
+      type: 'tool-result',
+      toolCallId: CallId('still'),
+      content: [image(3)],
+    }])).toBe(false)
+  })
+})
+
+describe('projectVideosForTextModel', () => {
+  it('returns video-free history unchanged', () => {
+    const messages = [createUserMessage({ content: [image(3)], source })]
+    expect(projectVideosForTextModel(messages)).toBe(messages)
+  })
+
+  it('replaces direct and nested videos while retaining images and unaffected messages', () => {
+    const plain = createUserMessage({ content: [{ type: 'text', text: 'plain' }], source })
+    const nested = {
+      type: 'tool-result' as const,
+      toolCallId: CallId('nested-video'),
+      content: [{ type: 'text' as const, text: 'before' }, video(3), { type: 'text' as const, text: 'after' }],
+    }
+    const videoFree = {
+      type: 'tool-result' as const,
+      toolCallId: CallId('video-free'),
+      content: [{ type: 'text' as const, text: 'unchanged' }],
+    }
+    const visual = createUserMessage({
+      content: [{ type: 'text', text: 'lead' }, image(3), video(3), nested, videoFree],
+      source,
+    })
+
+    const projected = projectVideosForTextModel([plain, visual])
+    expect(projected[0]).toBe(plain)
+    expect(projected[1]?.content).toEqual([
+      { type: 'text', text: 'lead' },
+      image(3),
+      { type: 'text', text: '[video omitted because this model accepts text only; attachment sha256:aaaaaaaa]' },
+      {
+        ...nested,
+        content: [
+          { type: 'text', text: 'before' },
+          { type: 'text', text: '[video omitted because this model accepts text only; attachment sha256:aaaaaaaa]' },
+          { type: 'text', text: 'after' },
+        ],
+      },
+      videoFree,
     ])
   })
 })

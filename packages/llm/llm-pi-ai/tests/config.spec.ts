@@ -87,3 +87,53 @@ describe('request image policy bounds', () => {
     }).toThrow(message)
   })
 })
+
+describe('video modality and budget boundaries', () => {
+  it('accepts the harness video modality at both declaration levels', () => {
+    const declared = configWith({ input: ['text', 'video'] })() as {
+      providers: Record<string, { models?: { input?: unknown }[] }>
+    }
+    expect(declared.providers['acme-gateway']?.models?.[0]?.input).toEqual(['text', 'video'])
+    const routed = routeWith({ defaultInput: ['text', 'image', 'video'] })() as {
+      providers: Record<string, { defaultInput?: unknown }>
+    }
+    expect(routed.providers['acme-gateway']?.defaultInput).toEqual(['text', 'image', 'video'])
+    expect(routeWith({ defaultInput: ['text', 'video'] })).not.toThrow()
+  })
+
+  it('still rejects modalities outside the superset', () => {
+    expect(configWith({ input: ['audio'] })).toThrow(/expected/)
+    expect(routeWith({ defaultInput: ['vide'] })).toThrow(/expected/)
+  })
+
+  it('materializes the maxRequestVideoBytes default and rejects non-positive-integers', () => {
+    const materialized = routeWith({})() as {
+      providers: Record<string, { maxRequestVideoBytes?: unknown }>
+    }
+    expect(materialized.providers['acme-gateway']?.maxRequestVideoBytes).toBe(100 * 1024 * 1024)
+    const explicit = routeWith({ maxRequestVideoBytes: 4096 })() as {
+      providers: Record<string, { maxRequestVideoBytes?: unknown }>
+    }
+    expect(explicit.providers['acme-gateway']?.maxRequestVideoBytes).toBe(4096)
+  })
+
+  it.each([
+    ['maxRequestVideoBytes', 0],
+    ['maxRequestVideoBytes', 1.5],
+    ['maxRequestVideoBytes', Number.NaN],
+  ] as const)('rejects %s=%s at service resolution', (field, value) => {
+    const programmatic = {
+      providers: {
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          models: [{ id: 'm' }],
+          [field]: value,
+        },
+      },
+    } as unknown as Config
+    expect(() => {
+      assertServiceable(programmatic)
+    }).toThrow(new RegExp(`${field} must be a positive integer`))
+  })
+})

@@ -16,7 +16,6 @@ import type {
   LlmProviderInfo,
   PreparedAdapterCall,
   LlmResolvedModelInfo,
-  ModelModality,
   ResolvedRetryPolicy,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
@@ -57,8 +56,14 @@ export interface DeepSeekCatalogModel {
    * system section for requests that name this id.
    */
   systemPrompt?: string
-  /** Accepted request modalities; omission is text-only. */
-  inputModalities?: ModelModality[]
+  /**
+   * Accepted request modalities; omission is text-only. The DeepSeek wire API
+   * accepts text and image input only: a video block never reaches this
+   * adapter's wire — the shared LLM runtime projects videos into text
+   * placeholders for models whose modalities omit video, and every DeepSeek
+   * model's do — and serialization refuses one that arrives anyway.
+   */
+  inputModalities?: ('text' | 'image')[]
   /** Total-pixel budget for one deterministic request preview. */
   imagePixelBudget?: number
   /** Encoded-byte cap for one deterministic request preview. */

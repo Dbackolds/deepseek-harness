@@ -2,7 +2,7 @@
 
 import type { ContentBlock } from './types.ts'
 import type { Message } from './message.ts'
-import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, RequestImageAttachment, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 
 /** Model-facing stand-in for an image removed to fit a provider request bound. */
 export const OFFLOADED_IMAGE_TEXT
@@ -16,6 +16,16 @@ export const OFFLOADED_IMAGE_TEXT
 export function textOnlyImageText(ref: ImageAttachmentRef): string {
   const digest = String(ref.attachmentId).slice('sha256:'.length, 'sha256:'.length + 8)
   return `[image omitted because this model accepts text only; attachment sha256:${digest}]`
+}
+
+/**
+ * Stable text shown to a model that cannot accept one durable video reference.
+ * @param ref - durable master reference omitted from the request.
+ * @returns deterministic text-only placeholder.
+ */
+export function textOnlyVideoText(ref: VideoAttachmentRef): string {
+  const digest = String(ref.attachmentId).slice('sha256:'.length, 'sha256:'.length + 8)
+  return `[video omitted because this model accepts text only; attachment sha256:${digest}]`
 }
 
 /**
@@ -38,6 +48,17 @@ export function requestImageHandleText(version: RequestImageAttachment): string 
 export function contentHasImage(content: readonly ContentBlock[]): boolean {
   return content.some(block => block.type === 'image'
     || (block.type === 'tool-result' && contentHasImage(block.content)))
+}
+
+/**
+ * True when typed model content contains a video block, walking nested
+ * tool-result content with the same depth every other content policy uses.
+ * @param content - typed model content blocks.
+ * @returns whether any nested block is a video.
+ */
+export function contentHasVideo(content: readonly ContentBlock[]): boolean {
+  return content.some(block => block.type === 'video'
+    || (block.type === 'tool-result' && contentHasVideo(block.content)))
 }
 
 /** Base64 length of raw image bytes, including padding. */
@@ -127,6 +148,28 @@ function replaceImagesForTextModel(blocks: readonly ContentBlock[]): ContentBloc
   return next ?? blocks as ContentBlock[]
 }
 
+/** Replace every video occurrence, including nested tool results, for a video-less model. */
+function replaceVideosForTextModel(blocks: readonly ContentBlock[]): ContentBlock[] {
+  let next: ContentBlock[] | undefined
+  for (const [index, block] of blocks.entries()) {
+    if (block.type === 'video') {
+      next ??= blocks.slice(0, index)
+      next.push({ type: 'text', text: textOnlyVideoText(block.attachment) })
+      continue
+    }
+    if (block.type === 'tool-result') {
+      const content = replaceVideosForTextModel(block.content)
+      if (content !== block.content) {
+        next ??= blocks.slice(0, index)
+        next.push({ ...block, content })
+        continue
+      }
+    }
+    next?.push(block)
+  }
+  return next ?? blocks as ContentBlock[]
+}
+
 /**
  * Project durable image history into deterministic text for an exact text-only model.
  * @param messages - complete request history.
@@ -136,6 +179,20 @@ export function projectImagesForTextModel(messages: readonly Message[]): readonl
   if (!messages.some(message => contentHasImage(message.content))) return messages
   return messages.map((message) => {
     const content = replaceImagesForTextModel(message.content)
+    return content === message.content ? message : { ...message, content }
+  })
+}
+
+/**
+ * Project durable video history into deterministic text for an exact model
+ * that does not accept video input.
+ * @param messages - complete request history.
+ * @returns the original list without videos, otherwise shallow message copies with stable placeholders.
+ */
+export function projectVideosForTextModel(messages: readonly Message[]): readonly Message[] {
+  if (!messages.some(message => contentHasVideo(message.content))) return messages
+  return messages.map((message) => {
+    const content = replaceVideosForTextModel(message.content)
     return content === message.content ? message : { ...message, content }
   })
 }

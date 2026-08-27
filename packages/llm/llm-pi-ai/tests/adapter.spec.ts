@@ -6,15 +6,17 @@ import type {
   ImageAttachmentRef,
   ImageRequestPolicy,
   RequestImageAttachment,
+  RequestVideoAttachment,
   SaveImageAttachment,
   StoredImageAttachment,
+  VideoAttachmentRef,
 } from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { createUserMessage, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, ReasoningEffortId, userAgent } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
-import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, resolveProfiles } from '../src/config.ts'
+import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_MAX_REQUEST_VIDEO_BYTES, resolveProfiles } from '../src/config.ts'
 import { memoryAuth } from './auth-double.ts'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
@@ -30,6 +32,80 @@ const IMAGE_REF: ImageAttachmentRef = {
   bytes: 1,
   width: 1,
   height: 1,
+}
+
+const VIDEO_REF: VideoAttachmentRef = {
+  attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
+  mediaType: 'video/mp4',
+  bytes: 3,
+}
+
+/** The raw request version one stored video resolves to. */
+function requestVideo(ref: VideoAttachmentRef, data = 'QUJD'): RequestVideoAttachment {
+  return { attachment: ref, data, mediaType: ref.mediaType, bytes: ref.bytes, version: 'raw-v1' }
+}
+
+/**
+ * An attachment store that only answers request projections. Image
+ * persistence members reject and video members keep the base class's
+ * fail-loud defaults: these tests never persist, only re-read.
+ */
+class RequestOnlyAttachmentStore extends AttachmentStore {
+  readonly imageLimits: ImageAttachmentLimits = {
+    maxImageBytes: 1,
+    maxImagesPerMessage: 1,
+    maxMessageImageBytes: 1,
+    maxImagePixels: 1,
+    maxImageDimension: 2000,
+    mediaTypes: ['image/png'],
+  }
+
+  private readonly videos: ReadonlyMap<string, string>
+
+  constructor(ctx: Context, config?: { videos?: ReadonlyMap<string, string> }) {
+    super(ctx)
+    this.videos = config?.videos ?? new Map([[String(VIDEO_REF.attachmentId), 'QUJD']])
+  }
+
+  private readonly refused = () => Promise.reject(new Error('not used'))
+
+  validateImage(_input: SaveImageAttachment): Promise<void> {
+    return this.refused()
+  }
+
+  saveImage(_input: SaveImageAttachment): Promise<ImageAttachmentRef> {
+    return this.refused()
+  }
+
+  readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
+    return this.refused()
+  }
+
+  override readVideoRequest(ref: VideoAttachmentRef): Promise<RequestVideoAttachment> {
+    return Promise.resolve(requestVideo(ref, this.videos.get(String(ref.attachmentId)) ?? 'QUJD'))
+  }
+}
+
+/** Plain-object store answering only `readVideoRequest`, for direct adapter tests. */
+function storeWithVideos(videos?: ReadonlyMap<string, string>): AttachmentStore {
+  const payload = videos ?? new Map([[String(VIDEO_REF.attachmentId), 'QUJD']])
+  return {
+    readVideoRequest: (ref: VideoAttachmentRef) =>
+      Promise.resolve(requestVideo(ref, payload.get(String(ref.attachmentId)) ?? 'QUJD')),
+  } as unknown as AttachmentStore
+}
+
+/** Adapter over the real resolver with a request-only attachment store. */
+function adapterWithStore(
+  providers: Record<string, LlmPiAi.PiAiProviderProfile>,
+  videos?: ReadonlyMap<string, string>,
+): PiAiAdapter {
+  return new PiAiAdapter({
+    profiles: () => resolveProfiles(providers),
+    resolveApiKey: () => Promise.resolve('test-key'),
+    auth: memoryAuth(),
+    resolveAttachments: () => storeWithVideos(videos),
+  })
 }
 
 async function harness(baseURL: string, overrides: Record<string, unknown> = {}): Promise<Context> {
@@ -1054,5 +1130,200 @@ describe('abort wiring', () => {
     }
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(server.requests).toHaveLength(1)
+  })
+})
+
+describe('video input', () => {
+  const videoGateway = (baseURL: string, overrides: Record<string, unknown> = {}): Record<string, LlmPiAi.PiAiProviderProfile> => ({
+    'video-gateway': {
+      apiKeyEnv: 'PI_TEST_KEY',
+      api: 'openai-completions',
+      baseURL,
+      models: [{ id: 'glm-5.3-flash', input: ['text', 'image', 'video'], contextWindow: 131_072, maxTokens: 8_192 }],
+      ...overrides,
+    },
+  })
+
+  const drain = async (adapter: PiAiAdapter, options: Parameters<PiAiAdapter['stream']>[0]): Promise<unknown> =>
+    (async () => {
+      for await (const _chunk of adapter.stream(options)) { /* drain */ }
+    })()
+
+  it('rejects video for a model whose modalities omit it before provider I/O', async () => {
+    const adapter = adapterOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test/v1',
+        models: [{ id: 'acme-text', contextWindow: 65_536, maxTokens: 4_096 }],
+      },
+    })
+    await expect(drain(adapter, {
+      provider: 'acme-gateway',
+      model: 'acme-text',
+      messages: [createUserMessage({
+        content: [{ type: 'video', attachment: VIDEO_REF }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })).rejects.toThrow('pi-ai model "acme-text" does not support video input')
+  })
+
+  it('rejects video without the durable attachment service before provider I/O', async () => {
+    const server = await mockServer([])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'video-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          models: [{ id: 'glm-5.3-flash', input: ['text', 'image', 'video'], contextWindow: 131_072, maxTokens: 8_192 }],
+        },
+      },
+    })
+
+    const result = await assemble(ctx, {
+      provider: 'video-gateway',
+      model: 'glm-5.3-flash',
+      messages: [createUserMessage({
+        content: [{ type: 'video', attachment: VIDEO_REF }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'UNSUPPORTED_CONTENT' } })
+    expect(server.requests).toEqual([])
+  })
+
+  it('rejects a video payload over maxRequestVideoBytes naming the size', async () => {
+    const adapter = adapterWithStore({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test/v1',
+        maxRequestVideoBytes: 3,
+        models: [{ id: 'acme-vision', input: ['text', 'image', 'video'], contextWindow: 65_536, maxTokens: 4_096 }],
+      },
+    })
+    await expect(drain(adapter, {
+      provider: 'acme-gateway',
+      model: 'acme-vision',
+      messages: [createUserMessage({
+        content: [{ type: 'video', attachment: VIDEO_REF }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })).rejects.toThrow(/video request payload 4 bytes exceeds.*maxRequestVideoBytes 3/s)
+  })
+
+  it('injects video_url wire items for user videos and leaves marker-free bodies untouched', async () => {
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: videoGateway(`${server.url}/v1`) })
+    await ctx.plugin(RequestOnlyAttachmentStore)
+
+    await assemble(ctx, {
+      provider: 'video-gateway',
+      model: 'glm-5.3-flash',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'describe' }, { type: 'video', attachment: VIDEO_REF }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(server.requests[0]).toMatchObject({
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: 'describe' },
+          { type: 'video_url', video_url: { url: 'QUJD' } },
+        ],
+      }],
+    })
+    expect(JSON.stringify(server.requests[0])).not.toContain('dsh-video-request')
+
+    // A marker-free request on the same lease pays only the fast-path scan.
+    await assemble(ctx, {
+      provider: 'video-gateway',
+      model: 'glm-5.3-flash',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'plain' }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(server.requests[1]).toMatchObject({
+      messages: [{ role: 'user', content: 'plain' }],
+    })
+  })
+
+  it('moves tool-result videos into the synthetic user message on the wire', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: videoGateway(`${server.url}/v1`) })
+    await ctx.plugin(RequestOnlyAttachmentStore)
+
+    await assemble(ctx, {
+      provider: 'video-gateway',
+      model: 'glm-5.3-flash',
+      messages: [createUserMessage({
+        content: [{
+          type: 'tool-result',
+          toolCallId: 'call-video' as never,
+          content: [
+            { type: 'text', text: 'Video sha256:bbb: clip.mp4 (video/mp4, 3 bytes)' },
+            { type: 'video', attachment: VIDEO_REF },
+          ],
+        }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+
+    const wire = server.requests[0] as { messages: { role: string; content: unknown; tool_call_id?: string }[] }
+    expect(wire.messages.map(message => message.role)).toEqual(['tool', 'user'])
+    expect(wire.messages[0]).toMatchObject({ tool_call_id: 'call-video' })
+    expect(wire.messages[0]?.content).not.toContain('dsh-video-request')
+    expect(wire.messages[1]?.content).toEqual([
+      { type: 'text', text: 'Attached video(s) from tool result:' },
+      { type: 'video_url', video_url: { url: 'QUJD' } },
+    ])
+  })
+
+  it('shares the SSE repair lease with the video rewrite without stacking wrappers', async () => {
+    // Both stages ride one pipeline wrapper for the stream lifetime; the SSE
+    // repair must keep working while the video rewrite is installed.
+    const broken = '{"choices":[{"delta":{"content":"x\\n y"},"index":0,"finish_reason":null}]}'
+    const events = [
+      '{"choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}',
+      broken.replaceAll('\\n', '\n'),
+      '{"choices":[{"delta":{},"index":0,"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}',
+      '[DONE]',
+    ]
+    const server = await mockServer([{ events }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: videoGateway(`${server.url}/v1`) })
+    await ctx.plugin(RequestOnlyAttachmentStore)
+
+    const result = await assemble(ctx, {
+      provider: 'video-gateway',
+      model: 'glm-5.3-flash',
+      messages: [createUserMessage({
+        content: [{ type: 'video', attachment: VIDEO_REF }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(result.message.content).toEqual([{ type: 'text', text: 'x\n y' }])
+  })
+
+  it('defaults and validates maxRequestVideoBytes beside the image budgets', () => {
+    expect(DEFAULT_MAX_REQUEST_VIDEO_BYTES).toBe(100 * 1024 * 1024)
+    expect(resolveProfiles(videoGateway('https://acme.test/v1')).get('video-gateway')?.maxRequestVideoBytes)
+      .toBe(DEFAULT_MAX_REQUEST_VIDEO_BYTES)
+    expect(resolveProfiles(videoGateway('https://acme.test/v1', { maxRequestVideoBytes: 1024 })).get('video-gateway')?.maxRequestVideoBytes)
+      .toBe(1024)
+    expect(() => resolveProfiles(videoGateway('https://acme.test/v1', { maxRequestVideoBytes: 0 })))
+      .toThrow(/maxRequestVideoBytes must be a positive integer/)
+    expect(() => resolveProfiles(videoGateway('https://acme.test/v1', { maxRequestVideoBytes: 1.5 })))
+      .toThrow(/maxRequestVideoBytes must be a positive integer/)
+    expect(() => resolveProfiles(videoGateway('https://acme.test/v1', { maxRequestVideoBytes: Number.NaN })))
+      .toThrow(/maxRequestVideoBytes must be a positive integer/)
   })
 })

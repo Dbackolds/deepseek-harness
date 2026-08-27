@@ -17,11 +17,13 @@ import LlmRuntime, {
   createUserMessage,
 } from '@deepseek-ai/dsh-llm'
 import type {
+  ContentBlock,
   LlmModelContext,
   LlmModelInfo,
   LlmModelReasoningInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
+  ModelModality,
 } from '@deepseek-ai/dsh-llm'
 
 class ScriptedAdapter extends LlmAdapter {
@@ -1037,6 +1039,107 @@ describe('LlmRuntime', () => {
     await collect(ctx.llm.stream(frozen))
     expect(Object.isFrozen(seen[1])).toBe(true)
     expect(Object.isFrozen(seen[1]?.messages)).toBe(true)
+  })
+
+  it('projects historical videos for a video-less route while an image-capable one keeps them', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const seen: Record<'videoless' | 'sighted', ContentBlock[]> = { videoless: [], sighted: [] }
+    type Route = 'videoless' | 'sighted'
+    const adapterOf = (route: Route, inputModalities: readonly ModelModality[]) =>
+      new class extends ScriptedAdapter {
+        override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+          return Promise.resolve({ provider, id: model, name: model, inputModalities })
+        }
+
+        override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+          seen[route].push(...options.messages[0]?.content ?? [])
+          yield * super.stream(options)
+        }
+      }(SCRIPT)
+    ctx.llm.registerAdapter(['videoless'], adapterOf('videoless', ['text', 'image']))
+    ctx.llm.registerAdapter(['sighted'], adapterOf('sighted', ['text', 'image', 'video']))
+    const video = {
+      type: 'video' as const,
+      attachment: {
+        attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
+        mediaType: 'video/mp4' as const,
+        bytes: 3,
+      },
+    }
+
+    await collect(ctx.llm.stream({
+      provider: 'videoless',
+      model: 'still-model',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'watch' }, video],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }))
+    await collect(ctx.llm.stream({
+      provider: 'sighted',
+      model: 'vision-model',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'watch' }, video],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }))
+
+    expect(seen.videoless).toEqual([
+      { type: 'text', text: 'watch' },
+      { type: 'text', text: '[video omitted because this model accepts text only; attachment sha256:bbbbbbbb]' },
+    ])
+    expect(seen.sighted).toEqual([{ type: 'text', text: 'watch' }, video])
+  })
+
+  it('projects images and videos together for a text-only route', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const seen: ContentBlock[] = []
+    const adapter = new class extends ScriptedAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text'] })
+      }
+
+      override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+        seen.push(...options.messages[0]?.content ?? [])
+        yield * super.stream(options)
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
+
+    await collect(ctx.llm.stream({
+      provider: 'route',
+      model: 'text-only',
+      messages: [createUserMessage({
+        content: [
+          {
+            type: 'image',
+            attachment: {
+              attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+              mediaType: 'image/png',
+              bytes: 3,
+              width: 1,
+              height: 1,
+            },
+          },
+          {
+            type: 'video',
+            attachment: {
+              attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
+              mediaType: 'video/mp4',
+              bytes: 3,
+            },
+          },
+        ],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }))
+
+    expect(seen).toEqual([
+      { type: 'text', text: '[image omitted because this model accepts text only; attachment sha256:aaaaaaaa]' },
+      { type: 'text', text: '[video omitted because this model accepts text only; attachment sha256:bbbbbbbb]' },
+    ])
   })
 
   it('passes cancellation through exact-model resolution', async () => {
