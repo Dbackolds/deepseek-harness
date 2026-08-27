@@ -17,6 +17,8 @@ import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import type { CommandContribution, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
+import type { ModelIdentityLabelInjected } from '../src/client/ModelIdentityLabel.tsx'
+import type { ModelRouteLineInjected } from '../src/client/ModelRouteLine.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { zh } from '../src/client/locales.ts'
 
@@ -94,13 +96,26 @@ async function bench() {
     },
   })
   const seats = new Map<string, {
-    inject: ((sessionId: SessionId) => ModelSelectInjected) | undefined
+    inject: ((sessionId: SessionId) => unknown) | undefined
     locale: string | undefined
+    id: string | undefined
+    order: number | undefined
   }>()
   ctx.provide('slots', {
     inject(_name: string, callback: () => () => void) { return callback() },
-    register(options: { name: string; locale?: string; inject?: (sessionId: SessionId) => ModelSelectInjected }) {
-      seats.set(options.name, { inject: options.inject, locale: options.locale })
+    register(options: {
+      name: string
+      locale?: string
+      id?: string
+      order?: number
+      inject?: (sessionId: SessionId) => unknown
+    }) {
+      seats.set(options.name, {
+        inject: options.inject,
+        locale: options.locale,
+        id: options.id,
+        order: options.order,
+      })
       return () => { seats.delete(options.name) }
     },
   })
@@ -130,7 +145,12 @@ async function bench() {
   return {
     ctx, fiber, mint, calls,
     contribution: () => contribution!,
-    seat: () => seats.get('conversation.input.model')!,
+    seat: () => seats.get('conversation.input.model')! as {
+      inject: ((sessionId: SessionId) => ModelSelectInjected) | undefined
+      locale: string | undefined
+    },
+    headerSeat: () => seats.get('conversation.session.header.actions')!,
+    routeSeat: () => seats.get('conversation.chat.assistantRoute')!,
     hostCurrent: () => current,
     setHostCurrent: (selection: ModelSelection) => { current = selection },
     address: (id: SessionId) => { addressed.add(id) },
@@ -324,5 +344,45 @@ describe('ui-model-selection dual entry', () => {
     b.ctx.emit('connection/reset')
     await Promise.resolve()
     expect(b.calls).toEqual({ models: 0, select: 0 })
+  })
+
+  it('registers both read-only identity labels over the SAME shared directory', async () => {
+    const b = await bench()
+    b.mint('s1')
+    // The header chip sits in the static-context band, right of agent-preset's -10.
+    expect(b.headerSeat()).toMatchObject({ id: 'model-identity', order: -5, locale: 'model' })
+    expect(b.routeSeat()).toMatchObject({ locale: 'model' })
+
+    const headerFace = b.headerSeat().inject!(sid('s1')) as ModelIdentityLabelInjected
+    const routeFace = b.routeSeat().inject!(sid('s1')) as ModelRouteLineInjected
+    const seatFace = b.seat().inject!(sid('s1'))
+    // One directory instance per session across all four entries — the labels
+    // are readers of the selection entries' state, never a second service.
+    expect(headerFace.hooks.directory).toBe(seatFace.directory)
+    expect(routeFace.hooks.directory).toBe(seatFace.directory)
+
+    // The header face primes the load, so names resolve without the composer.
+    expect(b.calls.models).toBe(0)
+    headerFace.load()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(b.calls.models).toBe(1)
+    expect(headerFace.hooks.directory.getSnapshot().groups).toHaveLength(1)
+  })
+
+  it('withholds identity-label load priming from addressed subagent sessions', async () => {
+    const b = await bench()
+    b.mint('child')
+    b.address(sid('child'))
+
+    const headerFace = b.headerSeat().inject!(sid('child')) as ModelIdentityLabelInjected
+    headerFace.load()
+    const routeFace = b.routeSeat().inject!(sid('child')) as ModelRouteLineInjected
+    routeFace.load()
+    await Promise.resolve()
+    await Promise.resolve()
+    // The chip still reports (raw-id fallback in the component); it just never
+    // fires the Agent-bound RPC an addressed subagent session must not run.
+    expect(b.calls.models).toBe(0)
   })
 })

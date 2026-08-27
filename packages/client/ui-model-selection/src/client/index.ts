@@ -1,6 +1,7 @@
 /**
- * Model selection plugin, browser half — TWO entries over ONE per-session
- * directory owned by ModelDirectoryResolver (`ctx.modelDirectories`). The /model popupSelect
+ * Model selection plugin, browser half — TWO selection entries and TWO
+ * read-only identity labels over ONE per-session directory owned by
+ * ModelDirectoryResolver (`ctx.modelDirectories`). The /model popupSelect
  * contribution and the composer's named `conversation.input.model` seat both
  * load the session's provider-grouped advisory directory (`session.models`)
  * and submit through `session.selectModel` via the same directory instance,
@@ -10,6 +11,12 @@
  * inline error) without forking the state. Addressed subagent sessions expose
  * neither entry because those Agent-bound RPCs would activate persisted
  * history outside the direct-parent continuation path.
+ *
+ * The two labels REPORT instead of choosing: the session header's identity
+ * chip (last dispatched request, from the `requestRoute` projection) and the
+ * per-step clock line (provenance/requestConfig from the chat fold) resolve
+ * catalog display names from the same shared directory, so selector changes
+ * that were never sent never move them.
  */
 // Type-only: the carrier types, the forwarded Host-event face and the ctx.remote merge.
 import type { ModelSelection, SessionModels } from '@deepseek-ai/dsh-api-remotes/client'
@@ -24,6 +31,10 @@ import type { ModelDirectoryState } from './directory.ts'
 import { ModelDirectoryResolver } from './service.ts'
 import type { ModelSelectInjected } from './slots.ts'
 import { ModelSelect } from './ModelSelect.tsx'
+import { ModelIdentityLabel } from './ModelIdentityLabel.tsx'
+import type { ModelIdentityLabelInjected } from './ModelIdentityLabel.tsx'
+import { ModelRouteLine } from './ModelRouteLine.tsx'
+import type { ModelRouteLineInjected } from './ModelRouteLine.tsx'
 import { en, zh, type ModelKey } from './locales.ts'
 
 export { ModelDirectory } from './directory.ts'
@@ -31,6 +42,8 @@ export type { ModelDirectoryState } from './directory.ts'
 export { ModelDirectoryResolver } from './service.ts'
 export type { ModelSelectInjected } from './slots.ts'
 export type { ModelKey } from './locales.ts'
+export type { ModelIdentityLabelInjected, ModelIdentityLabelProps } from './ModelIdentityLabel.tsx'
+export type { ModelRouteLineInjected, ModelRouteLineProps } from './ModelRouteLine.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -172,5 +185,51 @@ export function apply(ctx: ClientContext): void {
         }
       },
     }, ModelSelect))
+  })
+
+  // Entries 3 & 4: the two read-only identity labels over the SAME per-session
+  // directory. Both report LOGGED routes (the requestRoute projection / the
+  // chat fold's per-step shares) — the composer selector never moves them.
+  ctx.inject(['slots', 'modelDirectories'], (scope: ClientContext) => {
+    const models = scope.modelDirectories
+    const sessions = scope.sessions
+
+    // Entry 3: the session header's identity chip beside the agent-preset
+    // label (same static-context band, right of its -10).
+    scope.slots.inject('conversation.session.header.actions', () => scope.slots.register({
+      name: 'conversation.session.header.actions',
+      id: 'model-identity',
+      // Static session context occupies the header's leading negative-order band.
+      order: -5,
+      locale: NS,
+      inject: (sessionId): ModelIdentityLabelInjected => {
+        const directory = models.directoryFor(sessionId)
+        // Addressed subagent sessions reject the Agent-bound models RPC; the
+        // chip still reports (raw-id fallback) without priming a refused load.
+        const available = sessions.subagentAddress(sessionId) === undefined
+        return {
+          hooks: { directory: directory.store },
+          load: () => {
+            if (available) directory.load().catch(() => { /* surfaced on the store */ })
+          },
+        }
+      },
+    }, ModelIdentityLabel))
+
+    // Entry 4: the per-step model line under the assistant message clock.
+    scope.slots.inject('conversation.chat.assistantRoute', () => scope.slots.register({
+      name: 'conversation.chat.assistantRoute',
+      locale: NS,
+      inject: (sessionId): ModelRouteLineInjected => {
+        const directory = models.directoryFor(sessionId)
+        const available = sessions.subagentAddress(sessionId) === undefined
+        return {
+          hooks: { directory: directory.store },
+          load: () => {
+            if (available) directory.load().catch(() => { /* surfaced on the store */ })
+          },
+        }
+      },
+    }, ModelRouteLine))
   })
 }
