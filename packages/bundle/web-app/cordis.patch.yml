@@ -96,6 +96,12 @@
     - id: session-stats
       name: '@deepseek-ai/dsh-session-stats'
 
+    # Latest dispatched request route (the requestRoute projection key) for
+    # the header identity label and per-step model lines; the projection
+    # registry itself is a base-layer row.
+    - id: session-route
+      name: '@deepseek-ai/dsh-session-route'
+
     # Resolve bind host, SSH launch, and display once at boot, then mount the
     # matching dual-face directory picker. Mount -native or -browse directly in
     # an overlay to pin the interaction.
