@@ -10,7 +10,6 @@ import LocalAttachmentStore, {
   DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION,
   DEFAULT_IMAGE_COMPRESSION_CONCURRENCY,
   DEFAULT_MAX_IMAGE_BYTES,
-  DEFAULT_MAX_IMAGE_DIMENSION,
   DEFAULT_MAX_IMAGE_PIXELS,
   DEFAULT_MAX_IMAGES_PER_MESSAGE,
   DEFAULT_MAX_MESSAGE_IMAGE_BYTES,
@@ -23,13 +22,11 @@ describe('local attachment service', () => {
     expect(DEFAULT_MAX_IMAGES_PER_MESSAGE).toBe(20)
     expect(DEFAULT_MAX_MESSAGE_IMAGE_BYTES).toBe(200 * 1024 * 1024)
     expect(DEFAULT_MAX_IMAGE_PIXELS).toBe(64_000_000)
-    expect(DEFAULT_MAX_IMAGE_DIMENSION).toBe(8192)
     expect(service.imageLimits).toEqual({
       maxImageBytes: DEFAULT_MAX_IMAGE_BYTES,
       maxImagesPerMessage: DEFAULT_MAX_IMAGES_PER_MESSAGE,
       maxMessageImageBytes: DEFAULT_MAX_MESSAGE_IMAGE_BYTES,
       maxImagePixels: DEFAULT_MAX_IMAGE_PIXELS,
-      maxImageDimension: DEFAULT_MAX_IMAGE_DIMENSION,
       mediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
     })
     expect(service.normalizationPolicy).toEqual({
@@ -37,6 +34,26 @@ describe('local attachment service', () => {
       maxBytes: DEFAULT_NORMALIZED_IMAGE_MAX_BYTES,
     })
     expect(service.imageCompressionConcurrency).toBe(DEFAULT_IMAGE_COMPRESSION_CONCURRENCY)
+  })
+
+  it('publishes an explicit per-side admission cap when configured', () => {
+    const service = new LocalAttachmentStore(new Context(), { maxImageDimension: 4096 })
+    expect(service.imageLimits.maxImageDimension).toBe(4096)
+  })
+
+  it('admits a source whose long side exceeds the former default per-side cap', async () => {
+    const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-wide-source-'))
+    try {
+      const service = new LocalAttachmentStore(new Context(), { dshHome })
+      const data = new Uint8Array(await sharp({
+        create: { width: 9000, height: 16, channels: 3, background: { r: 1, g: 2, b: 3 } },
+      }).png().toBuffer())
+      await expect(service.saveImage({ data, mediaType: 'image/png' })).resolves.toMatchObject({
+        originalDimensions: { width: 9000, height: 16 },
+      })
+    } finally {
+      await rm(dshHome, { recursive: true, force: true })
+    }
   })
 
   it('resolves and validates the instance image-compression concurrency', () => {

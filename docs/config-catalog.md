@@ -335,7 +335,11 @@ export interface Config {
   maxMessageImageBytes?: number
   /** Maximum intrinsic width multiplied by height accepted for one submitted image. Default: 64,000,000. */
   maxImagePixels?: number
-  /** Maximum intrinsic width and maximum intrinsic height accepted for one submitted image. Default: 8192px. */
+  /**
+   * Maximum intrinsic width and maximum intrinsic height accepted for one
+   * submitted image. Omitted by default so source admission does not refuse
+   * images by side length; normalization still limits the stored long edge.
+   */
   maxImageDimension?: number
   /** Long-edge pixel cap of the stored provider-independent normalized image. */
   normalizedImageMaxDimension?: number
@@ -346,7 +350,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/attachment/attachment-local/src/index.ts:51`](../packages/attachment/attachment-local/src/index.ts)
+Source: [`packages/attachment/attachment-local/src/index.ts:49`](../packages/attachment/attachment-local/src/index.ts)
 
 <a id="deepseek-aidsh-bash-local"></a>
 

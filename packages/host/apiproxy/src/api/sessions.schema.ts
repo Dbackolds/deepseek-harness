@@ -249,7 +249,7 @@ export const imageLimitsProjectionSchema = z.object({
   maxImagesPerMessage: z.number().int().positive(),
   maxMessageImageBytes: z.number().int().positive(),
   maxImagePixels: z.number().int().positive(),
-  maxImageDimension: z.number().int().positive(),
+  maxImageDimension: z.number().int().positive().optional(),
   mediaTypes: z.array(z.string()),
 }) as unknown as z.ZodType<ImageAttachmentLimits>
 

@@ -50,13 +50,16 @@ interface ImageAttachmentLimits {
   maxImagesPerMessage: number
   maxMessageImageBytes: number
   maxImagePixels: number
-  /** Maximum intrinsic width and maximum intrinsic height in pixels for one image. */
-  maxImageDimension: number
+  /**
+   * Maximum intrinsic width and maximum intrinsic height in pixels for one
+   * image. Omitted when the deployment does not refuse images by side length.
+   */
+  maxImageDimension?: number
   mediaTypes: readonly ImageMediaType[]
 }
 ```
 
-本地后端每条消息最多准入 20 张图片，源图编码数据总量不超过 200 MiB。单张源图不得超过 20 MiB、64,000,000 像素和单边 8192 像素。这些源文件限制先于独立的规范化阶段执行；该阶段默认把长边限制为 2048 像素，把编码数据限制为 4 MiB。
+本地后端每条消息最多准入 20 张图片，源图编码数据总量不超过 200 MiB。单张源图不得超过 20 MiB 和 64,000,000 像素。这些源文件限制先于独立的规范化阶段执行；该阶段默认把长边限制为 2048 像素，把编码数据限制为 4 MiB。部署也可以设置 `maxImageDimension`，在该阶段之前按边长拒绝图片。
 
 引用记录固有尺寸和编码长度，使客户端无需先解码即可排布历史记录；每次权威读取仍会根据对象重新校验摘要、媒体签名、尺寸和元数据。
 

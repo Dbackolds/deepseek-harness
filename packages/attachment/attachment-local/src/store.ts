@@ -52,7 +52,10 @@ async function inspectMetadata(
   limits: ImageAttachmentLimits,
 ): Promise<DetectedImage> {
   if (data.byteLength === 0) throw new AttachmentError('Image is empty.', 'INVALID_IMAGE')
-  const detected = await detectImage(data, { maxPixels: limits.maxImagePixels, maxDimension: limits.maxImageDimension })
+  const detected = await detectImage(data, {
+    maxPixels: limits.maxImagePixels,
+    ...limits.maxImageDimension === undefined ? {} : { maxDimension: limits.maxImageDimension },
+  })
   if (detected.mediaType !== declaredMediaType) throw new AttachmentError('Declared image type does not match its bytes.', 'IMAGE_TYPE_MISMATCH')
   return detected
 }

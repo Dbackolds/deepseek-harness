@@ -34,7 +34,9 @@ export function attachmentErrorText(
     case 'SUBAGENT_IMAGE_UNSUPPORTED': return t('image.subagentUnsupported')
     case 'IMAGE_TOO_MANY_PIXELS': return t('image.tooManyPixels')
     case 'IMAGE_DIMENSION_TOO_LARGE':
-      if (limits !== undefined) return t('image.dimensionTooLarge', { size: limits.maxImageDimension })
+      if (limits?.maxImageDimension !== undefined) {
+        return t('image.dimensionTooLarge', { size: limits.maxImageDimension })
+      }
       break
     // Undecodable bytes or a declared type its bytes contradict: solvable by
     // replacing or re-exporting the file, so it reads as a format problem.

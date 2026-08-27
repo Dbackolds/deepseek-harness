@@ -224,8 +224,11 @@ export function applyReadImageTool(ctx: Context): void {
         // must never enter durable history, where it would ride every later
         // model request past provider-side dimension rejections.
         if (error.code === 'IMAGE_DIMENSION_TOO_LARGE') {
+          const dimensionLimit = attachments.imageLimits.maxImageDimension
           throw new Error(
-            `cannot read "${target.displayPath}": at least one image side exceeds the ${attachments.imageLimits.maxImageDimension}px limit; downscale the image and read the smaller copy`,
+            dimensionLimit === undefined
+              ? `cannot read "${target.displayPath}": at least one image side exceeds the deployment's per-side pixel limit; downscale the image and read the smaller copy`
+              : `cannot read "${target.displayPath}": at least one image side exceeds the ${dimensionLimit}px limit; downscale the image and read the smaller copy`,
             { cause: error },
           )
         }

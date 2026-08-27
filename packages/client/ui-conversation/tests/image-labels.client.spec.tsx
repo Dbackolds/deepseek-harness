@@ -66,6 +66,9 @@ describe('attachment rejection copy', () => {
     expect(attachmentErrorText(t, 'IMAGES_TOO_LARGE', limits)).toBe('图片总大小超过 100MB，请移除部分图片')
     expect(attachmentErrorText(t, 'IMAGE_DIMENSION_TOO_LARGE', limits)).toBe('图片宽高不能超过 2000px，请缩小后重试')
     expect(attachmentErrorText(enT, 'TOO_MANY_IMAGES', limits)).toBe('A message can include up to 20 images')
+    const { maxImageDimension: _omitted, ...limitsWithoutDimension } = limits
+    expect(attachmentErrorText(t, 'IMAGE_DIMENSION_TOO_LARGE', limitsWithoutDimension))
+      .toBe('图片发送失败（IMAGE_DIMENSION_TOO_LARGE），请重新添加图片后再试')
   })
 
   it('folds unknown reasons and limit reasons without projected limits into the send-failed line', () => {

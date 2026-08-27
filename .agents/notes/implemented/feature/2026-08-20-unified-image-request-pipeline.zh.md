@@ -14,7 +14,7 @@ Status: implemented
 
 ### 提供方无关的规范化附件
 
-每条消息最多准入 20 张图片，源图编码字节总量不超过 200MiB。每张源图会在可配置的 20MiB、64,000,000 像素和单边 8192px 限制内完整解码。规范化过程会应用 EXIF 方向，删除元数据和色彩配置文件，转换为 8-bit sRGB/sRGBA，并保持宽高比把长边限制到 `normalizedImageMaxDimension`，默认 2048px。缩放减小光栅时，`originalDimensions` 记录规范化之前、应用方向之后的输入宽高。
+每条消息最多准入 20 张图片，源图编码字节总量不超过 200MiB。每张源图会在可配置的 20MiB 和 64,000,000 像素限制内完整解码。部署也可以设置 `maxImageDimension`，按边长拒绝源图；默认不启用该拒绝，因此普通大截图会被准入，再进入规范化（[默认不再按边长拒绝源图](../simplification/2026-08-27-omit-default-image-side-admission-cap.zh.md)）。规范化过程会应用 EXIF 方向，删除元数据和色彩配置文件，转换为 8-bit sRGB/sRGBA，并保持宽高比把长边限制到 `normalizedImageMaxDimension`，默认 2048px。缩放减小光栅时，`originalDimensions` 记录规范化之前、应用方向之后的输入宽高。
 
 规范化附件有独立的 `normalizedImageMaxBytes` 安全上限，默认 4MiB。透明通道绝不铺平。系统通过 nearest-neighbour 对有界样本判断色彩复杂度，不会通过像素平均把高频图片误判为低色数。确认的低色数输入先尝试 PNG，只有不带 alpha 通道时才使用 palette，随后依次尝试质量 85、80、75 的 WebP；其他透明输入依次尝试这些质量的 WebP；其他非透明输入依次尝试这些质量的 JPEG。候选按顺序执行，首个不超过上限的结果会立即返回。同一尺寸的候选全部超限后才会缩小尺寸。源扩展名不会把 PNG 归类为低色数图片。处于两个规范化上限内的干净、单帧、8-bit sRGB/sRGBA PNG、JPEG 或 WebP 按字节原样直通，并保留内容寻址去重。GIF、动图、元数据、方向、16-bit PNG 和不兼容色彩空间都会触发转换。源图和转换输出各完整解码一次；输出的格式、尺寸、位深、色彩空间和透明通道事实通过校验后，其摘要才会进入引用。
 

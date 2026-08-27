@@ -198,7 +198,7 @@ it('accepts a whole-page drop under the limits-labeled overlay and refuses an ov
   expect([...(rail?.querySelectorAll('img') ?? [])]).toHaveLength(1)
 })
 
-it('renders a host dimension rejection with the projected 2000px limit', async () => {
+it('renders a host dimension rejection with the projected per-side limit', async () => {
   mountAssembledApp('?fixture&fixturePrompt=reject')
 
   const tree = await screen.findByRole('tree', { name: 'Sessions' }, { timeout: 10_000 })
@@ -219,12 +219,12 @@ it('renders a host dimension rejection with the projected 2000px limit', async (
   })
   fireEvent.keyDown(textarea, { key: 'Enter' })
 
-  const message = 'Image sides must be at most 2000px; downscale it and try again'
+  const message = 'Sending images failed (IMAGE_DIMENSION_TOO_LARGE); re-add them and try again'
   const toast = await screen.findByText(message)
   expect({ role: toast.closest('[role="alert"]')?.getAttribute('role'), text: toast.textContent }).toMatchInlineSnapshot(`
     {
       "role": "alert",
-      "text": "Image sides must be at most 2000px; downscale it and try again",
+      "text": "Sending images failed (IMAGE_DIMENSION_TOO_LARGE); re-add them and try again",
     }
   `)
   expect(document.querySelector('[role="group"][aria-label="Pending images"]')).not.toBeNull()

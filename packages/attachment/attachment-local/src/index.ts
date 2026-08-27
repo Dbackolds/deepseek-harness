@@ -32,8 +32,6 @@ export const DEFAULT_MAX_IMAGES_PER_MESSAGE = 20
 export const DEFAULT_MAX_MESSAGE_IMAGE_BYTES = 200 * 1024 * 1024
 /** Default maximum intrinsic pixels for one submitted image. */
 export const DEFAULT_MAX_IMAGE_PIXELS = 64_000_000
-/** Default per-side pixel cap for one submitted image. */
-export const DEFAULT_MAX_IMAGE_DIMENSION = 8192
 /**
  * Default long-edge target of the stored normalized image. A larger source
  * is admitted and downscaled to this edge, so admission bounds what rides
@@ -59,7 +57,11 @@ export interface Config {
   maxMessageImageBytes?: number
   /** Maximum intrinsic width multiplied by height accepted for one submitted image. Default: 64,000,000. */
   maxImagePixels?: number
-  /** Maximum intrinsic width and maximum intrinsic height accepted for one submitted image. Default: 8192px. */
+  /**
+   * Maximum intrinsic width and maximum intrinsic height accepted for one
+   * submitted image. Omitted by default so source admission does not refuse
+   * images by side length; normalization still limits the stored long edge.
+   */
   maxImageDimension?: number
   /** Long-edge pixel cap of the stored provider-independent normalized image. */
   normalizedImageMaxDimension?: number
@@ -138,7 +140,7 @@ export class LocalAttachmentStore extends AttachmentStore {
     maxImagesPerMessage: z.number().step(1).min(1).default(DEFAULT_MAX_IMAGES_PER_MESSAGE),
     maxMessageImageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_MESSAGE_IMAGE_BYTES),
     maxImagePixels: z.number().step(1).min(1).default(DEFAULT_MAX_IMAGE_PIXELS),
-    maxImageDimension: z.number().step(1).min(1).default(DEFAULT_MAX_IMAGE_DIMENSION),
+    maxImageDimension: z.number().step(1).min(1),
     normalizedImageMaxDimension: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION),
     normalizedImageMaxBytes: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_BYTES),
     imageCompressionConcurrency: z.number().step(1).min(1).max(MAX_IMAGE_COMPRESSION_CONCURRENCY)
@@ -163,7 +165,7 @@ export class LocalAttachmentStore extends AttachmentStore {
       maxImagesPerMessage: config.maxImagesPerMessage ?? DEFAULT_MAX_IMAGES_PER_MESSAGE,
       maxMessageImageBytes: config.maxMessageImageBytes ?? DEFAULT_MAX_MESSAGE_IMAGE_BYTES,
       maxImagePixels: config.maxImagePixels ?? DEFAULT_MAX_IMAGE_PIXELS,
-      maxImageDimension: config.maxImageDimension ?? DEFAULT_MAX_IMAGE_DIMENSION,
+      ...config.maxImageDimension === undefined ? {} : { maxImageDimension: config.maxImageDimension },
       mediaTypes: Object.freeze(['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const),
     })
     this.normalizationPolicy = Object.freeze({

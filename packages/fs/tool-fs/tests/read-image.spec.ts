@@ -407,6 +407,40 @@ describe('image admission failures', () => {
     expect(text(result)).toContain('downscale the image and read the smaller copy')
   })
 
+  it('names a generic per-side refusal when the store omits maxImageDimension', async () => {
+    class DimensionStore extends AttachmentStore {
+      readonly imageLimits: ImageAttachmentLimits = Object.freeze({
+        maxImageBytes: 1024,
+        maxImagesPerMessage: 1,
+        maxMessageImageBytes: 1024,
+        maxImagePixels: 100,
+        mediaTypes: Object.freeze(['image/png'] as const),
+      })
+
+      validateImage(_input: SaveImageAttachment): Promise<void> {
+        return Promise.resolve()
+      }
+
+      saveImage(_input: SaveImageAttachment): Promise<ImageAttachmentRef> {
+        return Promise.reject(new AttachmentError(
+          'Image exceeds the configured per-side pixel limit.',
+          'IMAGE_DIMENSION_TOO_LARGE',
+        ))
+      }
+
+      readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
+        return Promise.reject(new Error('unreachable in this test'))
+      }
+    }
+    await writeFile(join(dir, 'wide.png'), PNG_3X3)
+    const ctx = await setup({ attachments: false })
+    await ctx.plugin(DimensionStore)
+    const result = await readImage(ctx, { file_path: 'wide.png' }, agentOn('vision-model'))
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain("exceeds the deployment's per-side pixel limit")
+    expect(text(result)).toContain('downscale the image and read the smaller copy')
+  })
+
   it('passes storage faults and non-attachment failures through unchanged', async () => {
     /** Store whose commit fails with a configurable error; admission itself passes. */
     class FailingStore extends AttachmentStore {

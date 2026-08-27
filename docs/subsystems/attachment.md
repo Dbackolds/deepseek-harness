@@ -50,13 +50,16 @@ interface ImageAttachmentLimits {
   maxImagesPerMessage: number
   maxMessageImageBytes: number
   maxImagePixels: number
-  /** Maximum intrinsic width and maximum intrinsic height in pixels for one image. */
-  maxImageDimension: number
+  /**
+   * Maximum intrinsic width and maximum intrinsic height in pixels for one
+   * image. Omitted when the deployment does not refuse images by side length.
+   */
+  maxImageDimension?: number
   mediaTypes: readonly ImageMediaType[]
 }
 ```
 
-The local backend admits at most 20 images and 200 MiB of encoded source data per message. One source may use up to 20 MiB, 64,000,000 pixels, and 8192 pixels on either side. These source limits precede the independent normalization stage, which limits the long edge to 2048 pixels and encoded data to 4 MiB by default.
+The local backend admits at most 20 images and 200 MiB of encoded source data per message. One source may use up to 20 MiB and 64,000,000 pixels. These source limits precede the independent normalization stage, which limits the long edge to 2048 pixels and encoded data to 4 MiB by default. A deployment may also set `maxImageDimension` to refuse images by side length before that stage.
 
 The reference records intrinsic dimensions and encoded length so clients can lay out history without decoding first, while every authoritative read still re-checks digest, media signature, dimensions, and metadata against the object.
 
