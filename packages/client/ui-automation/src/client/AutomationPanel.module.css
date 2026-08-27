@@ -1,47 +1,9 @@
 /* Automation sidebar control and center-column page. Tokens only. */
 
+/* Geometry lives on the sidebar shell's New Session sibling list. This
+   class only names the Host Automation occupant. */
 .trigger {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: calc(100% - 4px);
-  height: 38px;
-  margin: 0 2px 8px;
-  padding: 8px 16px;
-  box-sizing: border-box;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
-  background: var(--dsw-alias-button-elevated-fill);
-  color: var(--dsw-alias-label-primary);
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 22px;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.trigger:hover,
-.trigger[aria-pressed='true'] {
-  background: var(--dsw-alias-button-floating-hover);
-}
-
-.trigger.rail {
-  align-self: flex-start;
-  width: 36px;
-  height: 36px;
-  margin: 0 0 12px;
-  padding: 0;
-  gap: 0;
-  border-color: transparent;
-  background: transparent;
-}
-
-.trigger.rail:hover,
-.trigger.rail[aria-pressed='true'] {
-  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .label { max-width: 200px; overflow: hidden; white-space: nowrap; }

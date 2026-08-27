@@ -8,8 +8,9 @@
  * settings control only fades. The workspace/session browsing region between
  * the New Session button and the foot is the `sidebar.workspaces` registrant's,
  * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the
- * control under New Session is `sidebar.automation`. The shell hands them
- * the wide flag (plus an expand request callback for the browser).
+ * list under New Session is `sidebar.automation`. Occupants match New Session
+ * geometry. The shell hands them the wide flag (plus an expand request
+ * callback for the browser).
  *
  * The shell also counts unread Completed reminders from `useSessions` and
  * forwards that count to the desktop Host, when present, so macOS can badge
@@ -192,6 +193,7 @@ export function SidebarRoot({
         <button
           type="button"
           className={css.newSession}
+          data-dsh-sidebar-new-session=""
           aria-label={t('session.new.label')}
           onClick={() => { startSession() }}
         >
@@ -200,7 +202,7 @@ export function SidebarRoot({
         </button>
       </Tooltip>
 
-      <div className={css.automationArea}>
+      <div className={css.automationArea} data-dsh-sidebar-actions="">
         {renderSlot('sidebar.automation', { wide })}
       </div>
 

@@ -111,7 +111,7 @@ export function AutomationPanel(props: AutomationPanelProps): ReactNode {
     <Tooltip label={t('trigger.label')} delayMs={500} disabled={wide}>
       <button
         type="button"
-        className={wide ? css.trigger : [css.trigger, css.rail].join(' ')}
+        className={css.trigger}
         aria-pressed={pageOpen}
         aria-label={t('trigger.label')}
         onClick={() => { setPageOpen(!pageOpen) }}

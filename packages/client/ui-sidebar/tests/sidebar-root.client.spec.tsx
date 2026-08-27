@@ -67,7 +67,7 @@ function mountShell({
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.automation') {
-          return <div data-testid="automation-seat" data-wide={owner.wide} />
+          return <div data-testid="automation-seat" data-wide={(owner as SidebarAutomationOwnerProps).wide} />
         }
         if (key === 'sidebar.settings') {
           settingsOwner = owner
@@ -117,6 +117,10 @@ describe('SidebarRoot shell', () => {
     expect(b.startSession).toHaveBeenCalledTimes(2)
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
+    expect(screen.getAllByRole('button', { name: 'New session' }).some(
+      el => el.hasAttribute('data-dsh-sidebar-new-session'),
+    )).toBe(true)
+    expect(screen.getByTestId('automation-seat').closest('[data-dsh-sidebar-actions]')).toBeTruthy()
   })
 
   it('renders generic brand fallbacks when no package fills the slots', () => {

@@ -10,7 +10,7 @@ Host Automation already owns durable rules, Host RPC, and model tools, but the W
 
 ## Decision
 
-`ui-sidebar` declares `sidebar.automation` under New Session. `@deepseek-ai/dsh-client-ui-automation` occupies that seat with a clock-icon trigger that matches New Session geometry, and occupies `shell.overlay` with a center-column page over the existing `automation.*` wire: list, create (exactly one of after / at / every / local-clock), enable, run-now, delete, and delete-run. The Host remains the fact source. The collection stays off Settings, because the product request is a sibling of New Session.
+`ui-sidebar` declares `sidebar.automation` as a list under New Session. Occupants inherit New Session capsule geometry from that shell, including a third-party button injected under `[data-dsh-sidebar-actions]` and known DOM entries tagged `data-dsh-mnemon-entry`, `data-dsh-taskboard-entry`, or `data-dsh-ssh-entry`. `@deepseek-ai/dsh-client-ui-automation` occupies the first list entry (`id: host-automation`, `order: 0`) with a clock-icon trigger, and occupies `shell.overlay` with a center-column page over the existing `automation.*` wire: list, create (exactly one of after / at / every / local-clock), enable, run-now, delete, and delete-run. The Host remains the fact source. The collection stays off Settings, because the product request is a sibling of New Session.
 
 Create stays on the four selectors the service already accepts. Built-in templates prefill that form and do not persist a rule until submit. The keep-awake switch writes the `ui-automation.keepAwake` Host setting; a live Host then holds an OS sleep assertion and releases it when the switch turns off or the plugin unloads. The form does not parse natural language. Clicking the card body, not only the title, shows that rule's settings and history; settings save through `automation.update`. History lists `endedAt`, `source`, and can delete one past run through `automation.deleteRun`. A started run-now waits until the Host list carries the new Session, then closes the Automation page and opens that Session; a skipped or failed fire stays on the page. Each time the page opens it fetches the Host list once.
 
@@ -24,7 +24,7 @@ Create stays on the four selectors the service already accepts. Built-in templat
 
 ## Verification
 
-Package tests cover slot registration and HMR disposal, store list/create/update/enable/run-now/delete and page visibility, run-count loading, the selected-rule settings and history panes, a started run-now waiting for the Session list then opening it, selector summaries, remaining-time chips, draft validation, keep-awake preference and OS hold, template overlay, and the trigger plus center-column page. The Web e2e scenario creates an `after` rule through the real Host and asserts it on the page. Sidebar shell snapshots include the empty `sidebar.automation` hole.
+Package tests cover slot registration and HMR disposal, store list/create/update/enable/run-now/delete and page visibility, run-count loading, the selected-rule settings and history panes, a started run-now waiting for the Session list then opening it, selector summaries, remaining-time chips, draft validation, keep-awake preference and OS hold, template overlay, and the trigger plus center-column page. The Web e2e scenario creates an `after` rule through the real Host and asserts it on the page. Sidebar shell snapshots include the empty `sidebar.automation` list hole. Shell style tests pin the shared capsule geometry for New Session siblings.
 
 ## Consequences
 

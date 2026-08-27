@@ -42,13 +42,14 @@ export function apply(ctx: ClientContext): void {
     () => ctx.slots.register({
       name: 'sidebar',
       locale: NS,
-      // The shell owns geometry; ui-automation occupies the seat under New
-      // Session, ui-workspace registers the browsing region, and ui-settings
-      // registers the foot trigger + settings panel.
+      // The shell owns geometry; ui-automation occupies the first New
+      // Session sibling, other plugins may append after it, ui-workspace
+      // registers the browsing region, and ui-settings registers the foot
+      // trigger + settings panel.
       children: {
         'sidebar.brand.mark': { kind: 'single', scope: 'root' },
         'sidebar.brand.name': { kind: 'single', scope: 'root' },
-        'sidebar.automation': { kind: 'single', scope: 'root' },
+        'sidebar.automation': { kind: 'list', scope: 'root' },
         'sidebar.workspaces': { kind: 'single', scope: 'root' },
         'sidebar.settings': { kind: 'single', scope: 'root' },
         'sidebar.footer.action': { kind: 'list', scope: 'root' },

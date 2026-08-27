@@ -62,6 +62,19 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .logoRow')?.get('justify-content')).toBe('flex-start')
     expect(declarations('.collapsed .newSession')?.get('align-self')).toBe('flex-start')
     expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
+    expect(declarations('.collapsed .automationArea :global(button)')?.get('width')).toBe('36px')
+    expect(declarations('.collapsed .automationArea :global(button)')?.get('align-self')).toBe('flex-start')
+  })
+
+  it('gives New Session siblings the same wide capsule as New Session', () => {
+    const capsule = declarations('.automationArea :global(button)')
+    expect(capsule?.get('height')).toBe('38px')
+    expect(capsule?.get('border-radius')).toBe('12px')
+    expect(capsule?.get('background')).toBe('var(--dsw-alias-button-elevated-fill)')
+    expect(declarations('.automationArea')?.get('flex-direction')).toBe('column')
+    expect(css).toContain('.root :global(button[data-dsh-mnemon-entry])')
+    expect(css).toContain('.root :global(button[data-dsh-taskboard-entry])')
+    expect(css).toContain('.root :global(button[data-dsh-ssh-entry])')
   })
 
   it('keeps the slotted brand row at the full artwork height', () => {

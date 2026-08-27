@@ -1,8 +1,9 @@
 /**
- * Host Automation sidebar plugin, browser half: occupies `sidebar.automation`
- * with the trigger under New Session and a modal over the Host Automation
- * wire. The Host remains the fact source; this plugin holds no store beyond
- * the page snapshot, the create-form draft, and the keep-awake preference.
+ * Host Automation sidebar plugin, browser half: occupies the first
+ * `sidebar.automation` list entry under New Session and a modal over the Host
+ * Automation wire. The Host remains the fact source; this plugin holds no
+ * store beyond the page snapshot, the create-form draft, and the keep-awake
+ * preference.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
@@ -70,6 +71,8 @@ export function apply(ctx: ClientContext): void {
 
   ctx.slots.inject('sidebar.automation', () => ctx.slots.register({
     name: 'sidebar.automation',
+    id: 'host-automation',
+    order: 0,
     locale: NS,
     inject: injected,
   }, AutomationPanel))

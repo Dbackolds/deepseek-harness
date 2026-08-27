@@ -21,7 +21,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   ctx.slots.register({
     name: 'root',
     children: {
-      'sidebar.automation': { kind: 'single', scope: 'root' },
+      'sidebar.automation': { kind: 'list', scope: 'root' },
       'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
@@ -62,6 +62,7 @@ describe('ui-automation browser half', () => {
   it('registers the sidebar occupant, and fiber teardown removes it (HMR safety)', async () => {
     const { ctx, fiber } = await bench()
     expect(ctx.slots.entries('sidebar.automation')).toHaveLength(1)
+    expect(ctx.slots.entries('sidebar.automation')[0]!.options).toMatchObject({ id: 'host-automation', order: 0 })
     expect(ctx.slots.entries('shell.overlay')).toHaveLength(1)
     const injected = (ctx.slots.entries('sidebar.automation')[0]!.inject as () => {
       load: () => Promise<void>

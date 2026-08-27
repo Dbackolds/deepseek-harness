@@ -2,17 +2,17 @@
 
 [English](README.md) | 中文
 
-侧边栏外壳插件：负责品牌行、New Session 操作、其下方的 `sidebar.automation` seat、布局持有的折叠控件、可感知滚动的区域 seat，以及固定在底部的 Settings seat。[ui-automation](../ui-automation/README.zh.md) 占据自动化控件；[ui-workspace](../ui-workspace/README.zh.md) 持有渲染到 `sidebar.workspaces` 的 Workspace 与 Session 浏览器；本包既不派生其中的行，也不持有其视图偏好。折叠到布局拥有的 56px 轨道仍属于本地呈现行为。约定：[slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)。
+侧边栏外壳插件：负责品牌行、New Session 操作、其下方的 `sidebar.automation` 列表、布局持有的折叠控件、可感知滚动的区域 seat，以及固定在底部的 Settings seat。[ui-automation](../ui-automation/README.zh.md) 占据第一个 New Session 兄弟入口；其他插件可追加在其后。占位者从此外壳继承 New Session 胶囊几何，包括注入到 `[data-dsh-sidebar-actions]` 下的第三方按钮，以及带 `data-dsh-mnemon-entry`、`data-dsh-taskboard-entry` 或 `data-dsh-ssh-entry` 的已知 DOM 入口。[ui-workspace](../ui-workspace/README.zh.md) 持有渲染到 `sidebar.workspaces` 的 Workspace 与 Session 浏览器；本包既不派生其中的行，也不持有其视图偏好。折叠到布局拥有的 56px 轨道仍属于本地呈现行为。约定：[slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)。
 
 New Session 会启动运行时的页面局部前端 Session Intent。运行时优先使用作用域操作明确指定的 Workspace，否则使用当前 Session 所属 Workspace，再否则使用最近活跃 Workspace；一个 Workspace 都没有时则清空选择，进入空白 New Session 页面。Workspace 专属控件与共享选择器由 ui-workspace 持有。
 
 展开的品牌行把 `sidebar.brand.mark` 与 `sidebar.brand.name` 渲染为两个独立的 single slot，收起轨道则渲染同一个 mark slot。没有占位者时，外壳使用鱼形标记，以及带有构建期 7 位 `DSH_CLIENT_COMMIT_HASH` 徽标的 `DSH Local Build` 标签。部署包可以单独替换任一值，而无须替换 New Session 控件或轨道几何；声明感知的 `slots.inject()` 让这种包无论先于还是后于侧边栏激活都能生效。
 
-`SidebarRootComponentProps` 组合布局 owner share、全局 `useSessions` 和 `useWorkspaces` 钩子、已声明的品牌、`sidebar.automation`、`sidebar.workspaces` 与 `sidebar.settings` 子 slot，以及注入的 `startSession` 与侧边栏切换回调。外壳只为把未读已完成计数转发给桌面 Host 而读取 `useSessions`。这里没有插件 store。
+`SidebarRootComponentProps` 组合布局 owner share、全局 `useSessions` 和 `useWorkspaces` 钩子、已声明的品牌、`sidebar.automation` 列表、`sidebar.workspaces` 与 `sidebar.settings` 子 slot，以及注入的 `startSession` 与侧边栏切换回调。外壳只为把未读已完成计数转发给桌面 Host 而读取 `useSessions`。这里没有插件 store。
 
 数字是当前列表里仍带有浏览器本地 Completed 提醒的 Session 数。若桌面 Host 注入了 `window.dshDesktop.setCompletedUnread`，外壳会把该计数发给它；普通浏览器标签页没有该方法，调用为空操作。绿色数字角标画在 macOS dock 鲸鱼图标上，不画在页内品牌标记上。
 
-实时收起时，外壳会把展开内容固定在当前宽度，并用 150ms 将其淡出。随后，上方控件——外壳的侧栏切换、新建会话、自动化 seat，以及通过 `sidebar.workspaces` 渲染的添加和搜索——共用一次 150ms 的淡入和 49px 左移，在布局的 300ms 栏滑动结束时一起进入 56px 轨道；每个 36px 控件盒都会沿同一条路径到达轨道左侧 10px 的内边距。固定在底部的 `sidebar.settings` 控件只共用淡入时序，不发生横向位移。页面初始即为收起状态时会静态渲染轨道；减少动态效果模式会禁用两段过渡。
+实时收起时，外壳会把展开内容固定在当前宽度，并用 150ms 将其淡出。随后，上方控件——外壳的侧栏切换、新建会话、New Session 兄弟列表，以及通过 `sidebar.workspaces` 渲染的添加和搜索——共用一次 150ms 的淡入和 49px 左移，在布局的 300ms 栏滑动结束时一起进入 56px 轨道；每个 36px 控件盒都会沿同一条路径到达轨道左侧 10px 的内边距。固定在底部的 `sidebar.settings` 控件只共用淡入时序，不发生横向位移。页面初始即为收起状态时会静态渲染轨道；减少动态效果模式会禁用两段过渡。
 
 栏内的滚动条是一种指针可供性：只要指针不在栏内，外壳就把 ui-theme 的[滚动条间接层](../ui-theme/README.zh.md)重新绑定为 `transparent`；指针离开后滑块再保留 2 秒，因此没人指向的列表不会带着滚动条。避免行位移的空间预留属于滚动区域本身（[ui-workspace](../ui-workspace/README.zh.md)），所以显示滑块不会引起重排。
 

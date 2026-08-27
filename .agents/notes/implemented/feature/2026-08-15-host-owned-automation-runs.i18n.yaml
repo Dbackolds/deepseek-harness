@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-host-owned-automation-runs.md
-2026-08-15-host-owned-automation-runs.md: aeb7c4407e111d342eeaf5e609d6a31037d91c69
-2026-08-15-host-owned-automation-runs.zh.md: bdf57d091fa2adce441803fe6297804aefa7ec14
+2026-08-15-host-owned-automation-runs.md: 4e3ff6952f9ec8e71d018cf8673e3ff8f3cf2c2e
+2026-08-15-host-owned-automation-runs.zh.md: 24e2a9e7772078fae2919665772c6d5b00d48cbb

@@ -49,6 +49,7 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
     <button
       aria-label="New session"
       class="newSession"
+      data-dsh-sidebar-new-session=""
       type="button"
     >
       <svg
@@ -60,6 +61,15 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
         xmlns="http://www.w3.org/2000/svg"
       />
     </button>
+    <div
+      class="automationArea"
+      data-dsh-sidebar-actions=""
+    >
+      <div
+        data-slot="sidebar.automation"
+        style="display: contents;"
+      />
+    </div>
     <div
       class="regionArea"
     >
@@ -170,6 +180,7 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
     <button
       aria-label="New session"
       class="newSession"
+      data-dsh-sidebar-new-session=""
       type="button"
     >
       <svg
@@ -186,6 +197,15 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
         New Session
       </span>
     </button>
+    <div
+      class="automationArea"
+      data-dsh-sidebar-actions=""
+    >
+      <div
+        data-slot="sidebar.automation"
+        style="display: contents;"
+      />
+    </div>
     <div
       class="regionArea"
     >
@@ -296,6 +316,7 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
     <button
       aria-label="新建会话"
       class="newSession"
+      data-dsh-sidebar-new-session=""
       type="button"
     >
       <svg
@@ -312,6 +333,15 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
         新会话
       </span>
     </button>
+    <div
+      class="automationArea"
+      data-dsh-sidebar-actions=""
+    >
+      <div
+        data-slot="sidebar.automation"
+        style="display: contents;"
+      />
+    </div>
     <div
       class="regionArea"
     >

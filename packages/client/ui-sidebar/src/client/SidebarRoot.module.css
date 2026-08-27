@@ -279,18 +279,98 @@
   max-width: 0;
 }
 
-/* Automation seat: sits under New Session in both widths. The occupant owns
-   button geometry and hover chrome; this wrapper only keeps the column flow. */
+/* New Session siblings: official list occupants and known third-party DOM
+   injections share the capsule geometry. Occupants may still own extra
+   chrome; these rules are the default they inherit. */
 .automationArea {
   flex: none;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   width: 100%;
 }
 
+.automationArea > :global([data-slot='sidebar.automation']) {
+  display: contents;
+}
+
+.root :global(button[data-dsh-mnemon-entry]),
+.root :global(button[data-dsh-taskboard-entry]),
+.root :global(button[data-dsh-ssh-entry]),
+.automationArea :global(button) {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: calc(100% - 4px);
+  height: 38px;
+  margin: 0 2px 8px;
+  padding: 8px 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.root :global(button[data-dsh-mnemon-entry]:hover),
+.root :global(button[data-dsh-taskboard-entry]:hover),
+.root :global(button[data-dsh-ssh-entry]:hover),
+.root :global(button[data-dsh-mnemon-entry][data-active]),
+.root :global(button[data-dsh-taskboard-entry][data-active]),
+.root :global(button[data-dsh-ssh-entry][data-active]),
+.automationArea :global(button:hover),
+.automationArea :global(button[aria-pressed='true']),
+.automationArea :global(button[data-active]) {
+  background: var(--dsw-alias-button-floating-hover);
+}
+
 .collapsed .automationArea {
   display: flex;
-  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
   width: auto;
+}
+
+.collapsed :global(button[data-dsh-mnemon-entry]),
+.collapsed :global(button[data-dsh-taskboard-entry]),
+.collapsed :global(button[data-dsh-ssh-entry]),
+.collapsed .automationArea :global(button) {
+  align-self: flex-start;
+  width: 36px;
+  height: 36px;
+  margin: 0 0 12px;
+  padding: 0;
+  gap: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.collapsed :global(button[data-dsh-mnemon-entry]:hover),
+.collapsed :global(button[data-dsh-taskboard-entry]:hover),
+.collapsed :global(button[data-dsh-ssh-entry]:hover),
+.collapsed :global(button[data-dsh-mnemon-entry][data-active]),
+.collapsed :global(button[data-dsh-taskboard-entry][data-active]),
+.collapsed :global(button[data-dsh-ssh-entry][data-active]),
+.collapsed .automationArea :global(button:hover),
+.collapsed .automationArea :global(button[aria-pressed='true']),
+.collapsed .automationArea :global(button[data-active]) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.collapsed :global(button[data-dsh-mnemon-entry] > span:last-child:not(:only-child)),
+.collapsed :global(button[data-dsh-taskboard-entry] > span:last-child:not(:only-child)),
+.collapsed :global(button[data-dsh-ssh-entry] > span:last-child:not(:only-child)),
+.collapsed .automationArea :global(button > span:last-child:not(:only-child)) {
+  display: none;
 }
 
 /* Region seat: always mounted so the foot never moves. Its trailing margin

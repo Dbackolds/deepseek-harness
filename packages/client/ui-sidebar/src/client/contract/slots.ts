@@ -2,8 +2,8 @@
  * Sidebar slot contract: the registrant-side props composition for the
  * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
  * owns column geometry (fold state machine, brand row, New Session);
- * the seat under New Session is `sidebar.automation`; everything between
- * that seat and the list bottom is the `sidebar.workspaces` registrant's
+ * the list under New Session is `sidebar.automation`; everything between
+ * that list and the list bottom is the `sidebar.workspaces` registrant's
  * (ui-workspace), and the foot is the `sidebar.settings` registrant's
  * (ui-settings), followed by optional footer actions in
  * `sidebar.footer.action`.
@@ -28,10 +28,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'sidebar.brand.name': { kind: 'single'; scope: 'root'; owner: SidebarBrandNameOwnerProps }
     /**
-     * The control under New Session. Declared by this package's 'sidebar'
-     * entry; ui-automation registers the Host Automation trigger and panel.
+     * Capsule controls under New Session. Declared by this package's
+     * 'sidebar' entry. Occupants must match New Session geometry. Host
+     * Automation registers first; other plugins append after it.
      */
-    'sidebar.automation': { kind: 'single'; scope: 'root'; owner: SidebarAutomationOwnerProps }
+    'sidebar.automation': { kind: 'list'; scope: 'root'; owner: SidebarAutomationOwnerProps }
     /**
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
@@ -70,8 +71,8 @@ export interface SidebarBrandNameOwnerProps {
  * boundary. Business data and actions arrive through the region's own inject.
  */
 /**
- * Owner share of the Automation seat: the column display state the occupant's
- * trigger must render against (wide row vs rail icon).
+ * Owner share of each New Session sibling: the column display state the
+ * occupant's trigger must render against (wide row vs rail icon).
  */
 export interface SidebarAutomationOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail). */
