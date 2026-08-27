@@ -5,7 +5,7 @@
  * a deployed `@deepseek-ai/dsh` cannot resolve them until they are restored.
  */
 
-import { cpSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
@@ -59,8 +59,25 @@ export function deployedPackagePath(deployedRoot: string, packageName: string): 
 }
 
 /**
- * Copy every required vendored package into a deployed Host when deploy omitted it.
- * Existing copies are left in place.
+ * Whether a deployed Host copy of a vendored package can stay in place.
+ * `pnpm deploy --legacy` often leaves a workspace `link:` symlink that
+ * resolves inside the build tree and is gone after Docker COPY or Windows pack.
+ * @param destination - deployed `node_modules/@deepseek-ai/<name>` path.
+ * @returns false when the path is missing, a symlink, or lacks package.json.
+ */
+export function vendoredHostCopyIsMaterial(destination: string): boolean {
+  if (!existsSync(destination)) return false
+  try {
+    if (lstatSync(destination).isSymbolicLink()) return false
+  } catch {
+    return false
+  }
+  return existsSync(join(destination, 'package.json'))
+}
+
+/**
+ * Copy every required vendored package into a deployed Host when deploy omitted
+ * it or left a workspace symlink. Material copies with a package.json stay.
  * @param deployedRoot - `pnpm deploy` target.
  * @param repoRoot - repository root that contains `vendor/`.
  * @returns package names that were copied.
@@ -71,7 +88,8 @@ export function restoreVendoredHostPackages(deployedRoot: string, repoRoot: stri
     const vendorDir = join(repoRoot, 'vendor', directory)
     const packageName = vendoredPackageName(vendorDir)
     const destination = deployedPackagePath(deployedRoot, packageName)
-    if (existsSync(destination)) continue
+    if (vendoredHostCopyIsMaterial(destination)) continue
+    rmSync(destination, { recursive: true, force: true })
     mkdirSync(dirname(destination), { recursive: true })
     cpSync(vendorDir, destination, {
       recursive: true,
@@ -87,7 +105,7 @@ export function restoreVendoredHostPackages(deployedRoot: string, repoRoot: stri
   }
   const stillMissing = VENDORED_HOST_DIRECTORIES
     .map(directory => vendoredPackageName(join(repoRoot, 'vendor', directory)))
-    .filter(name => !existsSync(deployedPackagePath(deployedRoot, name)))
+    .filter(name => !vendoredHostCopyIsMaterial(deployedPackagePath(deployedRoot, name)))
   if (stillMissing.length > 0) {
     throw new Error(`restore-vendored-host: still missing ${stillMissing.join(', ')}`)
   }
