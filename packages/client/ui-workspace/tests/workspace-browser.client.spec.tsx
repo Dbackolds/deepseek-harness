@@ -6,7 +6,9 @@ import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-sess
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type {
+  SessionPendingInteractionBase, SessionPendingInteractionSnapshot,
+} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -262,10 +264,10 @@ describe('WorkspaceBrowser', () => {
       summary('crash', 5.5, { interrupted: true }),
       ...Array.from({ length: 6 }, (_, index) => summary(`old-${index + 1}`, 5 - index)),
     ]
-    const pending: SessionPendingInteractionSnapshot = new Map([[
+    const pending = new Map([[
       waiting.id,
-      { key: 'question:1', kind: 'question', sessionId: waiting.id },
-    ]])
+      { key: 'question:1', kind: 'question', sessionId: waiting.id } satisfies SessionPendingInteractionBase,
+    ]]) as SessionPendingInteractionSnapshot
     mount({
       useSessions: hook(sessionState(items)),
       useSessionPendingInteraction: hook(pending),
