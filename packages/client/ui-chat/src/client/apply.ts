@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import type { ISessions, SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { BoundActions, ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
@@ -46,10 +46,6 @@ const CHAT_NODE_INJECT: ChatNodeTurnDataInjected = {
 }
 
 /** Services required by the Chat target and its presentation registrations. */
-function clientSessions(ctx: Context): ISessions {
-  return clientSessions(ctx) as unknown as ISessions
-}
-
 export const inject = [
   'slots', 'sessions', 'uiSession', 'uiConversation', 'layout', 'locale',
   'settingsScope', 'remote', 'remote.session',
@@ -112,7 +108,7 @@ export function apply(ctx: Context): void {
       },
       store: chatStore,
       inject: (sessionId: SessionId, actions: BoundActions<typeof chatStore>): ChatViewInjected => {
-        const session = clientSessions(ctx).binding(sessionId)?.session
+        const session = ctx.sessions.binding(sessionId)?.session
         if (session === undefined) throw new Error(`ui-chat: unknown session "${sessionId}"`)
         return {
           hooks: { transcriptView: transcriptView.mode },
@@ -122,7 +118,7 @@ export function apply(ctx: Context): void {
           },
           fileMentions: (owner: TurnTailOwnerProps) => ctx.get('chatFileMentions')?.forClosing(owner),
           openFile: async (path) => {
-            const cwd = clientSessions(ctx).list.getSnapshot().byId[sessionId]?.cwd
+            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
             const result = await ctx.remote.session.openWorkspacePath({
               path: resolveWorkspacePath(cwd, path),
             })
@@ -141,8 +137,8 @@ export function apply(ctx: Context): void {
             read: () => chatScrollPositions.get(sessionId) ?? null,
           },
           forkAt: (seq) => {
-            clientSessions(ctx).fork({ sessionId, atSeq: seq, increaseTitle: true })
-              .then((childId) => { clientSessions(ctx).open(childId) })
+            ctx.sessions.fork({ sessionId, atSeq: seq, increaseTitle: true })
+              .then((childId) => { ctx.sessions.open(childId) })
               .catch(() => {
                 // Fork or child-title failure leaves the source view unchanged.
               })
