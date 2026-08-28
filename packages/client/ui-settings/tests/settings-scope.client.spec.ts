@@ -430,7 +430,7 @@ describe('SettingsScopeController', () => {
     expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'dark' }, revision: 1 })
   })
 
-  it('keeps a remote browser in memory mode without Host calls', async () => {
+  it('keeps an explicit memory-mode controller without Host calls', async () => {
     const describeCall = vi.fn()
     const mutate = vi.fn()
     const wire = { settings: { describe: describeCall, mutate } } as never

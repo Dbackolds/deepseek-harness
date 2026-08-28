@@ -1333,7 +1333,7 @@ export function WorkspaceBrowser({
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
   const groupBy = useStore(s => s.groupBy)
   const orderBy = useStore(s => s.orderBy)
-  const activityLayout = useStore(s => s.activityLayout)
+  const activityLayout = useStore(s => s.activityLayout === 'inline' ? 'inline' : 'folders')
   const emptyWorkspaces = useStore(s => s.emptyWorkspaces === 'hide' ? 'hide' : 'show')
   const groupExpansion = useStore(s => s.groupExpansion)
   const sessionOrderByAccount = useStore(s => s.sessionOrderByAccount)

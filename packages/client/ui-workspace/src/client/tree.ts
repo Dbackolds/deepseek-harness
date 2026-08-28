@@ -410,17 +410,6 @@ export function deriveHiddenGroups(
   return groups
 }
 
-/**
- * Derive the flat session list ("In one list" mode): every session — fork
- * children included — as a top-level row, strictly newest-first. No grouping,
- * no parent/child adjacency. Content search lives outside this derivation
- * (see {@link deriveSearchResults}).
- * @param list - sessions list snapshot.
- * @param archivedSessionIds - registry-global archive set.
- * @param pendingInteractions - pending UI interactions by Session.
- * @returns flat rows in render order.
- */
-
 /** Sidebar activity bucket used to float live work or paint status folders. */
 export type SessionActivityBucket = 'pinned' | 'unread' | 'running' | 'abnormal' | 'history'
 
@@ -503,6 +492,16 @@ export function partitionSessionActivity(sessions: readonly SessionNode[]): read
   ]
 }
 
+/**
+ * Derive the flat session list ("In one list" mode): every session — fork
+ * children included — as a top-level row, strictly newest-first. No grouping,
+ * no parent/child adjacency. Content search lives outside this derivation
+ * (see {@link deriveSearchResults}).
+ * @param list - sessions list snapshot.
+ * @param archivedSessionIds - registry-global archive set.
+ * @param pendingInteractions - pending UI interactions by Session.
+ * @returns flat rows in render order.
+ */
 export function deriveFlat(
   list: SessionListState,
   archivedSessionIds: readonly SessionId[],

@@ -254,6 +254,40 @@ describe('WorkspaceBrowser', () => {
     ])
   })
 
+  it('keeps Workspace folders and floats live Sessions above idle rows when status sections are off', () => {
+    const waiting = summary('waiting', 6)
+    const items = [
+      summary('done-a', 9, { completed: true }),
+      summary('live', 7, { running: true }),
+      waiting,
+      summary('crash', 5.5, { interrupted: true }),
+      summary('old-1', 5),
+    ]
+    const pending = new Map([[
+      waiting.id,
+      { key: 'question:1', kind: 'question', sessionId: waiting.id } satisfies SessionPendingInteractionBase,
+    ]]) as unknown as SessionPendingInteractionSnapshot
+    const b = mount({
+      useSessions: hook(sessionState(items)),
+      useSessionPendingInteraction: hook(pending),
+      useWorkspaces: hook(workspaceState([workspace('alpha', items.map(item => item.id))])),
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    expect(screen.getByRole('button', { name: '已完成 1 个' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '运行中 2 个' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '不分区' }))
+    expect(b.store.getSnapshot().activityLayout).toBe('inline')
+    expect(b.store.getSnapshot().groupBy).toBe('workspace')
+    expect(screen.getByText('alpha')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '已完成 1 个' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '运行中 2 个' })).toBeNull()
+    const titles = screen.getAllByRole('treeitem').map(row => row.textContent ?? '')
+    expect(titles[0]).toContain('alpha')
+    expect(titles[1]).toContain('live')
+    expect(titles[2]).toContain('waiting')
+  })
+
   it('splits the flat list into Completed, Running, Abnormal, and History by default and can switch to live-on-top', () => {
     const waiting = summary('waiting', 6)
     const items = [
