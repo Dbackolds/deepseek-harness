@@ -12,7 +12,7 @@ The [session rehome proposal](../../proposed/feature/2026-08-20-session-rehome.m
 
 ## Decision
 
-`ApiProxyService` activation awaits `ensureNoRepoWorkspace`: mkdir `$DSH_HOME/no-repo` if needed, then `workspaceRegistry.create(path, 'No Repo')` only when that canonical path is unowned. A hidden owner stays hidden, so Hide survives later boots. Direct `createApiProxy` callers, including package tests, do not run this registration; omitted-project create still attaches there.
+`WorkspaceController` registers No Repo from `[Service.init]` through `ensureNoRepoWorkspace`: mkdir `$DSH_HOME/no-repo` if needed, then `workspaceRegistry.create(path, 'No Repo')` only when that canonical path is unowned. A hidden owner stays hidden, so Hide survives later boots. The call reads the registry with `ctx.get` so a live-reload dispose does not throw. Direct `new WorkspaceController` in tests does not run this hook; omitted-project create still attaches there.
 
 Sidebar New Session without an explicit Workspace still prefers the current Session's Workspace, then visible No Repo, then the most recent visible Workspace.
 
@@ -26,8 +26,8 @@ Sidebar New Session without an explicit Workspace still prefers the current Sess
 
 ## Consequences
 
-Existing Hosts gain a No Repo row on the next gateway start without waiting for an omitted-project create. A Host that already hid No Repo keeps it hidden. Tests that construct `createApiProxy` without the plugin still start with an empty registry.
+Existing Hosts gain a No Repo row on the next gateway start without waiting for an omitted-project create. A Host that already hid No Repo keeps it hidden. Tests that construct the controller without the plugin hook still start with an empty registry.
 
 ## Testing
 
-`packages/host/apiproxy/tests/api-proxy-workspace.spec.ts` covers boot registration of an empty No Repo row, idempotent reuse of that row, and a later boot that does not show a hidden No Repo. Omitted-project create still attaches there.
+`packages/api/workspace-controller/tests/workspace-controller.host.spec.ts` covers the inactive-registry no-op. Omitted-project create still attaches at the canonical No Repo path.

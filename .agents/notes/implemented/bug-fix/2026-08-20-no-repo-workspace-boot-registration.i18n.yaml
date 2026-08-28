@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-no-repo-workspace-boot-registration.md
-2026-08-20-no-repo-workspace-boot-registration.md: 2fd41728cb6ecacf51fd5b97db35c3a14aa57086
-2026-08-20-no-repo-workspace-boot-registration.zh.md: bc5601061ba37f0a44d2c9ce65edcc47b275a991
+2026-08-20-no-repo-workspace-boot-registration.md: 019c29e29cd2d6ee7c6d896e0e52576cfbc5af6e
+2026-08-20-no-repo-workspace-boot-registration.zh.md: 2328daee043ceffebf141328e2fb8256fa30be70
