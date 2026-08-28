@@ -15,17 +15,18 @@ afterEach(cleanup)
 
 const EMPTY = { skills: [] }
 type CatalogResult =
-  | { readonly result: { readonly ok: true; readonly value: typeof EMPTY } }
-  | { readonly result: { readonly ok: false; readonly error: { readonly code: string; readonly message: string } } }
+  | { readonly ok: true; readonly value: typeof EMPTY }
+  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
 
 async function bench() {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
-  const catalog = vi.fn<() => Promise<CatalogResult>>()
-    .mockResolvedValue({ result: { ok: true, value: EMPTY } })
-  ctx.provide('connection', { api: { skills: { catalog } } })
+  const catalog = vi.fn<(args: { readonly sessionId: never }) => Promise<CatalogResult>>()
+    .mockResolvedValue({ ok: true, value: EMPTY })
+  ctx.provide('connection', {})
+  ctx.provide('remote', { skills: { list: catalog } })
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, catalog }
 }
 
@@ -38,7 +39,7 @@ function declare(slots: SlotRegistry): () => void {
 
 describe('ui-settings-skills browser plugin', () => {
   it('declares only the services used by the Settings contribution', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote'])
   })
 
   it('registers a localized section between Plugins and Agent presets', async () => {
@@ -57,9 +58,9 @@ describe('ui-settings-skills browser plugin', () => {
     await expect(injected.list()).resolves.toEqual([])
     expect(b.catalog).toHaveBeenCalledOnce()
     b.catalog.mockResolvedValueOnce({
-      result: { ok: false, error: { code: 'internal', message: 'unavailable' } },
+      ok: false, error: { code: 'internal', message: 'unavailable' },
     })
-    await expect(injected.list()).rejects.toThrow('skill.catalog failed: internal: unavailable')
+    await expect(injected.list()).rejects.toThrow('skills.list failed: internal: unavailable')
     await b.ctx.fiber.dispose()
   })
 
