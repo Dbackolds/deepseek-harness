@@ -299,8 +299,10 @@ export async function ensureNoRepoDirectory(): Promise<string> {
  */
 export async function ensureNoRepoWorkspace(ctx: Context): Promise<string> {
   const canonical = await ensureNoRepoDirectory()
-  if (await ctx.workspaceRegistry.resolveByPath(canonical) === undefined) {
-    await ctx.workspaceRegistry.create(canonical, 'No Repo')
+  const registry = ctx.get('workspaceRegistry')
+  if (registry === undefined) return canonical
+  if (await registry.resolveByPath(canonical) === undefined) {
+    await registry.create(canonical, 'No Repo')
   }
   return canonical
 }

@@ -10,6 +10,7 @@ import { TypertRemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import WorkspaceController from '../src/index.ts'
+import { ensureNoRepoWorkspace } from '../src/commands.ts'
 import { WorkspaceFeed } from '../src/feed.ts'
 import type { WorkspaceFollowFrame } from '../src/types.ts'
 import { MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
@@ -329,5 +330,14 @@ describe('WorkspaceController follow', () => {
     await ctx.fiber.dispose()
     roots.splice(roots.indexOf(ctx), 1)
     await expect(closing).resolves.toEqual({ done: true, value: undefined })
+  })
+})
+
+describe('ensureNoRepoWorkspace', () => {
+  it('no-ops when the workspace registry is already inactive', async () => {
+    const { ctx } = await harness()
+    await ctx.fiber.dispose()
+    roots.splice(roots.indexOf(ctx), 1)
+    await expect(ensureNoRepoWorkspace(ctx)).resolves.toMatch(/no-repo$/)
   })
 })

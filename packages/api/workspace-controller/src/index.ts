@@ -1,6 +1,6 @@
 /** Host Workspace Remote owner: explicit commands and reconnect-safe state. */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { WorkspaceCommands, ensureNoRepoWorkspace } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
@@ -50,7 +50,15 @@ export class WorkspaceController extends TypertRemoteService {
     // stays pending until a picking backend is composed, so a host without one
     // registers no picking namespace instead of answering an unservable verb.
     ctx.plugin(DirectoryPickerController)
-    void ensureNoRepoWorkspace(ctx)
+  }
+
+  /**
+   * Register the Host No Repo workspace after this service is provided.
+   * `ctx.get` no-ops when a live-reload already disposed the fiber, so
+   * fail-loud does not treat that rejection as a fatal load failure.
+   */
+  protected async [Service.init](): Promise<void> {
+    await ensureNoRepoWorkspace(this.ctx)
   }
 
   /**
