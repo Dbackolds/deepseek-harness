@@ -4,6 +4,7 @@ import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import AutomationService, {
@@ -20,7 +21,7 @@ const NOW = Date.parse('2026-08-15T12:00:00.000Z')
 
 afterEach(() => {
   internals.now = () => Date.now()
-  internals.uuid = () => crypto.randomUUID()
+  internals.uuid = () => randomUUID()
   vi.useRealTimers()
 })
 
@@ -416,5 +417,51 @@ describe('automation timer', () => {
     internals.now = () => Date.parse('2026-08-15T21:00:01.000Z')
     await vi.advanceTimersByTimeAsync(60_000)
     await vi.waitFor(() => { expect(created).toHaveLength(1) })
+  })
+
+  it('resumes waiting after requestDrive cancels the current timer', async () => {
+    vi.useFakeTimers()
+    internals.now = () => NOW
+    const { service, created } = await harness()
+    await service.create({
+      task: 'later',
+      workspaceId: WORKSPACE,
+      afterSeconds: 120,
+    })
+    internals.now = () => NOW + 1_000
+    await service.create({
+      task: 'sooner',
+      workspaceId: WORKSPACE,
+      afterSeconds: 1,
+    })
+    internals.now = () => NOW + 2_000
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() => { expect(created).toHaveLength(1) })
+  })
+
+  it('keeps later due rules after one fireDue rejection', async () => {
+    vi.useFakeTimers()
+    internals.now = () => NOW
+    const { ctx, service, created } = await harness()
+    const first = await service.create({
+      task: 'broken',
+      workspaceId: WORKSPACE,
+      afterSeconds: 1,
+    })
+    await service.create({
+      task: 'healthy',
+      workspaceId: WORKSPACE,
+      afterSeconds: 1,
+    })
+    const original = ctx.automation.fireDue.bind(ctx.automation)
+    vi.spyOn(ctx.automation, 'fireDue').mockImplementation(async (id, now) => {
+      if (id === first.id)
+        throw new Error('open failed')
+      return original(id, now)
+    })
+    internals.now = () => NOW + 1_000
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() => { expect(created).toHaveLength(1) })
+    expect(created[0]?.session.append).toHaveBeenCalled()
   })
 })

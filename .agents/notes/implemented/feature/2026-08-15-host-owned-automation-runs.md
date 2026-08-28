@@ -30,7 +30,7 @@ Tools, Host RPC, and the Web sidebar panel are Consumers of the same service. Th
 
 ## Verification
 
-Package tests cover selector validation, create/fire of an `after` rule, `skip` versus `replace` overlap, idle-not-busy, permission pinning, delete-without-id-reuse, `deleteRun`, `runNow` leaving the next target, the live timer owner, a wait-slice catch-up after wall-clock jump, the domain/table invariant, and tool authority. Session tests accept `origin: 'automation'` and reject other origin literals. Model routing of ordinary-language create requests is owned by the [infer-create-intent](../bug-fix/2026-08-23-automation-infer-create-intent.md) note.
+Package tests cover selector validation, create/fire of an `after` rule, `skip` versus `replace` overlap, idle-not-busy, permission pinning, delete-without-id-reuse, `deleteRun`, `runNow` leaving the next target, the live timer owner, a wait-slice catch-up after wall-clock jump, a cancelled wait that re-derives, a rejected `fireDue` that still fires later due rules, the domain/table invariant, and tool authority. Cancelling the current wait is owned by the [cancelled-wait resume](../bug-fix/2026-08-29-automation-cancelled-wait-resumes.md) note. Session tests accept `origin: 'automation'` and reject other origin literals. Model routing of ordinary-language create requests is owned by the [infer-create-intent](../bug-fix/2026-08-23-automation-infer-create-intent.md) note.
 
 ## Consequences
 

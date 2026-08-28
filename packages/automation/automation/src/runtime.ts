@@ -29,6 +29,7 @@ export const MAX_WAIT_SLICE_MS = 60_000
 export class AutomationRuntime {
   private readonly stop = Promise.withResolvers<void>()
   private timer: ReturnType<typeof setTimeout> | undefined
+  private wake: (() => void) | undefined
   private run: Promise<void> | undefined
   private requested = false
   private stopping = false
@@ -75,11 +76,17 @@ export class AutomationRuntime {
     if (this.requested && !this.stopping)
       this.requestDrive()
   }
+  /**
+   * Cancel the armed wait and resolve it so drive can re-derive.
+   */
   clearTimer() {
     if (this.timer !== undefined) {
       clearTimeout(this.timer)
       this.timer = undefined
     }
+    const wake = this.wake
+    this.wake = undefined
+    wake?.()
   }
   async drive() {
     this.requested = false
@@ -97,20 +104,34 @@ export class AutomationRuntime {
       for (const rule of due) {
         if (this.stopping || this.requested)
           return
-        await this.service.fireDue(rule.id, now)
+        try {
+          await this.service.fireDue(rule.id, now)
+        } catch (error) {
+          this.ctx.logger.warn(`automation: fire for '${rule.id}' failed: ${renderThrown(error)}`)
+        }
       }
+      if (!this.stopping && !this.requested && this.service.dueRules(this.now()).length > 0)
+        await this.wait(MAX_WAIT_SLICE_MS)
     }
   }
+  /**
+   * Wait until `delay` elapses, `requestDrive` cancels this wait, or dispose.
+   * @param delay - Bound wait in milliseconds.
+   * @returns settlement of this wait slice.
+   */
   wait(delay: number): Promise<void> {
     return new Promise((resolve) => {
-      this.timer = setTimeout(() => {
+      let settled = false
+      const finish = (): void => {
+        if (settled) return
+        settled = true
         this.timer = undefined
+        this.wake = undefined
         resolve()
-      }, delay)
-      void this.stop.promise.then(() => {
-        this.clearTimer()
-        resolve()
-      }, () => undefined)
+      }
+      this.wake = finish
+      this.timer = setTimeout(finish, delay)
+      void this.stop.promise.then(finish, () => undefined)
     })
   }
   /**
