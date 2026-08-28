@@ -537,10 +537,22 @@ describe('SettingsScopeBinder.bind', () => {
     expect(theme.getSnapshot()).toMatchObject({ revision: 1 })
   })
 
-  it('binds a remote browser in memory mode without starting a settings read', async () => {
+  it('keeps an explicit memory mirror without starting a settings read', async () => {
     const describeCall = vi.fn()
     const wire = { settings: { describe: describeCall } }
     const mirror = new SettingsDescribeMirror(wire as never, 'memory')
+    const explicit = new SettingsScopeController<UiTestSettings>(
+      wire as never, { namespace: 'ui-test' }, mirror, 'memory', settingsSchema)
+    expect(explicit.getSnapshot()).toMatchObject({ status: 'unavailable', mode: 'memory', writable: false })
+    await explicit.dispose()
+    expect(describeCall).not.toHaveBeenCalled()
+  })
+
+  it('binds a trusted-host browser in host mode and derives once the mirror has a view', async () => {
+    const gate = deferred<ReturnType<typeof described>>()
+    const describeCall = vi.fn().mockReturnValue(gate.promise)
+    const wire = { settings: { describe: describeCall } }
+    const mirror = new SettingsDescribeMirror(wire as never)
     const ctx = new Context()
     ctx.provide('connection', { api: wire, isLoopback: false } as never)
     let scope!: SettingsScope<UiTestSettings>
@@ -553,8 +565,12 @@ describe('SettingsScopeBinder.bind', () => {
       },
     })
     await fiber.await()
-    expect(scope.getSnapshot()).toMatchObject({ status: 'unavailable', mode: 'memory', writable: false })
+    expect(scope.getSnapshot()).toMatchObject({ status: 'loading', mode: 'host' })
+    gate.resolve(described({ preference: 'dark' }, 1))
+    await vi.waitFor(() => {
+      expect(scope.getSnapshot()).toMatchObject({ status: 'ready', value: { preference: 'dark' }, mode: 'host' })
+    })
+    expect(describeCall).toHaveBeenCalledTimes(1)
     await fiber.dispose()
-    expect(describeCall).not.toHaveBeenCalled()
   })
 })

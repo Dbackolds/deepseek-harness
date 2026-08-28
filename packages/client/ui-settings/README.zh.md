@@ -94,7 +94,7 @@ kind: "package-reference"
 
 这些限制说明设置传输层够不到的地方；它们是当前包约束。
 
-- **非 loopback 页面没有持久化设置**：本 Client 在那里禁用 Host 持久化，因此 scope 以 `unavailable` 起步且从不跨线路；尽管 Connection 认证覆盖 API，它支撑的每一行仍在那里无效。
+- **memory 模式组合永远不会到达 Host 设置**：显式的 `memory` 镜像或 controller 保持 `unavailable` 且从不跨线路；产品 `bind()` 始终使用 host 持久化，包括 `--trusted-host` 页面。[ui-settings-general](../ui-settings-general/README.zh.md) 中的「打开配置文件」仍仅限 loopback。
 
 <a id="dev-note"></a>
 ### 开发备注
