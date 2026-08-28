@@ -33,6 +33,53 @@ function chip(shell: SessionInputShell): void {
 }
 
 describe('reference submission', () => {
+  it('publishes detectLength so a second insert after a long clipboard chip stays in bounds', () => {
+    const shell = new SessionInputShell({
+      actx: {} as Context,
+      defaultSink: vi.fn(),
+      commandImages,
+    })
+    expect(shell.snapshot.detectLength).toBe(0)
+    const longPath = `/workspace/.dsh-filess/session-a/${'a'.repeat(80)}.txt`
+    expect(shell.insertReference({
+      source: 'dsh-files',
+      ref: longPath,
+      label: '',
+      clipboardText: longPath,
+    }, {
+      start: shell.snapshot.detectLength,
+      end: shell.snapshot.detectLength,
+      draftRev: shell.snapshot.draftRev,
+    })).toBe(true)
+    // Chip is one detect cell plus a separating space; clipboard expands to the path.
+    expect(shell.snapshot.detectLength).toBe(2)
+    expect(shell.snapshot.draft.length).toBe(longPath.length + 1)
+    expect(shell.snapshot.draft.length).toBeGreaterThan(shell.snapshot.detectLength)
+
+    const secondPath = '/workspace/.dsh-filess/session-a/b.txt'
+    expect(shell.insertReference({
+      source: 'dsh-files',
+      ref: secondPath,
+      label: '',
+      clipboardText: secondPath,
+    }, {
+      start: shell.snapshot.draft.length,
+      end: shell.snapshot.draft.length,
+      draftRev: shell.snapshot.draftRev,
+    })).toBe(false)
+    expect(shell.insertReference({
+      source: 'dsh-files',
+      ref: secondPath,
+      label: '',
+      clipboardText: secondPath,
+    }, {
+      start: shell.snapshot.detectLength,
+      end: shell.snapshot.detectLength,
+      draftRev: shell.snapshot.draftRev,
+    })).toBe(true)
+    expect(shell.snapshot.occurrences.map(item => item.ref)).toEqual([longPath, secondPath])
+  })
+
   it('mirrors canonical reference text so a persisted draft remains resolvable after remount', async () => {
     const mirror = vi.fn()
     const first = new SessionInputShell({

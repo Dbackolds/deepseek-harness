@@ -903,6 +903,7 @@ export class SessionInputShell implements SessionInput {
     const core = this.core.state
     return {
       draft: this.projection.clipboardText,
+      detectLength: this.projection.detectText.length,
       imageIds: this.imageIds,
       draftRev: this.rev,
       phase: core.phase,

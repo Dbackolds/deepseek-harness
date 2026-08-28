@@ -321,6 +321,11 @@ export interface Occurrence {
 export interface InputState {
   /** Clipboard-text projection of the editor document (chips expanded to their clipboard form). */
   readonly draft: string
+  /**
+   * Detect-coordinate length of the editor document; TokenSpan start/end
+   * compare against this, not draft.length.
+   */
+  readonly detectLength: number
   /** Ordered runtime-only image ids; bytes and URLs stay in ConversationController. */
   readonly imageIds: readonly DraftAttachmentId[]
   /** Monotonic editor revision (span CAS compares against this). */
