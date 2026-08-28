@@ -39,12 +39,7 @@
         "@deepseek-ai/dsh-llm-default-policy",
         "@deepseek-ai/dsh-client-store"
       ],
-      "platform": "web",
-      "external": [
-        "@deepseek-ai/dsh-llm-default-policy",
-        "@deepseek-ai/dsh-llm-default-policy/defaults",
-        "@deepseek-ai/dsh-llm-default-policy/settings"
-      ]
+      "platform": "web"
     }
   },
   "scripts": {
