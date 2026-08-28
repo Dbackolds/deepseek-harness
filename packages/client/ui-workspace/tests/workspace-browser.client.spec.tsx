@@ -267,7 +267,7 @@ describe('WorkspaceBrowser', () => {
     const pending = new Map([[
       waiting.id,
       { key: 'question:1', kind: 'question', sessionId: waiting.id } satisfies SessionPendingInteractionBase,
-    ]]) as SessionPendingInteractionSnapshot
+    ]]) as unknown as SessionPendingInteractionSnapshot
     mount({
       useSessions: hook(sessionState(items)),
       useSessionPendingInteraction: hook(pending),
