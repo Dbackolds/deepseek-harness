@@ -107,12 +107,36 @@ export function verifyDesktopTag(version: string, ref: string): void {
   }
 }
 
+/** GitHub rejects a Release body longer than this many characters. */
+export const GITHUB_RELEASE_BODY_MAX_CHARS = 125_000
+
+/** Leave a buffer under GitHub's body cap for the truncation notice. */
+export const DESKTOP_RELEASE_NOTES_MAX_CHARS = 120_000
+
+/**
+ * Keep GitHub Release notes under the API body cap.
+ * @param notes - assembled markdown.
+ * @returns notes, truncated at a line boundary when over the cap.
+ */
+export function clampDesktopReleaseNotes(notes: string): string {
+  if (notes.length <= DESKTOP_RELEASE_NOTES_MAX_CHARS) return notes
+  const notice = '\n\n… truncated: GitHub release body is limited to 125000 characters.\n'
+  const budget = DESKTOP_RELEASE_NOTES_MAX_CHARS - notice.length
+  let cut = notes.slice(0, budget)
+  const lastNl = cut.lastIndexOf('\n')
+  if (lastNl > Math.floor(budget / 2)) cut = cut.slice(0, lastNl)
+  const clamped = `${cut}${notice}`
+  return clamped.length <= GITHUB_RELEASE_BODY_MAX_CHARS
+    ? clamped
+    : clamped.slice(0, GITHUB_RELEASE_BODY_MAX_CHARS)
+}
+
 /**
  * GitHub Release notes for one desktop tag: the archive contract plus commits
  * since the previous `desktop-v*` tag, or every commit when this is the first.
  * @param version - desktop package version being published.
- * @param gitLog - raw `git log` lines, already formatted as `subject\n\nbody`.
- * @returns markdown notes.
+ * @param gitLog - raw `git log` lines, already formatted as subjects or `subject\n\nbody`.
+ * @returns markdown notes, never longer than GitHub's Release body cap.
  */
 export function desktopReleaseNotes(version: string, gitLog: string): string {
   const intro = [
@@ -123,9 +147,9 @@ export function desktopReleaseNotes(version: string, gitLog: string): string {
   ]
   const changes = gitLog.trim()
   if (changes.length === 0) {
-    return [...intro, 'No commits since the previous desktop tag.', ''].join('\n')
+    return clampDesktopReleaseNotes([...intro, 'No commits since the previous desktop tag.', ''].join('\n'))
   }
-  return [...intro, changes, ''].join('\n')
+  return clampDesktopReleaseNotes([...intro, changes, ''].join('\n'))
 }
 
 /**

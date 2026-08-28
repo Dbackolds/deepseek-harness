@@ -6,10 +6,13 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   builderTarget,
+  clampDesktopReleaseNotes,
   desktopReleaseNotes,
   desktopReleaseTag,
   desktopVersion,
+  DESKTOP_RELEASE_NOTES_MAX_CHARS,
   expectedArtifacts,
+  GITHUB_RELEASE_BODY_MAX_CHARS,
   parsePlatform,
   pnpmBin,
   verifyDesktopTag,
@@ -56,6 +59,13 @@ describe('desktop release naming', () => {
 
   it('says so when the previous desktop tag has no later commits', () => {
     expect(desktopReleaseNotes('0.1.0-rc.5.1', '  \n')).toContain('No commits since the previous desktop tag.')
+  })
+
+  it('keeps GitHub Release notes under the API body cap', () => {
+    const huge = desktopReleaseNotes('0.1.2-alpha.1', 'x'.repeat(DESKTOP_RELEASE_NOTES_MAX_CHARS + 50_000))
+    expect(huge.length).toBeLessThanOrEqual(GITHUB_RELEASE_BODY_MAX_CHARS)
+    expect(huge).toContain('truncated: GitHub release body is limited to 125000 characters.')
+    expect(clampDesktopReleaseNotes('short').length).toBeLessThan(100)
   })
 })
 

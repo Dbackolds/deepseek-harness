@@ -160,7 +160,7 @@ jobs:
           else
             range="$tag"
           fi
-          git log --no-merges --format='%s%n%n%b' "$range" > /tmp/dsh-desktop-git-log.txt
+          git log --no-merges --format='%s' "$range" > /tmp/dsh-desktop-git-log.txt
           NOTES_VERSION="$version" node --import tsx/esm -e '
             import { readFileSync, writeFileSync } from "node:fs"
             import { desktopReleaseNotes } from "./scripts/desktop/pack.ts"
