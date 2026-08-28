@@ -14,7 +14,7 @@ Status: implemented
 
 **声明使用同一个弹窗组件。** `OnboardingModal` 包装既有 ui-primitives `Modal`，提供统一的标题和内容布局，并只在可见期间持有 `#root` 的 inert 状态。Escape 和遮罩点击不会静默完成强制引导；该步骤只暴露自己的明确「继续」操作。步骤仍在加载私有事实时返回 `null`，因此不会绘制或阻塞界面。
 
-**欢迎声明复用既有持久化字段。** 完整文案与版本由 `onboarding-copy.ts` 持有。回环客户端通过既有 settings API 比较和写入 `ui-onboarding.welcomeNoticeVersion`，且只有点击「继续」才确认当前版本。非 loopback 页面继续使用既有的进程内回退，因为 Client 在那里禁用 Host settings 持久化。不改变 Host schema、API Proxy 允许列表或持久化实现。
+**欢迎声明复用既有持久化字段。** 完整文案与版本由 `onboarding-copy.ts` 持有。客户端通过既有 settings API 比较和写入 `ui-onboarding.welcomeNoticeVersion`，且只有点击「继续」才确认当前版本。产品 Host 持久化覆盖 loopback 与 `--trusted-host` 页面；只有显式 memory 模式组合仍只保留在进程内。不改变 Host schema、API Proxy 允许列表或持久化实现。
 
 **API 密钥在 Models 页填写。** [移除首次启动凭据弹窗](../simplification/2026-08-15-remove-first-run-api-key-dialog.zh.md) 删除了 DeepSeek 官方的 `settings.onboarding` 步骤。缺失密钥表现为 Models 设置卡片或缺失密钥行，而不是产品接管。
 

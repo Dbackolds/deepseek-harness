@@ -18,7 +18,7 @@ The owning Host halves register three schemas: optional `locale.preference` (`zh
 
 User changes update the live service synchronously and queue a `settings.mutate` path operation through `scope.set`. The scope serializes gestures, sends the latest known namespace revision as `expectedRevision`, records every successful revision, and lets only the latest write settlement republish live state. A rejected or failed latest write reloads Host state. Disposal rejects new work, skips queued operations, suppresses publication by the in-flight operation, and waits for that operation to settle before the plugin reaches quiescence.
 
-The Client keeps Host persistence disabled on non-loopback pages, so their preferences remain process-local even though Connection authenticates the complete API. Dynamic third-party theme ids remain in-process extensions outside the built-in Host schema; removing one resets the live registry without replacing the last durable built-in preference.
+The product composition uses Host persistence on loopback and `--trusted-host` pages alike; only an explicit memory-mode mirror or controller stays process-local. Dynamic third-party theme ids remain in-process extensions outside the built-in Host schema; removing one resets the live registry without replacing the last durable built-in preference. **Open configuration file** remains loopback-only in ui-settings-general.
 
 ## Alternatives considered
 

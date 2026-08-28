@@ -14,7 +14,7 @@ First-run onboarding mixed two interaction models: a viewport takeover for produ
 
 **The notice uses one modal component.** `OnboardingModal` wraps the existing ui-primitives `Modal`, supplies the common title and content geometry, and owns `#root` inert for exactly the visible lifetime. Escape and mask clicks do not silently complete mandatory onboarding; the step exposes only its explicit Continue action. A step still loading private facts returns `null`, so it paints and blocks nothing.
 
-**The welcome notice reuses the existing durable field.** Its exact copy and version live in `onboarding-copy.ts`. Loopback clients compare and write `ui-onboarding.welcomeNoticeVersion` through the existing settings API, and only Continue acknowledges the current version. Non-loopback pages retain the existing process-local fallback because the Client keeps Host settings persistence disabled there. No Host schema, API-proxy allowlist, or persistence implementation changes.
+**The welcome notice reuses the existing durable field.** Its exact copy and version live in `onboarding-copy.ts`. Clients compare and write `ui-onboarding.welcomeNoticeVersion` through the existing settings API, and only Continue acknowledges the current version. Product Host persistence covers loopback and `--trusted-host` pages; only an explicit memory-mode composition stays process-local. No Host schema, API-proxy allowlist, or persistence implementation changes.
 
 **API keys are entered on the Models page.** The [first-run credential dialog removal](../simplification/2026-08-15-remove-first-run-api-key-dialog.md) dropped the official-DeepSeek `settings.onboarding` step. A missing key is a Models setup card or missing-key row, not a product takeover.
 
