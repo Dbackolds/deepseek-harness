@@ -13,6 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
+import type { SessionEmptyWorkspaces } from './stores.ts'
 import {
   indexSubagentDescendants, type SubagentDescendantSummary,
 } from './subagent-lineage.ts'
@@ -292,16 +293,26 @@ function sessionNode(
 /**
  * Derive the workspace browser groups with every session as a top-level row.
  *
- * Every group shows; sessions populate under expanded groups in the selected
- * local order. Blank sessions are excluded except for the selected
- * provisional New Session row; archived sessions are excluded everywhere.
- * Content search lives outside this derivation
+ * Project groups appear in Host order, then Chat. Sessions populate under
+ * expanded groups in the selected local order. Blank sessions are excluded
+ * except for the selected provisional New Session row; archived sessions
+ * are excluded everywhere. Auto-hide (`emptyWorkspaces === 'hide'`) omits a
+ * project group whose visible `sessionCount` is 0 unless that group owns
+ * `list.current` (including a blank current Session). Chat / No Repo always
+ * remains. Content search lives outside this derivation
  * (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot (`current` feeds containsCurrent).
  * @param workspaces - real workspaces in stable Host order.
  * @param archivedSessionIds - registry-global archive set.
  * @param pendingInteractions - pending UI interactions by Session.
  * @param view - local expansion arrays.
+ * @param hiddenWorkspaceIds - registry-global hidden Workspace set. Hidden
+ * project Workspaces stay out of the main grouped list; callers that need
+ * Hidden-section rows pass those ids into {@link deriveHiddenGroups}.
+ * Auto-hide never writes this set.
+ * @param emptyWorkspaces - `'hide'` omits empty project groups from this
+ * list. Any other value is Always show. Chat / No Repo always remains, and
+ * the Workspace that owns `list.current` remains even when empty.
  * @returns group sections in render order.
  */
 export function deriveGroups(
@@ -311,6 +322,7 @@ export function deriveGroups(
   pendingInteractions: SessionPendingInteractions,
   view: TreeView,
   hiddenWorkspaceIds: readonly WorkspaceId[] = [],
+  emptyWorkspaces: SessionEmptyWorkspaces = 'show',
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
   const hidden = new Set(hiddenWorkspaceIds)
@@ -325,6 +337,12 @@ export function deriveGroups(
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)) {
     if (g.key !== UNGROUPED_KEY && g.workspaceId !== undefined && hidden.has(g.workspaceId)) continue
+    if (
+      emptyWorkspaces === 'hide'
+      && g.key !== UNGROUPED_KEY
+      && g.sessions.length === 0
+      && g.key !== currentGroup
+    ) continue
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,
@@ -406,11 +424,16 @@ export function deriveHiddenGroups(
 /** Sidebar activity bucket used to float live work or paint status folders. */
 export type SessionActivityBucket = 'pinned' | 'unread' | 'running' | 'abnormal' | 'history'
 
+/** Drag and overflow cluster: live work stays above idle rows. */
+export type SessionListCluster = 'live' | 'idle'
+
 /** Status sections that show a count badge when folders are on. */
 export const BADGED_ACTIVITY_BUCKETS = ['unread', 'running', 'abnormal'] as const satisfies readonly SessionActivityBucket[]
 
 /**
  * Classify one visible Session into Completed / Running / Abnormal / History.
+ * Live work outranks an unviewed completion; a crash/reload interruption is
+ * Abnormal unless the Session is running again.
  * @param node - derived session row.
  * @returns the status bucket for this row.
  */
@@ -427,6 +450,8 @@ export function sessionActivityBucket(
 
 /**
  * Split live work from idle rows while preserving each side's incoming order.
+ * Pending interaction, own running, and running descendants are live; every
+ * other row is idle.
  * @param sessions - visible rows in the current view order.
  * @returns live rows first, then idle rows.
  */
@@ -441,6 +466,41 @@ export function partitionLiveIdle(sessions: readonly SessionNode[]): {
     else idle.push(session)
   }
   return { live, idle }
+}
+
+/** One classified status section; tests keep empty buckets present. */
+export interface SessionActivitySection {
+  bucket: SessionActivityBucket
+  sessions: readonly SessionNode[]
+}
+
+/**
+ * Split a Session list into Completed / Running / Abnormal / History.
+ * Empty sections stay present so the renderer can skip a heading with no rows.
+ * The pinned bucket stays empty here: the browser paints pinned rows from the
+ * store, not from this classification.
+ * @param sessions - visible rows in the current view order.
+ * @returns the five sections in classification order.
+ */
+export function partitionSessionActivity(sessions: readonly SessionNode[]): readonly SessionActivitySection[] {
+  const unread: SessionNode[] = []
+  const running: SessionNode[] = []
+  const abnormal: SessionNode[] = []
+  const history: SessionNode[] = []
+  for (const session of sessions) {
+    const bucket = sessionActivityBucket(session)
+    if (bucket === 'unread') unread.push(session)
+    else if (bucket === 'running') running.push(session)
+    else if (bucket === 'abnormal') abnormal.push(session)
+    else history.push(session)
+  }
+  return [
+    { bucket: 'pinned', sessions: [] },
+    { bucket: 'unread', sessions: unread },
+    { bucket: 'running', sessions: running },
+    { bucket: 'abnormal', sessions: abnormal },
+    { bucket: 'history', sessions: history },
+  ]
 }
 
 export function deriveFlat(

@@ -95,6 +95,29 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
   return e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
 }
 
+/** Real-Workspace row menu actions; Hidden rows supply `show` instead of `hide`. */
+export type WorkspaceRowActions = {
+  rename?: () => void
+  addFolder?: () => void
+  removeFolder?: (path: string) => void
+  hide?: () => void
+  show?: () => void
+  delete: () => void
+}
+
+/** Dispatch one Workspace row-menu id. Unknown ids leave without a fallback. */
+function selectWorkspaceMenu(id: string, actions: WorkspaceRowActions): void {
+  if (id.startsWith('remove:')) {
+    actions.removeFolder?.(id.slice('remove:'.length))
+    return
+  }
+  if (id === 'rename') actions.rename?.()
+  else if (id === 'addFolder') actions.addFolder?.()
+  else if (id === 'hide') actions.hide?.()
+  else if (id === 'show') actions.show?.()
+  else if (id === 'delete') actions.delete()
+}
+
 /**
  * Project (workspace) header row: folder + title;
  * hover reveals the chevron and create button, and dwelling on a real
@@ -113,7 +136,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   onToggle: () => void
   onCreate: () => void
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
-  actions?: { rename: () => void; delete: () => void } | undefined
+  actions?: WorkspaceRowActions | undefined
   /** Present only for real Workspace rows in the grouped view. */
   drag?: WorkspaceRowDragProps | undefined
   /** Host account home; POSIX home-rooted hover paths display as `~`. */
@@ -125,10 +148,26 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
-  const workspaceMenuItems = [
-    { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
-    { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
-  ]
+  const hidden = actions?.show !== undefined
+  const workspaceMenuItems = hidden
+    ? [
+      { id: 'show', label: t('menu.showWorkspace'), icon: <IconFolderOpen16 /> },
+      { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
+    ]
+    : [
+      { id: 'hide', label: t('menu.hideWorkspace'), icon: <IconFolderClose16 /> },
+      { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
+      { id: 'addFolder', label: t('menu.addFolder'), icon: <IconPlusOutline16 /> },
+      ...row.folders.length === 0
+        ? []
+        : [{
+          id: 'removeFolder',
+          label: t('menu.removeFolder'),
+          icon: <IconFolderClose16 />,
+          submenu: row.folders.map(folder => ({ id: `remove:${folder}`, label: folder })),
+        }],
+      { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
+    ]
   const ownRow = (
     <div
       className={clsx(css.projectRow, menuOpen && css.menuOpen)}
@@ -162,12 +201,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
             items={workspaceMenuItems}
             onSelect={(id) => {
               setMenuOpen(false)
-              // Unknown ids leave before the dispatch: a future menu row must
-              // not inherit the destructive branch as an else fallback.
-              /* v8 ignore next -- Menu can emit only the rename and delete rows supplied above. */
-              if (id !== 'rename' && id !== 'delete') return
-              if (id === 'rename') actions.rename()
-              else actions.delete()
+              selectWorkspaceMenu(id, actions)
             }}
             portal
             closeOnPointerLeave
