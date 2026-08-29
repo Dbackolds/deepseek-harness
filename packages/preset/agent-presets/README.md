@@ -76,7 +76,7 @@ A copy is refused when the id is not `[a-z0-9][a-z0-9-]*` (the id becomes a dire
 
 ### Switching a session's preset
 
-A session can switch to a different preset only while it has produced nothing — no messages or tool calls. After that, the composition is fixed for the session's life, because swapping tools mid-conversation would leave logged tool calls the new composition cannot make. A committed switch emits `tools/change` because the resolved tool set changed without a registry edit. The switch is also recorded in the session log, so a resumed or forked session rebuilds under the composition it ran.
+A session can switch to a different preset only while it has produced nothing — no messages or tool calls. After that, the composition is fixed for the session's life, because swapping tools mid-conversation would leave logged tool calls the new composition cannot make. A committed switch emits `tools/change` because the resolved tool set changed without a registry edit. The switch is also recorded in the session log, so a resumed or forked session rebuilds under the composition it ran. Resolving a recorded id that no longer exists maps it to the renamed successor when one is recorded (`code` resolves to `ptc` across the PTC rename), so sessions logged before a rename resume on the renamed composition; an id the roster actually supplies always wins.
 
 ### Failures and recovery
 

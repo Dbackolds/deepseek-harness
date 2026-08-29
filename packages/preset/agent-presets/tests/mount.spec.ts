@@ -336,6 +336,20 @@ describe('rejecting a composition that cannot be used', () => {
     await expect(ctx.agentPresets.resolve('nope'))
       .rejects.toThrow(/preset "nope" not found \(available: .*standard/)
   })
+
+  it('resolves a session-recorded legacy id to its renamed preset', async () => {
+    // Durable sessions keep the code-mode vocabulary across the ptc rename
+    // until the v1 session migration, so resume must mount the successor.
+    const shipped = await harness({ default: 'standard', roots: ROOTS, includeShippedRoot: true, includeUserRoot: false })
+    const legacy = await shipped.agentPresets.resolve('code')
+    expect(legacy.id).toBe('ptc')
+  })
+
+  it('refuses a legacy id whose renamed successor is absent', async () => {
+    const bare = await harness({ default: 'ptc', roots: [], includeShippedRoot: false, includeUserRoot: false })
+    await expect(bare.agentPresets.resolve('code'))
+      .rejects.toThrow(/preset "code" not found/)
+  })
 })
 
 describe('the preset roster', () => {

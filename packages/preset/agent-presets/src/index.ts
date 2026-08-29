@@ -146,6 +146,21 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
+ * Preset ids that renamed presets must still resolve.
+ *
+ * A session records the id it started with in its creation header and
+ * `agent-preset/selected` events, and that durable vocabulary intentionally
+ * outlives renames — the code-mode → ptc rename kept it until the
+ * SESSION_FORMAT_VERSION v1 migration lands. Resolution maps a missing legacy
+ * id to its renamed successor so resuming a pre-rename session mounts the
+ * renamed composition; an id a deployment defines itself always wins over the
+ * alias.
+ */
+const LEGACY_PRESET_IDS: Readonly<Record<string, string>> = {
+  code: 'ptc',
+}
+
+/**
  * Registry over the deployment's agent presets.
  *
  * Discovery is unmemoized: `list()` and `resolve()` re-read the roots on every
@@ -335,15 +350,17 @@ export class AgentPresets extends TypertRemoteService {
    *
    * A broken preset resolves — deleting one, reading one, and reporting one
    * all need the row — and the mounting paths refuse it AFTER resolution
-   * through {@link resolveMountable}.
+   * through {@link resolveMountable}. A missing id that names a renamed
+   * preset resolves to the successor (see {@link LEGACY_PRESET_IDS}).
    * @param id - the preset id, or `undefined` for {@link defaultId}.
    * @returns the resolved preset.
-   * @throws when no configured root supplies that id.
+   * @throws when no configured root supplies that id or its successor.
    */
   async resolve(id?: string): Promise<AgentPreset> {
     const wanted = id ?? this.defaultId
     const presets = await this.list()
     const found = presets.find(preset => preset.id === wanted)
+      ?? presets.find(preset => preset.id === LEGACY_PRESET_IDS[wanted])
     if (found === undefined) {
       throw new UnknownPresetError(wanted, presets.map(preset => preset.id))
     }
