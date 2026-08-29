@@ -219,6 +219,10 @@ function startHost(memory: LaunchMemory): HostLaunch {
     ready: startWebHost({
       cwd,
       extraArgs: extraWebArgs(),
+      extraEnv: {
+        DSH_PRODUCT_CHANNEL: 'desktop',
+        DSH_PRODUCT_VERSION: app.getVersion(),
+      },
       ...memory.node === undefined ? {} : { nodePath: memory.node },
       ...memory.port === undefined ? {} : { port: memory.port },
     }),

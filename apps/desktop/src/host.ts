@@ -263,16 +263,26 @@ export function webHostArgs(extraArgs: readonly string[] = [], rememberedPort?: 
 }
 
 /**
+ * Merge Host-child env overrides such as `DSH_PRODUCT_CHANNEL` onto `process.env`.
+ * @param extraEnv - sparse overrides; empty values are still written.
+ * @returns a new env object for `child_process.spawn`.
+ */
+export function webHostEnv(extraEnv: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  return { ...process.env, ...extraEnv }
+}
+
+/**
  * Start `dsh web` and resolve when `/` carries `window.__DSH_BOOT__`.
  * The readiness line means the HTTP server is listening; the modules row
  * injects the boot graph later. Loading before that marker leaves the
  * window on a blank page.
- * @param options - working directory, extra web flags, and the last successful port.
+ * @param options - working directory, extra web flags, Host-child env overrides, and the last successful port.
  * @returns the child and the announced loopback URL.
  */
 export async function startWebHost(options: {
   cwd: string
   extraArgs?: readonly string[]
+  extraEnv?: NodeJS.ProcessEnv
   timeoutMs?: number
   nodePath?: string
   port?: number
@@ -285,7 +295,7 @@ export async function startWebHost(options: {
   const args = [...invocation.args, ...webHostArgs(extra, remembered)]
   const child = spawn(invocation.command, args, {
     cwd: options.cwd,
-    env: process.env,
+    env: webHostEnv(options.extraEnv),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
