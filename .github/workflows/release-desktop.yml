@@ -89,6 +89,14 @@ jobs:
         shell: bash
         run: pnpm exec tsx scripts/desktop/pack.ts --platform ${{ matrix.platform }}
 
+      # Boot-smoke the staged Host on the POSIX packers: a composition or
+      # deploy-closure breakage must fail the pack job instead of shipping
+      # an archive that cannot start.
+      - name: Boot-smoke the staged Host
+        if: matrix.platform != 'win32'
+        shell: bash
+        run: pnpm exec tsx scripts/desktop/host-boot-smoke.ts --host dist-desktop/staging/host
+
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}

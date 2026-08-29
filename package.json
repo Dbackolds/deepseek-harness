@@ -158,7 +158,8 @@
     "mock:llm": "node --import tsx packages/test-support/llm-mock-server/src/bin.ts",
     "dev:web": "tsx scripts/dev-web.ts --poll",
     "postinstall": "node scripts/install-lefthook.mjs",
-    "verify-client-remote-inject": "tsx scripts/verify-client-remote-inject.ts"
+    "verify-client-remote-inject": "tsx scripts/verify-client-remote-inject.ts",
+    "verify-fork-customizations": "tsx scripts/verify-fork-customizations.ts"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-tool-session-query": "workspace:^",
