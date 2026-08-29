@@ -607,6 +607,55 @@ describe('SubagentRuntime.followup residency routing', () => {
     expect(userTexts(loaded.events)).toEqual(['child task', 'continue without provider'])
   })
 
+  it('persists a provider-prepared continuable cwd after the preparing provider unregisters', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('after resume')])
+    const disposeProvider = ctx.subagents.registerProvider({
+      name: 'managed',
+      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      inheritsParentContext: false,
+      start: async () => { throw new Error('one-shot start is not used') },
+      prepareContinuable: () => Promise.resolve({ cwd: '/managed/worktree' }),
+    })
+
+    const started = await ctx.subagents.startContinuable(startSpec(parent, 'managed'))
+    await waitNoActivation(ctx, started.childId)
+    disposeProvider()
+    expect(ctx.subagents.getProvider('managed')).toBeUndefined()
+
+    const loaded = await ctx.sessionPersistence.load(started.childId)
+    expect(loaded.meta.cwd).toBe('/managed/worktree')
+
+    await expect(followup(ctx, parent, started.childId, message('continue without provider')))
+      .resolves.toBeTypeOf('string')
+    await waitNoActivation(ctx, started.childId)
+    const reloaded = await ctx.sessionPersistence.load(started.childId)
+    expect(reloaded.meta.cwd).toBe('/managed/worktree')
+  })
+
+  it('persists a caller-supplied cwd over the provider-prepared value', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('after resume')])
+    const disposeProvider = ctx.subagents.registerProvider({
+      name: 'prepared',
+      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      inheritsParentContext: false,
+      start: async () => { throw new Error('one-shot start is not used') },
+      prepareContinuable: () => Promise.resolve({ cwd: '/provider/tree' }),
+    })
+
+    const spec = { ...startSpec(parent, 'prepared'), cwd: '/caller/tree' }
+    const started = await ctx.subagents.startContinuable(spec)
+    await waitNoActivation(ctx, started.childId)
+    const loaded = await ctx.sessionPersistence.load(started.childId)
+    expect(loaded.meta.cwd).toBe('/caller/tree')
+
+    await expect(followup(ctx, parent, started.childId, message('continue please')))
+      .resolves.toBeTypeOf('string')
+    await waitNoActivation(ctx, started.childId)
+    const reloaded = await ctx.sessionPersistence.load(started.childId)
+    expect(reloaded.meta.cwd).toBe('/caller/tree')
+    disposeProvider()
+  })
+
   it('wakes a waiting Activation instead of cold-resuming it', async () => {
     const releaseGrandchild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
