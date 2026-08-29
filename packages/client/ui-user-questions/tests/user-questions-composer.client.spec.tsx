@@ -175,6 +175,7 @@ describe('QuestionComposer', () => {
     const detail = screen.getByText('按当前空缺岗位的优先级选择。')
     const scrollRegion = detail.closest('[data-question-scroll]')
     expect(scrollRegion).toBeTruthy()
+    expect(scrollRegion?.contains(screen.getByRole('heading', { name: '选择候选人类型' }))).toBe(true)
     expect(scrollRegion?.contains(screen.getByRole('radio', { name: /工程落地型/ }))).toBe(true)
     expect(scrollRegion?.contains(screen.getByText('下一题').closest('button'))).toBe(false)
     fireEvent.keyDown(screen.getByRole('radio', { name: /工程落地型/ }), { key: 'Enter' })
@@ -423,6 +424,34 @@ describe('PendingQuestion domain face', () => {
     expect(question.key).toMatch(/^question:\d+$/)
     expect(question.sessionId).toBe(SID)
     expect(question.questions).toBe(QUESTIONS)
+  })
+
+  it('puts a long question title in the shared scroll region with the choices', () => {
+    const long = Array.from(
+      { length: 24 },
+      (_, index) => `Clause ${String(index + 1)}: keep footer actions and choices reachable.`,
+    ).join(' ')
+    const { carrier } = wait([{
+      id: 'contract',
+      header: 'Confirm contract',
+      question: long,
+      options: [{ label: 'Accept' }, { label: 'Reject' }],
+    }])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    const heading = screen.getByRole('heading', { name: long })
+    const scrollRegion = heading.closest('[data-question-scroll]')
+    expect(scrollRegion).toBeTruthy()
+    expect(scrollRegion?.contains(screen.getByRole('radio', { name: 'Accept' }))).toBe(true)
+    expect(scrollRegion?.contains(screen.getByRole('radio', { name: 'Reject' }))).toBe(true)
+    expect(scrollRegion?.contains(screen.getByText('跳过本题').closest('button'))).toBe(false)
+    expect(screen.getByRole('button', { name: '跳过本题' })).toBeTruthy()
+
+    fireEvent.click(screen.getByLabelText(zh['nav.minimize']))
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(screen.getByRole('heading', { name: long }).closest('[data-question-scroll]')).toBeNull()
+    fireEvent.click(screen.getByLabelText(zh['nav.maximize']))
+    expect(screen.getByRole('heading', { name: long }).closest('[data-question-scroll]')).toBeTruthy()
   })
 
   it('collapses the card to the header strip and expands it back', () => {
