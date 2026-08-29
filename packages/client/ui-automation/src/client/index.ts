@@ -34,7 +34,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Required services for locale, the sidebar seat, the Host wire, sessions, and settings. */
-export const inject = ['slots', 'locale', 'connection', 'remote', 'sessions', 'settingsScope']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.automation', 'sessions', 'settingsScope']
 
 /**
  * Register the dictionaries and the sidebar Automation occupant.

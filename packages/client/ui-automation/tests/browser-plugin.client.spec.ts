@@ -40,6 +40,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   }
   ctx.provide('connection', { api: { automation, settings: {} }, isLoopback: false } as never)
   ctx.provide('remote', { $on: () => () => {} } as never)
+  ctx.provide('remote.automation', { list: () => Promise.resolve({ rpcId: 'a', result: { ok: false, error: { code: 'x', message: 'no' } } }) } as never)
   ctx.provide('sessions', {
     list: {
       getSnapshot: () => ({ byId: { 'session-1': { id: 'session-1' } } }),
@@ -56,7 +57,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
 
 describe('ui-automation browser half', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'sessions', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.automation', 'sessions', 'settingsScope'])
   })
 
   it('registers the sidebar occupant, and fiber teardown removes it (HMR safety)', async () => {
