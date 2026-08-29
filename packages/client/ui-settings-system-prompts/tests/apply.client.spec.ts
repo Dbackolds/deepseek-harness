@@ -64,12 +64,20 @@ describe('ui-settings-system-prompts apply', () => {
     await face.setPromptIds('p', 'm', [])
     await face.setOverride('p', 'm', false)
     expect(typeof face.load).toBe('function')
-    ctx.emit('settings/document-updated' as never, ['user-system-prompts'])
-    ctx.emit('settings/document-updated' as never, ['other'])
+    // 测试裸 Context 不携带运行时模块合并出的客户端事件词表。
+    // @ts-expect-error the client event vocabulary is runtime-declared
+    ctx.emit('settings/document-updated', 'user-system-prompts')
+    // 测试裸 Context 不携带运行时模块合并出的客户端事件词表。
+    // @ts-expect-error the client event vocabulary is runtime-declared
+    ctx.emit('settings/document-updated', 'other')
+    // 测试裸 Context 不携带运行时模块合并出的客户端事件词表。
+    // @ts-expect-error the client event vocabulary is runtime-declared
     ctx.emit('llm/adapters-updated' as never, [])
     ctx.emit('connection/reset')
     await face.load()
-    ctx.emit('settings/document-updated' as never, ['user-system-prompts'])
+    // 测试裸 Context 不携带运行时模块合并出的客户端事件词表。
+    // @ts-expect-error the client event vocabulary is runtime-declared
+    ctx.emit('settings/document-updated', 'user-system-prompts')
   })
 
   it('unregisters the section with the fiber', async () => {
