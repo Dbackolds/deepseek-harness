@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-29-desktop-host-closure-backfill.md
+2026-08-29-desktop-host-closure-backfill.md: 9dda16a29e578d6ee432fbde1792780be9e95a2b
+2026-08-29-desktop-host-closure-backfill.zh.md: 8be4564007185d2ca6c101ea8e5f0cd2ac1a13db

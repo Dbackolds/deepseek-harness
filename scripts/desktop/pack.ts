@@ -10,6 +10,7 @@ import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFi
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { restoreVendoredHostPackages } from '../docker/restore-vendored-host.ts'
+import { backfillWorkspaceHostClosure } from './backfill-host-closure.ts'
 import { isEntry } from '../release/process.ts'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -235,6 +236,10 @@ function stageHost(skipBuild = false): void {
     throw new Error('desktop pack: pnpm deploy did not write apps/cli/lib/bin.js into the Host tree')
   }
   restoreVendoredHostPackages(deployed, root)
+  const backfilled = backfillWorkspaceHostClosure(deployed, root)
+  if (backfilled.length > 0) {
+    console.log(`desktop pack: backfilled Host workspace closure: ${backfilled.join(', ')}`)
+  }
   stageNodeBinary(hostRoot)
 }
 
