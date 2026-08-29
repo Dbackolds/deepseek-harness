@@ -59,7 +59,7 @@ kind: "package-reference"
 
 ### 宿主端
 
-宿主端在用户设置 seam 中注册 `ui-onboarding`。`ui-settings-models` 提供的欢迎步骤通过既有公开 settings 边界读写其中的 `welcomeNoticeVersion`；外壳本身仍不持有产品策略。
+宿主端在用户设置 seam 中注册 `ui-onboarding` 与 `ui-host`。`ui-settings-models` 提供的欢迎步骤通过既有公开 settings 边界读写其中的 `welcomeNoticeVersion`。`ui-host` 记录本次进程启动时刻，并在每个 Node 进程中把持久启动次数加一；设置内容栏标题显示这两项事实。
 
 </details>
 

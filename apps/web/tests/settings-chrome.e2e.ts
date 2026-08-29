@@ -69,6 +69,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await expect.poll(() => dialog.getByText('插件热重载', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     expect(await dialog.getByRole('switch', { name: '自动热重载' }).getAttribute('aria-checked')).toBe('false')
     expect(await dialog.getByRole('button', { name: '重载插件' }).count()).toBe(1)
+    await expect.poll(() => dialog.getByText(/启动于/).count(), { timeout: 10_000 }).toBe(1)
     const openDocument = dialog.getByRole('button', { name: '打开配置文件' })
     await openDocument.waitFor({ timeout: 10_000 })
     let openRequests = 0

@@ -22,6 +22,7 @@
     - button "系统提示词":
       - img
       - text: 系统提示词
+  - text: 启动于 {{clock}} · 已启动 1 次
   - button "打开配置文件"
   - button "关闭":
     - img

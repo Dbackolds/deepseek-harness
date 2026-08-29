@@ -13,6 +13,7 @@
     - button "Agent presets":
       - img
       - text: Agent presets
+  - text: Started {{clock}} · launched 1 times
   - button "Open configuration file"
   - button "Close":
     - img

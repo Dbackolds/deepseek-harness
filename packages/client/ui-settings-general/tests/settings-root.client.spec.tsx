@@ -58,6 +58,15 @@ function mount({
     useSessionPendingInteraction,
     useWorkspaces: unusedHook,
     wide,
+    t: (key, params) => {
+      if (key === 'hostStart.meta') return `Started ${String(params?.['time'])} · launched ${String(params?.['count'])} times`
+      return key
+    },
+    useHostStart: select => select({
+      status: 'ready',
+      startCount: 3,
+      startedAt: '2026-08-29T00:17:56.000Z',
+    }),
     useOnboardingSteps: select => select(steps),
     useSections: (select) => {
       const [, force] = useState(0)
@@ -127,6 +136,12 @@ describe('SettingsPanel chrome seats', () => {
     openPanel()
     expect(screen.getByText('Open configuration file')).toBeTruthy()
     expect(renderSlot).toHaveBeenCalledWith('settings.action', {})
+  })
+
+  it('renders Host start time and start count in the content header', () => {
+    mount()
+    openPanel()
+    expect(screen.getByText(/Started /).textContent).toMatch(/launched 3 times/)
   })
 })
 

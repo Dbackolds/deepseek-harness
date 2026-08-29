@@ -24,6 +24,8 @@ import type {
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
+import { HOST_LIFETIME_SETTINGS_NAMESPACE } from '../host-lifetime.ts'
+import { HostStartMetaPolicy } from './host-start-meta.ts'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
 import { SettingsDocumentStore } from './settings-document-store.ts'
@@ -81,6 +83,9 @@ export function apply(ctx: ClientContext): void {
       hooks: { snapshot: documentController.store },
     })
   ctx.effect(() => () => { documentController?.dispose() }, 'ui-settings-general: document action directory')
+  const hostStart = new HostStartMetaPolicy(
+    ctx.settingsScope.bind({ namespace: HOST_LIFETIME_SETTINGS_NAMESPACE }),
+  )
   // The settings shell: this package occupies the sidebar-owned hole and
   // declares the settings slots. Ledger → nav-row projection as an observable
   // source (uSES contract: getSnapshot returns the cached rows until the
@@ -137,10 +142,12 @@ export function apply(ctx: ClientContext): void {
         },
         subscribe: listener => ctx.slots.subscribe('settings.onboarding', listener),
       },
+      hostStart: hostStart.store,
     },
   })
   ctx.slots.inject('sidebar.settings', () => ctx.slots.register({
     name: 'sidebar.settings',
+    locale: NS,
     children: {
       'settings.trigger': { kind: 'single', scope: 'root' },
       'settings.header': { kind: 'single', scope: 'root' },

@@ -172,6 +172,18 @@
   box-sizing: border-box;
 }
 
+.hostStart {
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 0 0 4px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .actions {
   min-width: 0;
   display: flex;

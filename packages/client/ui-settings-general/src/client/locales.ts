@@ -4,6 +4,7 @@
 export const zh = {
   'trigger': '设置',
   'title': '设置',
+  'hostStart.meta': '启动于 {time} · 已启动 {count} 次',
   'close': '关闭',
   'openDocument': '打开配置文件',
   'openDocument.error': '无法打开配置文件',
@@ -17,6 +18,7 @@ export type SettingsKey = keyof typeof zh
 export const en = {
   'trigger': 'Settings',
   'title': 'Settings',
+  'hostStart.meta': 'Started {time} · launched {count} times',
   'close': 'Close',
   'openDocument': 'Open configuration file',
   'openDocument.error': 'Could not open configuration file',

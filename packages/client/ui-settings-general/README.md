@@ -59,7 +59,7 @@ On a loopback page, the Client loads the provider's `hasDocument` capability thr
 
 ### Host half
 
-The Host half registers `ui-onboarding` in the user-settings seam. The welcome step contributed by ui-settings-models reads and writes its `welcomeNoticeVersion` through the existing public settings boundary; the shell itself remains policy-free.
+The Host half registers `ui-onboarding` and `ui-host` in the user-settings seam. The welcome step contributed by ui-settings-models reads and writes its `welcomeNoticeVersion` through the existing public settings boundary. `ui-host` records this process start instant and increments a durable start count once per Node process; the settings content header shows both facts.
 
 </details>
 

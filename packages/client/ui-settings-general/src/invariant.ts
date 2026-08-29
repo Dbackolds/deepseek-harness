@@ -16,9 +16,10 @@ export const inject = ['invariants']
 
 /**
  * No runtime invariant: the settings seam validates and publishes the durable
- * onboarding section, while slot conflicts fail loud in the slot core. The local
- * document action is browser state over typed RPC responses and is covered by
- * store/component tests rather than a Cordis runtime relationship.
+ * onboarding and Host-lifetime sections, while slot conflicts fail loud in the
+ * slot core. The local document action and Host-start header are browser state
+ * over typed RPC responses and are covered by store/component tests rather than
+ * a Cordis runtime relationship.
  */
 const install: InvariantInstaller = () => {}
 

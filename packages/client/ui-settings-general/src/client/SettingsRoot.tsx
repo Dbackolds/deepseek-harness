@@ -17,6 +17,8 @@ import {
   IconListPenOutline16, IconPersonalizationOutline16, IconSettingsOutline16, IconSkillOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
+import { HostStartMeta } from './HostStartMeta.tsx'
+import type { HostStartMetaView } from './host-start-meta.ts'
 import css from './SettingsRoot.module.css'
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
@@ -36,6 +38,8 @@ type PanelProps = {
   activeId: string | undefined
   onSelect: (id: string) => void
   onClose: () => void
+  t: SettingsRootComponentProps['t']
+  hostStart: HostStartMetaView
 }
 
 /**
@@ -43,7 +47,7 @@ type PanelProps = {
  * header button, a mask click, and document-level Escape (mounted only while
  * open, so the listener lifetime is the panel's).
  */
-function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
+function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose, t, hostStart }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
@@ -84,6 +88,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
         </nav>
         <div className={css.content}>
           <div className={css.header}>
+            <HostStartMeta meta={hostStart} t={t} />
             <div className={css.actions}>{renderSlot('settings.action', {})}</div>
             <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
               <IconCloseOutline16 size={14} />
@@ -105,7 +110,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
  * @returns the settings shell element tree.
  */
 export function SettingsRoot(props: SettingsRootComponentProps) {
-  const { wide, useSections, useOnboardingSteps, useSessions, renderSlot } = props
+  const { wide, useSections, useOnboardingSteps, useSessions, useHostStart, renderSlot, t } = props
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | undefined>(undefined)
   const [completedOnboarding, setCompletedOnboarding] = useState<ReadonlySet<string>>(() => new Set())
@@ -123,6 +128,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
   // seats re-render through their own outlets' subscriptions.
   const rows = useSections(s => s)
   const onboardingSteps = useOnboardingSteps(s => s)
+  const hostStart = useHostStart(s => s)
   const onboardingActive = useSessions(state =>
     state.phase === 'ready'
     && (state.current === undefined || state.byId[state.current]?.blank === true))
@@ -160,6 +166,8 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           activeId={activeId}
           onSelect={setActiveId}
           onClose={close}
+          t={t}
+          hostStart={hostStart}
         />
       )}
       {/* Dialog chrome and `#root` inert ownership live inside each step's

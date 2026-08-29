@@ -5,6 +5,7 @@ import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
+import { HostStartMeta } from '../src/client/HostStartMeta.tsx'
 import type { TriggerContentProps } from '../src/client/chrome.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
@@ -21,7 +22,12 @@ afterEach(cleanup)
 
 // The seat's key domain is settings ∪ common; the stub answers from the
 // package dictionary and falls back to the key like the real chain.
-const t: TriggerContentProps['t'] = key => (en as Record<string, string>)[key] ?? key
+const t: TriggerContentProps['t'] = (key, params) => {
+  const template = (en as Record<string, string>)[key] ?? key
+  if (params === undefined) return template
+  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+    name in params ? String(params[name]) : match)
+}
 
 // Global standard kit stubs: none of these components consume the hooks.
 const unusedHook = (() => { throw new Error('unused by settings-general components') }) as never
@@ -48,6 +54,16 @@ describe('chrome content', () => {
     render(<CloseLabel {...kit} t={t} />)
     expect(screen.getByText('Settings')).toBeTruthy()
     expect(screen.getByText('Close')).toBeTruthy()
+  })
+
+  it('HostStartMeta stays empty until a ready start count exists', () => {
+    const { rerender } = render(<HostStartMeta meta={{ status: 'loading', startCount: 0 }} t={t} />)
+    expect(screen.queryByText(/launched/)).toBeNull()
+    rerender(<HostStartMeta
+      meta={{ status: 'ready', startCount: 2, startedAt: '2026-08-29T00:17:56.000Z' }}
+      t={t}
+    />)
+    expect(screen.getByText(/launched 2 times/).textContent).toContain('Started')
   })
 })
 
