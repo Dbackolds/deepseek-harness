@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-29-client-panel-remote-namespace-inject.md
+2026-08-29-client-panel-remote-namespace-inject.md: 458f8b215bc27cc3ce590d5305b38aaf4786b53f
+2026-08-29-client-panel-remote-namespace-inject.zh.md: f59fb737d40be58ac6d5abf165288b042b178471

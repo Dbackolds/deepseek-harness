@@ -30,7 +30,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'settings.systemPrompts'
 
 /** Required services (cordis fiber inject). */
-export const inject = ['slots', 'locale', 'connection', 'remote']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settings', 'remote.llm', 'remote.systemPrompt']
 
 /**
  * Register the System prompts section once `settings.section` is declared.

@@ -1,4 +1,3 @@
-// @ts-nocheck — merge-port: client-runtime retirement; restore types in a follow-up.
 /** What the browser half registers, and that it all leaves with the fiber. */
 
 import { Context } from '@deepseek-ai/cordis'
@@ -18,6 +17,9 @@ async function bench() {
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   new TestRemote(ctx)
+  ctx.provide('remote.settings', { describe: vi.fn(() => Promise.resolve({ rpcId: 's', result: { ok: false, error: { message: 'no' } } })) } as never)
+  ctx.provide('remote.llm', { listProviders: vi.fn(() => Promise.resolve({ rpcId: 'm', result: { ok: false, error: { message: 'no' } } })) } as never)
+  ctx.provide('remote.systemPrompt', { list: vi.fn(() => Promise.resolve({ rpcId: 'p', result: { ok: false, error: { message: 'no' } } })) } as never)
   ctx.provide('connection', {
     isLoopback: true,
     api: {
@@ -38,7 +40,7 @@ function declareRoot(slots: SlotRegistry): () => void {
 
 describe('ui-settings-system-prompts apply', () => {
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.settings', 'remote.llm', 'remote.systemPrompt'])
   })
 
   it('registers one System prompts section after Agent presets', async () => {

@@ -25,7 +25,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const NS = 'settings.skills'
 
 /** Required services (cordis fiber inject). */
-export const inject = ['slots', 'locale', 'connection', 'remote']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.skills']
 
 /**
  * Register the Skills section once `settings.section` is declared.

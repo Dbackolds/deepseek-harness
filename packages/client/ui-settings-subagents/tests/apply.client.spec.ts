@@ -1,4 +1,3 @@
-// @ts-nocheck — merge-port: client-runtime retirement; restore types in a follow-up.
 /** What the browser half registers, and that it all leaves with the fiber. */
 
 import { Context } from '@deepseek-ai/cordis'
@@ -24,6 +23,7 @@ async function bench() {
       settings: { describe: vi.fn(() => Promise.resolve({ rpcId: 's', result: { ok: false, error: { message: 'no' } } })) },
     },
   } as never)
+  ctx.provide('remote.settings', { describe: vi.fn(() => Promise.resolve({ rpcId: 's', result: { ok: false, error: { message: 'no' } } })) } as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   return { ctx, slots: ctx.get('slots') as SlotRegistry }
 }
@@ -37,7 +37,7 @@ function declareRoot(slots: SlotRegistry): () => void {
 
 describe('ui-settings-subagents apply', () => {
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.settings', 'settingsScope'])
   })
 
   it('registers one Subagents section between Models and Plugins', async () => {

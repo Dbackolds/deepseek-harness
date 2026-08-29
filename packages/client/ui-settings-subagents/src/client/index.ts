@@ -32,7 +32,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'settings.subagents'
 
 /** Required services (cordis fiber inject). */
-export const inject = ['slots', 'locale', 'connection', 'remote', 'settingsScope']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settings', 'settingsScope']
 
 /**
  * Register the Subagents section once settings.section is declared.

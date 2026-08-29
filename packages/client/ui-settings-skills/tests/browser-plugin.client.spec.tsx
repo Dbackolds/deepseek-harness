@@ -27,6 +27,7 @@ async function bench() {
     .mockResolvedValue({ ok: true, value: EMPTY })
   ctx.provide('connection', {})
   ctx.provide('remote', { skills: { list: catalog } })
+  ctx.provide('remote.skills', { list: catalog } as never)
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, catalog }
 }
 
@@ -39,7 +40,7 @@ function declare(slots: SlotRegistry): () => void {
 
 describe('ui-settings-skills browser plugin', () => {
   it('declares only the services used by the Settings contribution', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.skills'])
   })
 
   it('registers a localized section between Plugins and Agent presets', async () => {
