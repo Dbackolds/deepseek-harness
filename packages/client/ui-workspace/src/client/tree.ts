@@ -64,6 +64,8 @@ export interface SessionNode {
   runningSubagentCount: number
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
+  /** Browser-local pin: the row also appears under the Pinned heading. */
+  pinned?: boolean
   updatedAt: number
 }
 
@@ -500,17 +502,23 @@ export function partitionSessionActivity(sessions: readonly SessionNode[]): read
  * @param list - sessions list snapshot.
  * @param archivedSessionIds - registry-global archive set.
  * @param pendingInteractions - pending UI interactions by Session.
+ * @param includeSessionIds - extra ids to consider even when they are not in
+ * `list.ids` (Pinned rows whose Workspace is Host-hidden).
  * @returns flat rows in render order.
  */
 export function deriveFlat(
   list: SessionListState,
   archivedSessionIds: readonly SessionId[],
   pendingInteractions: SessionPendingInteractions,
+  includeSessionIds: readonly SessionId[] = [],
 ): SessionNode[] {
   const archived = new Set(archivedSessionIds)
   const descendants = indexSubagentDescendants(list.byId)
   const rows: SessionSummary[] = []
-  for (const id of list.ids) {
+  const seen = new Set<SessionId>()
+  for (const id of [...list.ids, ...includeSessionIds]) {
+    if (seen.has(id)) continue
+    seen.add(id)
     const s = list.byId[id]
     if (s === undefined || !sessionVisible(s, list.current, archived)) continue
     rows.push(s)

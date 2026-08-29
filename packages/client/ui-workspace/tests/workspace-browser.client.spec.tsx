@@ -254,6 +254,27 @@ describe('WorkspaceBrowser', () => {
     ])
   })
 
+  it('pins a session under the Pinned heading and unpins it back into its Workspace', () => {
+    const b = mount({
+      useSessions: hook(sessionState([summary('alpha-s', 2), summary('beta-s', 1)])),
+      useWorkspaces: hook(workspaceState([
+        workspace('alpha', ['alpha-s']),
+        workspace('beta', ['beta-s']),
+      ])),
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    fireEvent.click(screen.getByRole('button', { name: '会话“alpha-s”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '置顶任务' }))
+    expect(b.store.getSnapshot().pinnedSessionIds).toEqual(['alpha-s'])
+    expect(screen.getByRole('button', { name: '置顶' })).toBeTruthy()
+    expect(screen.getAllByText('alpha-s')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '会话“alpha-s”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '取消置顶' }))
+    expect(b.store.getSnapshot().pinnedSessionIds).toEqual([])
+    expect(screen.queryByRole('button', { name: '置顶' })).toBeNull()
+    expect(screen.getByText('alpha-s')).toBeTruthy()
+  })
+
   it('keeps Workspace folders and floats live Sessions above idle rows when status sections are off', () => {
     const waiting = summary('waiting', 6)
     const items = [

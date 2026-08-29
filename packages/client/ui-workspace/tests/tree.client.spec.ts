@@ -602,6 +602,16 @@ describe('createWorkspaceViewStore', () => {
     expect(snapshot.sessionOrderByAccount).toEqual({ alpha: ['alpha-session'] })
     expect(snapshot.sessionUpdatedAtByAccount).toEqual({ alpha: { 'alpha-session': 2 } })
   })
+
+  it('pins newest last and unpins without dropping the rest', () => {
+    const store = createWorkspaceViewStore().create()
+    store.actions.pinSession('one')
+    store.actions.pinSession('two')
+    store.actions.pinSession('one')
+    expect(store.getSnapshot().pinnedSessionIds).toEqual(['two', 'one'])
+    store.actions.unpinSession('two')
+    expect(store.getSnapshot().pinnedSessionIds).toEqual(['one'])
+  })
 })
 
 describe('workspaceLabel', () => {
