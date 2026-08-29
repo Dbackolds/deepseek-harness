@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { applyCompletedDockIcon } from './dock-attention.ts'
-import { isReusableListenPort, startWebHost, stopWebHost, waitForPluginRoute, type StartedHost } from './host.ts'
+import { isReusableListenPort, startWebHost, stopWebHost, type StartedHost } from './host.ts'
 import { APP_USER_MODEL_ID, desktopIconPath } from './icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from './shortcut.ts'
 import {
@@ -234,9 +234,8 @@ async function presentWindow(launch: HostLaunch): Promise<void> {
   window.show()
   try {
     host = await launch.ready
-    await waitForPluginRoute(host.ready.href)
     rememberLaunch(launch.cwd, host.child.spawnfile, host.ready.port)
-    fenceNavigation(window, host.ready.href)
+    fenceNavigation(window, new URL(host.ready.href).origin)
     await window.loadURL(host.ready.href)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

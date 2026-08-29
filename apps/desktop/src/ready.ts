@@ -5,16 +5,25 @@
 
 /** Canonical loopback URL the desktop window may load. */
 export interface ReadyUrl {
-  /** Full loopback origin, for example `http://127.0.0.1:3080`. */
+  /** Full loopback URL, carrying the authentication token when the Host mints one. */
   href: string
   /** Listening port from the readiness line. */
   port: number
 }
 
-const READY_LINE = /^dsh web: (http:\/\/127\.0\.0\.1:(\d+))(?:\s|$)/u
+/**
+ * The Host prints one authenticated URL, optionally followed by the LAN
+ * handoff. The token query belongs to `href` so the window load authenticates;
+ * probes that must stay unauthenticated derive the origin from it instead.
+ */
+const READY_LINE = /^dsh web: (http:\/\/127\.0\.0\.1:(\d+)\/?[^\s]*)(?=\s|$)/u
 
-/** Marker the modules node half injects into every index.html response. */
-export const BOOT_MANIFEST_MARKER = 'window.__DSH_BOOT__'
+/**
+ * The modules node half injects the boot graph into every index.html response.
+ * The injector switched between `window.__DSH_BOOT__` and
+ * `globalThis["__DSH_BOOT__"]`, so the marker matches the bare identifier.
+ */
+export const BOOT_MANIFEST_MARKER = '__DSH_BOOT__'
 
 /**
  * Extract the loopback URL from one Host log line.

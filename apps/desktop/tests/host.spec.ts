@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   findRepoRoot, isReusableListenPort, listenPortAvailable, packagedHostRoot, resolveDshInvocation,
-  resolveNodeExecutable, waitForPluginRoute, webHostArgs,
+  resolveNodeExecutable, webHostArgs,
 } from '../src/host.ts'
 import { desktopIconPath } from '../src/icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from '../src/shortcut.ts'
@@ -25,35 +25,6 @@ describe('desktop host resolution', () => {
 
   it('rejects a directory that is not this checkout', () => {
     expect(() => findRepoRoot(join(tmpdir(), 'dsh-desktop-not-a-checkout'))).toThrow(/cannot locate the repository root/)
-  })
-
-  it('waits until the plugin route answers GET', async () => {
-    let calls = 0
-    const methods: string[] = []
-    const urls: string[] = []
-    await waitForPluginRoute('http://127.0.0.1:4010', {
-      timeoutMs: 1_000,
-      fetchImpl: async (url, init) => {
-        calls += 1
-        urls.push(url)
-        methods.push(init.method)
-        return { ok: calls >= 3 }
-      },
-    })
-    expect(calls).toBe(3)
-    expect(methods).toEqual(['GET', 'GET', 'GET'])
-    expect(urls).toEqual([
-      'http://127.0.0.1:4010/plugins/%40deepseek-ai/dsh-client-modules/client.js',
-      'http://127.0.0.1:4010/plugins/%40deepseek-ai/dsh-client-modules/client.js',
-      'http://127.0.0.1:4010/plugins/%40deepseek-ai/dsh-client-modules/client.js',
-    ])
-  })
-
-  it('rejects when the plugin route never answers', async () => {
-    await expect(waitForPluginRoute('http://127.0.0.1:4010', {
-      timeoutMs: 80,
-      fetchImpl: async () => ({ ok: false }),
-    })).rejects.toThrow(/plugin route/)
   })
 
   it('treats extraResources/host with a CLI bin as a packaged Host', () => {

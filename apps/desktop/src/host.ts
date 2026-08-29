@@ -11,14 +11,10 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { indexHasBootManifest, parseReadyChunk, type ReadyUrl } from './ready.ts'
 
-/** How long the window waits for `dsh web: http://127.0.0.1:<port>`. */
+/** How long the window waits for `dsh web: http://127.0.0.1:<port>` and the boot graph after it. */
 const HOST_READY_TIMEOUT_MS = 60_000
-/** How long the window waits after that line for `/plugins` to answer. */
-const PLUGIN_ROUTE_TIMEOUT_MS = 15_000
-/** Client bundle probed so the window does not load a Host that still 404s plugins. */
-const PLUGIN_PROBE_PATH = '/plugins/%40deepseek-ai/dsh-client-modules/client.js'
 
-/** How often the window re-reads `/` while waiting for `window.__DSH_BOOT__`. */
+/** How often the window re-read `/` while waiting for `window.__DSH_BOOT__`. */
 const BOOT_MANIFEST_POLL_MS = 50
 
 /** One running Host and the loopback URL it announced. */
@@ -137,37 +133,89 @@ export function resolveDshInvocation(from: string, rememberedNode?: string): Dsh
 }
 
 /**
- * Wait until the Host serves a client plugin bundle.
- * The readiness line only means the HTTP server bound; later rows still
- * register `/plugins`. Loading the GUI before that 404s the first scripts.
- * @param href - loopback origin printed by `dsh web`.
- * @param options - timeout and fetch hook for tests.
+ * Minimal response surface the manifest poller needs from fetch
+ * implementations; the global fetch `Response` satisfies it.
  */
-export async function waitForPluginRoute(
+export interface BootManifestResponse {
+  status: number
+  headers: { get(name: string): string | null }
+  text(): Promise<string>
+}
+
+/** Request init the manifest poller hands to its fetch implementation. */
+export interface BootManifestRequest {
+  redirect: 'manual'
+  headers: Record<string, string>
+}
+
+/**
+ * Wait until `/` carries `window.__DSH_BOOT__`.
+ * The readiness line means the HTTP server is listening; the modules row
+ * injects the boot graph later. Loading before that marker leaves the
+ * window on a blank page.
+ *
+ * The readiness URL authenticates by carrying a one-use `?token=` query that
+ * the Host exchanges for a session cookie with a 303 redirect, so this poller
+ * performs that handshake once and then reads the index with the cookie.
+ * When the readiness URL is unauthenticated (no token printed) the poller
+ * reads the index directly.
+ * @param href - readiness URL printed by `dsh web`, token query included.
+ * @param timeoutMs - remaining supervisor budget.
+ * @param options - fetch hook for tests.
+ */
+export async function waitForBootManifest(
   href: string,
+  timeoutMs: number,
   options: {
-    timeoutMs?: number
-    fetchImpl?: (url: string, init: { method: 'GET' }) => Promise<{ ok: boolean }>
+    fetchImpl?: (url: string, init: BootManifestRequest) => Promise<BootManifestResponse>
   } = {},
 ): Promise<void> {
-  const timeoutMs = options.timeoutMs ?? PLUGIN_ROUTE_TIMEOUT_MS
-  const fetchImpl = options.fetchImpl ?? ((url, init) => fetch(url, init))
-  const url = `${href.replace(/\/$/u, '')}${PLUGIN_PROBE_PATH}`
+  const fetchImpl = options.fetchImpl ?? fetch
   const deadline = Date.now() + timeoutMs
   let lastError: Error | undefined
+  let cookie: string | undefined
+  let tokenRejected = false
+  try {
+    const first = await fetchImpl(href, { redirect: 'manual', headers: {} })
+    if (first.status === 303) {
+      // The Host mints `dsh-auth-*=v1...` as a session cookie; a rejected
+      // token answers 401 instead and polling cannot recover from it.
+      const setCookie = first.headers.get('set-cookie')
+      if (setCookie === null) {
+        lastError = new Error('the token handshake answered 303 without a session cookie')
+      } else {
+        cookie = setCookie.split(';')[0]
+      }
+    } else if (first.status === 401) {
+      tokenRejected = true
+    }
+  } catch (error) {
+    // Transient handshake failures overlap the Host still binding; fall back
+    // to polling and let the deadline own the failure.
+    lastError = error instanceof Error ? error : new Error(String(error))
+  }
+  if (tokenRejected) {
+    throw new Error(`dsh desktop: ${href} rejected its readiness token with HTTP 401`)
+  }
+  const pollUrl = new URL('/', href).toString()
   while (Date.now() < deadline) {
     try {
-      // `/plugins` answers GET. A HEAD probe would 405 forever and leave the
-      // window on the blank loading page after the timeout.
-      const response = await fetchImpl(url, { method: 'GET' })
-      if (response.ok) return
-      lastError = new Error(`dsh desktop: plugin route ${url} returned a non-OK status`)
+      const response = await fetchImpl(pollUrl, {
+        redirect: 'manual',
+        headers: cookie === undefined ? {} : { cookie },
+      })
+      const html = await response.text()
+      if (response.status === 200 && indexHasBootManifest(html)) return
+      lastError = response.status === 200
+        ? new Error('returned HTTP 200 without a boot manifest')
+        : new Error(`returned HTTP ${String(response.status)} without a boot manifest`)
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error))
     }
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise(resolve => setTimeout(resolve, BOOT_MANIFEST_POLL_MS))
   }
-  throw lastError ?? new Error(`dsh desktop: timed out waiting for plugin route at ${url}`)
+  const detail = lastError?.message ?? 'no response'
+  throw new Error(`dsh desktop: timed out waiting for window.__DSH_BOOT__ at ${href}: ${detail}`)
 }
 
 /**
@@ -249,11 +297,16 @@ export async function startWebHost(options: {
     }, timeoutMs)
     const onData = (chunk: Buffer): void => {
       const text = chunk.toString('utf8')
-      process.stdout.write(text)
+      // Parse before echoing: a GUI-launched process can own a stalled stdout,
+      // and the readiness handshake must not wait on the echo.
       const parsed = parseReadyChunk(text)
-      if (parsed === undefined) return
+      if (parsed === undefined) {
+        process.stdout.write(text)
+        return
+      }
       settle()
       resolve(parsed)
+      process.stdout.write(text)
     }
     if (child.stdout === null || child.stderr === null) {
       child.kill()
@@ -284,29 +337,6 @@ export async function startWebHost(options: {
   const remainingMs = Math.max(1_000, timeoutMs - 1_000)
   await waitForBootManifest(ready.href, remainingMs)
   return { child, ready }
-}
-
-/**
- * Poll the Host index until the modules row has injected the boot graph.
- * @param href - loopback origin printed on the readiness line.
- * @param timeoutMs - remaining supervisor budget.
- */
-export async function waitForBootManifest(href: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  let lastError: unknown
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(href, { redirect: 'follow' })
-      const html = await response.text()
-      if (response.ok && indexHasBootManifest(html)) return
-      lastError = new Error(`dsh desktop: ${href} returned HTTP ${String(response.status)} without a boot manifest`)
-    } catch (error) {
-      lastError = error
-    }
-    await new Promise(resolve => setTimeout(resolve, BOOT_MANIFEST_POLL_MS))
-  }
-  const detail = lastError instanceof Error ? lastError.message : String(lastError ?? 'no response')
-  throw new Error(`dsh desktop: timed out waiting for window.__DSH_BOOT__ at ${href}: ${detail}`)
 }
 
 /**
