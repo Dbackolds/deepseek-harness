@@ -81,6 +81,33 @@ describe('SessionSkillCatalog', () => {
     expect(list).toHaveBeenCalledWith({ cwd: '/cold/project', scope: undefined })
   })
 
+  it('falls back to the Host cwd and the global registry for an empty sessionId', async () => {
+    // The Skills settings page renders before any session exists; the deploy
+    // catalog must not fail on the blank id.
+    const ctx = await context()
+    const observeSession = vi.fn()
+    ctx.provide('sessionQuery', { observeSession } as never)
+    const list = vi.fn(() => Promise.resolve([
+      {
+        name: 'review',
+        description: 'Review the current change.',
+        invocation: { modelInvocable: true, userInvocable: true },
+      },
+    ]))
+    ctx.provide('skills', { list } as never)
+    const catalog = new SessionSkillCatalog(ctx)
+
+    await expect(catalog.list({ sessionId: '' as never }, new AbortController().signal)).resolves.toEqual({
+      skills: [{
+        name: 'review',
+        description: 'Review the current change.',
+        modelInvocable: true,
+      }],
+    })
+    expect(observeSession).not.toHaveBeenCalled()
+    expect(list).toHaveBeenCalledWith({ cwd: process.cwd(), scope: undefined })
+  })
+
   it('uses a live Agent to address a preset-owned registry', async () => {
     const ctx = await context()
     const sessionId = SessionId('live-skills')

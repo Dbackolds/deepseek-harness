@@ -38,26 +38,35 @@ export class SessionSkillCatalog extends TypertRemoteService {
     const { sessionId } = request
     let cwd: string | undefined
     let agentPreset: string | undefined
-    try {
-      using observation = await this.ctx.sessionQuery.observeSession(sessionId)
-      if (observation.projections === undefined) {
-        throw new Error('skill catalog requires a projected Session observation')
-      }
-      cwd = observation.header.cwd
-      agentPreset = observation.projections.values.agentPreset ?? undefined
-    } catch (error: unknown) {
-      if (error instanceof SessionQueryError
-        && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
+    // An empty sessionId means the caller wants the deployment-wide catalog
+    // (the Skills settings page renders before any session exists), so skip
+    // the per-session observation instead of failing on the blank path.
+    const hasSession = sessionId !== undefined && sessionId !== ''
+    if (hasSession) {
+      try {
+        using observation = await this.ctx.sessionQuery.observeSession(sessionId)
+        if (observation.projections === undefined) {
+          throw new Error('skill catalog requires a projected Session observation')
+        }
+        cwd = observation.header.cwd
+        agentPreset = observation.projections.values.agentPreset ?? undefined
+      } catch (error: unknown) {
+        if (error instanceof SessionQueryError
+          && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
+          throw failure(
+            'session-not-found',
+            `session "${sessionId}" not found`,
+            { sessionId },
+          )
+        }
         throw failure(
-          'session-not-found',
-          `session "${sessionId}" not found`,
-          { sessionId },
+          'internal',
+          `session "${sessionId}" could not be inspected: ${String(error)}`,
         )
       }
-      throw failure(
-        'internal',
-        `session "${sessionId}" could not be inspected: ${String(error)}`,
-      )
+    }
+    if (!hasSession) {
+      cwd = process.cwd()
     }
     if (cwd === undefined) {
       throw failure('internal', `session "${sessionId}" has no project cwd`)

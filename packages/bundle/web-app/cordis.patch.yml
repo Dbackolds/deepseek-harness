@@ -97,6 +97,10 @@
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
 
+    # Shipped StarPivot catalog JSON for Discover.
+    - id: plugin-catalog
+      name: '@deepseek-ai/dsh-host-plugin-catalog'
+
     # Session commands, cold reads, and live control over Typert Remote.
     - id: session-controller
       name: '@deepseek-ai/dsh-api-session-controller'
