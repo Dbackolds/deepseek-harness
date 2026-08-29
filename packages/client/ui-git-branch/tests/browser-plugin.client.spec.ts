@@ -73,7 +73,16 @@ async function bench(options: {
     },
     isLoopback: false,
   } as never)
-  ctx.provide('remote', { $on: () => () => {} } as never)
+  // The runtime's `remote` value exposes namespace handles on itself while the
+  // gateway also registers each as a traced `remote.<namespace>` service; the
+  // stub mirrors both faces so `scope.remote.git` and injection agree.
+  const gitNamespace = {
+    describe: options.describe ?? (() => Promise.resolve({ rpcId: 'r', result: { ok: false, error: { code: 'git-not-a-repository', message: 'no', details: {} } } })),
+    checkout: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: {} } }),
+    createBranch: () => Promise.resolve({ rpcId: 'r', result: { ok: true, value: {} } }),
+  }
+  ctx.provide('remote', { $on: () => () => {}, git: gitNamespace } as never)
+  ctx.provide('remote.git', gitNamespace as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
   const fiber = ctx.plugin({ inject: [...inject], apply })
@@ -90,7 +99,7 @@ async function bench(options: {
 
 describe('ui-git-branch browser half', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'sessions', 'workspaces'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.git', 'sessions', 'workspaces'])
   })
 
   it('registers the hero chip, and fiber teardown removes it (HMR safety)', async () => {

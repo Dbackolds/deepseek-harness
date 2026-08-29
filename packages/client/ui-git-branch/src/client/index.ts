@@ -22,7 +22,7 @@ export type { GitBranchSeatInjected, GitBranchSeatProps } from './GitBranchSeat.
 export type { GitBranchSeatState } from './seat-store.ts'
 
 /** Required services for locale registration and hero-slot contribution. */
-export const inject = ['slots', 'locale', 'connection', 'sessions', 'workspaces']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.git', 'sessions', 'workspaces']
 
 /**
  * Client plugin body: register the dictionaries and the hero chip.
@@ -30,7 +30,7 @@ export const inject = ['slots', 'locale', 'connection', 'sessions', 'workspaces'
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-git-branch: dictionaries')
-  ctx.inject(['slots', 'conversation', 'sessions', 'workspaces'], (scope: ClientContext) => {
+  ctx.inject(['slots', 'conversation', 'sessions', 'workspaces', 'remote', 'remote.git'], (scope: ClientContext) => {
     const api = scope.remote
     const currentWorkspaceId = (): string | undefined => {
       const sessionId = scope.sessions.list.getSnapshot().current

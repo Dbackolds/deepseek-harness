@@ -53,6 +53,20 @@ describe('scanClientRemoteInject', () => {
     expect(scan.findings.map(f => f.namespace)).toContain('automation')
   })
 
+  it('flags a Pick<ClientRemote, …> type reference without the declaration', () => {
+    const dir = makePackage('bad-pick', "'slots', 'remote'", {
+      'seat-store.ts': "export type Api = Pick<ClientRemote, 'git'>\n",
+    })
+    expect(scanClientRemoteInject(dir).findings.map(f => f.namespace)).toEqual(['git'])
+  })
+
+  it('accepts a Pick<ClientRemote, …> reference whose namespace is declared', () => {
+    const dir = makePackage('good-pick', "'slots', 'remote', 'remote.git'", {
+      'seat-store.ts': "export type Api = Pick<ClientRemote, 'git'>\n",
+    })
+    expect(scanClientRemoteInject(dir).findings).toEqual([])
+  })
+
   it('ignores namespace handles bound to their own variable names', () => {
     const dir = makePackage('good-handle', "'remote', 'remote.messageFeedback'", {
       'controller.ts': 'this.remote.put({})\nthis.remote.list({})\n',

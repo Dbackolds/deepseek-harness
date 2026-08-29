@@ -6,13 +6,16 @@
  * fails at runtime with `cannot get property "remote.<namespace>" without
  * inject` — exactly the failure mode that shipped in desktop 0.1.2-alpha.1.1.
  *
- * Two declaration patterns are checked, both rooted at the unaliased
- * `ctx.remote` receiver so namespace handles bound to other variable names
- * (`this.remote` on a typed handle interface) stay out of scope:
+ * Three declaration patterns are checked. Patterns 1-2 are rooted at the
+ * unaliased `ctx.remote` receiver so namespace handles bound to other
+ * variable names (`this.remote` on a typed handle interface) stay out of
+ * scope; pattern 3 is a type-level signal with no aliasing risk:
  * 1. direct chained reads `ctx.remote.<namespace>`;
  * 2. a client source file that passes `ctx.remote` into a constructor or
  *    factory and elsewhere reads `this.api.<namespace>` — the established
- *    store convention for a `ClientRemote` constructor parameter.
+ *    store convention for a `ClientRemote` constructor parameter;
+ * 3. a `Pick<ClientRemote, '<namespace>'>` type reference anywhere in the
+ *    package's client sources — the namespace handle is demanded by name.
  *
  * @module scripts/verify-client-remote-inject
  */
@@ -87,6 +90,12 @@ export function scanClientRemoteInject(packageDir: string): RemoteInjectScan {
     if (injectMatch !== null && injectMatch[1] !== undefined) {
       for (const match of injectMatch[1].matchAll(/'remote\.([a-zA-Z][\w.]*)'/gu)) {
         if (match[1] !== undefined) declared.add(match[1])
+      }
+    }
+    for (const pickMatch of source.matchAll(/Pick<ClientRemote,\s*([^>]+)>/gu)) {
+      if (pickMatch[1] === undefined) continue
+      for (const name of pickMatch[1].matchAll(/'([a-zA-Z][\w]*)'/gu)) {
+        if (name[1] !== undefined) read.add(name[1])
       }
     }
     if (/\bctx\.remote\b/.test(source) && /\(\s*ctx\.remote\b|\[\s*ctx\.remote\b|=\s*ctx\.remote\b/u.test(source)) {
