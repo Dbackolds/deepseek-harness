@@ -14,9 +14,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
-     * The sidebar-foot trigger row content: icon + label, supplied as slot
-     * content (the accessible name comes from the content — rail state
-     * renders the label visually hidden). The shell renders the button
+     * The sidebar-foot trigger row content: account chip, Host account name
+     * (wide column), and a trailing settings glyph. The accessible name is
+     * the localized Settings string, kept visually hidden so the account
+     * name never becomes the button name. The shell renders the button
      * chrome and owns open state. Absent contribution degrades to an
      * icon-only button without an accessible name (broken-composition state;
      * the shipped composition always registers the seat).
@@ -103,7 +104,7 @@ export interface SettingsPluginsTabOwnerProps {
 
 /** Owner share of the trigger content seat: the sidebar column state. */
 export interface SettingsTriggerOwnerProps {
-  /** Whether the sidebar renders wide content (false = 56px rail, icon only). */
+  /** Whether the sidebar renders wide content (false = 56px rail, chip only). */
   wide: boolean
 }
 

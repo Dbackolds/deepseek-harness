@@ -18,7 +18,11 @@ async function bench() {
     getSnapshot: () => ({ active: 'zh', locales: [], revision: 0 }),
     subscribe: () => () => {},
   } as never)
-  ctx.provide('connection', { api: {}, isLoopback: false } as never)
+  ctx.provide('connection', {
+    api: {},
+    isLoopback: false,
+    generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
+  } as never)
   // The shell mounts ui-settings, which injects `remote.settings`; without the
   // namespace provided its fiber parks and no slot is ever declared.
   const settings = {

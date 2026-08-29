@@ -1,4 +1,5 @@
 .trigger {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
@@ -16,6 +17,7 @@
   color: var(--dsw-alias-label-primary);
   font-family: inherit;
   font-size: 14px;
+  font-weight: 500;
   line-height: 22px;
 }
 
@@ -32,11 +34,6 @@
   gap: 0;
   padding: 0;
   border-radius: 50%;
-}
-
-.triggerLabel {
-  overflow: hidden;
-  white-space: nowrap;
 }
 
 /* Full-viewport layer (figma Mask 501:29946 #000@24%): mask tokens match the

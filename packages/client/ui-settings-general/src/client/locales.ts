@@ -3,6 +3,7 @@
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'trigger': '设置',
+  'account.fallback': '本地',
   'title': '设置',
   'hostStart.meta': '启动于 {time} · 已启动 {count} 次',
   'close': '关闭',
@@ -17,6 +18,7 @@ export type SettingsKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'trigger': 'Settings',
+  'account.fallback': 'Local',
   'title': 'Settings',
   'hostStart.meta': 'Started {time} · launched {count} times',
   'close': 'Close',

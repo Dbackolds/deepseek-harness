@@ -36,17 +36,29 @@ const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: TriggerContentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
 const kit = { useSessions: unusedHook, useSessionPendingInteraction, useWorkspaces: unusedHook }
 
+function connectionGeneration(home?: string): TriggerContentProps['useConnectionGeneration'] {
+  return selector => selector(home === undefined ? undefined : { id: 1, host: { home } })
+}
+
 describe('chrome content', () => {
-  it('TriggerContent renders the icon with the label in the wide column', () => {
-    const { container } = render(<TriggerContent {...kit} wide t={t} />)
+  it('TriggerContent shows the account chip, name, and settings glyph in the wide column', () => {
+    const { container } = render(
+      <TriggerContent {...kit} wide t={t} useConnectionGeneration={connectionGeneration('/Users/cat7street')} />,
+    )
     expect(container.querySelector('svg')).toBeTruthy()
+    expect(screen.getByText('C')).toBeTruthy()
+    expect(screen.getByText('cat7street')).toBeTruthy()
     expect(screen.getByText('Settings')).toBeTruthy()
   })
 
-  it('TriggerContent drops the label in the rail state', () => {
-    const { container } = render(<TriggerContent {...kit} wide={false} t={t} />)
-    expect(container.querySelector('svg')).toBeTruthy()
-    expect(screen.queryByText('Settings')).toBeNull()
+  it('TriggerContent falls back to Local when Host home is absent and hides the name on the rail', () => {
+    const { container } = render(
+      <TriggerContent {...kit} wide={false} t={t} useConnectionGeneration={connectionGeneration()} />,
+    )
+    expect(container.querySelector('svg')).toBeNull()
+    expect(screen.getByText('L')).toBeTruthy()
+    expect(screen.queryByText('Local')).toBeNull()
+    expect(screen.getByText('Settings')).toBeTruthy()
   })
 
   it('HeaderContent and CloseLabel render their translated text', () => {

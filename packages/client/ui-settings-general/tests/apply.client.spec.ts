@@ -44,6 +44,7 @@ async function bench(isLoopback = true) {
   }))
   ctx.provide('connection', {
     isLoopback,
+    generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
   } as never)
   new TestRemote(ctx, {
     settings: { describe: settingsDescribe, openSettingsDocument: settingsOpenDocument },
@@ -99,6 +100,9 @@ describe('ui-settings-general apply', () => {
     const actionInjected = (action.inject as unknown as () => SettingsDocumentActionInjected)()
     expect(actionInjected.controller.store.getSnapshot().status).toBe('idle')
     expect(actionInjected.hooks.snapshot).toBe(actionInjected.controller.store)
+    const trigger = before.slots.entries('settings.trigger')[0]!
+    const triggerInjected = (trigger.inject as () => { hooks: { connectionGeneration: unknown } })()
+    expect(triggerInjected.hooks.connectionGeneration).toBe((before.ctx.get('connection') as { generation: unknown }).generation)
     // Copy rides the standard locale seat: every seat declares the namespace.
     for (const [name] of SEATS) {
       expect(before.slots.entries(name)[0]!.locale).toBe('settings')

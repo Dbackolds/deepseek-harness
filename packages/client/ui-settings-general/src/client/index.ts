@@ -19,7 +19,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {
-  SettingsOnboardingStep, SettingsRootInjected, SettingsSectionRow,
+  SettingsOnboardingStep, SettingsRootInjected, SettingsSectionRow, SettingsTriggerInjected,
 } from './shell-contract.ts'
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
@@ -34,6 +34,7 @@ import { en, zh, type SettingsKey } from './locales.ts'
 export type {
   CloseLabelProps, HeaderContentProps, TriggerContentProps,
 } from './chrome.tsx'
+export type { SettingsTriggerInjected } from './shell-contract.ts'
 export type {
   GeneralSectionComponentProps,
 } from './GeneralSection.tsx'
@@ -159,8 +160,11 @@ export function apply(ctx: ClientContext): void {
     inject: shellInjected,
   }, SettingsRoot))
 
+  const triggerInjected = (): SettingsTriggerInjected => ({
+    hooks: { connectionGeneration: connection.generation },
+  })
   ctx.slots.inject('settings.trigger', () =>
-    ctx.slots.register({ name: 'settings.trigger', locale: NS }, TriggerContent))
+    ctx.slots.register({ name: 'settings.trigger', locale: NS, inject: triggerInjected }, TriggerContent))
   ctx.slots.inject('settings.header', () =>
     ctx.slots.register({ name: 'settings.header', locale: NS }, HeaderContent))
   if (documentInjected !== undefined) {

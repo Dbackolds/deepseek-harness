@@ -6,6 +6,7 @@
  * reference graph closes a cycle through ui-sidebar → ui-layout → ui-theme.
  * The settings SLOT types (what registrants contribute) stay in ui-settings.
  */
+import type { ConnectionGenerationState } from '@deepseek-ai/dsh-client-connection/client'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-sidebar's SlotMap merge (the 'sidebar.settings' entry)
 // into every program that sees this contract.
@@ -40,6 +41,17 @@ export type SettingsRootInjected = {
     onboardingSteps: HostObservable<readonly SettingsOnboardingStep[]>
     /** Host-process start time and start count. */
     hostStart: HostObservable<HostStartMetaView>
+  }
+}
+
+/**
+ * Trigger-private injected share: the current connection generation, used
+ * only to derive the visual account name from the Host home path.
+ */
+export type SettingsTriggerInjected = {
+  hooks: {
+    /** Current generation and Host facts, bound by the slot renderer. */
+    connectionGeneration: ConnectionGenerationState
   }
 }
 

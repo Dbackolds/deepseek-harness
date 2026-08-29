@@ -1,29 +1,47 @@
 /**
  * Shell chrome content registered into the shell's trigger/header seats: the
- * trigger row icon + label (figma sidebar foot) and the panel title text.
+ * trigger row (account chip + settings glyph) and the panel title text.
  * The shell renders the surrounding chrome (button, nav heading row) and
- * reads each entry's `label` option for aria text.
+ * reads each entry's `label` option for aria text. The button's accessible
+ * name stays the localized Settings label; the account name is visual only.
  */
-import { IconSettingsOutline14, IconSettingsOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconSettingsOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { accountInitial, accountNameFromHome } from './account-label.ts'
+import type { SettingsTriggerInjected } from './shell-contract.ts'
 import css from './chrome.module.css'
 
-/** Trigger content props: the sidebar column state + the standard locale seat. */
-export type TriggerContentProps = PropsRuntime<'settings.trigger'> & PropsLocale<'settings'>
+/** Trigger content props: sidebar column state, Host home, and locale. */
+export type TriggerContentProps =
+  PropsRuntime<'settings.trigger'>
+  & InjectFace<SettingsTriggerInjected>
+  & PropsLocale<'settings'>
 
 /** Header content props: the standard locale seat only. */
 export type HeaderContentProps = PropsRuntime<'settings.header'> & PropsLocale<'settings'>
 
 /**
- * Render the trigger row content (icon; label only in the wide column).
+ * Render the trigger row: a circular initial chip, the Host account name in
+ * the wide column, and a trailing settings glyph. The localized Settings
+ * string stays in the tree and is visually hidden so the shell button's
+ * accessible name does not become the account name.
  * @param props - composed slot props.
  * @returns the trigger content fragment.
  */
-export function TriggerContent({ wide, t }: TriggerContentProps) {
+export function TriggerContent({ wide, useConnectionGeneration, t }: TriggerContentProps) {
+  const home = useConnectionGeneration(generation => generation?.host.home)
+  const account = accountNameFromHome(home) ?? t('account.fallback')
+  const initial = accountInitial(account)
   return (
     <>
-      {wide ? <IconSettingsOutline16 size={16} /> : <IconSettingsOutline14 size={18} />}
-      {wide && <span className={css.triggerLabel}>{t('trigger')}</span>}
+      <span className={css.avatar} aria-hidden="true">{initial}</span>
+      {wide && <span className={css.accountName} aria-hidden="true">{account}</span>}
+      {wide && (
+        <span className={css.settingsGlyph} aria-hidden="true">
+          <IconSettingsOutline16 size={16} />
+        </span>
+      )}
+      <span className={css.hiddenLabel}>{t('trigger')}</span>
     </>
   )
 }
