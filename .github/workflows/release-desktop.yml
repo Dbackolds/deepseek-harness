@@ -97,7 +97,12 @@ jobs:
       - name: Boot-smoke the staged Host
         if: matrix.platform != 'win32'
         shell: bash
-        run: node --import tsx/esm scripts/desktop/host-boot-smoke.ts --host dist-desktop/staging/host
+        env:
+          # electron-builder may leave NODE_ENV=production and prune tsx; keep smoke runnable.
+          NODE_ENV: development
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          node --import tsx/esm scripts/desktop/host-boot-smoke.ts --host dist-desktop/staging/host
 
       - uses: actions/upload-artifact@v4
         with:
