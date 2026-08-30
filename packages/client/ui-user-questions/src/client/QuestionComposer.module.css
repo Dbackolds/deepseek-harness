@@ -15,8 +15,9 @@
   width: 100%;
   max-width: var(--dsh-chat-content-width);
   /* Composer seat sits in a fixed-height conversation column (overflow
-     hidden): cap the card against the viewport and scroll the option list
-     so header and footer actions stay reachable on long batches. */
+     hidden): cap the card against the viewport and scroll the question
+     title, detail, and choices so header chrome and footer actions stay
+     reachable on a long prompt. */
   max-height: min(60vh, 520px);
   padding: 0 0 10px;
   border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
@@ -61,8 +62,9 @@
   flex-shrink: 0;
 }
 
-/* Figma 1019:36938 header, user-tuned: heading block left, close right; the
-   pager sits in the footer to balance the card. */
+/* Figma 1019:36938 header, user-tuned: eyebrow left, close right; the
+   pager sits in the footer to balance the card. Expanded, the question
+   title lives in `.body` so it can scroll with the choices. */
 .header {
   display: flex;
   align-items: flex-start;
@@ -72,7 +74,12 @@
   padding: 20px 16px 0 24px;
 }
 
+.header:not(:has(.headingBlock)) {
+  justify-content: flex-end;
+}
+
 .headingBlock {
+  flex: 1;
   min-width: 0;
 }
 
@@ -89,6 +96,23 @@
   font-size: 16px;
   line-height: 22px;
   font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* Expanded: the title is scroll content. Header chrome stays a compact
+   strip so a long prompt cannot consume the card cap and leave the
+   choices at height 0. */
+.body > .title {
+  padding: 0 16px 0 24px;
+}
+
+/* Collapsed: the title returns to the header strip. Clamp it so a long
+   prompt cannot re-expand the uncapped card and cover the conversation. */
+.cardMinimized .title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .detail {
@@ -152,6 +176,13 @@
   overscroll-behavior: contain;
 }
 
+/* Title, detail, and the option list are scroll content. Default
+   flex-shrink would collapse them inside the capped body instead of
+   extending scrollHeight. */
+.body > * {
+  flex-shrink: 0;
+}
+
 .options {
   display: flex;
   flex-direction: column;
@@ -173,7 +204,7 @@
   /* Rows are the scroll content, never the slack absorber: a shrinkable row
      collapses to min-height while its wrapped copy keeps the taller
      intrinsic height, and centered content then paints outside the row box —
-     over the title and the next row. Overflow belongs to .options. */
+     over the title and the next row. Overflow belongs to .body. */
   flex-shrink: 0;
   padding: 8px 12px 8px 8px;
   border: 1px solid transparent;
@@ -424,6 +455,10 @@
 
   .header {
     padding: 10px 12px 0 18px;
+  }
+
+  .body > .title {
+    padding: 0 12px 0 18px;
   }
 
   .options {

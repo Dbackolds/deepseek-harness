@@ -174,7 +174,7 @@ describe('web e2e: resident question composer round trip', () => {
     }
 
     // Squeezed card: the option rows are the capped card's scroll content, so
-    // shrinking the seat must push overflow into the option list, never
+    // shrinking the seat must push overflow into the shared scroll body, never
     // collapse a row below the height its own copy needs — a collapsed row
     // paints its centered copy outside the row box, over the title and the
     // neighbouring rows. Measured on the live composer at seat heights that
@@ -348,6 +348,71 @@ describe('web e2e: resident question composer round trip', () => {
     // Settle the wait so teardown is not racing a pending question.
     await composer.getByRole('button', { name: 'Skip this question' }).click()
     expect(await asked).toEqual({ answers: [{ id: 'free', selected: [] }] })
+    await expect.poll(() => page.locator('[data-question-key]').count(), { timeout: 10_000 }).toBe(0)
+  }, 60_000)
+
+  // The recorded fixture's title is one line, so the squeeze above cannot
+  // catch a long prompt consuming the card cap from the header. Drive the
+  // same user-questions seam with a wrapping title and require the choices
+  // to keep a real height while the footer stays on the card.
+  it.skipIf(MODE === 'record')('keeps choices reachable under a long question title', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-question-long-title'))
+    const sessionId = answeredSession
+    expect(sessionId).toBeDefined()
+    const agent = scaffold.ctx.agents.get(sessionId as SessionId)
+    expect(agent).toBeDefined()
+    const longQuestion = Array.from(
+      { length: 28 },
+      (_, index) => `Clause ${String(index + 1)}: keep footer actions and choices reachable.`,
+    ).join(' ')
+    const asked = scaffold.ctx.userQuestions.ask({
+      agent: agent as NonNullable<typeof agent>,
+      questions: [{
+        id: 'long',
+        header: 'Confirm',
+        question: longQuestion,
+        options: [{ label: 'Accept' }, { label: 'Reject' }],
+      }],
+    })
+
+    const composer = page.locator('[data-question-key]')
+    await composer.waitFor({ timeout: 30_000 })
+    const original = page.viewportSize() ?? { width: 1680, height: 1000 }
+    await page.setViewportSize({ width: 900, height: 520 })
+    const geometry = await composer.evaluate((card) => {
+      const heading = card.querySelector('h2')
+      const scroll = card.querySelector<HTMLElement>('[data-question-scroll]')
+      const accept = [...card.querySelectorAll<HTMLElement>('[role="radio"]')]
+        .find(row => row.getAttribute('aria-label') === 'Accept')
+      const skip = [...card.querySelectorAll('button')]
+        .find(button => button.textContent?.trim() === 'Skip this question')
+      const cardBox = card.getBoundingClientRect()
+      const skipBox = skip?.getBoundingClientRect()
+      return {
+        headingInScroll: scroll?.contains(heading) === true,
+        acceptInScroll: accept !== undefined && scroll?.contains(accept) === true,
+        skipInScroll: skip !== undefined && scroll?.contains(skip) === true,
+        scrolls: scroll !== null && scroll.scrollHeight > scroll.clientHeight,
+        acceptHeight: accept?.getBoundingClientRect().height ?? 0,
+        skipOnCard: skipBox !== undefined
+          && skipBox.top >= cardBox.top - 1
+          && skipBox.bottom <= cardBox.bottom + 1,
+      }
+    })
+    expect(geometry.headingInScroll).toBe(true)
+    expect(geometry.acceptInScroll).toBe(true)
+    expect(geometry.skipInScroll).toBe(false)
+    expect(geometry.scrolls).toBe(true)
+    expect(geometry.acceptHeight).toBeGreaterThan(20)
+    expect(geometry.skipOnCard).toBe(true)
+
+    await composer.locator('[data-question-scroll]').evaluate((node) => {
+      node.scrollTop = node.scrollHeight
+    })
+    await composer.getByRole('radio', { name: 'Accept' }).click()
+    await composer.getByRole('button', { name: 'Submit' }).click()
+    expect(await asked).toEqual({ answers: [{ id: 'long', selected: ['Accept'] }] })
+    await page.setViewportSize(original)
     await expect.poll(() => page.locator('[data-question-key]').count(), { timeout: 10_000 }).toBe(0)
   }, 60_000)
 

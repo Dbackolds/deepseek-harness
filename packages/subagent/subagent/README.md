@@ -90,7 +90,7 @@ A request is validated against the provider's advertised capabilities, a durable
 
 ### Continuable flow
 
-The manager reserves a child identity, resolves the durable descriptor, creates (or cold-resumes) the child Agent, installs it in an Activation, and submits the prompt. Later messages become FIFO turns through the child's own inbox; an absent Activation cold-resumes from the persisted session. When a resident Activation settles, the manager tells the child's direct parent in the parent's own turn stream.
+The manager reserves a child identity, resolves the durable descriptor, creates (or cold-resumes) the child Agent, installs it in an Activation, and submits the prompt. `ContinuableCreateSpec` may carry a resolved `cwd`; `ContinuableStartSpec.cwd` wins over that value, and `childSessionMeta()` writes the winner into the child header so cold resume uses the recorded directory without calling the provider. Later messages become FIFO turns through the child's own inbox; an absent Activation cold-resumes from the persisted session. When a resident Activation settles, the manager tells the child's direct parent in the parent's own turn stream.
 
 ### Ownership and invariants
 

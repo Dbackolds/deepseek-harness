@@ -160,6 +160,7 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const draft = drafts[index]!
   const hasOptions = (question.options?.length ?? 0) > 0
+  const headingId = `question-${pending.key}-${String(index)}`
 
   const replaceProgress = (nextIndex: number, nextDrafts: QuestionDraftAnswer[]): void => {
     actions.replace(pending.key, { index: nextIndex, drafts: nextDrafts })
@@ -279,15 +280,19 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
     <div className={css.frame} data-question-key={pending.key}>
       <section
         className={clsx(css.card, minimized && css.cardMinimized)}
-        aria-labelledby={`question-${pending.key}-${String(index)}`}
+        aria-labelledby={headingId}
       >
         <header className={css.header}>
-          <div className={css.headingBlock}>
-            {question.header !== undefined && <div className={css.eyebrow}>{question.header}</div>}
-            <h2 className={css.title} id={`question-${pending.key}-${String(index)}`}>
-              {question.question}
-            </h2>
-          </div>
+          {(question.header !== undefined || minimized) && (
+            <div className={css.headingBlock}>
+              {question.header !== undefined && <div className={css.eyebrow}>{question.header}</div>}
+              {minimized && (
+                <h2 className={css.title} id={headingId}>
+                  {question.question}
+                </h2>
+              )}
+            </div>
+          )}
           <div className={css.headerActions}>
             <button
               type="button" className={css.iconButton}
@@ -312,6 +317,9 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
         {!minimized && (
           <>
             <div className={css.body} data-question-scroll>
+              <h2 className={css.title} id={headingId}>
+                {question.question}
+              </h2>
               {question.detail !== undefined && (
                 <div className={css.detail}><MarkdownText text={question.detail} labels={markdownLabels} /></div>
               )}

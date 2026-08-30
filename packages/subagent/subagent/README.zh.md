@@ -90,7 +90,7 @@ kind: "package-reference"
 
 ### 可继续流程
 
-管理器预留子 agent 身份、解析持久化描述符、创建（或冷恢复）子 agent、把它安装进 Activation 并提交提示词。后续消息经子 agent 自己的 inbox 成为 FIFO 轮次；没有 Activation 时从持久化会话冷恢复。当驻留 Activation 结算时，管理器会在父级自身的轮次流中告知该子级的直接父级。
+管理器预留子 agent 身份、解析持久化描述符、创建（或冷恢复）子 agent、把它安装进 Activation 并提交提示词。`ContinuableCreateSpec` 可以携带已解析的 `cwd`；`ContinuableStartSpec.cwd` 覆盖该值，`childSessionMeta()` 把胜出值写入子 header，因此冷恢复使用已记录目录而无需再次调用提供方。后续消息经子 agent 自己的 inbox 成为 FIFO 轮次；没有 Activation 时从持久化会话冷恢复。当驻留 Activation 结算时，管理器会在父级自身的轮次流中告知该子级的直接父级。
 
 ### 所有权与不变式
 

@@ -126,6 +126,13 @@ export interface ContinuableStartSpec {
    * the durable descriptor, and composes the child itself.
    */
   readonly request: Omit<SubagentStartRequest, 'label' | 'signal' | 'outputSchema'>
+  /**
+   * Caller-resolved working directory persisted in the child session header.
+   * Wins over a provider-prepared `ContinuableCreateSpec.cwd`; absent inherits
+   * the parent session directory. Trusted same-process caller, same trust
+   * model as the provider-prepared value.
+   */
+  readonly cwd?: string
   /** Caller cancellation, owning the operation only until inbox acceptance. */
   readonly signal: AbortSignal
 }
@@ -463,7 +470,9 @@ export class SubagentContinuationManager {
         childId,
         provider: spec.provider,
         parent,
-        create: { seed, meta: childSessionMeta(parent, childDepth, lineageSeedLength), delegatedPolicies },
+        create: { seed, meta: childSessionMeta(parent, childDepth, lineageSeedLength, {
+          ...spec.cwd !== undefined ? { cwd: spec.cwd } : prepared.cwd !== undefined ? { cwd: prepared.cwd } : {},
+        }), delegatedPolicies },
         agentOptions,
         composition: { persona: request.persona, toolFilter: request.toolFilter },
         signal: spec.signal,
