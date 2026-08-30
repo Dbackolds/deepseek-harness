@@ -1,6 +1,6 @@
 /** Plugins marketplace section: discover + installed pages plus Host cards. */
 
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   IconCloseOutline16,
@@ -11,7 +11,7 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
+  InjectFace, PropsLocale, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { catalogPackageLabel, installedHoverLabel } from './catalog-label.ts'
 import { updatedAgoLine, updatedAgoRelative } from './updated-ago.ts'
@@ -92,10 +92,9 @@ export interface MarketplaceSettingsSectionInjected {
 export type MarketplaceSettingsSectionProps =
   PropsRuntime<'settings.plugins.tab'>
   & PropsLocale<'settings.pluginMarketplace'>
-  & PropsRenderSlots<'settings.plugin.item'>
   & InjectFace<MarketplaceSettingsSectionInjected>
 
-type TabId = 'discover' | 'installed' | 'configure'
+type TabId = 'discover' | 'installed'
 
 type ViewState<T> =
   | { readonly status: 'loading' }
@@ -150,8 +149,8 @@ function resolveTagFilter(
 
 /** Render the marketplace Plugins section. */
 export function MarketplaceSettingsSection({
-  t, renderSlot, listInstalled, listCatalog, refreshCatalog, install, uninstall,
-  setEnabled, setPluginNote, catalogUrls, setCatalogUrls, cardKeys,
+  t, listInstalled, listCatalog, refreshCatalog, install, uninstall,
+  setEnabled, setPluginNote, catalogUrls, setCatalogUrls,
 }: MarketplaceSettingsSectionProps): ReactNode {
   const tabsId = useId()
   const [tab, setTab] = useState<TabId>('discover')
@@ -268,9 +267,9 @@ export function MarketplaceSettingsSection({
       {restart ? <p className={css.restart} role="status">{t('restart')}</p> : null}
       {notice !== null ? <p className={css.failure} role="alert">{notice}</p> : null}
       <div className={css.tabs} role="tablist" aria-label={t('tabs')}>
-        {(['discover', 'installed', 'configure'] as const).map((id) => {
+        {(['discover', 'installed'] as const).map((id) => {
           const selected = tab === id
-          const label = id === 'discover' ? 'discoverTab' : id === 'installed' ? 'installedTab' : 'configureTab'
+          const label = id === 'discover' ? 'discoverTab' : 'installedTab'
           return (
             <button
               key={id}
@@ -294,7 +293,7 @@ export function MarketplaceSettingsSection({
         role="tabpanel"
         aria-labelledby={`${tabsId}-tab-${tab}`}
       >
-        {tab !== 'configure' ? (
+        {tab !== 'installed' ? (
           <label className={css.search}>
             <IconSearchOutline16 aria-hidden="true" />
             <span className={css.visuallyHidden}>{t('search')}</span>
@@ -350,11 +349,6 @@ export function MarketplaceSettingsSection({
               return ok
             }}
           />
-        ) : null}
-        {tab === 'configure' ? (
-          <ConfigurePage t={t} renderCards={() => cardKeys().map(ns => (
-            <Fragment key={ns}>{renderSlot('settings.plugin.item', {}, { entryKey: ns })}</Fragment>
-          ))} />
         ) : null}
       </div>
     </div>
@@ -1105,21 +1099,6 @@ function InstalledDetailsDialog(props: {
         ) : null}
       </div>
     </DetailsDialog>
-  )
-}
-
-function ConfigurePage(props: {
-  t: MarketplaceSettingsSectionProps['t']
-  renderCards: () => ReactNode
-}): ReactNode {
-  const cards = props.renderCards()
-  return (
-    <>
-      <div className={css.headingRow}>
-        <h3>{props.t('cards')}</h3>
-      </div>
-      <ul className={css.configList}>{cards}</ul>
-    </>
   )
 }
 

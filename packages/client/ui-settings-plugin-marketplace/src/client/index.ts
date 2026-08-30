@@ -255,13 +255,14 @@ export function apply(ctx: ClientContext): void {
   // `settings.plugins.tab`; registering a competing `settings.section` with
   // the shell's own id would be dropped by the first-wins section dedupe.
   console.error('[market-debug] applying; registering discover tab')
-  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+  // Synchronous registration: the lazy slots.inject callback never fired in
+  // the packaged composition, so the Discover tab silently never appeared.
+  ctx.effect(() => ctx.slots.register({
     name: 'settings.plugins.tab',
     id: 'discover',
     order: 5,
     label: () => t('nav'),
     locale: NS,
     inject: injected,
-    children: { 'settings.plugin.item': { kind: 'keyed', scope: 'root' } },
-  }, MarketplaceSettingsSection))
+  }, MarketplaceSettingsSection), 'plugin-marketplace: discover tab')
 }
