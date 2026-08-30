@@ -217,7 +217,7 @@ describe('sessions.fork', () => {
 
     for (const atSeq of [-1, 0.5]) {
       await expect(proxy.fork(request({ sessionId: sid('missing'), atSeq })))
-        .resolves.toMatchObject({ ok: false, error: { code: 'bad-request' } })
+        .resolves.toMatchObject({ ok: false, error: { code: 'gateway/bad-request' } })
     }
     expect(ctx.sessions.list()).toEqual([])
     await ctx.fiber.dispose()
@@ -247,7 +247,7 @@ describe('sessions.fork', () => {
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'fork-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/fork-unavailable', details: { sessionId: source.id } },
     })
     if (!response.ok) expect(response.error.message).toMatch(/has not completed/)
     await ctx.fiber.dispose()

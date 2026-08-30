@@ -1,6 +1,6 @@
 // Shared IconActions chrome for user and assistant messages: copy
-// live, optional same-session edit, optional branch wiring, and optional
-// settled-turn metrics.
+// live, optional same-session edit, optional branch wiring, and an optional
+// date-aware clock. Turn usage sits in usageAction (TurnUsagePanel).
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
@@ -8,19 +8,17 @@ import {
   Tooltip, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
-import { formatLatencySeconds, formatRunDuration, formatTokensPerSecond } from './message-chrome.ts'
+import { formatMessageClock } from './message-chrome.ts'
+import { useCalendarDay } from './use-calendar-day.ts'
 import css from './MessageIconActions.module.css'
 
 export interface MessageIconActionsProps {
   /** Plain text the copy action writes. */
   text: string
+  /** Unix epoch ms for the clock label; omitted for transient messages. */
   time?: number | undefined
-  /** Turn wall time in ms, shown as `Ran for 15s`; omitted when the turn's start is unknown. */
-  runMs?: number | undefined
-  /** Turn first-step TTFT in ms, appended as `· TTFT 1.2s`; omitted when unrecorded. */
-  ttftMs?: number | undefined
-  /** Turn decode throughput, appended as `· 34 tok/s`; omitted when unrecorded. */
-  tokensPerSecond?: number | undefined
+  /** Clock before icons (user) or after (assistant). */
+  clock: 'start' | 'end'
   /** Open in-place editing for this settled user prompt; omission hides the edit action. */
   onEdit?: (() => void) | undefined
   /** Save the in-place edit and resend; presence switches the row to save/cancel. */
@@ -34,27 +32,32 @@ export interface MessageIconActionsProps {
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
   branchUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
-  clock?: 'start' | 'end'
   className?: string | undefined
   /**
    * Slot-rendered actions owned by independent plugins, placed between the
    * built-in copy and branch controls.
    */
   extraActions?: ReactNode
+  /**
+   * Icon-row Turn-usage trigger (the TurnUsagePanel pill), seated after the
+   * branch control at the end of the icon cluster.
+   */
+  usageAction?: ReactNode
   /** The owning view's locale seat, passed down as a plain prop. */
   t: ChatViewSlotProps['t']
 }
 
 /**
- * Copy / edit / branch IconActions row shared by user and assistant chrome.
- * @param props - Copy text, optional run metrics, edit/branch callbacks, className.
+ * Copy / edit / branch (/ clock) IconActions row shared by user and assistant chrome.
+ * @param props - Copy text, event time, clock side, edit/branch callbacks, className.
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time: _time, runMs, ttftMs, tokensPerSecond, clock: _clock, onEdit, onSaveEdit, onCancelEdit, saveDisabled = false,
+  text, time, clock, onEdit, onSaveEdit, onCancelEdit, saveDisabled = false,
   onBranch, branchUnavailable = false, className,
-  extraActions, t,
+  extraActions, usageAction, t,
 }: MessageIconActionsProps) {
+  const day = useCalendarDay()
   const reasonId = useId()
   // Same success chrome as CodeBlock: a short check swap after the write,
   // gated so re-clicks during the window neither re-copy nor stack timers.
@@ -82,35 +85,14 @@ export function MessageIconActions({
       }, 1000)
     })
   }, [copied, text])
-  // The dot is decorative and stays hidden, but its margins separate the
-  // readings only on screen: without the flanking spaces a reader hears one
-  // run-on string ("Ran for 13sTTFT 0.2s12 tok/s") instead of three facts.
-  const metrics = runMs === undefined && ttftMs === undefined && tokensPerSecond === undefined
-    ? null
-    : (
-      <span className={css.metrics}>
-        {runMs !== undefined && t('message.ranFor', { duration: formatRunDuration(runMs, t) })}
-        {ttftMs !== undefined && (
-          <>
-            {runMs !== undefined && ' '}
-            <span className={css.runTimeDot} aria-hidden>·</span>
-            {' '}
-            {t('message.ttft', { seconds: formatLatencySeconds(ttftMs) })}
-          </>
-        )}
-        {tokensPerSecond !== undefined && (
-          <>
-            {(runMs !== undefined || ttftMs !== undefined) && ' '}
-            <span className={css.runTimeDot} aria-hidden>·</span>
-            {' '}
-            {t('message.tokensPerSecond', { tps: formatTokensPerSecond(tokensPerSecond) })}
-          </>
-        )}
-      </span>
-    )
+  const clockEl = time === undefined ? null : (
+    <span className={clock === 'start' ? css.timeStart : css.timeEnd}>
+      {formatMessageClock(time, t, day)}
+    </span>
+  )
   return (
     <div className={className === undefined ? css.actions : `${css.actions} ${className}`}>
-      {metrics}
+      {clock === 'start' ? clockEl : null}
       <Tooltip label={copied ? t('copied') : t('copy')} side="bottom">
         <button type="button" className={css.action} aria-label={copied ? t('copied') : t('copy')} onClick={onCopy}>
           {copied ? <IconCheckOutline16 /> : <IconCopyOutline16 />}
@@ -163,6 +145,8 @@ export function MessageIconActions({
       {onBranch !== undefined && branchUnavailable && (
         <span id={reasonId} className={css.visuallyHidden}>{t('message.branchUnavailable')}</span>
       )}
+      {usageAction}
+      {clock === 'end' ? clockEl : null}
     </div>
   )
 }

@@ -5,12 +5,11 @@ import { apply, inject } from '../src/client/index.ts'
 import { SettingsSchemaService } from '../src/client/schema.ts'
 import { SettingsScopeBinder } from '../src/client/settings-scope.ts'
 
-function bench(isLoopback = true) {
+function bench() {
   const describeCall = vi.fn().mockResolvedValue({
     ok: true, value: { writable: true, hasDocument: true, namespaces: [] },
   })
   const ctx = new Context()
-  ctx.provide('connection', { api: {}, isLoopback } as never)
   const remote = new TestRemote(ctx, { settings: { describe: describeCall } })
   return { ctx, describeCall, remote, fiber: ctx.plugin({ inject: [...inject], apply }) }
 }
@@ -35,7 +34,8 @@ describe('settings domain base plugin', () => {
   })
 
   it('reads Host settings from a trusted-host browser whose page is not loopback', async () => {
-    const { describeCall, fiber } = bench(false)
+    const { describeCall, fiber, remote } = bench()
+    remote.$host = { home: undefined, isLoopback: false }
     await fiber.await()
     await vi.waitFor(() => { expect(describeCall).toHaveBeenCalledTimes(1) })
   })

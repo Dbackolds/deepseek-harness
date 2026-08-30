@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -10,7 +10,6 @@ import type {
   SessionPendingInteractionBase, SessionPendingInteractionSnapshot,
 } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
 import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
@@ -97,8 +96,8 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     insertSessionBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
-    useConnectionGeneration: selector => selector(undefined),
     useSessionOverflowLimit: selector => selector(5),
+    useHostInfo: selector => selector({ home: undefined, isLoopback: true }),
     renderSlot: ((_name: string, owner: { open: boolean }) => (owner.open ? <div data-testid="directory-flow" /> : null)) as never,
     t,
     ...overrides,
@@ -124,7 +123,7 @@ describe('WorkspaceBrowser', () => {
           folders: [],
           title: 'Project',
         }])),
-        useConnectionGeneration: selector => selector({ id: 1, host: { home: '/home/u' } }),
+        useHostInfo: selector => selector({ home: '/home/u', isLoopback: true }),
       })
       fireEvent.pointerEnter(screen.getByText('Project').closest('[role="treeitem"]')?.parentElement as HTMLElement)
       act(() => { vi.advanceTimersByTime(500) })

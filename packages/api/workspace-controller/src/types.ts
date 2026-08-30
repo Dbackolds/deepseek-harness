@@ -7,9 +7,6 @@
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
-import type { z as zCore } from 'zod'
-
-type ZodIssue = zCore.core.$ZodIssue
 
 export type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 export type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
@@ -34,19 +31,29 @@ export interface WorkspaceView {
   readonly updatedAt: string
 }
 
-/** Stable Workspace failure details returned by unary methods. */
-export interface WorkspaceErrorDetailsMap {
-  'bad-request': Record<never, never>
-  'workspace-invalid-path': { readonly path: string }
-  'workspace-not-found': { readonly workspaceId: WorkspaceId }
-  'workspace-name-conflict': { readonly name: string }
-  'workspace-move-invalid': {
-    readonly workspaceId: WorkspaceId
-    readonly sessionId: SessionId
-    readonly beforeSessionId?: SessionId
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface RemoteErrorDetailsMap {
+    /** The requested directory cannot back a Workspace. */
+    'workspace/invalid-path': { readonly path: string }
+    /** Another Workspace already uses the requested name. */
+    'workspace/name-conflict': { readonly name: string }
+    /** The Session or its anchor is not in the Workspace's manual order. */
+    'workspace/move-invalid': {
+      readonly workspaceId: WorkspaceId
+      readonly sessionId: SessionId
+      readonly beforeSessionId?: SessionId
+    }
+    /** The verb needs an interaction the composed backend does not serve. */
+    'directory-picker/unavailable': { readonly capability: string }
+    /** The target is not fully qualified, or the backend cannot list it. */
+    'directory-picker/unreadable': { readonly path: string }
+    /** A child of that name is already there. */
+    'directory-picker/exists': { readonly path: string }
+    /** The parent is not fully qualified, the name is not one segment, or creation failed. */
+    'directory-picker/create-failed': { readonly path: string }
+    'session/not-found': { readonly sessionId: SessionId }
+    'workspace/folder-conflict': { readonly path: string; readonly workspaceId: WorkspaceId }
   }
-  'session-not-found': { readonly sessionId: SessionId }
-  'workspace-folder-conflict': { readonly path: string; readonly workspaceId: WorkspaceId }
 }
 
 /** Workspace business failure returned without throwing a carrier error. */

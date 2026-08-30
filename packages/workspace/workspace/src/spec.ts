@@ -6,7 +6,8 @@
  */
 
 import { z } from 'zod'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceId } from './types.ts'
 
@@ -24,7 +25,7 @@ export const workspaceRecord = z.object({
   path: z.string(),
   title: z.string(),
   folders: z.array(z.string()).default([]),
-  sessionIds: z.array(z.string().transform(SessionId)),
+  sessionIds: z.array(z.string().transform(value => brandString<SessionId>(value))),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -58,7 +59,7 @@ const workspacePendingMutation = z.discriminatedUnion('operation', [
 export const workspaceDomainState = z.object({
   initialized: z.boolean(),
   workspaceIds: z.array(workspaceId),
-  archivedSessionIds: z.array(z.string().transform(SessionId)).default([]),
+  archivedSessionIds: z.array(z.string().transform(value => brandString<SessionId>(value))).default([]),
   hiddenWorkspaceIds: z.array(workspaceId).default([]),
   pendingMutation: workspacePendingMutation.optional(),
 })

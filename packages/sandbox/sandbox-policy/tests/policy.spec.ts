@@ -12,9 +12,10 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SandboxPolicyService, {
-  SANDBOX_MODES, effectiveSandboxMode, invalidateGitDescribeCache, renderWorkspaceFoldersContext,
+  SANDBOX_MODES, invalidateGitDescribeCache, renderWorkspaceFoldersContext,
   sessionSearchRoots, setGitDescribeCacheMs, setSandboxMode, setSessionWorktree,
 } from '@deepseek-ai/dsh-sandbox-policy'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 
 afterEach(() => {
@@ -28,6 +29,7 @@ async function mounted(config: {
   gitDescribeCacheMs?: number
 } = {}) {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, config)
   return ctx
 }
@@ -59,6 +61,7 @@ async function foldersContext(ctx: Context, activeSession: Session): Promise<str
 async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, config)
   return ctx
 }
@@ -206,6 +209,9 @@ describe('SandboxPolicyService', () => {
 
   it('rejects a mode outside the closed vocabulary at load', async () => {
     const ctx = new Context()
+    // Config validation runs when the fiber activates, and the policy seam
+    // requires the projection registry (mandatory injection) to activate.
+    await ctx.plugin(SessionProjectionRegistry)
     // schemastery rejects the union violation when the plugin loads.
     await expect(ctx.plugin(SandboxPolicyService, { mode: 'yolo' as never })).rejects.toThrow()
   })
@@ -213,6 +219,7 @@ describe('SandboxPolicyService', () => {
   it('disposes the service and context contribution from a child fiber (HMR safety)', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
+    await ctx.plugin(SessionProjectionRegistry)
     const fiber = await ctx.plugin(SandboxPolicyService, {})
     expect(ctx.sandboxPolicy).toBeDefined()
     expect(await policyContext(ctx, session('sess-hmr'))).toContain('read-only')
@@ -378,12 +385,13 @@ describe('the sandbox/mode session kit', () => {
     expect(SANDBOX_MODES).toEqual(['read-only', 'workspace-write', 'danger-full-access'])
   })
 
-  it('effectiveSandboxMode folds to the last switch, or undefined without one', () => {
+  it('the sandboxMode projection folds to the last switch, or null without one', async () => {
+    const ctx = await mounted()
     const session = Session.create(SessionId('sess-fold'))
-    expect(effectiveSandboxMode(session.events)).toBeUndefined()
+    expect(ctx.sessionProjections.stateOf(session, 'sandboxMode')).toBeNull()
     setSandboxMode(session, 'workspace-write')
     setSandboxMode(session, 'read-only')
-    expect(effectiveSandboxMode(session.events)).toBe('read-only')
+    expect(ctx.sessionProjections.stateOf(session, 'sandboxMode')).toBe('read-only')
   })
 
   it('setSandboxMode appends exactly one sandbox/mode event per switch', () => {

@@ -35,11 +35,11 @@ describe('ui-settings-general host', () => {
     const fiber = ctx.plugin({ apply })
     await fiber.await()
     expect(ctx.settings.describe().map(row => row.ns)).toContain(
-      settingsNamespace(ONBOARDING_SETTINGS_NAMESPACE),
+      ONBOARDING_SETTINGS_NAMESPACE,
     )
     await fiber.dispose()
     expect(ctx.settings.describe().map(row => row.ns)).not.toContain(
-      settingsNamespace(ONBOARDING_SETTINGS_NAMESPACE),
+      ONBOARDING_SETTINGS_NAMESPACE,
     )
   })
 

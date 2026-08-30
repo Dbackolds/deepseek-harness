@@ -61,7 +61,7 @@ function recordHostProcessStart(scope: { get(): HostLifetimeSettings; update(pat
 export function apply(ctx: Context): void {
   ctx.inject(['settings'], (settingsCtx) => {
     settingsCtx.settings.register(
-      settingsNamespace(ONBOARDING_SETTINGS_NAMESPACE),
+      ONBOARDING_SETTINGS_NAMESPACE,
       OnboardingSettingsSchema,
     )
     const lifetime = settingsCtx.settings.register(HOST_NAMESPACE, HostLifetimeSettingsSchema)

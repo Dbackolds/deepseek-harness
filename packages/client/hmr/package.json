@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-hmr",
   "description": "Dev-only hot-reload driver for script-loaded client entries: SSE rebuilt frames \u2192 invalidate/prefetch \u2192 fiber swap through the vendored Loader entry",
-  "version": "0.1.2-alpha.1",
+  "version": "0.1.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -31,12 +31,7 @@
   },
   "dsh": {
     "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-api-remotes"
-      ],
+      "inject": [],
       "platform": "web",
       "immediately": true
     }
@@ -47,6 +42,7 @@
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
     "@deepseek-ai/dsh-client-connection": "workspace:^",
@@ -57,10 +53,10 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^",
     "react": "^18.2.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
     "@deepseek-ai/dsh-client-connection": "workspace:^",
@@ -72,7 +68,6 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^",
     "@types/react": "~18.3.1",
     "react": "^18.2.0"
   },
@@ -81,9 +76,5 @@
     "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
-  ],
-  "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
-  }
+  ]
 }

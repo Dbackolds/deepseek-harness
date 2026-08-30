@@ -51,7 +51,7 @@ kind: "package-reference"
 
 ### 贡献提示词段
 
-段携带静态或按上下文解析的文本与 `order`；它们先按 order 升序拼接，同号时再按名称的代码单元顺序排列。`FIRST_PARTY_SECTION_ORDER` 为仓库自带段分配稀疏且唯一的位置，外部段可以使用任意有限 order。`complete: true` 段会在组装后成为精确的完整提示词；有效的 complete 段超过一个时，组装会失败。
+段携带静态或按上下文解析的文本与 `order`；它们先按 order 升序拼接，同号时再按名称的代码单元顺序排列。仓库自带贡献方通过 `ctx.systemPrompt.getSectionOrder(name)` 解析集中分配的位置；runtime-context 贡献方使用 `getContextOrder(name)`。外部贡献可以使用任意有限 order。`complete: true` 段会在组装后成为精确的完整提示词；有效的 complete 段超过一个时，组装会失败。
 
 ```text
 ctx.systemPrompt.section({
@@ -168,7 +168,7 @@ schema token 在每次请求中重复。限制工具会为该 agent 移除其全
 
 这些限制说明提示词组装何时需要特别留意。它们是当前包约束，不是任务积压。
 
-- **部署方编写的提示词文本只来自配置／组合**：此插件拥有全局 persona 默认值；创建方插件可以注册 agent 作用域的遮蔽项；其他段来自拥有相应事实的插件。终端用户库编辑与已注册段替换位于 [`dsh-user-system-prompts`](../user-system-prompts/README.md)，它在 `afterAssemble` 之后应用。
+- **部署方编写的提示词文本只来自配置／组合**：此插件拥有全局 persona 默认值；创建方插件可以注册 agent 作用域的遮蔽项；其他段来自拥有相应事实的插件。不存在终端用户提示词编辑 API。
 - **没有表示字面量 `{{…}}` 花括号的转义语法**：每个完整组都会按已注册变量插值；只有实际提示词需要转义时才会实现。
 - **`toolOrder` 配置错误在提示词组装（首轮）时出现，而不是启动时**：只有形状违规会在配置加载时抛出。
 

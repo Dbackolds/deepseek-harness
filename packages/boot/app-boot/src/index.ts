@@ -21,7 +21,6 @@ import type {} from '@deepseek-ai/cordis-plugin-hmr'
 // Side-effect type import: resolves `ctx.get('systemPrompt')` / `ctx.get('agents')`.
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
-import { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -867,7 +866,7 @@ export function addHarnessSourceSection(ctx: Context, sourceRoot: string): (() =
   if (systemPrompt === undefined) return undefined
   return systemPrompt.section({
     name: HARNESS_SOURCE_SECTION,
-    order: FIRST_PARTY_SECTION_ORDER.HARNESS_SOURCE,
+    order: systemPrompt.getSectionOrder('HARNESS_SOURCE'),
     text: `The DeepSeek Harness implementation checkout is at ${sourceRoot}. The checkout location and current working directory are separate values and may differ; never infer the working directory from this path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.`,
   })
 }
