@@ -1,7 +1,7 @@
 /** Copy dictionaries for the plugin marketplace Settings section. */
 
 export const zh = {
-  nav: '插件',
+  nav: '插件市场',
   title: '插件市场',
   tabs: '插件视图',
   discoverTab: '发现',
@@ -93,7 +93,7 @@ export const zh = {
 export type MarketplaceLocaleKey = keyof typeof zh
 
 export const en = {
-  nav: 'Plugins',
+  nav: 'Marketplace',
   title: 'Plugin marketplace',
   tabs: 'Plugin views',
   discoverTab: 'Discover',

@@ -90,7 +90,7 @@ export interface MarketplaceSettingsSectionInjected {
 
 /** Full component props assembled by the Settings slot renderer. */
 export type MarketplaceSettingsSectionProps =
-  PropsRuntime<'settings.section'>
+  PropsRuntime<'settings.plugins.tab'>
   & PropsLocale<'settings.pluginMarketplace'>
   & PropsRenderSlots<'settings.plugin.item'>
   & InjectFace<MarketplaceSettingsSectionInjected>
@@ -150,7 +150,8 @@ function resolveTagFilter(
 
 /** Render the marketplace Plugins section. */
 export function MarketplaceSettingsSection({
-  t, renderSlot, listInstalled, listCatalog, refreshCatalog, install, uninstall, setEnabled, setPluginNote, catalogUrls, setCatalogUrls, cardKeys,
+  t, renderSlot, listInstalled, listCatalog, refreshCatalog, install, uninstall,
+  setEnabled, setPluginNote, catalogUrls, setCatalogUrls, cardKeys,
 }: MarketplaceSettingsSectionProps): ReactNode {
   const tabsId = useId()
   const [tab, setTab] = useState<TabId>('discover')
@@ -715,7 +716,8 @@ function InstalledPage(props: {
                 key={tag}
                 type="button"
                 className={css.filter}
-                data-active={activeTagFilter.mode === 'tag' && activeTagFilter.tag.toLocaleLowerCase() === tag.toLocaleLowerCase() ? 'true' : undefined}
+                data-active={activeTagFilter.mode === 'tag'
+                  && activeTagFilter.tag.toLocaleLowerCase() === tag.toLocaleLowerCase() ? 'true' : undefined}
                 onClick={() => {
                   setTagFilter(current => (
                     current.mode === 'tag' && current.tag.toLocaleLowerCase() === tag.toLocaleLowerCase()

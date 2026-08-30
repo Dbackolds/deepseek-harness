@@ -251,10 +251,13 @@ export function apply(ctx: ClientContext): void {
     decorateNamed('update')
   }
 
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'plugins',
-    order: 15,
+  // The Plugins settings page composes feature-owned tabs under
+  // `settings.plugins.tab`; registering a competing `settings.section` with
+  // the shell's own id would be dropped by the first-wins section dedupe.
+  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+    name: 'settings.plugins.tab',
+    id: 'discover',
+    order: 5,
     label: () => t('nav'),
     locale: NS,
     inject: injected,
