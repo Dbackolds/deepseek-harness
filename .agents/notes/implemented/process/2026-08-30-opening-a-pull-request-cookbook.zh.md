@@ -12,7 +12,7 @@ PR（Pull Request）策略由 Issue policy、标签分类、测试、文档配�
 
 ## 决策
 
-[`docs/cookbook/opening-a-pull-request.md`](../../../../docs/cookbook/opening-a-pull-request.zh.md) 是维护者与 agent（智能体）打开、打标签、举证并落地 PR 的清单。它不接受外部贡献；那扇仍然关闭的门留在 [`CONTRIBUTING.md`](../../../../CONTRIBUTING.zh.md)。
+[`docs/cookbook/opening-a-pull-request.md`](../../../../docs/cookbook/opening-a-pull-request.zh.md) 是打开、打标签、举证并落地 PR 的清单。[`CONTRIBUTING.md`](../../../../CONTRIBUTING.zh.md) 是社区入口，并链接该实操手册。
 
 该实操手册引用现行所有者，而不复制其清单：Issue 引用与正文形态引用 Issue policy 和 PR 模板，`kind/*` 与 `area/*` 引用[标签分类](2026-08-08-unified-github-label-taxonomy.zh.md)，同次变更证据引用 Agent Note / 测试 / GUI GIF / 配对，本地检查引用 [dsh-pre-push-checks](../../../skills/dsh-pre-push-checks/SKILL.md)，历史与评审修复归属引用[原生堆叠](2026-08-02-native-github-stacks-and-optional-rebases.zh.md)以及[堆叠评审实操手册](../../../../docs/cookbook/responding-to-pr-review-on-a-stack.zh.md)。
 
@@ -20,7 +20,7 @@ PR（Pull Request）策略由 Issue policy、标签分类、测试、文档配�
 
 ## 考虑过的替代方案
 
-**把完整清单放进 `CONTRIBUTING.md`。** 该文件是面向社区的闭门说明。把它扩成维护者手续会混用读者，并淹没当前「不接受外部 PR」的事实。
+**把完整清单放进 `CONTRIBUTING.md`。** 该文件保持为简短的社区入口。带 Issue 引用、标签、证据和落地步骤的手续属于 cookbook，CONTRIBUTING 只保留一行链接。
 
 **只把清单放进根 `AGENTS.md`。** Agent 现行指令保持一到三行再加链接。带 Issue 引用、标签、证据和落地步骤的手续属于 cookbook。
 
@@ -28,4 +28,4 @@ PR（Pull Request）策略由 Issue policy、标签分类、测试、文档配�
 
 ## 后果
 
-维护者与 agent 对进入评审的非 Draft 人类 PR 有一份手续。策略变更仍落在所属工作流、分类 Note 或 skill 中；这些必需步骤变化时，实操手册在同一次变更中更新。社区读者仍然先碰到 `CONTRIBUTING.md`，不会被邀请打开本仓库不会接受的 PR。
+贡献者对进入评审的非 Draft 人类 PR 有一份手续。策略变更仍落在所属工作流、分类 Note 或 skill 中；这些必需步骤变化时，实操手册在同一次变更中更新。打开 `CONTRIBUTING.md` 的社区读者会被转到同一份清单。

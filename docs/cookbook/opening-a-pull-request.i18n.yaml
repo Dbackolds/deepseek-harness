@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/opening-a-pull-request.md
-opening-a-pull-request.md: a34db141b855608dcb933a287121d68cc441344f
-opening-a-pull-request.zh.md: 8ce40ea0782363b3b2d3416ee74b2b0ce3e13e78
+opening-a-pull-request.md: 74b2d027336b3e1ccaf0482fe65598f2b438f79e
+opening-a-pull-request.zh.md: 360b55724069d7bb5f423e4c4387f02ef9acbaa8

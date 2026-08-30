@@ -2,11 +2,11 @@
 
 English | [中文](opening-a-pull-request.zh.md)
 
-How to open, label, evidence, and land a DeepSeek Harness pull request. Community contributors cannot land in this repository today ([CONTRIBUTING.md](../../CONTRIBUTING.md)); maintainers and agents still follow this checklist. The [stack review cookbook](responding-to-pr-review-on-a-stack.md) owns review-fix placement; [dsh-merging-stacked-prs](../../.agents/skills/dsh-merging-stacked-prs/SKILL.md) owns landing a dependent chain.
+How to open, label, evidence, and land a DeepSeek Harness pull request. The [stack review cookbook](responding-to-pr-review-on-a-stack.md) owns review-fix placement; [dsh-merging-stacked-prs](../../.agents/skills/dsh-merging-stacked-prs/SKILL.md) owns landing a dependent chain.
 
 ## Before you open one
 
-1. Confirm the work belongs in this repository. External pull requests are not accepted; ecosystem work lives in a community plugin with the `dsh-plugin` topic.
+1. Confirm the work belongs in this repository. Out-of-tree plugins stay in their own repository with the `dsh-plugin` topic.
 2. Split independent changes. One pull request has one dominant intent. Dependent follow-ups use GitHub's official stack object before landing ([native stacks](../../.agents/notes/implemented/process/2026-08-02-native-github-stacks-and-optional-rebases.md)).
 3. Keep the branch on current `master` (or the official parent in a stack). A mergeable GitHub state against a stale base is not current evidence.
 4. Open or reuse a same-repository Issue first. Ready-for-review human pull requests must cite at least one such Issue.

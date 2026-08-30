@@ -120,7 +120,7 @@ Contributors can opt into the comprehensive local gate set with `pnpm run check:
 
 ### Pull requests
 
-Maintainers opening a pull request follow the [opening-a-pull-request cookbook](cookbook/opening-a-pull-request.md) for Issue citation, labels, same-change evidence, local checks, and landing. Community contributors cannot land in this repository ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+Opening a pull request follows the [opening-a-pull-request cookbook](cookbook/opening-a-pull-request.md) for Issue citation, labels, same-change evidence, local checks, and landing.
 
 ### CI gates
 

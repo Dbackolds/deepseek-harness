@@ -124,7 +124,7 @@ vendor manifest 守卫检查 `vendor/*/src` 下的改动是否连同对应的 `v
 
 ### Pull Request
 
-维护者开 PR（Pull Request）时，按[开 PR 实操手册](cookbook/opening-a-pull-request.zh.md)处理 Issue 引用、标签、同次变更证据、本地检查和落地。社区贡献者不能向本仓库落地（[CONTRIBUTING.md](../CONTRIBUTING.zh.md)）。
+开 PR（Pull Request）时，按[开 PR 实操手册](cookbook/opening-a-pull-request.zh.md)处理 Issue 引用、标签、同次变更证据、本地检查和落地。
 
 ### CI 门禁
 

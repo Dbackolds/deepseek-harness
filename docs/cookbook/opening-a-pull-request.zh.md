@@ -2,11 +2,11 @@
 
 [English](opening-a-pull-request.md) | 中文
 
-如何打开、打标签、举证并落地 DeepSeek Harness 的 PR（Pull Request）。社区贡献者目前不能向本仓库落地（[CONTRIBUTING.md](../../CONTRIBUTING.zh.md)）；维护者与 agent（智能体）仍按本清单执行。堆叠评审修复的归属见[堆叠评审实操手册](responding-to-pr-review-on-a-stack.zh.md)；落地一条依赖链见 [dsh-merging-stacked-prs](../../.agents/skills/dsh-merging-stacked-prs/SKILL.md)。
+如何打开、打标签、举证并落地 DeepSeek Harness 的 PR（Pull Request）。堆叠评审修复的归属见[堆叠评审实操手册](responding-to-pr-review-on-a-stack.zh.md)；落地一条依赖链见 [dsh-merging-stacked-prs](../../.agents/skills/dsh-merging-stacked-prs/SKILL.md)。
 
 ## 打开之前
 
-1. 确认工作属于本仓库。外部 PR 不被接受；生态工作放在带 `dsh-plugin` 话题的社区插件中。
+1. 确认工作属于本仓库。仓库外的插件留在自己的仓库，并带 `dsh-plugin` 话题。
 2. 拆开相互独立的变更。一个 PR 只有一个主导意图。有依赖的后续工作在落地前使用 GitHub 官方的 stack 对象（[原生堆叠](../../.agents/notes/implemented/process/2026-08-02-native-github-stacks-and-optional-rebases.zh.md)）。
 3. 让分支基于当前 `master`（或官方堆叠中的父 PR）。相对过期 base 的可合并状态不是当前证据。
 4. 先打开或复用一个同仓库 Issue。进入评审的非 Draft 人类 PR 必须引用至少一个这样的 Issue。
