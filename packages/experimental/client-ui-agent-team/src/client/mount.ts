@@ -1,5 +1,6 @@
 /** Source-safe Agent Teams browser registration and Remote mount lifecycle. */
 
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   TeamMemberView as TeamRosterMember,
   TeamView,
@@ -30,7 +31,7 @@ export const inject = ['sessions', 'remote', 'slots', 'locale']
 
 function registerUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'client-ui-agent-team: dictionaries')
-  const sessions = ctx.sessions
+  const sessions = ctx.sessions as unknown as ISessions
   const leadSessionId = (sessionId: SessionId): SessionId => {
     const address = sessions.binding(sessionId)?.session.getSnapshot().subagent?.address
     return address?.parentSessionId ?? sessionId

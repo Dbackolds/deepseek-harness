@@ -30,6 +30,7 @@
  * accent row derived only from each logged call/result slice.
  */
 // Type-only: the carrier types, the forwarded Host-event face and the ctx.remote merge.
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SkillEntry } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
@@ -72,7 +73,7 @@ export function apply(ctx: ClientContext): void {
   ))
 
   const skills = ctx.remote.skills
-  const sessions = ctx.sessions
+  const sessions = ctx.sessions as unknown as ISessions as unknown as ISessions
   // Session-keyed catalog cache; single-flight per key. Plugin-closure state:
   // the fiber effect below is its teardown boundary.
   const fetches = new Map<SessionId, CatalogFetch>()
