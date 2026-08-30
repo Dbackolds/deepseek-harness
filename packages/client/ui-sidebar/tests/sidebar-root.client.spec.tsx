@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
+import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
   SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
   SidebarSettingsOwnerProps,
@@ -21,12 +22,25 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-// The shell never reads the global hooks itself, but they ride the standard
-// props share; stub them as never-called functions.
-const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
+// useWorkspaces rides the standard props share unused; the shell does read
+// useSessions for the desktop Completed badge.
+const neverWorkspaces = (() => { throw new Error('shell must not read workspaces') }) as never
 type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+
+function sessionsHook(completedIds: readonly string[] = []): SidebarRootComponentProps['useSessions'] {
+  const byId = Object.fromEntries(completedIds.map(id => [id, { completed: true }])) as SessionListState['byId']
+  return select => select({
+    ids: completedIds as SessionListState['ids'],
+    byId,
+    current: undefined,
+    phase: 'ready',
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
+  })
+}
 
 function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
   const startSession = vi.fn()
@@ -40,7 +54,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   const root = () => (
     <SidebarRoot
       collapsed={current.collapsed} width={current.width}
-      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      useSessions={sessionsHook()} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverWorkspaces}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
@@ -48,6 +62,9 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
       ) => {
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
+        if (key === 'sidebar.automation') {
+          return <div data-testid="automation-seat" data-wide={(owner as { wide: boolean }).wide} />
+        }
         if (key === 'sidebar.settings') {
           settingsOwner = owner
           return <div data-testid="settings-seat" data-wide={owner.wide} />
@@ -104,7 +121,7 @@ describe('SidebarRoot shell', () => {
     vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
     const { container } = render(<SidebarRoot
       collapsed={false} width={300}
-      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      useSessions={sessionsHook()} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverWorkspaces}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
@@ -122,7 +139,7 @@ describe('SidebarRoot shell', () => {
     for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
     render(<SidebarRoot
       collapsed={false} width={300}
-      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      useSessions={sessionsHook()} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverWorkspaces}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
@@ -135,7 +152,7 @@ describe('SidebarRoot shell', () => {
   it('retains the local-build fallback without complete build metadata', () => {
     render(<SidebarRoot
       collapsed={false} width={300}
-      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      useSessions={sessionsHook()} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverWorkspaces}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
@@ -159,9 +176,12 @@ describe('SidebarRoot shell', () => {
     vi.useFakeTimers()
     const b = mountShell()
     b.rerender({ collapsed: true })
-    // Wide content survives the crossfade window, then settles into the rail.
+    // Wide content survives the full column slide, then settles into the rail.
     expect(b.regionOwner().wide).toBe(true)
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(299)
+    b.rerender({})
+    expect(b.regionOwner().wide).toBe(true)
+    vi.advanceTimersByTime(1)
     b.rerender({})
     expect(b.regionOwner().wide).toBe(false)
     expect(b.footerActionOwner().wide).toBe(false)
