@@ -80,12 +80,19 @@ export async function bootSmokeHost(options: SmokeOptions): Promise<SmokeResult>
     child.kill('SIGTERM')
     const joined = output.join('')
     const broken = FAILURE_PATTERNS.find(pattern => pattern.test(joined))
-    return { smokeError: true as const, message: error instanceof Error ? error.message : String(error), broken: broken?.source }
+    return {
+      smokeError: true as const,
+      message: error instanceof Error ? error.message : String(error),
+      broken: broken?.source,
+      output: joined.slice(-4000),
+    }
   })
   if (typeof readyUrl !== 'string') {
     const failure = readyUrl
     const brokenNote = failure.broken === undefined ? '' : `; Host output matched ${failure.broken}`
-    return { ok: false, readyUrl: undefined, detail: `${failure.message}${brokenNote}` }
+    const outputNote = failure.output.trim() === '' ? '' : `; Host output tail:
+${failure.output}`
+    return { ok: false, readyUrl: undefined, detail: `${failure.message}${brokenNote}${outputNote}` }
   }
 
   try {

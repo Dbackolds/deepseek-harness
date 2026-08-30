@@ -102,6 +102,16 @@ jobs:
           NODE_ENV: development
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
+          # Capture a short raw Host boot attempt for triage if smoke fails.
+          set +e
+          dist-desktop/staging/host/node dist-desktop/staging/host/dsh/lib/bin.js web --port 0 --no-open             > /tmp/dsh-staged-host-boot.log 2>&1 &
+          host_pid=$!
+          sleep 8
+          kill "$host_pid" 2>/dev/null || true
+          wait "$host_pid" 2>/dev/null || true
+          set -e
+          echo "===== staged Host raw boot (8s) ====="
+          sed -n '1,200p' /tmp/dsh-staged-host-boot.log || true
           node --import tsx/esm scripts/desktop/host-boot-smoke.ts --host dist-desktop/staging/host
 
       - uses: actions/upload-artifact@v4
