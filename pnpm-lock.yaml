@@ -1284,6 +1284,9 @@ importers:
       '@deepseek-ai/dsh-session-checkpoint-policy':
         specifier: workspace:^
         version: link:../../session/session-checkpoint-policy
+      '@deepseek-ai/dsh-session-control':
+        specifier: workspace:^
+        version: link:../../session-query/session-control
       '@deepseek-ai/dsh-session-log-deepseek':
         specifier: workspace:^
         version: link:../../session/session-log-deepseek
@@ -1323,6 +1326,9 @@ importers:
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:^
         version: link:../../skill/skill-filesystem
+      '@deepseek-ai/dsh-skill-session-control':
+        specifier: workspace:^
+        version: link:../../skill/skill-session-control
       '@deepseek-ai/dsh-spill-local':
         specifier: workspace:^
         version: link:../../spill/spill-local
@@ -1380,6 +1386,9 @@ importers:
       '@deepseek-ai/dsh-tool-ralph':
         specifier: workspace:^
         version: link:../../workflow/tool-ralph
+      '@deepseek-ai/dsh-tool-session-control':
+        specifier: workspace:^
+        version: link:../../session-query/tool-session-control
       '@deepseek-ai/dsh-tool-skill':
         specifier: workspace:^
         version: link:../../skill/tool-skill
@@ -1419,6 +1428,9 @@ importers:
       '@deepseek-ai/dsh-user-questions':
         specifier: workspace:^
         version: link:../../interaction/user-questions
+      '@deepseek-ai/dsh-user-system-prompts':
+        specifier: workspace:^
+        version: link:../../core/user-system-prompts
       '@deepseek-ai/dsh-web':
         specifier: workspace:^
         version: link:../../web/web
