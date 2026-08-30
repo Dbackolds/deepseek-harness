@@ -72,6 +72,15 @@ async function bench() {
   // comes from FALLBACK_LOCALE (en): state the asserted locale explicitly.
   locale.setLocale('zh')
   ctx.provide('locale', locale)
+  ctx.provide('settingsScope', {
+    bind: () => ({
+      getSnapshot: () => ({ value: undefined, revision: 0, writable: true, status: 'ready' }),
+      subscribe: () => () => {},
+      set: async () => {},
+      unset: async () => {},
+      mutate: async () => {},
+    }),
+  } as never)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
     insertSessionBefore, open, clear, search, renameSession, binding, fork, pickDirectory,
@@ -90,6 +99,7 @@ describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
     expect(inject).toEqual([
       'slots', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.directoryPicker', 'remote.session',
+      'settingsScope',
     ])
   })
 

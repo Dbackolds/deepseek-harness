@@ -42,7 +42,13 @@
       "path": "../ui-sidebar"
     },
     {
+      "path": "../ui-settings"
+    },
+    {
       "path": "../ui-conversation"
+    },
+    {
+      "path": "../../settings/settings"
     },
     {
       "path": "../ui-renderer"

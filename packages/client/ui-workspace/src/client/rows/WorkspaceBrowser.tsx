@@ -31,6 +31,10 @@ import {
 } from '../tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY, type SessionActivityLayout, type SessionEmptyWorkspaces } from '../stores.ts'
+import {
+  nextSessionOverflowLimit, ordinarySessionCount, resolvedSessionOverflowLimit,
+  sessionOverflowRevealCount, sessionOverflowStep, type SessionOverflowLimit,
+} from '../session-overflow.ts'
 import { WorkspacePickFlow } from '../WorkspacePicker.tsx'
 import css from './WorkspaceBrowser.module.css'
 
@@ -43,26 +47,27 @@ const EXPAND_SLIDE_MS = 300
 const SEARCH_DEBOUNCE_MS = 250
 /** `session.search` wire bound, measured in JavaScript UTF-16 code units. */
 const SEARCH_QUERY_MAX_CODE_UNITS = 500
-/** Idle Session rows visible per Workspace before the local overflow control. */
-const COLLAPSED_SESSION_LIMIT = 5
-/** Idle rows visible in the flat list before the local overflow control. */
-const COLLAPSED_HISTORY_LIMIT = 5
 /** Folded Pinned heading; absent in the store means expanded. */
 const PINNED_EXPANSION_KEY = '__pinned__:pinned'
 
 /** Fold idle/History rows without charging a provisional New Session against the ordinary-row limit. */
-function collapsedSessionRows(sessions: readonly SessionNode[], limit: number = COLLAPSED_SESSION_LIMIT): {
+function collapsedSessionRows(sessions: readonly SessionNode[], limit: number | null): {
   rows: readonly SessionNode[]
   hiddenCount: number
+  ordinaryCount: number
 } {
-  let ordinaryCount = 0
+  const ordinaryCount = ordinarySessionCount(sessions)
+  if (limit === null || ordinaryCount <= limit) {
+    return { rows: sessions, hiddenCount: 0, ordinaryCount }
+  }
+  let shownOrdinary = 0
   const rows = sessions.filter((session) => {
     if (session.blank) return true
-    if (ordinaryCount >= limit) return false
-    ordinaryCount += 1
+    if (shownOrdinary >= limit) return false
+    shownOrdinary += 1
     return true
   })
-  return { rows, hiddenCount: sessions.length - rows.length }
+  return { rows, hiddenCount: sessions.length - rows.length, ordinaryCount }
 }
 
 /** Localized heading for one activity section. */
@@ -150,11 +155,6 @@ function sanitizeSearchQuery(value: string): string {
   const next = withoutNul.charCodeAt(end)
   if (last >= 0xD800 && last <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) end--
   return withoutNul.slice(0, end)
-}
-
-/** Immutable membership toggle for the local expand-all array. */
-function toggled(list: readonly string[], key: string): string[] {
-  return list.includes(key) ? list.filter(k => k !== key) : [...list, key]
 }
 
 /**
@@ -415,6 +415,8 @@ type SessionTreeProps = Pick<
   pinnedSessionIds: readonly string[]
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
+  /** Settings-owned overflow step, or expand-all. */
+  sessionOverflowLimit: SessionOverflowLimit
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
@@ -426,12 +428,13 @@ function SessionTree({
   insertWorkspaceBefore, insertSessionBefore, orderBy, activityLayout, emptyWorkspaces,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
-  activityExpansion, setActivityExpanded, home, t,
+  activityExpansion, setActivityExpanded, home, t, sessionOverflowLimit,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const pendingInteractions = useSessionPendingInteraction(s => s)
   const current = list.current
-  const [expandedSessionGroups, setExpandedSessionGroups] = useState<string[]>([])
+  const [sessionOverflowByAccount, setSessionOverflowByAccount] = useState<Record<string, number>>({})
+  const overflowStep = sessionOverflowStep(sessionOverflowLimit)
   // Transient drag marker state; the selected mode owns the resulting order.
   const [drag, setDrag] = useState<DragState | null>(null)
   const sessionDropCommitted = useRef(false)
@@ -554,13 +557,17 @@ function SessionTree({
     const group = groups.find(candidate => candidate.key === activeDrag.accountKey)
     if (group === undefined) return
     const neighbors = dragNeighbors(group.sessions, activityLayout, activeDrag)
-    const sessionsExpanded = expandedSessionGroups.includes(group.key)
-    const collapseNeighbors = !sessionsExpanded && (
+    const overflowLimit = (
       activityLayout === 'inline'
         ? activeDrag.cluster === 'idle'
         : activeDrag.bucket === 'history'
     )
-    const renderedSessions = collapseNeighbors ? collapsedSessionRows(neighbors).rows : neighbors
+      ? resolvedSessionOverflowLimit(sessionOverflowByAccount[group.key], sessionOverflowLimit)
+      : null
+    const collapseNeighbors = overflowLimit !== null
+    const renderedSessions = collapseNeighbors
+      ? collapsedSessionRows(neighbors, overflowLimit).rows
+      : neighbors
     const targetIndex = renderedSessions.findIndex(session => session.id === over.id)
     if (targetIndex === -1) return
     const sourceIndex = renderedSessions.findIndex(session => session.id === activeDrag.sessionId)
@@ -599,7 +606,7 @@ function SessionTree({
         const node = nodes.get(id)
         return node === undefined ? [] : [node]
       })
-      if (!collapsedSessionRows(nextGroup).rows.some(node => node.id === activeDrag.sessionId)) return
+      if (!collapsedSessionRows(nextGroup, overflowLimit).rows.some(node => node.id === activeDrag.sessionId)) return
     }
     setSessionOrder(activeDrag.accountKey, nextOrder.map(id => id as string))
     if (orderBy === 'updated' || activeDrag.accountKey === UNGROUPED_KEY) return
@@ -687,9 +694,9 @@ function SessionTree({
         {groups.map((group) => {
           const workspaceId = group.workspaceId
           const clusters = partitionLiveIdle(group.sessions)
-          const idleCollapsed = !expandedSessionGroups.includes(group.key)
-          const collapsedIdle = collapsedSessionRows(clusters.idle)
-          const visibleIdle = idleCollapsed ? collapsedIdle.rows : clusters.idle
+          const idleLimit = resolvedSessionOverflowLimit(sessionOverflowByAccount[group.key], sessionOverflowLimit)
+          const collapsedIdle = collapsedSessionRows(clusters.idle, idleLimit)
+          const visibleIdle = collapsedIdle.rows
           const inlineVisible = [...clusters.live, ...visibleIdle]
           const folderSections = partitionSessionActivity(group.sessions)
             .filter(section => section.bucket !== 'pinned' && section.sessions.length > 0)
@@ -783,7 +790,12 @@ function SessionTree({
                 t={t}
                 onToggle={() => {
                   if (group.expanded) {
-                    setExpandedSessionGroups(keys => keys.filter(key => key !== group.key))
+                    setSessionOverflowByAccount((currentLimits) => {
+                      if (!(group.key in currentLimits)) return currentLimits
+                      return Object.fromEntries(
+                        Object.entries(currentLimits).filter(([key]) => key !== group.key),
+                      )
+                    })
                   }
                   setGroupExpanded(group.key, !group.expanded)
                 }}
@@ -823,9 +835,11 @@ function SessionTree({
                 ? folderSections.map((section) => {
                   const foldKey = activityExpansionKey(group.key, section.bucket)
                   const sectionExpanded = activityExpansion[foldKey] !== false
-                  const historyCollapsed = section.bucket === 'history' && !expandedSessionGroups.includes(group.key)
-                  const collapsedHistory = collapsedSessionRows(section.sessions)
-                  const visible = historyCollapsed ? collapsedHistory.rows : section.sessions
+                  const historyLimit = section.bucket === 'history'
+                    ? resolvedSessionOverflowLimit(sessionOverflowByAccount[group.key], sessionOverflowLimit)
+                    : null
+                  const collapsedHistory = collapsedSessionRows(section.sessions, historyLimit)
+                  const visible = collapsedHistory.rows
                   return (
                     <div key={section.bucket} className={css.activitySection}>
                       <ActivitySectionHeading
@@ -856,17 +870,39 @@ function SessionTree({
                               t={t}
                             />
                           ))}
-                          {section.bucket === 'history' && collapsedHistory.hiddenCount > 0 && (
+                          {section.bucket === 'history' && collapsedHistory.hiddenCount > 0 && overflowStep !== null && (
                             <button
                               type="button"
                               className={css.sessionOverflowButton}
-                              aria-expanded={expandedSessionGroups.includes(group.key)}
+                              aria-expanded={false}
                               tabIndex={sectionExpanded ? undefined : -1}
-                              onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
+                              onClick={() => {
+                                const visibleLimit = resolvedSessionOverflowLimit(
+                                  sessionOverflowByAccount[group.key],
+                                  sessionOverflowLimit,
+                                )
+                                if (visibleLimit === null || overflowStep === null) return
+                                const ordinary = ordinarySessionCount(
+                                  activityLayout === 'folders'
+                                    ? (partitionSessionActivity(group.sessions).find(section => section.bucket === 'history')?.sessions ?? [])
+                                    : partitionLiveIdle(group.sessions).idle,
+                                )
+                                setSessionOverflowByAccount(currentLimits => ({
+                                  ...currentLimits,
+                                  [group.key]: nextSessionOverflowLimit(visibleLimit, overflowStep, ordinary),
+                                }))
+                              }}
                             >
-                              {expandedSessionGroups.includes(group.key)
-                                ? t('sessions.collapse')
-                                : t('sessions.expand', { n: collapsedHistory.hiddenCount })}
+                              {t('sessions.expand', {
+                                n: sessionOverflowRevealCount(
+                                  resolvedSessionOverflowLimit(
+                                    sessionOverflowByAccount[group.key],
+                                    sessionOverflowLimit,
+                                  ) ?? 0,
+                                  overflowStep ?? 0,
+                                  collapsedHistory.ordinaryCount,
+                                ),
+                              })}
                             </button>
                           )}
                         </div>
@@ -893,16 +929,38 @@ function SessionTree({
                           t={t}
                         />
                       ))}
-                      {collapsedIdle.hiddenCount > 0 && (
+                      {collapsedIdle.hiddenCount > 0 && overflowStep !== null && (
                         <button
                           type="button"
                           className={css.sessionOverflowButton}
-                          aria-expanded={expandedSessionGroups.includes(group.key)}
-                          onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
+                          aria-expanded={false}
+                          onClick={() => {
+                            const visibleLimit = resolvedSessionOverflowLimit(
+                              sessionOverflowByAccount[group.key],
+                              sessionOverflowLimit,
+                            )
+                            if (visibleLimit === null || overflowStep === null) return
+                            const ordinary = ordinarySessionCount(
+                              activityLayout === 'folders'
+                                ? (partitionSessionActivity(group.sessions).find(section => section.bucket === 'history')?.sessions ?? [])
+                                : partitionLiveIdle(group.sessions).idle,
+                            )
+                            setSessionOverflowByAccount(currentLimits => ({
+                              ...currentLimits,
+                              [group.key]: nextSessionOverflowLimit(visibleLimit, overflowStep, ordinary),
+                            }))
+                          }}
                         >
-                          {expandedSessionGroups.includes(group.key)
-                            ? t('sessions.collapse')
-                            : t('sessions.expand', { n: collapsedIdle.hiddenCount })}
+                          {t('sessions.expand', {
+                            n: sessionOverflowRevealCount(
+                              resolvedSessionOverflowLimit(
+                                sessionOverflowByAccount[group.key],
+                                sessionOverflowLimit,
+                              ) ?? 0,
+                              overflowStep ?? 0,
+                              collapsedIdle.ordinaryCount,
+                            ),
+                          })}
                         </button>
                       )}
                     </div>
@@ -925,9 +983,9 @@ function SessionTree({
             />
             {groupExpansion[HIDDEN_SECTION_KEY] === true && hiddenGroups.map((group) => {
               const clusters = partitionLiveIdle(group.sessions)
-              const idleCollapsed = !expandedSessionGroups.includes(group.key)
-              const collapsedIdle = collapsedSessionRows(clusters.idle)
-              const visibleIdle = idleCollapsed ? collapsedIdle.rows : clusters.idle
+              const idleLimit = resolvedSessionOverflowLimit(sessionOverflowByAccount[group.key], sessionOverflowLimit)
+              const collapsedIdle = collapsedSessionRows(clusters.idle, idleLimit)
+              const visibleIdle = collapsedIdle.rows
               const inlineVisible = [...clusters.live, ...visibleIdle]
               const folderSections = partitionSessionActivity(group.sessions)
                 .filter(section => section.bucket !== 'pinned' && section.sessions.length > 0)
@@ -938,7 +996,12 @@ function SessionTree({
                     t={t}
                     onToggle={() => {
                       if (group.expanded) {
-                        setExpandedSessionGroups(keys => keys.filter(key => key !== group.key))
+                        setSessionOverflowByAccount((currentLimits) => {
+                          if (!(group.key in currentLimits)) return currentLimits
+                          return Object.fromEntries(
+                            Object.entries(currentLimits).filter(([key]) => key !== group.key),
+                          )
+                        })
                       }
                       setGroupExpanded(group.key, !group.expanded)
                     }}
@@ -966,9 +1029,11 @@ function SessionTree({
                     ? folderSections.map((section) => {
                       const foldKey = activityExpansionKey(group.key, section.bucket)
                       const sectionExpanded = activityExpansion[foldKey] !== false
-                      const historyCollapsed = section.bucket === 'history' && !expandedSessionGroups.includes(group.key)
-                      const collapsedHistory = collapsedSessionRows(section.sessions)
-                      const visible = historyCollapsed ? collapsedHistory.rows : section.sessions
+                      const historyLimit = section.bucket === 'history'
+                        ? resolvedSessionOverflowLimit(sessionOverflowByAccount[group.key], sessionOverflowLimit)
+                        : null
+                      const collapsedHistory = collapsedSessionRows(section.sessions, historyLimit)
+                      const visible = collapsedHistory.rows
                       return (
                         <div key={section.bucket} className={css.activitySection}>
                           <ActivitySectionHeading
@@ -998,17 +1063,39 @@ function SessionTree({
                                   t={t}
                                 />
                               ))}
-                              {section.bucket === 'history' && collapsedHistory.hiddenCount > 0 && (
+                              {section.bucket === 'history' && collapsedHistory.hiddenCount > 0 && overflowStep !== null && (
                                 <button
                                   type="button"
                                   className={css.sessionOverflowButton}
-                                  aria-expanded={expandedSessionGroups.includes(group.key)}
+                                  aria-expanded={false}
                                   tabIndex={sectionExpanded ? undefined : -1}
-                                  onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
+                                  onClick={() => {
+                                    const visibleLimit = resolvedSessionOverflowLimit(
+                                      sessionOverflowByAccount[group.key],
+                                      sessionOverflowLimit,
+                                    )
+                                    if (visibleLimit === null || overflowStep === null) return
+                                    const ordinary = ordinarySessionCount(
+                                      activityLayout === 'folders'
+                                        ? (partitionSessionActivity(group.sessions).find(section => section.bucket === 'history')?.sessions ?? [])
+                                        : partitionLiveIdle(group.sessions).idle,
+                                    )
+                                    setSessionOverflowByAccount(currentLimits => ({
+                                      ...currentLimits,
+                                      [group.key]: nextSessionOverflowLimit(visibleLimit, overflowStep, ordinary),
+                                    }))
+                                  }}
                                 >
-                                  {expandedSessionGroups.includes(group.key)
-                                    ? t('sessions.collapse')
-                                    : t('sessions.expand', { n: collapsedHistory.hiddenCount })}
+                                  {t('sessions.expand', {
+                                    n: sessionOverflowRevealCount(
+                                      resolvedSessionOverflowLimit(
+                                        sessionOverflowByAccount[group.key],
+                                        sessionOverflowLimit,
+                                      ) ?? 0,
+                                      overflowStep ?? 0,
+                                      collapsedHistory.ordinaryCount,
+                                    ),
+                                  })}
                                 </button>
                               )}
                             </div>
@@ -1034,16 +1121,38 @@ function SessionTree({
                               t={t}
                             />
                           ))}
-                          {collapsedIdle.hiddenCount > 0 && (
+                          {collapsedIdle.hiddenCount > 0 && overflowStep !== null && (
                             <button
                               type="button"
                               className={css.sessionOverflowButton}
-                              aria-expanded={expandedSessionGroups.includes(group.key)}
-                              onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
+                              aria-expanded={false}
+                              onClick={() => {
+                                const visibleLimit = resolvedSessionOverflowLimit(
+                                  sessionOverflowByAccount[group.key],
+                                  sessionOverflowLimit,
+                                )
+                                if (visibleLimit === null || overflowStep === null) return
+                                const ordinary = ordinarySessionCount(
+                                  activityLayout === 'folders'
+                                    ? (partitionSessionActivity(group.sessions).find(section => section.bucket === 'history')?.sessions ?? [])
+                                    : partitionLiveIdle(group.sessions).idle,
+                                )
+                                setSessionOverflowByAccount(currentLimits => ({
+                                  ...currentLimits,
+                                  [group.key]: nextSessionOverflowLimit(visibleLimit, overflowStep, ordinary),
+                                }))
+                              }}
                             >
-                              {expandedSessionGroups.includes(group.key)
-                                ? t('sessions.collapse')
-                                : t('sessions.expand', { n: collapsedIdle.hiddenCount })}
+                              {t('sessions.expand', {
+                                n: sessionOverflowRevealCount(
+                                  resolvedSessionOverflowLimit(
+                                    sessionOverflowByAccount[group.key],
+                                    sessionOverflowLimit,
+                                  ) ?? 0,
+                                  overflowStep ?? 0,
+                                  collapsedIdle.ordinaryCount,
+                                ),
+                              })}
                             </button>
                           )}
                         </div>
@@ -1065,7 +1174,7 @@ function FlatList({
   useSessions, useSessionPendingInteraction, open, forkSession, onSessionRename, onSessionArchive,
   onSessionPin, onSessionUnpin, pinnedSessionIds, archivedSessionIds,
   orderBy, activityLayout, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
-  activityExpansion, setActivityExpanded, t,
+  activityExpansion, setActivityExpanded, t, sessionOverflowLimit,
 }: Pick<
   SessionTreeProps,
   | 'useSessions'
@@ -1087,6 +1196,7 @@ function FlatList({
   | 'activityExpansion'
   | 'setActivityExpanded'
   | 't'
+  | 'sessionOverflowLimit'
 >) {
   const list = useSessions(s => s)
   const pendingInteractions = useSessionPendingInteraction(s => s)
@@ -1133,12 +1243,13 @@ function FlatList({
   }, [baseRows, pinnedSessionIds])
   const [drag, setDrag] = useState<DragState | null>(null)
   const dropCommitted = useRef(false)
-  const [historyExpanded, setHistoryExpanded] = useState(false)
+  const [flatOverflowLimit, setFlatOverflowLimit] = useState<number | undefined>(undefined)
+  const overflowStep = sessionOverflowStep(sessionOverflowLimit)
+  const flatVisibleLimit = resolvedSessionOverflowLimit(flatOverflowLimit, sessionOverflowLimit)
   useNativeDragAcceptance(drag !== null)
   const clusters = useMemo(() => partitionLiveIdle(rows), [rows])
-  const visibleIdle = historyExpanded
-    ? clusters.idle
-    : clusters.idle.slice(0, COLLAPSED_HISTORY_LIMIT)
+  const collapsedIdle = collapsedSessionRows(clusters.idle, flatVisibleLimit)
+  const visibleIdle = collapsedIdle.rows
   const inlineVisible = [...clusters.live, ...visibleIdle]
   const folderSections = useMemo(
     () => partitionSessionActivity(rows).filter(section => section.bucket !== 'pinned' && section.sessions.length > 0),
@@ -1251,9 +1362,9 @@ function FlatList({
         {rows.length > 0 && activityLayout === 'folders' && folderSections.map((section) => {
           const foldKey = activityExpansionKey(FLAT_SESSION_ORDER_KEY, section.bucket)
           const sectionExpanded = activityExpansion[foldKey] !== false
-          const visible = section.bucket === 'history' && !historyExpanded
-            ? section.sessions.slice(0, COLLAPSED_HISTORY_LIMIT)
-            : section.sessions
+          const historyLimit = section.bucket === 'history' ? flatVisibleLimit : null
+          const collapsedHistory = collapsedSessionRows(section.sessions, historyLimit)
+          const visible = collapsedHistory.rows
           return (
             <div key={section.bucket} className={css.activitySection}>
               <ActivitySectionHeading
@@ -1285,17 +1396,28 @@ function FlatList({
                       t={t}
                     />
                   ))}
-                  {section.bucket === 'history' && section.sessions.length > COLLAPSED_HISTORY_LIMIT && (
+                  {section.bucket === 'history' && collapsedHistory.hiddenCount > 0 && overflowStep !== null && (
                     <button
                       type="button"
                       className={css.sessionOverflowButton}
-                      aria-expanded={historyExpanded}
+                      aria-expanded={false}
                       tabIndex={sectionExpanded ? undefined : -1}
-                      onClick={() => { setHistoryExpanded(openHistory => !openHistory) }}
+                      onClick={() => {
+                        if (flatVisibleLimit === null) return
+                        setFlatOverflowLimit(nextSessionOverflowLimit(
+                          flatVisibleLimit,
+                          overflowStep,
+                          collapsedHistory.ordinaryCount,
+                        ))
+                      }}
                     >
-                      {historyExpanded
-                        ? t('sessions.collapse')
-                        : t('sessions.expand', { n: section.sessions.length - COLLAPSED_HISTORY_LIMIT })}
+                      {t('sessions.expand', {
+                        n: sessionOverflowRevealCount(
+                          flatVisibleLimit ?? 0,
+                          overflowStep,
+                          collapsedHistory.ordinaryCount,
+                        ),
+                      })}
                     </button>
                   )}
                 </div>
@@ -1323,16 +1445,27 @@ function FlatList({
                   t={t}
                 />
               ))}
-              {clusters.idle.length > COLLAPSED_HISTORY_LIMIT && (
+              {collapsedIdle.hiddenCount > 0 && overflowStep !== null && (
                 <button
                   type="button"
                   className={css.sessionOverflowButton}
-                  aria-expanded={historyExpanded}
-                  onClick={() => { setHistoryExpanded(openHistory => !openHistory) }}
+                  aria-expanded={false}
+                  onClick={() => {
+                    if (flatVisibleLimit === null) return
+                    setFlatOverflowLimit(nextSessionOverflowLimit(
+                      flatVisibleLimit,
+                      overflowStep,
+                      collapsedIdle.ordinaryCount,
+                    ))
+                  }}
                 >
-                  {historyExpanded
-                    ? t('sessions.collapse')
-                    : t('sessions.expand', { n: clusters.idle.length - COLLAPSED_HISTORY_LIMIT })}
+                  {t('sessions.expand', {
+                    n: sessionOverflowRevealCount(
+                      flatVisibleLimit ?? 0,
+                      overflowStep,
+                      collapsedIdle.ordinaryCount,
+                    ),
+                  })}
                 </button>
               )}
             </div>
@@ -1456,6 +1589,7 @@ export function WorkspaceBrowser({
   searchResultLimit,
   useDirectoryFlow,
   useConnectionGeneration,
+  useSessionOverflowLimit,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
@@ -1476,6 +1610,7 @@ export function WorkspaceBrowser({
   const sessionUpdatedAtByAccount = useStore(s => s.sessionUpdatedAtByAccount)
   const activityExpansion = useStore(s => s.activityExpansion)
   const pinnedSessionIds = useStore(s => s.pinnedSessionIds)
+  const sessionOverflowLimit = useSessionOverflowLimit(value => value)
   const pinSession = (sessionId: SessionNode['id']) => {
     actions.pinSession(sessionId as string)
   }
@@ -1903,6 +2038,7 @@ export function WorkspaceBrowser({
                 setSessionOrder={actions.setSessionOrder}
                 activityExpansion={activityExpansion}
                 setActivityExpanded={actions.setActivityExpanded}
+                sessionOverflowLimit={sessionOverflowLimit}
                 t={t}
               />
             )
@@ -1925,6 +2061,7 @@ export function WorkspaceBrowser({
                 setSessionOrder={actions.setSessionOrder}
                 activityExpansion={activityExpansion}
                 setActivityExpanded={actions.setActivityExpanded}
+                sessionOverflowLimit={sessionOverflowLimit}
                 activityLayout={activityLayout}
                 emptyWorkspaces={emptyWorkspaces}
                 archivedSessionIds={archivedSessionIds}

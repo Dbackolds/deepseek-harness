@@ -22,11 +22,18 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the Session root standard-hook merge.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
 import { UiWorkspaceService } from './navigation.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './rows/WorkspaceBrowser.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
+import { SessionOverflowPolicy } from './session-overflow-policy.ts'
+import { SessionOverflowRow } from './settings/SessionOverflowRow.tsx'
+import type { SessionOverflowRowInjected } from './settings/SessionOverflowRow.tsx'
+import {
+  WORKSPACE_SETTINGS_NAMESPACE, type WorkspaceSettings,
+} from './session-overflow.ts'
 import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type { UiWorkspace } from './navigation.ts'
@@ -61,6 +68,7 @@ const NS = 'workspace'
  */
 export const inject = [
   'slots', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.directoryPicker', 'remote.session',
+  'settingsScope',
 ]
 
 /**
@@ -78,6 +86,20 @@ export function apply(ctx: Context): void {
     ctx, ctx.remote.directoryPicker, workspaces, sessions)
   ctx.slots.provideRoot({ hooks: { workspaces: workspaces.list } })
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
+
+  const overflowPolicy = new SessionOverflowPolicy(
+    ctx.settingsScope.bind<WorkspaceSettings>({ namespace: WORKSPACE_SETTINGS_NAMESPACE }),
+  )
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'session-overflow',
+    order: 21,
+    locale: NS,
+    inject: (): SessionOverflowRowInjected => ({
+      hooks: { sessionOverflowLimit: overflowPolicy.sessionOverflowLimit },
+      setSessionOverflowLimit: (limit) => { overflowPolicy.setSessionOverflowLimit(limit) },
+    }),
+  }, SessionOverflowRow))
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {
     const result = await sessions.search(query, signal)

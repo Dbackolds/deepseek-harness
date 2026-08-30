@@ -23,7 +23,9 @@
  * contract and the same occupant.
  */
 import type { ConnectionGenerationState } from '@deepseek-ai/dsh-client-connection/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { HostObservable, PropsHooks, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SessionOverflowLimit } from '../session-overflow.ts'
 // Type-only: pull the owner SlotMap merges into programs that resolve the
 // runtime shares below.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -91,6 +93,8 @@ export type WorkspaceBrowserInjected = {
   hooks: DirectoryPickingInjected['hooks'] & {
     /** Current generation's Host description, bound by the slot renderer. */
     connectionGeneration: ConnectionGenerationState
+    /** Sidebar Session overflow preference bound as useSessionOverflowLimit. */
+    sessionOverflowLimit: SnapshotStore<SessionOverflowLimit>
   }
   /**
    * Start a New Session in a Workspace: reuse-or-create its blank session and
