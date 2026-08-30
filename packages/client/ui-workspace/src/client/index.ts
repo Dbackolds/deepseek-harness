@@ -149,7 +149,7 @@ export function apply(ctx: Context): void {
       await workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     },
     createWorkspace: input => workspaces.create(input),
-    markUnread: (_sessionId) => {},
+    markUnread: (sessionId) => { sessions.markUnread(sessionId) },
     openPath: async (path) => {
       const result = await ctx.remote.session.openWorkspacePath({ path })
       if (!result.ok) throw new Error(result.error.message)

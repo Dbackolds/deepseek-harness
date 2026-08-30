@@ -274,6 +274,14 @@ export class ClientSessions implements ISessions {
   }
 
   /**
+   * Restore the Completed reminder for a listed Session.
+   * @param id - listed Session id.
+   */
+  markUnread(id: SessionId): void {
+    this.manager.markUnread(id)
+  }
+
+  /**
    * Open a healthy catalog child through its direct-parent address.
    * @param address - catalog-derived parent and child ids.
    */

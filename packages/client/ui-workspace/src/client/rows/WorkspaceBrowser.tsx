@@ -360,7 +360,7 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessions' | 'useSessionPendingInteraction' | 'startSession' | 'open' | 'forkSession'
-  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 't'
+  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 'markUnread' | 'openPath' | 'openSplit' | 't'
 > & {
   hiddenWorkspaceIds: readonly WorkspaceId[]
   /** Host account home for POSIX hover-path abbreviation. */
@@ -425,7 +425,7 @@ function SessionTree({
   hiddenWorkspaceIds,
   onRenameRequest, onHideRequest, onShowRequest, onDeleteRequest, onAddFolderRequest, onRemoveFolderRequest,
   onSessionRename, onSessionArchive, onSessionPin, onSessionUnpin, pinnedSessionIds,
-  insertWorkspaceBefore, insertSessionBefore, orderBy, activityLayout, emptyWorkspaces,
+  insertWorkspaceBefore, insertSessionBefore, markUnread, openPath, openSplit, orderBy, activityLayout, emptyWorkspaces,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   activityExpansion, setActivityExpanded, home, t, sessionOverflowLimit,
@@ -684,6 +684,9 @@ function SessionTree({
                     onArchive={onSessionArchive}
                     onPin={onSessionPin}
                     onUnpin={onSessionUnpin}
+                    onMarkUnread={markUnread}
+                    onSplit={openSplit}
+                    onReveal={(path) => { void openPath(path) }}
                     t={t}
                   />
                 ))}
@@ -866,6 +869,9 @@ function SessionTree({
                               onArchive={onSessionArchive}
                               onPin={onSessionPin}
                               onUnpin={onSessionUnpin}
+                              onMarkUnread={markUnread}
+                              onSplit={openSplit}
+                              onReveal={(path) => { void openPath(path) }}
                               drag={sessionDragProps(node)}
                               t={t}
                             />
@@ -924,6 +930,9 @@ function SessionTree({
                           onArchive={onSessionArchive}
                           onPin={onSessionPin}
                           onUnpin={onSessionUnpin}
+                          onMarkUnread={markUnread}
+                          onSplit={openSplit}
+                          onReveal={(path) => { void openPath(path) }}
                           drag={sessionDragProps(node)}
                           t={t}
                         />
@@ -1058,6 +1067,9 @@ function SessionTree({
                                   onArchive={onSessionArchive}
                                   onPin={onSessionPin}
                                   onUnpin={onSessionUnpin}
+                                  onMarkUnread={markUnread}
+                                  onSplit={openSplit}
+                                  onReveal={(path) => { void openPath(path) }}
                                   t={t}
                                 />
                               ))}
@@ -1115,6 +1127,9 @@ function SessionTree({
                               onArchive={onSessionArchive}
                               onPin={onSessionPin}
                               onUnpin={onSessionUnpin}
+                              onMarkUnread={markUnread}
+                              onSplit={openSplit}
+                              onReveal={(path) => { void openPath(path) }}
                               t={t}
                             />
                           ))}
@@ -1168,7 +1183,7 @@ function SessionTree({
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
   useSessions, useSessionPendingInteraction, open, forkSession, onSessionRename, onSessionArchive,
-  onSessionPin, onSessionUnpin, pinnedSessionIds, archivedSessionIds,
+  onSessionPin, onSessionUnpin, markUnread, openPath, openSplit, pinnedSessionIds, archivedSessionIds,
   orderBy, activityLayout, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   activityExpansion, setActivityExpanded, t, sessionOverflowLimit,
 }: Pick<
@@ -1181,6 +1196,9 @@ function FlatList({
   | 'onSessionArchive'
   | 'onSessionPin'
   | 'onSessionUnpin'
+  | 'markUnread'
+  | 'openPath'
+  | 'openSplit'
   | 'pinnedSessionIds'
   | 'archivedSessionIds'
   | 'orderBy'
@@ -1347,6 +1365,9 @@ function FlatList({
                     onArchive={onSessionArchive}
                     onPin={onSessionPin}
                     onUnpin={onSessionUnpin}
+                    onMarkUnread={markUnread}
+                    onSplit={openSplit}
+                    onReveal={(path) => { void openPath(path) }}
                     flat
                     t={t}
                   />
@@ -1387,6 +1408,9 @@ function FlatList({
                       onArchive={onSessionArchive}
                       onPin={onSessionPin}
                       onUnpin={onSessionUnpin}
+                      onMarkUnread={markUnread}
+                      onSplit={openSplit}
+                      onReveal={(path) => { void openPath(path) }}
                       flat
                       drag={sessionDragProps(node)}
                       t={t}
@@ -1436,6 +1460,9 @@ function FlatList({
                   onArchive={onSessionArchive}
                   onPin={onSessionPin}
                   onUnpin={onSessionUnpin}
+                  onMarkUnread={markUnread}
+                  onSplit={openSplit}
+                  onReveal={(path) => { void openPath(path) }}
                   flat
                   drag={sessionDragProps(node)}
                   t={t}
@@ -1577,6 +1604,9 @@ export function WorkspaceBrowser({
   archiveSession,
   insertSessionBefore,
   createWorkspace,
+  markUnread,
+  openPath,
+  openSplit,
   hideWorkspace,
   showWorkspace,
   addWorkspaceFolder,
@@ -2024,6 +2054,7 @@ export function WorkspaceBrowser({
                 open={open} forkSession={forkSession}
                 onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
                 onSessionPin={pinSession} onSessionUnpin={unpinSession}
+                markUnread={markUnread} openPath={openPath} openSplit={openSplit}
                 pinnedSessionIds={pinnedSessionIds}
                 archivedSessionIds={archivedSessionIds}
                 orderBy={orderBy}
@@ -2064,6 +2095,9 @@ export function WorkspaceBrowser({
                 hiddenWorkspaceIds={hiddenWorkspaceIds}
                 startSession={startSession}
                 open={open}
+                markUnread={markUnread}
+                openPath={openPath}
+                openSplit={openSplit}
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 insertSessionBefore={insertSessionBefore}
                 orderBy={orderBy}

@@ -108,6 +108,11 @@ export interface ISessions {
    */
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
   /**
+   * Restore the Completed reminder so a listed Session returns to that section.
+   * @param id - listed Session id.
+   */
+  markUnread(id: SessionId): void
+  /**
    * Resolve an Agent-scoped context view (use-and-discard).
    * @param id - session id.
    * @returns scoped ctx, or undefined for a session neither listed nor already scoped.

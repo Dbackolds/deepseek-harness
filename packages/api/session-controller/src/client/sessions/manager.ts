@@ -181,6 +181,19 @@ export class SessionManager {
   }
 
   /**
+   * Restore the Completed reminder for a listed Session.
+   * @param sessionId - listed Session id.
+   */
+  markUnread(sessionId: SessionId): void {
+    if (!this.summaries.some(summary => summary.sessionId === sessionId)) {
+      throw new Error(`sessions.markUnread: unknown session ${sessionId}`)
+    }
+    if (this.completedNotifications.has(sessionId)) return
+    this.completedNotifications.add(sessionId)
+    this.notifier.notifyNow()
+  }
+
+  /**
    * Select a healthy child through its durable direct-parent address.
    * @param address - catalog-derived parent and child ids.
    */

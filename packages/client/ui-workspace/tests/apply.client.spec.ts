@@ -27,6 +27,7 @@ async function bench() {
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
+  const markUnread = vi.fn()
   const subscribe = () => () => {}
   ctx.provide('workspaces', {
     list: {
@@ -57,6 +58,7 @@ async function bench() {
     searchResultLimit: 20,
     binding,
     fork,
+    markUnread,
   } as never)
   const pickDirectory = vi.fn(() => Promise.resolve({ ok: true as const, value: '/projects/picked' }))
   const directoryPicker = { pick: pickDirectory }
@@ -80,7 +82,7 @@ async function bench() {
   } as never)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
-    insertSessionBefore, open, clear, search, renameSession, binding, fork, pickDirectory,
+    insertSessionBefore, open, clear, search, renameSession, binding, fork, markUnread, pickDirectory,
   }
 }
 
@@ -147,6 +149,10 @@ describe('ui-workspace apply', () => {
       expect(b.open).toHaveBeenCalledWith('forked')
     })
     expect(b.fork).toHaveBeenCalledWith({ sessionId: 'session', increaseTitle: true })
+    browser.markUnread('session' as never)
+    expect(b.markUnread).toHaveBeenCalledWith('session')
+    browser.openSplit('session' as never)
+    expect(b.open).toHaveBeenCalledWith('session')
     await browser.renameWorkspace('ws' as never, 'renamed')
     expect(b.rename).toHaveBeenCalledWith('ws', 'renamed')
     await browser.insertSessionBefore('ws' as never, 's1' as never, 's2' as never)

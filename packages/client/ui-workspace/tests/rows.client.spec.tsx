@@ -95,6 +95,12 @@ describe('workspace browser rows', () => {
     expect(row.hasAttribute('draggable')).toBe(false)
     fireEvent.click(row)
     expect(onOpen).toHaveBeenCalledWith(result.id)
+
+    const ungrouped: SearchResultNode = {
+      ...result, id: sid('ungrouped'), workspace: '', snippet: undefined,
+    }
+    render(<SearchResultItem result={ungrouped} currentId={undefined} onOpen={onOpen} t={t} />)
+    expect(screen.getByText('聊天')).toBeTruthy()
   })
 
   it('keeps the active-Schedule marker after a search title and inside the row action', () => {
@@ -483,9 +489,7 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('button', { name: /工作区/ })).toBeNull()
     expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(false)
     expect(screen.queryByRole('menu')).toBeNull()
-    const row = screen.getByRole('treeitem')
-    expect(row.querySelector('path[d^="M5.05582"]')).toBeNull()
-    expect(row.querySelector('svg[width="14"]')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /工作区/ })).toBeNull()
   })
 
   it('blank New Session rows carry no menu, no time label, and no hover-card time', () => {
@@ -582,8 +586,13 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('menu')).toBeNull()
 
     const onPin = vi.fn()
+    const onUnpin = vi.fn()
+    const onReveal = vi.fn()
+    const onSplit = vi.fn()
+    const onMarkUnread = vi.fn()
     rerender(<SessionNodeItem node={{ ...node, cwd: '/projects/project' }} currentId={undefined} now={0} onOpen={onOpen}
-      onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} onPin={onPin} t={t} />)
+      onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} onPin={onPin} onUnpin={onUnpin}
+      onMarkUnread={onMarkUnread} onSplit={onSplit} onReveal={onReveal} t={t} />)
     const sessionRow = screen.getByRole('treeitem')
     expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
     expect(onOpen).not.toHaveBeenCalled()
@@ -592,17 +601,168 @@ describe('workspace browser rows', () => {
     expect(sessionContext.style.top).toBe('144px')
     expect(screen.getByRole('menuitem', { name: '置顶任务' })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: '取消置顶' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: '在分屏打开' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: '在资源管理器打开' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: '在分屏打开' })).toHaveProperty('disabled', false)
+    expect(screen.getByRole('menuitem', { name: '复制日志路径' })).toHaveProperty('disabled', false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '在分屏打开' }))
+    expect(onSplit).toHaveBeenCalledWith(node.id)
+    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
     fireEvent.click(screen.getByRole('menuitem', { name: '置顶任务' }))
     expect(onPin).toHaveBeenCalledWith(node.id)
+    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '标记为未读' }))
+    expect(onMarkUnread).toHaveBeenCalledWith(node.id)
+    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '在资源管理器打开' }))
+    expect(onReveal).toHaveBeenCalledWith('/projects/project')
+    const writeText = vi.fn(async () => {})
+    const restoreClipboard = installClipboard(writeText)
+    try {
+      expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+      fireEvent.click(screen.getByRole('menuitem', { name: '复制路径' }))
+      expect(writeText).toHaveBeenCalledWith('/projects/project')
+      expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+      fireEvent.click(screen.getByRole('menuitem', { name: '复制任务路径' }))
+      expect(writeText).toHaveBeenCalledWith('/projects/project')
+      expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+      fireEvent.click(screen.getByRole('menuitem', { name: '复制日志路径' }))
+      expect(String(writeText.mock.calls.at(-1)?.[0])).toContain('session.jsonl')
+      expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+      fireEvent.click(screen.getByRole('menuitem', { name: '复制会话 ID' }))
+      expect(writeText).toHaveBeenCalledWith(node.id)
+    } finally {
+      restoreClipboard()
+    }
     fireEvent.click(screen.getByRole('button', { name: '会话“One”的操作' }))
     const sessionEllipsis = screen.getByRole('menu')
     expect(sessionEllipsis).not.toBe(sessionContext)
     expect(screen.getByRole('menuitem', { name: '分叉会话' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: '置顶任务' }))
+    expect(onPin).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: '会话“One”的操作' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
     expect(onRenameSession).toHaveBeenCalledWith(node.id, 'One')
     expect(onOpen).not.toHaveBeenCalled()
+
+    rerender(<SessionNodeItem node={{ ...node, cwd: '/projects/project', pinned: true }} currentId={undefined} now={0} onOpen={onOpen}
+      onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} onPin={onPin} onUnpin={onUnpin}
+      onMarkUnread={onMarkUnread} onSplit={onSplit} onReveal={onReveal} t={t} />)
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '取消置顶' }))
+    expect(onUnpin).toHaveBeenCalledWith(node.id)
+    fireEvent.click(screen.getByRole('button', { name: '会话“One”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '取消置顶' }))
+    expect(onUnpin).toHaveBeenCalledTimes(2)
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    const onArchive = vi.fn()
+    rerender(<SessionNodeItem node={{ ...node, cwd: '/projects/project' }} currentId={undefined} now={0} onOpen={onOpen}
+      onRename={onRenameSession} onFork={vi.fn()} onArchive={onArchive} t={t} />)
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
+    expect(screen.queryByRole('menuitem', { name: '置顶任务' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: '重命名任务' }))
+    expect(onRenameSession).toHaveBeenCalledWith(node.id, 'One')
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '归档任务' }))
+    expect(onArchive).toHaveBeenCalledWith(node.id)
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '标记为未读' }))
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '在分屏打开' }))
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '在资源管理器打开' }))
+    expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('workspace context menu remove-folder and Escape close paths', () => {
+    const onRemoveFolder = vi.fn()
+    const group: GroupNode = {
+      key: 'project', workspaceId: wid('project'), cwd: '/projects/project', folders: ['/libs/shared'], createdAt: 0, label: 'Project',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    render(<ProjectRowItem
+      group={group} onToggle={vi.fn()} onCreate={vi.fn()}
+      actions={{ rename: vi.fn(), addFolder: vi.fn(), removeFolder: onRemoveFolder, delete: vi.fn() }} t={t}
+    />)
+    const workspaceRow = screen.getByRole('treeitem')
+    expect(fireEvent.contextMenu(workspaceRow, { clientX: 48, clientY: 96 })).toBe(false)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(fireEvent.contextMenu(workspaceRow, { clientX: 48, clientY: 96 })).toBe(false)
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: '移除文件夹' }).parentElement as HTMLElement)
+    fireEvent.click(screen.getByRole('menuitem', { name: '/libs/shared' }))
+    expect(onRemoveFolder).toHaveBeenCalledWith('/libs/shared')
+    expect(fireEvent.contextMenu(workspaceRow, { clientX: 48, clientY: 96 })).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+  })
+
+  it('workspace row drag start writes the group key', () => {
+    const start = vi.fn()
+    const end = vi.fn()
+    const group: GroupNode = {
+      key: 'project', workspaceId: wid('project'), cwd: '/projects/project', folders: [], createdAt: 0, label: 'Project',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    render(<ProjectRowItem
+      group={group} onToggle={vi.fn()} onCreate={vi.fn()} drag={{ start, end }} t={t}
+    />)
+    const row = screen.getByRole('treeitem')
+    fireEvent.dragStart(row, { dataTransfer })
+    expect(dataTransfer.effectAllowed).toBe('move')
+    expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'project')
+    expect(start).toHaveBeenCalledOnce()
+    fireEvent.dragEnd(row)
+    expect(end).toHaveBeenCalledOnce()
+  })
+
+  it('copies a session log path without a cwd and disables reveal rows', () => {
+    const writeText = vi.fn(async () => {})
+    const restoreClipboard = installClipboard(writeText)
+    const priorHome = process.env.HOME
+    const priorProfile = process.env.USERPROFILE
+    delete process.env.HOME
+    delete process.env.USERPROFILE
+    try {
+      const node: SessionNode = {
+        id: sid('s-empty'), title: 'Empty', blank: false, running: false,
+        interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0, cwd: '',
+      }
+      render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
+      const sessionRow = screen.getByRole('treeitem')
+      expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+      expect(screen.getByRole('menuitem', { name: '在资源管理器打开' })).toHaveProperty('disabled', true)
+      fireEvent.click(screen.getByRole('menuitem', { name: '复制日志路径' }))
+      expect(writeText).toHaveBeenCalledWith('.dsh/sessions/_no-cwd/s-empty/session.jsonl')
+      fireEvent.click(screen.getByRole('button', { name: '会话“Empty”的操作' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    } finally {
+      if (priorHome === undefined) delete process.env.HOME
+      else process.env.HOME = priorHome
+      if (priorProfile === undefined) delete process.env.USERPROFILE
+      else process.env.USERPROFILE = priorProfile
+      restoreClipboard()
+    }
+  })
+
+  it('copies a session log path for a slash-only cwd', () => {
+    const writeText = vi.fn(async () => {})
+    const restoreClipboard = installClipboard(writeText)
+    process.env.HOME = '/home/u'
+    try {
+      const node: SessionNode = {
+        id: sid('s-root'), title: 'Root', blank: false, running: false,
+        interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0, cwd: '/',
+      }
+      render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
+      expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
+      fireEvent.click(screen.getByRole('menuitem', { name: '复制日志路径' }))
+      expect(writeText).toHaveBeenCalledWith('/home/u/.dsh/sessions/--root--/s-root/session.jsonl')
+    } finally {
+      restoreClipboard()
+    }
   })
 
   it('shows the hover card after the dwell and suppresses it while the row menu is open', () => {

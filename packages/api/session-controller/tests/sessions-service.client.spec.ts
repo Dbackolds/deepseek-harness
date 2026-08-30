@@ -419,6 +419,15 @@ describe('current selection (migrated from ui-layout, arbitrated into the list s
     expect(b.svc.list.getSnapshot().current).toBe('s1') // failed open leaves the selection alone
   })
 
+  it('markUnread restores a Completed reminder on a listed session', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }, { id: 's2' }])
+    b.svc.open(sid('s1'))
+    expect(b.svc.list.getSnapshot().byId[sid('s2')]?.completed).toBeFalsy()
+    b.svc.markUnread(sid('s2'))
+    expect(b.svc.list.getSnapshot().byId[sid('s2')]?.completed).toBe(true)
+  })
+
   it('clear() blanks list.current and the persisted selection', async () => {
     const storage = new Map<string, string>()
     vi.stubGlobal('localStorage', {

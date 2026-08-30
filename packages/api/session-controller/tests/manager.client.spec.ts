@@ -91,6 +91,21 @@ describe('list lifecycle', () => {
     expect(manager.getListSnapshot().items[0]?.updatedAt).toBe(500)
   })
 
+  it('restores a Completed reminder through markUnread', async () => {
+    const api = new FakeApiClient()
+    api.onList = () => Promise.resolve(ok({ items: [summary(S1), summary(S2)] as never[] }))
+    const manager = new SessionManager(fakeRemote(api))
+    await manager.refreshList()
+    manager.select(S1)
+    expect(manager.getListSnapshot().items.find(item => item.sessionId === S2)?.completed).toBe(false)
+
+    manager.markUnread(S2)
+    expect(manager.getListSnapshot().items.find(item => item.sessionId === S2)?.completed).toBe(true)
+    manager.markUnread(S2)
+    expect(manager.getListSnapshot().items.find(item => item.sessionId === S2)?.completed).toBe(true)
+    expect(() => { manager.markUnread('missing' as SessionId) }).toThrow(/unknown session/)
+  })
+
   it('keeps the error in the list snapshot on failure', async () => {
     const api = new FakeApiClient()
     api.onList = () => Promise.resolve(err(new RemoteError('gateway/internal', 'boom', {})))
