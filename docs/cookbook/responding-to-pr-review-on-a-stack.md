@@ -2,7 +2,7 @@
 
 English | [中文](responding-to-pr-review-on-a-stack.zh.md)
 
-Review comments may target several PRs in a dependent stack (`A ← B ← C …`). Keep that chain linked through GitHub's official stacked-PR feature. This guide owns review-fix placement and propagation; the [dsh-merging-stacked-prs](../../.agents/skills/dsh-merging-stacked-prs/SKILL.md) skill owns linkage checks and landing.
+Review comments may target several PRs in a dependent stack (`A ← B ← C …`). Keep that chain linked through GitHub's official stacked-PR feature. This guide owns review-fix placement and propagation; the [opening-a-pull-request cookbook](opening-a-pull-request.md) owns opening, labels, and evidence; the [dsh-merging-stacked-prs](../../.agents/skills/dsh-merging-stacked-prs/SKILL.md) skill owns linkage checks and landing.
 
 ## Ground rules
 

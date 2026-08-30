@@ -58,7 +58,7 @@ The container listens on port 3080. Mount a workspace at `/workspace` and persis
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Maintainers opening a pull request follow the [opening-a-pull-request cookbook](docs/cookbook/opening-a-pull-request.md).
 
 ## Development
 

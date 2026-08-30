@@ -79,7 +79,7 @@ docker compose -f docker/compose.yml up --build
 
 ## 参与贡献
 
-参见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。
+参见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。维护者开 PR（Pull Request）时遵循[开 PR 实操手册](docs/cookbook/opening-a-pull-request.zh.md)。
 
 ## 开发
 

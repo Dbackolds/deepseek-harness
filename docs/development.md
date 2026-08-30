@@ -118,6 +118,10 @@ Apart from the scoped staged-record verification, the hooks intentionally do not
 
 Contributors can opt into the comprehensive local gate set with `pnpm run check:all`. The command is independent of the Git hooks and is not an agent instruction.
 
+### Pull requests
+
+Maintainers opening a pull request follow the [opening-a-pull-request cookbook](cookbook/opening-a-pull-request.md) for Issue citation, labels, same-change evidence, local checks, and landing. Community contributors cannot land in this repository ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+
 ### CI gates
 
 The keyless [CI workflow](../.github/workflows/ci.yml) groups independent gates into broad lanes and runs a smaller compatibility signal across supported Node versions. Artifact consumers wait for one build within their lane. The separate real-API workflow runs `pnpm run test:e2e` with its configured worker bound. See [scripts/run-gates.ts](../scripts/run-gates.ts) and the workflow files for the current gate and job inventory.

@@ -122,6 +122,10 @@ vendor manifest 守卫检查 `vendor/*/src` 下的改动是否连同对应的 `v
 
 贡献者可以选择运行 `pnpm run check:all`，执行全面的本地门禁集。该命令独立于 Git 钩子，也不是对 agent 的指令。
 
+### Pull Request
+
+维护者开 PR（Pull Request）时，按[开 PR 实操手册](cookbook/opening-a-pull-request.zh.md)处理 Issue 引用、标签、同次变更证据、本地检查和落地。社区贡献者不能向本仓库落地（[CONTRIBUTING.md](../CONTRIBUTING.zh.md)）。
+
 ### CI 门禁
 
 keyless [CI 工作流](../.github/workflows/ci.yml) 将独立门禁分组到若干宽粒度 lane，并在受支持的 Node 版本上运行一组较小的兼容性检查。产物消费方在各自 lane 内等待一次 build。单独的真实 API 工作流按其配置的 worker 上限运行 `pnpm run test:e2e`。当前门禁和 job 清单以 [scripts/run-gates.ts](../scripts/run-gates.ts) 和工作流文件为准。
