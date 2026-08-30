@@ -14,7 +14,18 @@ import {
 } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import lefthookPackage from 'lefthook/package.json' with { type: 'json' }
+let lefthookPackage
+try {
+  lefthookPackage = (await import('lefthook/package.json', { with: { type: 'json' } })).default
+} catch (error) {
+  // Production desktop/docker pack installs omit devDependencies. Lefthook is
+  // a local-dev hook installer only, so a missing package must not fail pack.
+  if (error && (error.code === 'ERR_MODULE_NOT_FOUND' || error.code === 'MODULE_NOT_FOUND')) {
+    process.exit(0)
+  }
+  throw error
+}
+
 
 const MINIMUM_GIT = [2, 26, 0]
 const HOOKS_DIRECTORY = 'dsh-hooks'
