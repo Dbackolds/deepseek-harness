@@ -157,7 +157,11 @@ export function apply(ctx: Context): void {
     showWorkspace: async (workspaceId) => { await workspaces.show(workspaceId) },
     addWorkspaceFolder: (workspaceId, path) => workspaces.addFolder(workspaceId, path),
     removeWorkspaceFolder: (workspaceId, path) => workspaces.removeFolder(workspaceId, path),
-    hooks: { directoryFlow: browserFlowSource, connectionGeneration },
+    hooks: {
+      directoryFlow: browserFlowSource,
+      connectionGeneration,
+      sessionOverflowLimit: overflowPolicy.sessionOverflowLimit,
+    },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => workspaces.create(input),

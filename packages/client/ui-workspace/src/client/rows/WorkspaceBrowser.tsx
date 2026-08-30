@@ -882,14 +882,13 @@ function SessionTree({
                                   sessionOverflowLimit,
                                 )
                                 if (visibleLimit === null || overflowStep === null) return
-                                const ordinary = ordinarySessionCount(
-                                  activityLayout === 'folders'
-                                    ? (partitionSessionActivity(group.sessions).find(section => section.bucket === 'history')?.sessions ?? [])
-                                    : partitionLiveIdle(group.sessions).idle,
-                                )
                                 setSessionOverflowByAccount(currentLimits => ({
                                   ...currentLimits,
-                                  [group.key]: nextSessionOverflowLimit(visibleLimit, overflowStep, ordinary),
+                                  [group.key]: nextSessionOverflowLimit(
+                                    visibleLimit,
+                                    overflowStep,
+                                    collapsedHistory.ordinaryCount,
+                                  ),
                                 }))
                               }}
                             >
@@ -940,14 +939,13 @@ function SessionTree({
                               sessionOverflowLimit,
                             )
                             if (visibleLimit === null || overflowStep === null) return
-                            const ordinary = ordinarySessionCount(
-                              activityLayout === 'folders'
-                                ? (partitionSessionActivity(group.sessions).find(section => section.bucket === 'history')?.sessions ?? [])
-                                : partitionLiveIdle(group.sessions).idle,
-                            )
                             setSessionOverflowByAccount(currentLimits => ({
                               ...currentLimits,
-                              [group.key]: nextSessionOverflowLimit(visibleLimit, overflowStep, ordinary),
+                              [group.key]: nextSessionOverflowLimit(
+                                visibleLimit,
+                                overflowStep,
+                                collapsedIdle.ordinaryCount,
+                              ),
                             }))
                           }}
                         >
@@ -1075,14 +1073,13 @@ function SessionTree({
                                       sessionOverflowLimit,
                                     )
                                     if (visibleLimit === null || overflowStep === null) return
-                                    const ordinary = ordinarySessionCount(
-                                      activityLayout === 'folders'
-                                        ? (partitionSessionActivity(group.sessions).find(section => section.bucket === 'history')?.sessions ?? [])
-                                        : partitionLiveIdle(group.sessions).idle,
-                                    )
                                     setSessionOverflowByAccount(currentLimits => ({
                                       ...currentLimits,
-                                      [group.key]: nextSessionOverflowLimit(visibleLimit, overflowStep, ordinary),
+                                      [group.key]: nextSessionOverflowLimit(
+                                        visibleLimit,
+                                        overflowStep,
+                                        collapsedHistory.ordinaryCount,
+                                      ),
                                     }))
                                   }}
                                 >
@@ -1132,14 +1129,13 @@ function SessionTree({
                                   sessionOverflowLimit,
                                 )
                                 if (visibleLimit === null || overflowStep === null) return
-                                const ordinary = ordinarySessionCount(
-                                  activityLayout === 'folders'
-                                    ? (partitionSessionActivity(group.sessions).find(section => section.bucket === 'history')?.sessions ?? [])
-                                    : partitionLiveIdle(group.sessions).idle,
-                                )
                                 setSessionOverflowByAccount(currentLimits => ({
                                   ...currentLimits,
-                                  [group.key]: nextSessionOverflowLimit(visibleLimit, overflowStep, ordinary),
+                                  [group.key]: nextSessionOverflowLimit(
+                                    visibleLimit,
+                                    overflowStep,
+                                    collapsedIdle.ordinaryCount,
+                                  ),
                                 }))
                               }}
                             >
