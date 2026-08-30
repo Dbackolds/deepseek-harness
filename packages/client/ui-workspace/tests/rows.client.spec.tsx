@@ -551,7 +551,7 @@ describe('workspace browser rows', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: '置顶任务' }))
     expect(onPin).toHaveBeenCalledWith(node.id)
     expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
-    fireEvent.click(screen.getByRole('menuitem', { name: '在 Finder 中打开' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '在资源管理器打开' }))
     expect(onReveal).toHaveBeenCalledWith('/projects/project')
     fireEvent.click(screen.getByRole('button', { name: '会话“One”的操作' }))
     const sessionEllipsis = screen.getByRole('menu')

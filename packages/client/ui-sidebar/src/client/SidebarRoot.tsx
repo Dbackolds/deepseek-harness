@@ -31,8 +31,10 @@ import { unreadCompletedCount } from './completed-badge.ts'
 import { setDesktopCompletedUnread } from './desktop-attention.ts'
 import css from './SidebarRoot.module.css'
 
-/** Wide-content unmount delay; matches the 150ms wide-content fade-out. */
-const COLLAPSE_SETTLE_MS = 150
+/** Wide-content unmount delay; matches the AppFrame column slide
+ * (`--ds-transition-duration-slow` = 300ms). Fade finishes earlier; the rail
+ * snaps in only when the track settles so the crossfade does not hitch. */
+const COLLAPSE_SETTLE_MS = 300
 
 /**
  * How long the column's scrollbars stay drawn after the pointer leaves it.

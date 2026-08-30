@@ -33,7 +33,7 @@ The expanded brand row renders `sidebar.brand.mark` and `sidebar.brand.name` as 
 
 ### Collapse behavior
 
-During a live collapse, the expanded content fades out at its current width, the upper controls share one fade and leftward translation into the 56px rail, and the layout's column slide ends the motion. A page that starts collapsed renders the rail statically, and reduced-motion mode disables both transitions. The bottom-pinned `sidebar.settings` control shares the fade timing but has no horizontal translation.
+During a live collapse, the shell holds the expanded content at its current width while it fades out for 150ms and the layout's 300ms column slide runs to the end. The upper controls—the shell toggle, New Session, the New Session sibling list, plus add and search rendered through `sidebar.workspaces`—then share one 150ms fade and 49px leftward translation into the 56px rail; every 36px control box follows the same path to the rail's 10px left inset. The bottom-pinned `sidebar.settings` control shares the fade timing but has no horizontal translation. Expanding remounts wide content with a matching 300ms fade. A page that starts collapsed renders the rail statically, and reduced-motion mode disables both transitions.
 
 ### Scrollbars
 
