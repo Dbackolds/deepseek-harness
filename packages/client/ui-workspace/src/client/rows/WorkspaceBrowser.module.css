@@ -315,9 +315,10 @@
   pointer-events: none;
 }
 
-/* Wide-only content fades back in on expand remount (mirrors the shell). */
+/* Wide-only content fades back in on expand remount (mirrors the shell;
+   matched to the AppFrame 300ms column slide). */
 .wide {
-  animation: wide-in 200ms var(--ds-ease-in-out);
+  animation: wide-in 300ms var(--ds-ease-in-out);
 }
 
 @keyframes wide-in {
