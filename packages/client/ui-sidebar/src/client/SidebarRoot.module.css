@@ -43,35 +43,36 @@
 }
 
 /* Collapse phase 1: the whole frozen-width content fades out in place over
-   150ms; at settle the children unmount/snap to the rail layout. */
+   150ms while the 300ms column slide continues; at the slide settle the
+   children unmount/snap to the rail layout. */
 .fading > * {
   opacity: 0;
   transition: opacity 150ms var(--ds-ease-in-out);
 }
 
-/* Wide-only content fades back in on expand remount. */
+/* Wide-only content fades back in on expand remount, matched to the column
+   slide so the list does not arrive a beat after the track opens. */
 .wide {
-  animation: wide-in 200ms var(--ds-ease-in-out);
+  animation: wide-in 300ms var(--ds-ease-in-out);
 }
 
 @keyframes wide-in {
   from { opacity: 0; }
 }
 
-/* At the 150ms rail settle, the four upper controls enter from the former
-   rail right edge over the remaining 150ms of the AppFrame track transition.
-   The bottom-pinned settings seat shares their opacity timeline but stays
-   horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
-   render stays static. */
+/* After the 300ms slide settle, the four upper controls enter from the former
+   rail right edge over 150ms. The bottom-pinned settings seat shares their
+   opacity timeline but stays horizontally fixed. Only a live collapse gets
+   .railIn; a cold collapsed render stays static. */
 .railIn .iconButton,
 .railIn .newSession,
 .railIn .automationArea,
 .railIn .regionArea {
-  animation: rail-in 150ms var(--ds-ease-in-out) backwards;
+  animation: rail-in 150ms var(--ds-ease-in-out) both;
 }
 
 .railIn .footArea {
-  animation: rail-fade-in 150ms var(--ds-ease-in-out) backwards;
+  animation: rail-fade-in 150ms var(--ds-ease-in-out) both;
 }
 
 @keyframes rail-in {
