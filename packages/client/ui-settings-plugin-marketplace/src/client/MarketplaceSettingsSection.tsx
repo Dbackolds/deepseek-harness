@@ -84,8 +84,6 @@ export interface MarketplaceSettingsSectionInjected {
   setPluginNote: (name: string, note: string, tags: readonly string[]) => Promise<MarketplaceMutationResult>
   catalogUrls: readonly string[]
   setCatalogUrls: (value: readonly string[]) => Promise<void>
-  /** Settings namespaces whose cards are currently registered. */
-  cardKeys: () => readonly string[]
 }
 
 /** Full component props assembled by the Settings slot renderer. */

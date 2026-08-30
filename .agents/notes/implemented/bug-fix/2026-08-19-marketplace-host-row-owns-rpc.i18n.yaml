@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-marketplace-host-row-owns-rpc.md
-2026-08-19-marketplace-host-row-owns-rpc.md: 2524491996e1d1a1f5514cd15ef0eefd3d25ab37
-2026-08-19-marketplace-host-row-owns-rpc.zh.md: 418f8f8625c13fdea3040f4a6360d0347c74cfce
+2026-08-19-marketplace-host-row-owns-rpc.md: f03a6624e5dd7cd6a2dbe693db52981b3abb52d7
+2026-08-19-marketplace-host-row-owns-rpc.zh.md: 32f9c544e2e59c0ce6f0f919ba4ce8cc4b39e2b7

@@ -1,6 +1,7 @@
 # Agent Note: The shipped Plugins settings row yields to the in-box marketplace
 
 Status: implemented
+Archived: 2026-08-30
 
 English | [中文](2026-08-16-plugins-settings-marketplace-yield.zh.md)
 

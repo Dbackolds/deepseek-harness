@@ -1,6 +1,7 @@
 # Agent Note: 随附的插件设置行向随安装内置市场让位
 
 Status: implemented
+Archived: 2026-08-30
 
 [English](2026-08-16-plugins-settings-marketplace-yield.md) | 中文
 

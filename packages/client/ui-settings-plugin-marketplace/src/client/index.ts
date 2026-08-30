@@ -24,17 +24,10 @@ import {
   statusFromMarketplaceSettings, storedRebootNonce, type ReloadStatus,
 } from './reload-status.ts'
 import { en, zh } from './locales.ts'
-import './slot-contract.ts'
 
 export const NS = 'settings.pluginMarketplace'
 export { MARKETPLACE_CLIENT_PACKAGE } from './reload-page.ts'
 export const inject = ['slots', 'locale', 'settingsScope', 'connection', 'loader', 'modules', 'commandUi', 'sessions']
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    pluginMarketplaceUi?: true
-  }
-}
 
 type RpcResult<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } }
 
@@ -53,7 +46,6 @@ function marketplaceCaller(ctx: ClientContext): <T>(method: string, body?: unkno
 
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'plugin-marketplace: dictionaries')
-  ctx.provide('pluginMarketplaceUi', true)
   const t = ctx.locale.bind(NS)
   const catalogScope = ctx.settingsScope.bind<{
     catalogUrls: string[]
@@ -191,8 +183,6 @@ export function apply(ctx: ClientContext): void {
     setPluginNote: async (name, note, tags) => mutation(await callMarketplace('setPluginNote', { name, note, tags })),
     catalogUrls: catalogScope.getSnapshot().value?.catalogUrls ?? [],
     setCatalogUrls: async (value) => { await catalogScope.set('catalogUrls', value) },
-    cardKeys: () => ctx.slots.entries('settings.plugin.item').flatMap(entry =>
-      entry.options.key === undefined ? [] : [entry.options.key]),
   })
 
   const commandCard = (props: {
@@ -254,7 +244,6 @@ export function apply(ctx: ClientContext): void {
   // The Plugins settings page composes feature-owned tabs under
   // `settings.plugins.tab`; registering a competing `settings.section` with
   // the shell's own id would be dropped by the first-wins section dedupe.
-  console.error('[market-debug] applying; registering discover tab')
   // Synchronous registration: the lazy slots.inject callback never fired in
   // the packaged composition, so the Discover tab silently never appeared.
   ctx.effect(() => ctx.slots.register({

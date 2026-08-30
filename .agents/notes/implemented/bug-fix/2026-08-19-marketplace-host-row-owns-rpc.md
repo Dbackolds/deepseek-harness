@@ -20,7 +20,7 @@ The web bundle mounts two Loader rows for the in-box marketplace: Host `plugin-m
 
 ## Consequences
 
-A checkout that already built `lib/index.js` still fails until this split is present. The Host row specifier is a published export; overlays that copied the old package-entry name for `plugin-marketplace` keep colliding. The web-app roster keeps both rows: `plugin-marketplace` names `./host`, and `ui-settings-plugin-marketplace` names the package entry. The browser row is not a second RPC owner. Dropping it leaves Settings → Plugins on the generic configuration cards, because `pluginMarketplaceUi` never mounts.
+A checkout that already built `lib/index.js` still fails until this split is present. The Host row specifier is a published export; overlays that copied the old package-entry name for `plugin-marketplace` keep colliding. The web-app roster keeps both rows: `plugin-marketplace` names `./host`, and `ui-settings-plugin-marketplace` names the package entry. The browser row is not a second RPC owner. Dropping it leaves Settings → Plugins on the generic configuration cards, because the marketplace's Discover and Installed tabs never register.
 
 ## Testing
 
