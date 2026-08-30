@@ -207,7 +207,7 @@ export class SessionCommandController {
     const agent = await this.resolveAgent(request.sessionId)
     if (typeof agent.continueFromSurface !== 'function') {
       throw new RemoteError(
-        'rewrite-unavailable',
+        'session/rewrite-unavailable',
         `session "${request.sessionId}" cannot rewrite a settled prompt`,
         { sessionId: request.sessionId },
       )
@@ -216,7 +216,7 @@ export class SessionCommandController {
     await agent.whenIdle()
     if (agent.status !== 'idle') {
       throw new RemoteError(
-        'rewrite-unavailable',
+        'session/rewrite-unavailable',
         `session "${request.sessionId}" is still running`,
         { sessionId: request.sessionId },
       )
@@ -232,7 +232,7 @@ export class SessionCommandController {
       || startIdx === -1
       || endSeq === undefined) {
       throw new RemoteError(
-        'rewrite-unavailable',
+        'session/rewrite-unavailable',
         `session "${request.sessionId}" has no editable user prompt at event ${String(request.atSeq)}`,
         { sessionId: request.sessionId },
       )
@@ -286,7 +286,7 @@ export class SessionCommandController {
           throw new RemoteError('session/attachment-invalid', error.message, { reason: error.code })
         }
         throw new RemoteError(
-          'rewrite-unavailable',
+          'session/rewrite-unavailable',
           `failed to rewrite session "${request.sessionId}": ${String(error)}`,
           { sessionId: request.sessionId },
         )
@@ -309,7 +309,7 @@ export class SessionCommandController {
       canonical = await realpath(request.path)
       if (!(await stat(canonical)).isDirectory()) {
         throw new RemoteError(
-          'workspace-invalid-path',
+          'session/workspace-invalid-path',
           `cannot rehome session "${request.sessionId}" to "${request.path}": path is not a directory`,
           { path: request.path },
         )
@@ -317,7 +317,7 @@ export class SessionCommandController {
     } catch (error: unknown) {
       if (remoteErrorOf(error) !== undefined) throw error
       throw new RemoteError(
-        'workspace-invalid-path',
+        'session/workspace-invalid-path',
         `cannot rehome session "${request.sessionId}" to "${request.path}": ${error instanceof Error ? error.message : String(error)}`,
         { path: request.path },
       )
@@ -325,7 +325,7 @@ export class SessionCommandController {
     const noRepo = await ensureNoRepoDirectory()
     if (canonical === noRepo) {
       throw new RemoteError(
-        'session-rehome-no-repo',
+        'session/rehome-no-repo',
         `cannot rehome session "${request.sessionId}" back to No Repo`,
         { path: canonical },
       )
@@ -336,7 +336,7 @@ export class SessionCommandController {
       target = existing ?? await this.ctx.workspaceRegistry.create(canonical)
     } catch (error: unknown) {
       throw new RemoteError(
-        'workspace-invalid-path',
+        'session/workspace-invalid-path',
         `cannot rehome session "${request.sessionId}" to "${request.path}": ${error instanceof Error ? error.message : String(error)}`,
         { path: request.path },
       )

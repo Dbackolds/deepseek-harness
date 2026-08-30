@@ -79,6 +79,7 @@ import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
 import { registerPiAiFlows } from './login.ts'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'

@@ -21,6 +21,7 @@ export type { PluginInventorySnapshot } from '@deepseek-ai/dsh-host-plugin-inven
 export type {} from '@deepseek-ai/dsh-agent-presets/remote'
 export type {} from '@deepseek-ai/dsh-commands/remote'
 export type {} from '@deepseek-ai/dsh-api-settings-controller/remote'
+export type {} from '@deepseek-ai/dsh-api-settings-controller/types'
 export type {} from '@deepseek-ai/dsh-goal/remote'
 export type {} from '@deepseek-ai/dsh-llm/remote'
 export type {} from '@deepseek-ai/dsh-host-plugin-inventory/remote'

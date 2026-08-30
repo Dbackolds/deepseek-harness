@@ -7,6 +7,9 @@
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { z as zCore } from 'zod'
+
+type ZodIssue = zCore.core.$ZodIssue
 
 export type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 export type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
@@ -37,6 +40,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'workspace/invalid-path': { readonly path: string }
     /** Another Workspace already uses the requested name. */
     'workspace/name-conflict': { readonly name: string }
+    /** The Workspace id is not registered. */
+    'workspace/not-found': { readonly workspaceId: WorkspaceId }
     /** The Session or its anchor is not in the Workspace's manual order. */
     'workspace/move-invalid': {
       readonly workspaceId: WorkspaceId
@@ -54,6 +59,21 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/not-found': { readonly sessionId: SessionId }
     'workspace/folder-conflict': { readonly path: string; readonly workspaceId: WorkspaceId }
   }
+}
+
+/** Stable Workspace failure details returned by unary methods. */
+export interface WorkspaceErrorDetailsMap {
+  'bad-request': Record<never, never>
+  'workspace-invalid-path': { readonly path: string }
+  'workspace-not-found': { readonly workspaceId: WorkspaceId }
+  'workspace-name-conflict': { readonly name: string }
+  'workspace-move-invalid': {
+    readonly workspaceId: WorkspaceId
+    readonly sessionId: SessionId
+    readonly beforeSessionId?: SessionId
+  }
+  'session-not-found': { readonly sessionId: SessionId }
+  'workspace-folder-conflict': { readonly path: string; readonly workspaceId: WorkspaceId }
 }
 
 /** Workspace business failure returned without throwing a carrier error. */

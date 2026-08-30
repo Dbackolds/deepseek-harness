@@ -176,3 +176,10 @@ export interface AutomationDeleteValue {
   readonly id: string
   readonly deleted: boolean
 }
+
+
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface RemoteErrorDetailsMap {
+    'automation/rejected': { readonly automationCode: string }
+  }
+}

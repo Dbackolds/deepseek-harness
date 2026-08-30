@@ -172,7 +172,7 @@ export class WorkspaceCommands {
       await this.ctx.workspaceRegistry.unarchiveSession(request.sessionId)
     } catch (error) {
       if (!(error instanceof WorkspaceUnknownSessionError)) throw error
-      throw failure('session-not-found', error.message, { sessionId: request.sessionId })
+      throw new RemoteError('session/not-found', error.message, { sessionId: request.sessionId }, { cause: error })
     }
     return { archivedSessionIds: [...this.ctx.workspaceRegistry.archivedSessionIds] }
   }
@@ -187,8 +187,8 @@ export class WorkspaceCommands {
     const workspace = this.requireWorkspace(workspaceId)
     const owner = await this.ctx.workspaceRegistry.resolveByPath(path).catch(() => undefined)
     if (owner !== undefined && owner.id !== workspace.id) {
-      throw failure(
-        'workspace-folder-conflict',
+      throw new RemoteError(
+        'workspace/folder-conflict',
         `path "${path}" is already a folder of workspace "${owner.id}"`,
         { path, workspaceId: owner.id },
       )
@@ -196,10 +196,11 @@ export class WorkspaceCommands {
     try {
       await workspace.addFolder(path)
     } catch (error) {
-      throw failure(
-        'workspace-invalid-path',
+      throw new RemoteError(
+        'workspace/invalid-path',
         `cannot add folder "${path}" to workspace "${workspaceId}": ${errorMessage(error)}`,
-        { path, workspaceId },
+        { path },
+        { cause: error },
       )
     }
     return { workspace: workspaceView(workspace) }
@@ -216,10 +217,11 @@ export class WorkspaceCommands {
     try {
       await workspace.removeFolder(path)
     } catch (error) {
-      throw failure(
-        'workspace-invalid-path',
+      throw new RemoteError(
+        'workspace/invalid-path',
         `cannot remove folder "${path}" from workspace "${workspaceId}": ${errorMessage(error)}`,
-        { path, workspaceId },
+        { path },
+        { cause: error },
       )
     }
     return { workspace: workspaceView(workspace) }
@@ -250,7 +252,6 @@ export class WorkspaceCommands {
   }
 
   private requireWorkspace(workspaceId: WorkspaceId): Workspace {
-
     const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(workspaceId))
     if (workspace === undefined) throw workspaceNotFound(workspaceId)
     return workspace

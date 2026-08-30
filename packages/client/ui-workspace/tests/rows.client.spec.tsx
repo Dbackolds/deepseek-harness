@@ -101,7 +101,7 @@ describe('workspace browser rows', () => {
     const onOpen = vi.fn()
     const result: SearchResultNode = {
       id: sid('scheduled-result'), title: 'Scheduled result', workspace: 'Project',
-      running: false, runningSubagentCount: 0, completed: false, hasActiveSchedule: true,
+      running: false, runningSubagentCount: 0, completed: false, interrupted: false, hasActiveSchedule: true,
     }
     render(<SearchResultItem result={result} currentId={undefined} onOpen={onOpen} t={t} />)
 
@@ -173,7 +173,7 @@ describe('workspace browser rows', () => {
     const onOpen = vi.fn()
     const node: SessionNode = {
       id: sid('scheduled-session'), title: 'Scheduled Session', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: true, updatedAt: 0,
+      runningSubagentCount: 0, completed: false, interrupted: false, hasActiveSchedule: true, updatedAt: 0,
     }
     const view = render(
       <SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
@@ -582,10 +582,8 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('menu')).toBeNull()
 
     const onPin = vi.fn()
-    const onReveal = vi.fn()
-    const onSplit = vi.fn()
     rerender(<SessionNodeItem node={{ ...node, cwd: '/projects/project' }} currentId={undefined} now={0} onOpen={onOpen}
-      onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} onPin={onPin} onSplit={onSplit} onReveal={onReveal} t={t} />)
+      onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} onPin={onPin} t={t} />)
     const sessionRow = screen.getByRole('treeitem')
     expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
     expect(onOpen).not.toHaveBeenCalled()
@@ -594,17 +592,10 @@ describe('workspace browser rows', () => {
     expect(sessionContext.style.top).toBe('144px')
     expect(screen.getByRole('menuitem', { name: '置顶任务' })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: '取消置顶' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: '取消置顶' })).toBeNull()
-    expect(screen.getByRole('menuitem', { name: '在分屏打开' })).toHaveProperty('disabled', false)
-    expect(screen.getByRole('menuitem', { name: '复制日志路径' })).toHaveProperty('disabled', false)
-    fireEvent.click(screen.getByRole('menuitem', { name: '在分屏打开' }))
-    expect(onSplit).toHaveBeenCalledWith(node.id)
-    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
+    expect(screen.queryByRole('menuitem', { name: '在分屏打开' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: '在资源管理器打开' })).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: '置顶任务' }))
     expect(onPin).toHaveBeenCalledWith(node.id)
-    expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
-    fireEvent.click(screen.getByRole('menuitem', { name: '在资源管理器打开' }))
-    expect(onReveal).toHaveBeenCalledWith('/projects/project')
     fireEvent.click(screen.getByRole('button', { name: '会话“One”的操作' }))
     const sessionEllipsis = screen.getByRole('menu')
     expect(sessionEllipsis).not.toBe(sessionContext)

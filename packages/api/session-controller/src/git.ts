@@ -6,7 +6,7 @@ import {
   checkoutSessionBranch, createSessionBranch, describeSessionGit, GitWorktreeError,
   sessionWorkingDirectory,
 } from '@deepseek-ai/dsh-sandbox-policy'
-import { Remote, TypertRemoteFailure, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { WorkspaceId as brandWorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { ApiSessionAgentController } from './agent.ts'
@@ -37,36 +37,16 @@ function gitFailure(error: unknown, workspacePath: string, branch?: string): nev
   if (error instanceof GitWorktreeError) {
     switch (error.code) {
       case 'not-a-repository':
-        throw new TypertRemoteFailure({
-          code: 'git-not-a-repository',
-          message: error.message,
-          details: { path: workspacePath },
-        })
+        throw new RemoteError('session/git-not-a-repository', error.message, { path: workspacePath })
       case 'branch-invalid':
-        throw new TypertRemoteFailure({
-          code: 'git-branch-invalid',
-          message: error.message,
-          details: { branch: branch ?? '' },
-        })
+        throw new RemoteError('session/git-branch-invalid', error.message, { branch: branch ?? '' })
       case 'branch-exists':
-        throw new TypertRemoteFailure({
-          code: 'git-branch-exists',
-          message: error.message,
-          details: { branch: branch ?? '' },
-        })
+        throw new RemoteError('session/git-branch-exists', error.message, { branch: branch ?? '' })
       default:
-        throw new TypertRemoteFailure({
-          code: 'git-failed',
-          message: error.message,
-          details: { reason: error.message },
-        })
+        throw new RemoteError('session/git-failed', error.message, { reason: error.message })
     }
   }
-  throw new TypertRemoteFailure({
-    code: 'git-failed',
-    message: error instanceof Error ? error.message : String(error),
-    details: { reason: String(error) },
-  })
+  throw new RemoteError('session/git-failed', error instanceof Error ? error.message : String(error), { reason: String(error) })
 }
 
 /** Host service backing `ctx.remote.git`. */
@@ -87,19 +67,11 @@ export class SessionGitController extends TypertRemoteService {
         describeSessionGit(workspace.path, session).then(viewOf))
     }
     if (request.workspaceId === undefined) {
-      throw new TypertRemoteFailure({
-        code: 'bad-request',
-        message: 'git.describe requires sessionId or workspaceId',
-        details: {},
-      })
+      throw new RemoteError('gateway/bad-request', 'git.describe requires sessionId or workspaceId', {})
     }
     const workspace = this.ctx.workspaceRegistry.get(brandWorkspaceId(request.workspaceId))
     if (workspace === undefined) {
-      throw new TypertRemoteFailure({
-        code: 'workspace-not-found',
-        message: 'workspace "' + String(request.workspaceId) + '" not found',
-        details: { workspaceId: request.workspaceId },
-      })
+      throw new RemoteError('workspace/not-found', 'workspace "' + String(request.workspaceId) + '" not found', { workspaceId: request.workspaceId })
     }
     try {
       return viewOf(await describeSessionGit(workspace.path))
@@ -127,29 +99,17 @@ export class SessionGitController extends TypertRemoteService {
   ): Promise<SessionGitView> {
     const resolved = await this.agents.resolveAgent(sessionId)
     if ('error' in resolved) {
-      throw new TypertRemoteFailure({
-        code: resolved.error.code,
-        message: resolved.error.message,
-        details: resolved.error.details,
-      })
+      throw new RemoteError(resolved.error.code, resolved.error.message, resolved.error.details)
     }
     const session = resolved.agent.session
     const cwd = sessionWorkingDirectory(session)
     if (cwd === undefined) {
-      throw new TypertRemoteFailure({
-        code: 'internal',
-        message: 'session "' + String(sessionId) + '" has no project cwd',
-        details: {},
-      })
+      throw new RemoteError('gateway/internal', 'session "' + String(sessionId) + '" has no project cwd', {})
     }
     const workspace = this.ctx.workspaceRegistry.list().find(item => item.sessionIds.includes(session.id))
       ?? this.ctx.workspaceRegistry.list().find(item => item.path === cwd)
     if (workspace === undefined) {
-      throw new TypertRemoteFailure({
-        code: 'workspace-not-found',
-        message: 'session "' + String(sessionId) + '" is not accounted by a workspace',
-        details: { workspaceId: '' as WorkspaceId },
-      })
+      throw new RemoteError('workspace/not-found', 'session "' + String(sessionId) + '" is not accounted by a workspace', { workspaceId: '' as WorkspaceId })
     }
     try {
       return await run(session, workspace)

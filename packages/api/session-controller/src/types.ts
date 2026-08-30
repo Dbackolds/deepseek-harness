@@ -196,16 +196,22 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/agent-busy': { readonly reason: string }
     'session/invalid-time-zone': { readonly value: string }
     'session/workspace-attach-failed': { readonly sessionId: SessionId; readonly workspaceId: string }
+    'session/workspace-not-found': { readonly workspaceId: string }
     'agent-preset/conflict': {
       readonly sessionId: SessionId
       readonly requestedPreset: string
       readonly existingPreset?: string
     }
+    'session/agent-preset-not-found': { readonly agentPreset: string; readonly available: readonly string[] }
+    'session/agent-preset-invalid': { readonly agentPreset: string; readonly reason: string }
     'session/attachment-invalid': { readonly reason: string }
     'session/queue-item-not-found': { readonly itemId: MessageId }
     'session/steer-unavailable': { readonly itemId: MessageId }
     'session/title-invalid': { readonly sessionId: SessionId }
     'session/fork-unavailable': { readonly sessionId: SessionId }
+    'session/rewrite-unavailable': { readonly sessionId: SessionId }
+    'session/rehome-no-repo': { readonly path: string }
+    'session/workspace-invalid-path': { readonly path: string }
     'subagent/not-found': {
       readonly parentSessionId: SessionId
       readonly childSessionId: SessionId
@@ -215,22 +221,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       readonly childSessionId: SessionId
       readonly reason: 'corrupt' | 'unsupported' | 'unavailable'
     }
-    'session/invalid-time-zone': { readonly value: string }
-    'session/workspace-attach-failed': { readonly sessionId: SessionId; readonly workspaceId: string }
-    'session/workspace-not-found': { readonly workspaceId: string }
-    'session/agent-preset-conflict': {
-      readonly sessionId: SessionId
-      readonly requestedPreset: string
-      readonly existingPreset?: string
-    }
-    'session/agent-preset-not-found': { readonly agentPreset: string; readonly available: readonly string[] }
-    'session/agent-preset-invalid': { readonly agentPreset: string; readonly reason: string }
-    'session/agent-busy': { readonly reason: string }
-    'session/rewrite-unavailable': { readonly sessionId: SessionId }
-    'session/rehome-no-repo': { readonly path: string }
-    'session/workspace-invalid-path': { readonly path: string }
     'subagent/unauthorized': { readonly childSessionId: SessionId }
-    'gateway/internal': Record<never, never>
+    'session/git-not-a-repository': { readonly path: string }
+    'session/git-branch-invalid': { readonly branch: string }
+    'session/git-branch-exists': { readonly branch: string }
+    'session/git-failed': { readonly reason: string }
   }
 }
 

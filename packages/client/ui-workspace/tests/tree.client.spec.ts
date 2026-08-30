@@ -538,11 +538,11 @@ describe('sessionActivityBucket', () => {
 describe('partitionLiveIdle', () => {
   it('keeps live work above idle rows and preserves incoming order on each side', () => {
     const sessions = [
-      { id: sid('done'), title: 'done', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: true, updatedAt: 4 },
-      { id: sid('live'), title: 'live', blank: false, running: true, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 3 },
-      { id: sid('crash'), title: 'crash', blank: false, running: false, interrupted: true, runningSubagentCount: 0, completed: false, updatedAt: 2 },
-      { id: sid('wait'), title: 'wait', blank: false, running: false, interrupted: false, runningSubagentCount: 1, completed: false, updatedAt: 1.5 },
-      { id: sid('read'), title: 'read', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 1 },
+      { id: sid('done'), title: 'done', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: true, hasActiveSchedule: false, updatedAt: 4 },
+      { id: sid('live'), title: 'live', blank: false, running: true, interrupted: false, runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 3 },
+      { id: sid('crash'), title: 'crash', blank: false, running: false, interrupted: true, runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 2 },
+      { id: sid('wait'), title: 'wait', blank: false, running: false, interrupted: false, runningSubagentCount: 1, completed: false, hasActiveSchedule: false, updatedAt: 1.5 },
+      { id: sid('read'), title: 'read', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 1 },
     ]
     expect(partitionLiveIdle(sessions)).toEqual({
       live: [sessions[1], sessions[3]],
@@ -555,10 +555,10 @@ describe('partitionLiveIdle', () => {
 describe('partitionSessionActivity', () => {
   it('keeps Completed, Running, Abnormal, and History in that order and preserves empty sections', () => {
     const sessions = [
-      { id: sid('done'), title: 'done', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: true, updatedAt: 4 },
-      { id: sid('live'), title: 'live', blank: false, running: true, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 3 },
-      { id: sid('crash'), title: 'crash', blank: false, running: false, interrupted: true, runningSubagentCount: 0, completed: false, updatedAt: 2 },
-      { id: sid('read'), title: 'read', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 1 },
+      { id: sid('done'), title: 'done', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: true, hasActiveSchedule: false, updatedAt: 4 },
+      { id: sid('live'), title: 'live', blank: false, running: true, interrupted: false, runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 3 },
+      { id: sid('crash'), title: 'crash', blank: false, running: false, interrupted: true, runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 2 },
+      { id: sid('read'), title: 'read', blank: false, running: false, interrupted: false, runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 1 },
     ]
     expect(partitionSessionActivity(sessions).map(section => [section.bucket, section.sessions.map(row => row.id)])).toEqual([
       ['pinned', []],

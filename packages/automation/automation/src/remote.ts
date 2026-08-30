@@ -1,7 +1,7 @@
 /** Host Remote owner for Host-owned Automation rules. */
 
 import { Context } from '@deepseek-ai/cordis'
-import { Remote, TypertRemoteFailure, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { AutomationInputError, AutomationPersistenceError } from './errors.ts'
 import type {
   AutomationDeleteValue,
@@ -10,7 +10,7 @@ import type {
   AutomationRunId as AutomationRunIdType,
   AutomationRuleValue,
   AutomationRunValue,
-  AutomationRuleView, AutomationRunRecord, CreateAutomationRuleRequest, UpdateAutomationRuleRequest,
+  AutomationRunRecord, CreateAutomationRuleRequest, UpdateAutomationRuleRequest,
 } from './types.ts'
 
 function AutomationRuleId(id: string): AutomationRuleIdType {
@@ -29,24 +29,12 @@ declare module '@deepseek-ai/cordis' {
 
 function automationFailure(error: unknown): never {
   if (error instanceof AutomationInputError) {
-    throw new TypertRemoteFailure({
-      code: 'automation-rejected',
-      message: error.message,
-      details: { automationCode: error.code },
-    })
+    throw new RemoteError('automation/rejected', error.message, { automationCode: error.code })
   }
   if (error instanceof AutomationPersistenceError) {
-    throw new TypertRemoteFailure({
-      code: 'automation-rejected',
-      message: error.message,
-      details: { automationCode: 'persistence_uncertain' },
-    })
+    throw new RemoteError('automation/rejected', error.message, { automationCode: 'persistence_uncertain' })
   }
-  throw new TypertRemoteFailure({
-    code: 'automation-rejected',
-    message: error instanceof Error ? error.message : String(error),
-    details: { automationCode: 'internal_error' },
-  })
+  throw new RemoteError('automation/rejected', error instanceof Error ? error.message : String(error), { automationCode: 'internal_error' })
 }
 
 /** Host service backing ctx.remote.automation. */

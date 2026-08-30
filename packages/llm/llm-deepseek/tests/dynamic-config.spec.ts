@@ -1,3 +1,4 @@
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { access, mkdtemp, rm, writeFile } from 'node:fs/promises'

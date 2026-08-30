@@ -42,6 +42,17 @@ function parseSettingsNamespace(value: string): SettingsNamespace {
   return value as SettingsNamespace
 }
 
+/**
+ * Brand a raw string as a {@link SettingsNamespace}.
+ * @param value - candidate namespace; lowercase kebab-case, as in plugin short names.
+ * @returns the branded namespace.
+ */
+export function settingsNamespace<Value extends string>(
+  value: SettingsNamespaceInput<Value>,
+): SettingsNamespace {
+  return parseSettingsNamespace(value)
+}
+
 /** When a namespace's changes take effect for its owner. */
 export type SettingsApplies = 'live' | 'restart'
 
@@ -888,6 +899,42 @@ export interface SettingsSectionHooks<T> {
    * @param value - the resolved section, schema-valid by construction.
    */
   validate?: (value: T) => void
+}
+
+export function installSettingsSection<T>(
+  ctx: Context,
+  ns: SettingsNamespace,
+  schema: z<T>,
+  entry: T,
+  hooks: SettingsSectionHooks<T>,
+): void {
+  ctx.inject(['settings'], (sctx) => {
+    const scope = sctx.settings.register(ns, schema, {
+      base: entry,
+      ...hooks.validate === undefined ? {} : { validate: hooks.validate },
+    })
+    hooks.setSource(() => scope.get())
+    sctx.effect(() => () => {
+      // This disposer runs for two different reasons. A settings provider
+      // detaching leaves the consumer running, so it must fall back to its
+      // composition entry and re-judge what it derived. The consumer's own
+      // unload runs it too — and there `onChange` would re-register routes
+      // and touch resources the teardown is releasing, so the fallback is
+      // pointless and the notification actively harmful.
+      if (isUnloading(ctx)) return
+      hooks.setSource(() => entry)
+      hooks.onChange()
+    })
+    hooks.onChange()
+    scope.watch(() => {
+      // A stored change landing while the consumer unloads reaches the watcher
+      // before the registration is released, and `onChange` is exactly as
+      // harmful here as in the disposer above: it re-registers routes against
+      // a fiber whose resources are being let go.
+      if (isUnloading(ctx)) return
+      hooks.onChange()
+    })
+  })
 }
 
 export default SettingsProvider

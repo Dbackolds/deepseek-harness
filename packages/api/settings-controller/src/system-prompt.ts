@@ -1,7 +1,7 @@
 /** Host Remote owner for the deployment-wide system-prompt registry listing. */
 
 import { Context } from '@deepseek-ai/cordis'
-import { Remote, TypertRemoteFailure, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 
 import type { SystemPromptListValue } from './types.ts'
 
@@ -21,11 +21,11 @@ export class SystemPromptCatalog extends TypertRemoteService {
   list(): SystemPromptListValue {
     const systemPrompt = this.ctx.get('systemPrompt')
     if (systemPrompt === undefined) {
-      throw new TypertRemoteFailure({
-        code: 'internal',
-        message: 'system-prompt registry is absent: this composition does not mount @deepseek-ai/dsh-system-prompt',
-        details: {},
-      })
+      throw new RemoteError(
+        'gateway/internal',
+        'system-prompt registry is absent: this composition does not mount @deepseek-ai/dsh-system-prompt',
+        {},
+      )
     }
     return { sections: systemPrompt.listSections() }
   }

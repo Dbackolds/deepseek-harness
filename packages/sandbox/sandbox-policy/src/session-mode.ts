@@ -18,7 +18,7 @@
  * @module dsh-sandbox-policy/session-mode
  */
 
-import type { Session } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -52,4 +52,19 @@ export const SANDBOX_MODES: readonly SandboxMode[] = ['read-only', 'workspace-wr
  */
 export function setSandboxMode(session: Session, mode: SandboxMode): void {
   session.append('sandbox/mode', { mode })
+}
+
+/**
+ * The session's sandbox-mode override: the last `sandbox/mode` event in the
+ * log, or undefined when the session never switched (callers apply the
+ * deployment default).
+ * @param events - session events in log order (other event types are skipped).
+ * @returns the mode of the last switch event, or undefined without one.
+ */
+export function effectiveSandboxMode(events: readonly SessionEvent[]): SandboxMode | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index] as SessionEvent
+    if (event.type === 'sandbox/mode') return event.data.mode
+  }
+  return undefined
 }

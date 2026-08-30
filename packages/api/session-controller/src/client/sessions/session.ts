@@ -234,7 +234,7 @@ export class Session implements SessionFace {
         parentSessionId: this.address.parentSessionId,
         childSessionId: this.address.childSessionId,
         mode: 'continuable',
-        content,
+        content: content as never,
         clientTimeZone: resolvedClientTimeZone(),
       }, signal)
       result = routed.ok ? { ok: true, value: { accepted: true } } : routed
@@ -325,7 +325,7 @@ export class Session implements SessionFace {
       result = {
         ok: false,
         error: new RemoteError(
-          'rewrite-unavailable',
+          'session/rewrite-unavailable',
           'subagent conversations cannot rewrite settled prompts',
           { sessionId: this.sessionId },
         ),

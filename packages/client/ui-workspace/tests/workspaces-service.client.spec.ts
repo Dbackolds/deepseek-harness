@@ -65,10 +65,12 @@ function workspaceState(
   items: WorkspaceSnapshot['items'] = [],
   archivedSessionIds: readonly SessionId[] = [],
   phase: WorkspaceSnapshot['phase'] = 'ready',
+  hiddenWorkspaceIds: readonly WorkspaceId[] = [],
 ): WorkspaceSnapshot {
   return {
     items,
     archivedSessionIds,
+    hiddenWorkspaceIds,
     phase,
     state: phase === 'ready' ? 'idle' : 'loading',
     error: null,
@@ -146,6 +148,57 @@ class FakeWorkspaces implements IWorkspaces {
     this.archiveCalls.push(sessionId)
     return this.onArchive(sessionId)
   }
+
+  async unarchiveSession(sessionId: SessionId): Promise<void> {
+    this.list.update(state => ({
+      ...state,
+      archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),
+    }))
+  }
+
+  async addFolder(workspaceId: WorkspaceId, path: string): Promise<WorkspaceView> {
+    const current = this.list.getSnapshot().items.find(item => item.workspaceId === workspaceId)
+    if (current === undefined) throw new Error(`unknown workspace ${workspaceId}`)
+    const next = {
+      ...current,
+      folders: [...(current.folders ?? []), path],
+    }
+    this.list.update(state => ({
+      ...state,
+      items: state.items.map(item => item.workspaceId === workspaceId ? next : item),
+    }))
+    return next
+  }
+
+  async removeFolder(workspaceId: WorkspaceId, path: string): Promise<WorkspaceView> {
+    const current = this.list.getSnapshot().items.find(item => item.workspaceId === workspaceId)
+    if (current === undefined) throw new Error(`unknown workspace ${workspaceId}`)
+    const next = {
+      ...current,
+      folders: (current.folders ?? []).filter(folder => folder !== path),
+    }
+    this.list.update(state => ({
+      ...state,
+      items: state.items.map(item => item.workspaceId === workspaceId ? next : item),
+    }))
+    return next
+  }
+
+  async hide(workspaceId: WorkspaceId): Promise<void> {
+    this.list.update(state => ({
+      ...state,
+      hiddenWorkspaceIds: state.hiddenWorkspaceIds.includes(workspaceId)
+        ? state.hiddenWorkspaceIds
+        : [...state.hiddenWorkspaceIds, workspaceId],
+    }))
+  }
+
+  async show(workspaceId: WorkspaceId): Promise<void> {
+    this.list.update(state => ({
+      ...state,
+      hiddenWorkspaceIds: state.hiddenWorkspaceIds.filter(id => id !== workspaceId),
+    }))
+  }
 }
 
 const listing: DirectoryListing = {
@@ -166,8 +219,8 @@ class FakeDirectoryPicker {
     () => Promise.resolve({ ok: true, value: '/home/u/new' })
 
   readonly remote: ClientRemote['directoryPicker'] = {
-    pick: () => this.record('pick', {}, this.onPick()),
-    list: (path?: string) => this.record('list', { path }, this.onList()),
+    pick: (_signal?: AbortSignal) => this.record('pick', {}, this.onPick()),
+    list: (path: string | undefined, _signal?: AbortSignal) => this.record('list', { path }, this.onList()),
     createDirectory: (path: string, name: string) =>
       this.record('createDirectory', { path, name }, this.onCreateDirectory()),
   }

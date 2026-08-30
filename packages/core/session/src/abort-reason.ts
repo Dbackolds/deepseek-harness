@@ -4,7 +4,7 @@
  * @module @deepseek-ai/dsh-session/abort-reason
  */
 
-import { assertNever } from '@deepseek-ai/dsh-llm'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { AgentCancelCause } from './types.ts'
 
 /**
