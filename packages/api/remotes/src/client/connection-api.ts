@@ -12,7 +12,6 @@ import type {
   ModelCatalogModel,
   ModelProviderGroup,
 } from '@deepseek-ai/dsh-client-connection/client'
-import { RpcId } from '@deepseek-ai/dsh-client-connection/client'
 import type { LlmConfigurableProvider, LlmProviderInfo } from '@deepseek-ai/dsh-llm/types'
 import type { SettingsDescribeValue, SettingsNamespaceView } from '@deepseek-ai/dsh-settings/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -20,7 +19,9 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 
 /** One correlation id shared by every compatibility envelope. Callers read `result` only. */
-const COMPAT_RPC_ID = RpcId('connection-api')
+const COMPAT_RPC_ID = 'connection-api' as ConnectionApi['llm'] extends {
+  providers(): Promise<{ readonly rpcId: infer Id }>
+} ? Id : never
 
 /** Wrap a Remote result in the historical unary envelope. */
 function wrap<T>(result: RemoteResult<T>): { readonly rpcId: typeof COMPAT_RPC_ID; readonly result: RemoteResult<T> } {

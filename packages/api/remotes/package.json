@@ -36,7 +36,11 @@
   "dsh": {
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-api-gateway"
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-connection"
+      ],
+      "external": [
+        "@deepseek-ai/dsh-client-connection/client"
       ],
       "platform": "web",
       "immediately": true
