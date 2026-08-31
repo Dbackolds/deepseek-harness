@@ -96,8 +96,9 @@ describe('workspace browser rows', () => {
     fireEvent.click(row)
     expect(onOpen).toHaveBeenCalledWith(result.id)
 
+    const { snippet: _omittedSnippet, ...ungroupedBase } = result
     const ungrouped: SearchResultNode = {
-      ...result, id: sid('ungrouped'), workspace: '', snippet: undefined,
+      ...ungroupedBase, id: sid('ungrouped'), workspace: '',
     }
     render(<SearchResultItem result={ungrouped} currentId={undefined} onOpen={onOpen} t={t} />)
     expect(screen.getByText('聊天')).toBeTruthy()
@@ -399,7 +400,7 @@ describe('workspace browser rows', () => {
 
   it('workspace hover card shows its details and copies the full directory path', async () => {
     vi.useFakeTimers()
-    const writeText = vi.fn(async () => {})
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => {})
     const restoreClipboard = installClipboard(writeText)
     try {
       const group: GroupNode = {
@@ -426,7 +427,7 @@ describe('workspace browser rows', () => {
 
   it('workspace hover card shows a POSIX home descendant as ~ and still copies the full path', async () => {
     vi.useFakeTimers()
-    const writeText = vi.fn(async () => {})
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => {})
     const restoreClipboard = installClipboard(writeText)
     try {
       const group: GroupNode = {
@@ -614,7 +615,7 @@ describe('workspace browser rows', () => {
     expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
     fireEvent.click(screen.getByRole('menuitem', { name: '在资源管理器打开' }))
     expect(onReveal).toHaveBeenCalledWith('/projects/project')
-    const writeText = vi.fn(async () => {})
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => {})
     const restoreClipboard = installClipboard(writeText)
     try {
       expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
@@ -625,7 +626,9 @@ describe('workspace browser rows', () => {
       expect(writeText).toHaveBeenCalledWith('/projects/project')
       expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
       fireEvent.click(screen.getByRole('menuitem', { name: '复制日志路径' }))
-      expect(String(writeText.mock.calls.at(-1)?.[0])).toContain('session.jsonl')
+      const copied = writeText.mock.calls.at(-1)
+      expect(copied).toBeDefined()
+      expect(String(copied?.[0] ?? '')).toContain('session.jsonl')
       expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
       fireEvent.click(screen.getByRole('menuitem', { name: '复制会话 ID' }))
       expect(writeText).toHaveBeenCalledWith(node.id)
@@ -717,7 +720,7 @@ describe('workspace browser rows', () => {
   })
 
   it('copies a session log path without a cwd and disables reveal rows', () => {
-    const writeText = vi.fn(async () => {})
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => {})
     const restoreClipboard = installClipboard(writeText)
     const priorHome = process.env.HOME
     const priorProfile = process.env.USERPROFILE
@@ -726,7 +729,8 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s-empty'), title: 'Empty', blank: false, running: false,
-        interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0, cwd: '',
+        interrupted: false, runningSubagentCount: 0, completed: false,
+        hasActiveSchedule: false, updatedAt: 0, cwd: '',
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
@@ -747,13 +751,14 @@ describe('workspace browser rows', () => {
   })
 
   it('copies a session log path for a slash-only cwd', () => {
-    const writeText = vi.fn(async () => {})
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => {})
     const restoreClipboard = installClipboard(writeText)
     process.env.HOME = '/home/u'
     try {
       const node: SessionNode = {
         id: sid('s-root'), title: 'Root', blank: false, running: false,
-        interrupted: false, runningSubagentCount: 0, completed: false, updatedAt: 0, cwd: '/',
+        interrupted: false, runningSubagentCount: 0, completed: false,
+        hasActiveSchedule: false, updatedAt: 0, cwd: '/',
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)

@@ -325,7 +325,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(again).toMatchObject({
       ok: false,
-      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
     await ctx.fiber.dispose()
   })
@@ -348,7 +348,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
     const turnEnd = source.events.find(event => event.type === 'turn/end')?.seq
     if (turnEnd === undefined) throw new Error('turn/end missing')
@@ -359,7 +359,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(notUser).toMatchObject({
       ok: false,
-      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
     await ctx.fiber.dispose()
   })
@@ -375,7 +375,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'invalid-time-zone', details: { value: 'CST' } },
+      error: { code: 'session/invalid-time-zone', details: { value: 'CST' } },
     })
     await ctx.fiber.dispose()
   })
@@ -390,7 +390,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
     await ctx.fiber.dispose()
   })
@@ -413,7 +413,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
     await ctx.fiber.dispose()
   })
@@ -441,7 +441,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
     await ctx.fiber.dispose()
   })
@@ -508,7 +508,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
     await ctx.fiber.dispose()
   })
@@ -532,7 +532,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'rewrite-unavailable', details: { sessionId: source.id } },
+      error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
     await ctx.fiber.dispose()
   })

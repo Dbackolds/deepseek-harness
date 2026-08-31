@@ -161,6 +161,14 @@ export class FixtureSession implements SessionFace {
   }
 
   /**
+   * Fail-loud stub; supply `loadThrough` on the fixture's session face to exercise it.
+   * @returns never — always throws.
+   */
+  loadThrough(): never {
+    throw new Error(`test session "${this.sessionId}": loadThrough is not stubbed — supply it on the fixture's session face`)
+  }
+
+  /**
    * Fail-loud stub; supply `rename` on the fixture's session face to exercise it.
    * @returns never — always throws.
    */
@@ -198,7 +206,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'search' | 'fork' | 'rewrite'
+      | 'clear' | 'refresh' | 'search' | 'fork' | 'rewrite' | 'markUnread'
     args: unknown[]
   }[] = []
 
@@ -441,6 +449,15 @@ export class TestSessions implements ISessions {
       draft.current = id
       draft.currentAddress = undefined
     })
+  }
+
+  /**
+   * Restore the Completed reminder so a listed Session returns to that section.
+   * @param id - listed Session id.
+   */
+  markUnread(id: SessionId): void {
+    this.calls.push({ method: 'markUnread', args: [id] })
+    this.require(id)
   }
 
   /** Open an existing fixture through its catalog address. */

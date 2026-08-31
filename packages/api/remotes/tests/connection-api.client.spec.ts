@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { LlmConfigurableProvider, LlmProviderInfo } from '@deepseek-ai/dsh-llm/types'
 import type { SettingsDescribeValue } from '@deepseek-ai/dsh-settings/types'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
   catalogFromDescribe,
   createConnectionApi,
@@ -16,7 +16,7 @@ function ok<T>(value: T): RemoteResult<T> {
 }
 
 function fail(message: string): RemoteResult<never> {
-  return { ok: false, error: { code: 'internal', message, details: {} } }
+  return { ok: false, error: new RemoteError('gateway/internal', message, {}) }
 }
 
 const registered: LlmProviderInfo[] = [

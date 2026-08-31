@@ -6,7 +6,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
-import { AttachmentError, admitEncodedImages, admitEncodedVideos } from '@deepseek-ai/dsh-attachment'
+import { AttachmentError, admitPromptContent } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import {
   ReasoningEffortId, createUserMessage, freezeMessage,
@@ -269,7 +269,7 @@ export class SessionCommandController {
             )
           }
         }
-        const durable = await durablePromptContent(this.ctx, request.content)
+        const durable = await admitPromptContent(this.ctx.attachments, request.content)
         const merged = mergeQueueEditText(target.data.content, durable)
         const message: UserMessage = createUserMessage({
           content: merged ?? durable,
@@ -517,7 +517,7 @@ export class SessionCommandController {
             )
           }
         }
-        const content = await durablePromptContent(this.ctx, request.content)
+        const content = await admitPromptContent(this.ctx.attachments, request.content)
         const message: UserMessage = createUserMessage({ content, source })
         if (request.mode === 'steer') agent.steer(message)
         else agent.followup(message)
@@ -695,28 +695,6 @@ export class SessionCommandController {
     }
     return undefined
   }
-}
-
-async function durablePromptContent(
-  ctx: Context,
-  content: readonly SessionPromptRequest['content'][number][],
-): Promise<ContentBlock[]> {
-  if (content.every(part => part.type === 'text')) {
-    return content.map(part => ({ type: 'text', text: part.text }))
-  }
-  const images = content.filter(part => part.type === 'image')
-  const videos = content.filter(part => part.type === 'video')
-  const [imageRefs, videoRefs] = await Promise.all([
-    images.length > 0 ? admitEncodedImages(ctx.attachments, images) : [],
-    videos.length > 0 ? admitEncodedVideos(ctx.attachments, videos) : [],
-  ])
-  let nextImage = 0
-  let nextVideo = 0
-  return content.map((part): ContentBlock => part.type === 'text'
-    ? { type: 'text', text: part.text }
-    : part.type === 'image'
-      ? { type: 'image', attachment: imageRefs[nextImage++] as ImageAttachmentRef }
-      : { type: 'video', attachment: videoRefs[nextVideo++] as VideoAttachmentRef })
 }
 
 function mergeQueueEditText(

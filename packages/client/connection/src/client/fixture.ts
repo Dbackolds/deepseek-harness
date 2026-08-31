@@ -315,6 +315,7 @@ type WorkspaceFollowFrame =
     readonly value: {
       readonly items: readonly WorkspaceView[]
       readonly archivedSessionIds: readonly SessionId[]
+      readonly hiddenWorkspaceIds: readonly WorkspaceId[]
     }
   }
   | { readonly type: 'upsert'; readonly workspace: WorkspaceView }
@@ -1913,6 +1914,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   // Registry-global archive set mirroring the host: archived sessions keep
   // their workspace accounting slot and only grouping surfaces hide them.
   const archivedSessionIds: SessionId[] = []
+  const hiddenWorkspaceIds: WorkspaceId[] = []
   const workspaceSnapshot = (workspace: FixtureWorkspace): WorkspaceView => ({
     ...workspace,
     sessionIds: [...workspace.sessionIds],
@@ -1922,6 +1924,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     value: {
       items: workspaces.map(workspaceSnapshot),
       archivedSessionIds: [...archivedSessionIds],
+      hiddenWorkspaceIds: [...hiddenWorkspaceIds],
     },
   })
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
-import { admitEncodedImages, admitEncodedVideos } from '@deepseek-ai/dsh-attachment'
+import { admitEncodedImages, admitEncodedVideos, admitPromptContent } from '@deepseek-ai/dsh-attachment'
 import type {
   ImageAttachmentRef,
   SaveImageAttachment,
@@ -119,5 +119,58 @@ describe('admitEncodedVideos', () => {
     const refused = Object.assign(new Error('Video batch exceeds the configured video-count limit.'), { code: 'TOO_MANY_VIDEOS' })
     mocks.saveVideos.mockRejectedValueOnce(refused)
     await expect(admitEncodedVideos(store, [{ mediaType: 'video/mp4', data: MP4 }])).rejects.toBe(refused)
+  })
+})
+
+describe('admitPromptContent', () => {
+  it('converts text-only prompts without touching the attachment store', async () => {
+    const store = {
+      saveImages: () => { throw new Error('text-only prompts must not reach the store') },
+      saveVideos: () => { throw new Error('text-only prompts must not reach the store') },
+    }
+    await expect(admitPromptContent(store as unknown as AttachmentStore, [
+      { type: 'text', text: 'hello' },
+    ])).resolves.toEqual([{ type: 'text', text: 'hello' }])
+  })
+
+  it('replaces image parts with admitted references in part order', async () => {
+    const { store } = storeOf()
+    await expect(admitPromptContent(store, [
+      { type: 'image', mediaType: 'image/png', data: 'AQ==' },
+      { type: 'text', text: 'between' },
+      { type: 'image', mediaType: 'image/png', data: 'Ag==' },
+    ])).resolves.toEqual([
+      { type: 'image', attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+      { type: 'text', text: 'between' },
+      { type: 'image', attachment: { attachmentId: 'att-2', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+    ])
+  })
+
+  it('replaces video-only parts without touching the image store', async () => {
+    const { store, mocks } = storeOf()
+    await expect(admitPromptContent(store, [
+      { type: 'text', text: 'clip' },
+      { type: 'video', mediaType: 'video/mp4', data: MP4, name: 'clip.mp4' },
+    ])).resolves.toEqual([
+      { type: 'text', text: 'clip' },
+      { type: 'video', attachment: { attachmentId: 'att-1', mediaType: 'video/mp4', bytes: 3, name: 'clip.mp4' } },
+    ])
+    expect(mocks.saveImages).not.toHaveBeenCalled()
+    expect(mocks.saveVideos).toHaveBeenCalledTimes(1)
+  })
+
+  it('replaces mixed image and video parts with admitted references in part order', async () => {
+    const { store, mocks } = storeOf()
+    await expect(admitPromptContent(store, [
+      { type: 'image', mediaType: 'image/png', data: 'AQ==' },
+      { type: 'text', text: 'between' },
+      { type: 'video', mediaType: 'video/mp4', data: MP4, name: 'clip.mp4' },
+    ])).resolves.toEqual([
+      { type: 'image', attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+      { type: 'text', text: 'between' },
+      { type: 'video', attachment: { attachmentId: 'att-1', mediaType: 'video/mp4', bytes: 3, name: 'clip.mp4' } },
+    ])
+    expect(mocks.saveImages).toHaveBeenCalledTimes(1)
+    expect(mocks.saveVideos).toHaveBeenCalledTimes(1)
   })
 })

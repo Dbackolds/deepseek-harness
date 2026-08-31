@@ -171,6 +171,21 @@
   bottom: -7px;
 }
 
+.thumbs {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.thumb {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-base);
+  object-fit: cover;
+}
+
 .preview,
 .editor {
   flex: 1 1 auto;

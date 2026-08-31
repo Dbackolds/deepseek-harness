@@ -510,6 +510,9 @@
     "testing/2026-07-26-execa-for-test-subprocess-plumbing.zh.md": "sha256:8a24bdc8376373d7a97f65cefc07078824bf918d6a9934056a025ecfafe8634b",
     "testing/2026-08-12-required-python-runtime-pull-request-ci.i18n.yaml": "sha256:741e7e58e5e8a9c82d901c4a16a70cea9bd256eac0e94179b5a24a231bb9fe1f",
     "testing/2026-08-12-required-python-runtime-pull-request-ci.md": "sha256:1f1273d7a550667533e29c76efd148aebf57581a91729c877b44a5e43a52d9ad",
-    "testing/2026-08-12-required-python-runtime-pull-request-ci.zh.md": "sha256:6b9bf126c6b83d9b21e135d38df677c0d5623168b4353c6ddb706f76762c2193"
+    "testing/2026-08-12-required-python-runtime-pull-request-ci.zh.md": "sha256:6b9bf126c6b83d9b21e135d38df677c0d5623168b4353c6ddb706f76762c2193",
+    "architecture/2026-08-18-sqlite-physical-chunk-row-compression.i18n.yaml": "sha256:42bce930799cb511e9fb245dec5e26efd78bdab4c9b75f7393e37b40fbee4d10",
+    "architecture/2026-08-18-sqlite-physical-chunk-row-compression.md": "sha256:4fe241f1b272278d9f3ca1a4431971220e1fa54411df043826ef6f59225bf949",
+    "architecture/2026-08-18-sqlite-physical-chunk-row-compression.zh.md": "sha256:73178c9ec5abf571680d8facfb145cbadc1efbb2e67e3f039747c2f9cf4bb730"
   }
 }
