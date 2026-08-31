@@ -14,14 +14,15 @@ import subagentsRemote from '@deepseek-ai/dsh-subagent/remote'
 import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
 import workspaceRemote from '@deepseek-ai/dsh-api-workspace-controller/remote'
 import automationRemote from '@deepseek-ai/dsh-automation/remote'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
+import { installConnectionApi } from './connection-api.ts'
 
 export type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 export type { PluginInventorySnapshot } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 export type {} from '@deepseek-ai/dsh-agent-presets/remote'
 export type {} from '@deepseek-ai/dsh-commands/remote'
 export type {} from '@deepseek-ai/dsh-api-settings-controller/remote'
-export type {} from '@deepseek-ai/dsh-api-settings-controller/types'
 export type {} from '@deepseek-ai/dsh-goal/remote'
 export type {} from '@deepseek-ai/dsh-llm/remote'
 export type {} from '@deepseek-ai/dsh-host-plugin-inventory/remote'
@@ -59,7 +60,7 @@ export type {} from '@deepseek-ai/dsh-api-session-controller/types'
 export type {
   ConnectionHandle, ConnectionSinks, ContentBlock,
   MessageId,
-  RpcId, RpcRequest, RpcResponse, RpcResult, SessionId,
+  RpcError, RpcId, RpcRequest, RpcResponse, RpcResult, SessionId,
   StreamChunk,
 } from '@deepseek-ai/dsh-client-connection/client'
 export type {} from '@deepseek-ai/dsh-api-gateway/client'
@@ -102,6 +103,10 @@ export type {
   DynamicCordisUndefineReceipt,
   RequestRunOutcome,
 } from '@deepseek-ai/dsh-cordis-host-runner/types'
+// The JSON vocabulary those payloads are built from, re-exported for the same
+// reason: a Client contribution names what it sends without importing a Host
+// package, and this assembly is where both planes legitimately meet.
+export type { JsonValue } from '@deepseek-ai/dsh-session/types'
 // Credential state vocabulary for the credentials namespace (values never ride it).
 export type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
 // Redacted namespace vocabulary for the settings namespace (secrets never ride
@@ -111,7 +116,7 @@ export type {
 } from '@deepseek-ai/dsh-settings/types'
 // Provider registry and discovery vocabulary for the llm namespace.
 export type {
-  LlmConfigurableProvider, LlmDiscoveredModel,
+  LlmConfigurableProvider, LlmDiscoveredModel, LlmModelDiscoveryError,
   LlmModelDiscoveryRequest, LlmProviderInfo,
 } from '@deepseek-ai/dsh-llm/types'
 // Reference-discovery result vocabulary for the fileReferences and
@@ -119,14 +124,21 @@ export type {
 export type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/types'
 export type { SessionReferenceMentionCandidate } from '@deepseek-ai/dsh-session-reference/types'
 
-// The Remote failure vocabulary, re-exported so business packages keep naming
-// this assembly alone. Types only: a value export would make spec imports load
-// this module's owner /remote artifacts; specs take RemoteError from
-// dsh-client-test-runtime instead.
-export type {
-  RemoteErrorCode, RemoteErrorDetailsMap, RemoteFailure, RemoteResult,
-} from '@deepseek-ai/dsh-typert-protocol'
-export type { RemoteHostFacts } from '@deepseek-ai/dsh-api-gateway/client'
+/** Failure vocabulary exposed by the assembled Client data layer. */
+export type ClientFailure =
+  | import('@deepseek-ai/dsh-client-connection/client').RpcError
+  | import('@deepseek-ai/dsh-agent-presets/types').AgentPresetError
+  | import('@deepseek-ai/dsh-api-session-controller/types').SessionError
+  | import('@deepseek-ai/dsh-api-settings-controller/types').CredentialError
+  | import('@deepseek-ai/dsh-api-settings-controller/types').SettingsError
+  | import('@deepseek-ai/dsh-llm/types').LlmModelDiscoveryError
+  | import('@deepseek-ai/dsh-subagent/client').SubagentControlError
+  | import('@deepseek-ai/dsh-api-workspace-controller/types').WorkspaceError
+
+/** Success or failure returned by Client operations spanning both API families. */
+export type ClientResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: ClientFailure }
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -157,9 +169,12 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
     for (const dispose of disposers.reverse()) await dispose()
     throw error
   }
+  const connection = ctx.get('connection') as ConnectionHandle | undefined
+  const uninstallApi = connection === undefined ? undefined : installConnectionApi(connection, ctx.remote)
   // Unwound in reverse mount order, so a namespace never outlives one mounted
   // after it.
   return async () => {
+    uninstallApi?.()
     for (const dispose of disposers.reverse()) await dispose()
   }
 }

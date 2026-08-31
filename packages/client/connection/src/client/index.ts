@@ -9,12 +9,13 @@ import {
   type ConnectionGeneration,
   type ConnectionGenerationSource,
   type ConnectionSinks,
-  type ConnectionState,
 } from './connection.ts'
 import { createFixtureConnectionRpc } from './fixture.ts'
 import { createWebConnectionRpc, type RpcFetch, type RpcStreamOpen } from './rpc.ts'
 import { isLoopbackHostname } from '../loopback-hostname.ts'
-import type { ClientConnectionRpc } from '../rpc.ts'
+import type { JsonValue } from '@deepseek-ai/dsh-session/types'
+import type { SettingsDescribeValue, SettingsNamespaceView } from '@deepseek-ai/dsh-settings/types'
+import type { ClientConnectionRpc, RpcResponse } from '../rpc.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -30,7 +31,7 @@ declare module '@deepseek-ai/cordis' {
 // ---- Browser-safe protocol and shared value re-exports ----
 export type {
   MessageId,
-  RpcRequest, RpcResponse, RpcResult,
+  RpcRequest, RpcResponse, RpcResult, RpcError, RpcErrorCode,
   ClientRequest, ServerResponse, RpcMessage,
   SessionId, SessionEvent, ContentBlock, StreamChunk,
 } from './api.ts'
@@ -54,19 +55,101 @@ export type {
 } from '../rpc.ts'
 export type { RpcFetch } from './rpc.ts'
 
+/**
+ * One configurable provider row on the historical `llm.providers` face.
+ * Settings plugins that still call `connection.api` consume this view.
+ */
+export interface ConfigurableProviderView {
+  /** Provider route key. */
+  provider: string
+  /** Human-readable provider name. */
+  displayName: string
+  /** User-settings namespace that owns this route's profile, when known. */
+  settingsNs: string
+  /** Whether the route is currently registered. */
+  active: boolean
+}
+
+/** One model entry inside a historical `llm.models` provider group. */
+export interface ModelCatalogModel {
+  /** Model id accepted by the route. */
+  id: string
+  /** Human-readable model name. */
+  name: string
+}
+
+/** One provider group on the historical `llm.models` catalog. */
+export interface ModelProviderGroup {
+  /** Provider route key. */
+  id: string
+  /** Human-readable provider name. */
+  name: string
+  /** Models advertised for this route. */
+  models: readonly ModelCatalogModel[]
+}
+
+/** Non-fatal lookup failure retained by the historical `llm.models` catalog. */
+export interface ModelCatalogFailure {
+  /** Provider route that failed. */
+  id: string
+  /** Human-readable provider name. */
+  name: string
+  /** Failure text. */
+  message: string
+}
+
+/**
+ * Historical unary API used by Client plugins compiled against `connection.api`.
+ * Current code uses `ctx.remote`; this face is a compatibility projection.
+ */
+export interface ConnectionApi {
+  /** LLM directory used by auxiliary-model settings pages. */
+  readonly llm: {
+    /**
+     * List every configurable provider plus live/dormant state.
+     * @param _args - unused historical payload.
+     * @returns wrapped provider directory.
+     */
+    providers(_args?: object): Promise<RpcResponse<{ providers: ConfigurableProviderView[] }>>
+    /**
+     * List advertised models grouped by live provider.
+     * @param _args - unused historical payload.
+     * @returns wrapped catalog groups and lookup failures.
+     */
+    models(_args?: object): Promise<RpcResponse<{
+      groups: ModelProviderGroup[]
+      failures: ModelCatalogFailure[]
+    }>>
+  }
+  /** Settings document used by auxiliary-model settings pages. */
+  readonly settings: {
+    /**
+     * Read every redacted namespace.
+     * @param _args - unused historical payload.
+     * @returns wrapped settings descriptor.
+     */
+    describe(_args?: object): Promise<RpcResponse<SettingsDescribeValue>>
+    /**
+     * Merge one namespace patch.
+     * @param payload - namespace, patch object, and optional revision.
+     * @returns wrapped namespace view after the write.
+     */
+    update(payload: {
+      ns: string
+      patch: Record<string, JsonValue>
+      expectedRevision?: number
+    }): Promise<RpcResponse<SettingsNamespaceView>>
+  }
+}
+
+/** Historical name for {@link ConnectionApi}. */
+export type IApiClient = ConnectionApi
+
 /** Observable identity and Host facts for the active connection generation. */
 export interface ConnectionGenerationState {
   /** Active generation, or undefined before readiness and while reconnecting. */
   getSnapshot(): ConnectionGeneration | undefined
   /** Subscribe to generation establishment, replacement, and loss. */
-  subscribe(listener: () => void): () => void
-}
-
-/** Observable recovery lifecycle of the owned Connection loop. */
-export interface ConnectionStateSource {
-  /** Current state, or undefined before the first connection outcome. */
-  getSnapshot(): ConnectionState | undefined
-  /** Subscribe to state changes. */
   subscribe(listener: () => void): () => void
 }
 
@@ -120,12 +203,13 @@ export interface ConnectionHandle {
   readonly isLoopback: boolean
   /** Current Remote event generation and the Host facts carried by its opening frame. */
   readonly generation: ConnectionGenerationState
-  /** Current recovery lifecycle for connection-specific consumers. */
-  readonly state: ConnectionStateSource
   /** Generic logical RPC channels over the same Connection transport. */
   readonly rpc: ClientConnectionRpc
-  /** Reset retry progression and replace the current attempt immediately. */
-  reconnect(): void
+  /**
+   * Compatibility unary API for plugins that still read `connection.api`.
+   * API Remotes installs it after `llm` and `settings` namespaces mount.
+   */
+  api?: ConnectionApi
   /**
    * Register the sole source defining Host generations. The source reports
    * ready only after its incremental listeners are attached.
@@ -137,44 +221,16 @@ export interface ConnectionHandle {
    * Start the connect/reconnect loop with the consumer's state callbacks.
    * API Gateway owns the loop; a second call throws.
    * @param sinks - connection-state callbacks.
-   * @param config - reconnect timing tunables.
-   * @returns lifecycle controls for the loop.
+   * @param config - reconnect/backoff tunables.
+   * @returns stop handle for the loop.
    */
-  start(sinks: ConnectionSinks, config?: ConnectionConfig): ConnectionLoop
-}
-
-/** Controls retained by the sole owner of a running connection loop. */
-export interface ConnectionLoop {
-  /** Stop the loop and withdraw its active generation. */
-  stop(): void
+  start(sinks: ConnectionSinks, config?: ConnectionConfig): { stop(): void }
 }
 
 interface ConnectionOwner {
   readonly token: object
   readonly source: ConnectionGenerationSource
   readonly controller: ConnectionController
-  readonly stopNetworkWatch: () => void
-}
-
-interface BrowserNetworkTarget {
-  readonly navigator?: { readonly onLine?: boolean }
-  addEventListener(type: 'online' | 'offline', listener: () => void): void
-  removeEventListener(type: 'online' | 'offline', listener: () => void): void
-}
-
-function watchBrowserNetwork(controller: ConnectionController): () => void {
-  const browser = (globalThis as { readonly window?: BrowserNetworkTarget }).window
-  const initiallyAvailable = browser?.navigator?.onLine
-  if (browser === undefined || initiallyAvailable === undefined) return () => {}
-  const online = (): void => { controller.setNetworkAvailable(true) }
-  const offline = (): void => { controller.setNetworkAvailable(false) }
-  controller.setNetworkAvailable(initiallyAvailable)
-  browser.addEventListener('online', online)
-  browser.addEventListener('offline', offline)
-  return () => {
-    browser.removeEventListener('online', online)
-    browser.removeEventListener('offline', offline)
-  }
 }
 
 /**
@@ -191,9 +247,7 @@ export function apply(ctx: Context): void {
   let owner: ConnectionOwner | undefined
   let generationId = 0
   let generation: ConnectionGeneration | undefined
-  let state: ConnectionState | undefined
   const generationListeners = new Set<() => void>()
-  const stateListeners = new Set<() => void>()
   const publishGeneration = (next: ConnectionGeneration | undefined): void => {
     if (Object.is(generation, next)) return
     generation = next
@@ -205,24 +259,11 @@ export function apply(ctx: Context): void {
       }
     }
   }
-  const publishState = (next: ConnectionState | undefined): void => {
-    if (state === next) return
-    state = next
-    for (const listener of [...stateListeners]) {
-      try {
-        listener()
-      } catch (error) {
-        console.error('[connection] state listener threw:', error)
-      }
-    }
-  }
   const releaseOwner = (current: ConnectionOwner): void => {
     if (owner !== current) return
     owner = undefined
-    current.stopNetworkWatch()
     current.controller.stop()
     publishGeneration(undefined)
-    publishState(undefined)
   }
   const handle: ConnectionHandle = {
     isLoopback: transport?.ownsHost === true || pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
@@ -233,17 +274,7 @@ export function apply(ctx: Context): void {
         return () => { generationListeners.delete(listener) }
       },
     },
-    state: {
-      getSnapshot: () => state,
-      subscribe: (listener) => {
-        stateListeners.add(listener)
-        return () => { stateListeners.delete(listener) }
-      },
-    },
     rpc,
-    reconnect() {
-      owner?.controller.reconnect()
-    },
     registerGenerationSource(source) {
       if (generationSource !== undefined) {
         throw new Error('connection: a generation source is already registered')
@@ -271,15 +302,14 @@ export function apply(ctx: Context): void {
           sinks.onConnected?.(host)
         },
         onStateChange: (state) => {
-          if (state !== 'connected') {
+          if (state === 'reconnecting') {
             publishGeneration(undefined)
           }
           if (!ownsGeneration()) return
-          publishState(state)
           sinks.onStateChange?.(state)
         },
       }, config ?? {})
-      const current = { token, source, controller, stopNetworkWatch: watchBrowserNetwork(controller) }
+      const current = { token, source, controller }
       owner = current
       controller.start()
       return {
