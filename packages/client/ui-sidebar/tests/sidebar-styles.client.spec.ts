@@ -78,6 +78,20 @@ describe('SidebarRoot.module.css', () => {
     expect(css).toContain('.root :global(button[data-dsh-ssh-entry])')
   })
 
+  it('hides injected sibling labels and keeps their glyphs in the 36px rail box', () => {
+    expect(css).toContain(
+      '.collapsed :global(button[data-dsh-mnemon-entry] [class*="entryLabel"])',
+    )
+    expect(css).toContain(
+      '.collapsed :global(button[data-dsh-mnemon-entry] svg)',
+    )
+    expect(declarations('.collapsed :global(button[data-dsh-mnemon-entry] svg)')?.get('width')).toBe('18px')
+    expect(declarations('.collapsed :global(button[data-dsh-mnemon-entry] svg)')?.get('height')).toBe('18px')
+    expect(
+      declarations('.collapsed :global(button[data-dsh-mnemon-entry] > span:first-child)')?.get('width'),
+    ).toBe('18px')
+  })
+
   it('keeps the slotted brand row at the full artwork height', () => {
     expect(declarations('.brandIdentity')?.get('height')).toBe('24px')
     expect(declarations('.brandName')?.get('height')).toBe('24px')

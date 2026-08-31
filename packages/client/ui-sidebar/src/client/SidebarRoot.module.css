@@ -389,8 +389,34 @@
 .collapsed :global(button[data-dsh-mnemon-entry] > span:last-child:not(:only-child)),
 .collapsed :global(button[data-dsh-taskboard-entry] > span:last-child:not(:only-child)),
 .collapsed :global(button[data-dsh-ssh-entry] > span:last-child:not(:only-child)),
+.collapsed :global(button[data-dsh-mnemon-entry] [class*="entryLabel"]),
+.collapsed :global(button[data-dsh-taskboard-entry] [class*="entryLabel"]),
+.collapsed :global(button[data-dsh-ssh-entry] [class*="entryLabel"]),
 .collapsed .automationArea :global(button > span:last-child:not(:only-child)) {
   display: none;
+}
+
+/* Keep injected sibling glyphs inside the 36px rail box. Third-party
+   entries still size their own SVG; the box and overflow match New Session. */
+.collapsed :global(button[data-dsh-mnemon-entry] > span:first-child),
+.collapsed :global(button[data-dsh-taskboard-entry] > span:first-child),
+.collapsed :global(button[data-dsh-ssh-entry] > span:first-child) {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+}
+
+.collapsed :global(button[data-dsh-mnemon-entry] svg),
+.collapsed :global(button[data-dsh-taskboard-entry] svg),
+.collapsed :global(button[data-dsh-ssh-entry] svg) {
+  display: block;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
 }
 
 /* Region seat: always mounted so the foot never moves. Its trailing margin
