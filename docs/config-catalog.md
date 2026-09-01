@@ -451,6 +451,29 @@ export interface Config {
 
 Source: [`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-update"></a>
+
+## `@deepseek-ai/dsh-client-ui-update`
+
+Requires: `connection` · `settings`
+
+```ts config-catalog
+/** Plugin config, validated by the same-named schemastery schema. */
+export interface Config {
+  /** GitHub `owner/repo` whose Releases feed is polled. */
+  repo?: string
+  /** Release channel; `auto` reads `DSH_PRODUCT_CHANNEL`. */
+  channel?: ProductChannelConfig
+  /** Gap between GitHub polls in milliseconds. */
+  checkIntervalMs?: number
+}
+
+/** Plugin config: `auto` defers to `DSH_PRODUCT_CHANNEL`. */
+export type ProductChannelConfig = typeof PRODUCT_CHANNEL_CONFIGS[number]
+```
+
+Source: [`packages/client/ui-update/src/index.ts:54`](../packages/client/ui-update/src/index.ts)
+
 <a id="deepseek-aidsh-code-runtime-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-code-runtime-worker-thread`

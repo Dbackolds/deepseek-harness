@@ -4,8 +4,8 @@
 export const zh = {
   title: '产品更新',
   description: '向 GitHub Releases 查询是否有更新的 dsh 或桌面端版本。查询不会下载或安装任何内容。',
-  currentVersion: '当前版本',
-  lastChecked: '上次检查',
+  currentVersion: '当前版本：{version}',
+  lastChecked: '上次检查：{time}',
   neverChecked: '尚未检查',
   checkNow: '立即检查',
   checking: '正在检查…',
@@ -28,8 +28,8 @@ export type ProductUpdateLocaleKey = keyof typeof zh
 export const en = {
   title: 'Product updates',
   description: 'Checks GitHub Releases for a newer dsh or desktop build. Checking does not download or install anything.',
-  currentVersion: 'Installed version',
-  lastChecked: 'Last checked',
+  currentVersion: 'Installed version: {version}',
+  lastChecked: 'Last checked: {time}',
   neverChecked: 'Not checked yet',
   checkNow: 'Check now',
   checking: 'Checking…',

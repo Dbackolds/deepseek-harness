@@ -1,0 +1,38 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "files": [
+    "src/index.ts",
+    "src/invariant.ts",
+    "src/rpc.ts",
+    "src/rpc-channel.ts",
+    "src/checker.ts",
+    "src/channel.ts",
+    "src/releases.ts",
+    "src/semver.ts",
+    "src/github-url.ts",
+    "src/product-version.ts",
+    "src/update-settings.ts"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../runtime-diagnostics/invariants"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../connection/tsconfig.host.json"
+    }
+  ]
+}

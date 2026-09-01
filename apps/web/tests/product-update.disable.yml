@@ -1,0 +1,6 @@
+# Web e2e must not poll GitHub on every scenario boot. The shipped ui-update
+# row stays in the Web bundle; this overlay disables it after that layer.
+# settings-chrome re-enables the row with an invalid repo so the General
+# Settings golden can pin REAL-composition evidence without a network call.
+- id: ui-update
+  disabled: true

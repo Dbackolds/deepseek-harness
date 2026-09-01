@@ -53,3 +53,5 @@
   - button "Queue":
     - text: Queue
     - img
+  - text: Product updates Checks GitHub Releases for a newer dsh or desktop build. Checking does not download or install anything. Not checked yet
+  - button "Check now"

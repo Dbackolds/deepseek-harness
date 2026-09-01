@@ -1,19 +1,10 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { ConnectionRpcHandler, HostConnectionHandle } from '@deepseek-ai/dsh-client-connection'
 import {
   Config, PRODUCT_UPDATE_RPC_CHANNEL, PRODUCT_UPDATE_SETTINGS_NAMESPACE, apply, inject,
 } from '@deepseek-ai/dsh-client-ui-update'
-
-type HostRpcHandle = {
-  rpc: {
-    handle: (
-      channel: string,
-      handler: (endpoint: string, payload: unknown) => unknown,
-      options: { authority: 'loopback' },
-    ) => () => void
-  }
-}
 
 class MemorySettings extends SettingsProvider {
   readonly writable = true
@@ -23,14 +14,15 @@ class MemorySettings extends SettingsProvider {
   }
 }
 
-function fakeConnection(handlerRef: { current: ((endpoint: string, payload: unknown) => unknown) | undefined }): HostRpcHandle {
+function fakeConnection(handlerRef: { current: ConnectionRpcHandler | undefined }): Pick<HostConnectionHandle, 'rpc'> {
   return {
     rpc: {
       handle: (channel, handler) => {
         expect(channel).toBe(PRODUCT_UPDATE_RPC_CHANNEL)
         handlerRef.current = handler
-        return () => { handlerRef.current = undefined }
+        return async () => { handlerRef.current = undefined }
       },
+      intercept: () => async () => {},
     },
   }
 }
@@ -45,7 +37,7 @@ describe('client-ui-update host', () => {
   it('registers the durable cache, handles check/dismiss, and disposes the namespace', async () => {
     const ctx = new Context()
     await ctx.plugin(MemorySettings).await()
-    const handlerRef: { current: ((endpoint: string, payload: unknown) => unknown) | undefined } = { current: undefined }
+    const handlerRef: { current: ConnectionRpcHandler | undefined } = { current: undefined }
     ctx.provide('connection', fakeConnection(handlerRef))
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify([{
       tag_name: 'dsh-v1.2.4',
@@ -65,9 +57,9 @@ describe('client-ui-update host', () => {
     })
     const handler = handlerRef.current
     if (handler === undefined) throw new Error('product-update RPC handler missing after apply')
-    const checked = await handler('check', { force: true })
+    const checked = await handler('check', { force: true }, new AbortController().signal)
     expect(checked).toMatchObject({ ok: true, value: { available: true, currentVersion: '1.2.3' } })
-    const dismissed = await handler('dismiss', { tag: 'dsh-v1.2.4' })
+    const dismissed = await handler('dismiss', { tag: 'dsh-v1.2.4' }, new AbortController().signal)
     expect(dismissed).toEqual({ ok: true, value: { ok: true } })
     expect((ctx.settings.get(ns) as { dismissedTag?: string }).dismissedTag).toBe('dsh-v1.2.4')
     await fiber.dispose()
@@ -78,7 +70,7 @@ describe('client-ui-update host', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     const ctx = new Context()
     await ctx.plugin(MemorySettings).await()
-    const handlerRef: { current: ((endpoint: string, payload: unknown) => unknown) | undefined } = { current: undefined }
+    const handlerRef: { current: ConnectionRpcHandler | undefined } = { current: undefined }
     ctx.provide('connection', fakeConnection(handlerRef))
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify([{
       tag_name: 'dsh-v1.2.4',
@@ -100,5 +92,25 @@ describe('client-ui-update host', () => {
     await fiber.dispose()
     await vi.advanceTimersByTimeAsync(60_000)
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('aborts an in-flight poll on dispose', async () => {
+    const ctx = new Context()
+    await ctx.plugin(MemorySettings).await()
+    const handlerRef: { current: ConnectionRpcHandler | undefined } = { current: undefined }
+    ctx.provide('connection', fakeConnection(handlerRef))
+    let seen: AbortSignal | undefined
+    const fetchImpl = vi.fn((_input: unknown, init?: { signal?: AbortSignal }) => {
+      seen = init?.signal
+      return new Promise<Response>(() => {})
+    })
+    vi.stubGlobal('fetch', fetchImpl)
+    vi.stubEnv('DSH_PRODUCT_VERSION', '1.2.3')
+    const fiber = ctx.plugin({ inject: [...inject], Config, apply })
+    await fiber.await()
+    await vi.waitFor(() => { expect(seen).toBeDefined() })
+    expect(seen!.aborted).toBe(false)
+    await fiber.dispose()
+    expect(seen!.aborted).toBe(true)
   })
 })

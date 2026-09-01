@@ -62,6 +62,8 @@
   - button "排队发送":
     - text: 排队发送
     - img
+  - text: 产品更新 向 GitHub Releases 查询是否有更新的 dsh 或桌面端版本。查询不会下载或安装任何内容。 尚未检查
+  - button "立即检查"
   - text: 插件热重载 关闭后，保存源码不会替换正在运行的插件。改完后再手动重载。
   - switch "自动热重载"
   - button "重载插件"

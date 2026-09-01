@@ -1,0 +1,54 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo",
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src/client/**/*.ts",
+    "src/client/**/*.tsx",
+    "src/css-modules.d.ts",
+    "src/github-url.ts",
+    "src/rpc-channel.ts",
+    "src/update-settings.ts",
+    "src/channel.ts",
+    "src/releases.ts",
+    "src/semver.ts"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../locale"
+    },
+    {
+      "path": "../connection/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-primitives"
+    },
+    {
+      "path": "../ui-layout"
+    },
+    {
+      "path": "../ui-slots"
+    },
+    {
+      "path": "../ui-settings"
+    },
+    {
+      "path": "../ui-renderer"
+    }
+  ]
+}

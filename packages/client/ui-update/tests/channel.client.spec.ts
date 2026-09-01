@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  PRODUCT_CHANNEL_CONFIGS, PRODUCT_CHANNELS, releaseTagPrefix, resolveProductChannel,
+  DEFAULT_DESKTOP_UPDATE_REPO,
+  DEFAULT_DSH_UPDATE_REPO,
+  PRODUCT_CHANNEL_CONFIGS,
+  PRODUCT_CHANNELS,
+  defaultUpdateRepo,
+  releaseTagPrefix,
+  resolveProductChannel,
 } from '../src/channel.ts'
 
 describe('PRODUCT_CHANNELS', () => {
@@ -24,5 +30,14 @@ describe('releaseTagPrefix', () => {
   it('maps each channel to its GitHub tag prefix', () => {
     expect(releaseTagPrefix('desktop')).toBe('desktop-v')
     expect(releaseTagPrefix('dsh')).toBe('dsh-v')
+  })
+})
+
+describe('defaultUpdateRepo', () => {
+  it('sends desktop tags to the StarPivot feed and CLI tags to deepseek-ai', () => {
+    expect(defaultUpdateRepo('desktop')).toBe(DEFAULT_DESKTOP_UPDATE_REPO)
+    expect(defaultUpdateRepo('dsh')).toBe(DEFAULT_DSH_UPDATE_REPO)
+    expect(DEFAULT_DESKTOP_UPDATE_REPO).toBe('StarPivotNet/deepseek-harness')
+    expect(DEFAULT_DSH_UPDATE_REPO).toBe('deepseek-ai/deepseek-harness')
   })
 })

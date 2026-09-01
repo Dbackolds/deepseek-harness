@@ -75,6 +75,15 @@ describe('handleProductUpdateRpc', () => {
     expect(failedString.ok).toBe(false)
   })
 
+  it('rethrows AbortError instead of mapping it to internal', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const opts = options()
+    opts.signal = controller.signal
+    opts.fetch = async () => { throw new Error('must not fetch') }
+    await expect(handleProductUpdateRpc('check', {}, opts)).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('dismisses a tag that is not the cached latest without rewriting lastResult', async () => {
     const opts = options({ lastResult: {
       available: true,

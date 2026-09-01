@@ -1,0 +1,9 @@
+# REAL-composition evidence for the shipped product-update Settings row.
+# Re-enable the plugin the scaffold disables to keep other lanes off GitHub,
+# and pin an invalid repo so the Host poll fails closed without a network call.
+# The row then hydrates as "not checked yet" — Check now is the only client poll.
+- id: ui-update
+  name: '@deepseek-ai/dsh-client-ui-update'
+  disabled: false
+  config:
+    repo: not-a-repo

@@ -44,7 +44,7 @@ export function UpdateRow({
   const result = status.result
   const lastChecked = result === undefined
     ? t('neverChecked')
-    : t('lastChecked') + ': ' + formatCheckedAt(result.checkedAt)
+    : t('lastChecked', { time: formatCheckedAt(result.checkedAt) })
   const version = result?.currentVersion ?? ''
   const available = result?.available === true && result.latest !== undefined
   const dismissed = result !== undefined
@@ -63,7 +63,7 @@ export function UpdateRow({
         <div className={css.title}>{t('title')}</div>
         <div className={css.desc}>{t('description')}</div>
         {version !== '' && (
-          <div className={css.meta}>{t('currentVersion')}: {version}</div>
+          <div className={css.meta}>{t('currentVersion', { version })}</div>
         )}
         <div className={css.meta}>{lastChecked}</div>
         {statusText !== undefined && <div className={css.status}>{statusText}</div>}

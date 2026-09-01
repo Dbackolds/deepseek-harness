@@ -21,6 +21,7 @@
 
 .toastTitle {
   font: var(--dsw-font-xs-strong-13);
+  font-weight: 600;
 }
 
 .toastActions {

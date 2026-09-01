@@ -60,6 +60,7 @@ function options(partial: Partial<ProductUpdateCheckerOptions> & {
     ...partial.timeoutMs === undefined ? {} : { timeoutMs: partial.timeoutMs },
     ...partial.requireFn === undefined ? {} : { requireFn: partial.requireFn },
     ...partial.now === undefined ? {} : { now: partial.now },
+    ...partial.signal === undefined ? {} : { signal: partial.signal },
   }
   return next
 }
@@ -208,6 +209,68 @@ describe('checkProductUpdate', () => {
     const opts = options({ settings: { dismissedTag: 'dsh-v1.2.4' } })
     expect((await checkProductUpdate(opts)).available).toBe(false)
     expect((await checkProductUpdate(opts)).latest?.tag).toBe('dsh-v1.2.4')
+  })
+
+  it('polls the StarPivot feed when the channel is desktop', async () => {
+    const urls: string[] = []
+    const body = JSON.stringify([{
+      tag_name: 'desktop-v1.2.4',
+      html_url: 'https://github.com/StarPivotNet/deepseek-harness/releases/tag/desktop-v1.2.4',
+      draft: false,
+      prerelease: false,
+      body: 'notes',
+    }])
+    const opts = options({
+      env: { DSH_PRODUCT_VERSION: '1.2.3', DSH_PRODUCT_CHANNEL: 'desktop' },
+      fetchImpl: async (input) => {
+        urls.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+        return new Response(body, { status: 200 })
+      },
+    })
+    const result = await checkProductUpdate(opts)
+    expect(urls[0]).toContain('StarPivotNet/deepseek-harness')
+    expect(result.channel).toBe('desktop')
+    expect(result.latest?.tag).toBe('desktop-v1.2.4')
+  })
+
+  it('throws when the caller aborts before fetch', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const opts = options({
+      signal: controller.signal,
+      fetchImpl: async () => {
+        throw new Error('must not fetch')
+      },
+    })
+    await expect(checkProductUpdate(opts)).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('throws when the caller aborts during fetch', async () => {
+    const controller = new AbortController()
+    const opts = options({
+      signal: controller.signal,
+      fetchImpl: async (_input, init) => {
+        controller.abort()
+        const err = new Error('aborted')
+        err.name = 'AbortError'
+        init?.signal?.throwIfAborted?.()
+        throw err
+      },
+    })
+    await expect(checkProductUpdate(opts)).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('does not write settings after aborting a completed fetch', async () => {
+    const controller = new AbortController()
+    const opts = options({
+      signal: controller.signal,
+      fetchImpl: async () => {
+        controller.abort()
+        return new Response(BODY, { status: 200 })
+      },
+    })
+    await expect(checkProductUpdate(opts)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(opts.writes).toEqual([])
   })
 
   it('reports no update when the feed has nothing newer', async () => {

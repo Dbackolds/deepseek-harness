@@ -2,10 +2,12 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import { isGithubHttpsUrl } from '../github-url.ts'
 import { PRODUCT_UPDATE_RPC_CHANNEL } from '../rpc-channel.ts'
 import {
   PRODUCT_UPDATE_SETTINGS_NAMESPACE,
@@ -15,8 +17,6 @@ import {
 import { UpdateRow, type ProductUpdateUiStatus, type UpdateRowInjected } from './UpdateRow.tsx'
 import { UpdateToast, type UpdateToastInjected } from './UpdateToast.tsx'
 import { en, zh, type ProductUpdateLocaleKey } from './locales.ts'
-
-type RpcResult<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } }
 
 export type { ProductUpdateLocaleKey } from './locales.ts'
 
@@ -31,11 +31,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Cordis plugin name. */
 export const name = 'client-ui-update'
-export const inject = ['slots', 'locale', 'settingsScope', 'connection'] as const
+export const inject = ['slots', 'locale', 'settingsScope', 'connection']
 
 /**
- * Register dictionaries, the General Settings row, the overlay toast, and the
- * one-shot check that hydrates from the Host cache.
+ * Register dictionaries, the General Settings row, and the overlay toast.
+ * The row hydrates from the Host settings cache; Check now is the only
+ * client-initiated poll.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -60,18 +61,14 @@ export function apply(ctx: ClientContext): void {
   adopt()
   ctx.effect(() => scope.subscribe(adopt), 'product-update: settings')
 
-  // Structural, not ConnectionHandle: this package's tsconfig also compiles
-  // the Host half, which can see HostConnectionHandle on Context.connection.
-  const rpc = (ctx.get('connection') as unknown as {
-    rpc: { call: (channel: string, endpoint: string, payload: unknown) => Promise<RpcResult<unknown>> }
-  }).rpc
+  const rpc = (ctx.get('connection') as ConnectionHandle).rpc
 
-  const checkNow = (force = true): void => {
+  const checkNow = (): void => {
     status.update((draft) => {
       draft.checking = true
       draft.error = false
     })
-    void rpc.call(PRODUCT_UPDATE_RPC_CHANNEL, 'check', { force }).then((payload) => {
+    void rpc.call(PRODUCT_UPDATE_RPC_CHANNEL, 'check', { force: true }).then((payload) => {
       if (!payload.ok) {
         status.update((draft) => {
           draft.checking = false
@@ -105,13 +102,13 @@ export function apply(ctx: ClientContext): void {
 
   const openRelease = (): void => {
     const url = status.getSnapshot().result?.latest?.url
-    if (url === undefined) return
+    if (url === undefined || !isGithubHttpsUrl(url)) return
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   const rowInjected = (): UpdateRowInjected => ({
     hooks: { status },
-    checkNow: () => { checkNow(true) },
+    checkNow,
     dismiss,
     openRelease,
   })
@@ -124,6 +121,7 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
     id: 'product-update',
+    order: 25,
     locale: NS,
     inject: rowInjected,
   }, UpdateRow))
@@ -133,6 +131,4 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: toastInjected,
   }, UpdateToast))
-
-  checkNow(false)
 }

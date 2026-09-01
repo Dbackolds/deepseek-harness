@@ -48,6 +48,15 @@ describe('pickLatestRelease', () => {
     expect(pickLatestRelease(rows, '1.2.3', 'dsh-v')).toBeUndefined()
     expect(pickLatestRelease(rows, '1.2.3-rc.0', 'dsh-v')?.version).toBe('1.2.4-rc.1')
   })
+
+  it('skips a newer tag whose html_url is not https://github.com', () => {
+    expect(pickLatestRelease([
+      release({
+        tag_name: 'dsh-v1.2.4',
+        html_url: 'https://example.test/releases/tag/dsh-v1.2.4',
+      }),
+    ], '1.2.3', 'dsh-v')).toBeUndefined()
+  })
 })
 
 describe('githubReleasesUrl', () => {

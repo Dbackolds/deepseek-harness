@@ -12,6 +12,12 @@ export type ProductChannel = typeof PRODUCT_CHANNELS[number]
 /** Plugin config: `auto` defers to `DSH_PRODUCT_CHANNEL`. */
 export type ProductChannelConfig = typeof PRODUCT_CHANNEL_CONFIGS[number]
 
+/** Default GitHub `owner/repo` for CLI/web (`dsh-v*`) releases. */
+export const DEFAULT_DSH_UPDATE_REPO = 'deepseek-ai/deepseek-harness'
+
+/** Default GitHub `owner/repo` for packaged desktop (`desktop-v*`) releases. */
+export const DEFAULT_DESKTOP_UPDATE_REPO = 'StarPivotNet/deepseek-harness'
+
 /**
  * Resolve the concrete channel used to pick a GitHub tag prefix.
  *
@@ -28,6 +34,19 @@ export function resolveProductChannel(
 ): ProductChannel {
   if (configured !== 'auto') return configured
   return env.DSH_PRODUCT_CHANNEL === 'desktop' ? 'desktop' : 'dsh'
+}
+
+/**
+ * GitHub `owner/repo` polled when plugin config omits `repo`.
+ *
+ * Desktop tags live on the StarPivot feed; CLI tags live on the official
+ * `deepseek-ai` feed. An explicit `repo` config still wins at the checker.
+ *
+ * @param channel - concrete channel.
+ * @returns `owner/repo`.
+ */
+export function defaultUpdateRepo(channel: ProductChannel): string {
+  return channel === 'desktop' ? DEFAULT_DESKTOP_UPDATE_REPO : DEFAULT_DSH_UPDATE_REPO
 }
 
 /**

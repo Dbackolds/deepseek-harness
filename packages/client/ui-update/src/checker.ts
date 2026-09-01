@@ -4,19 +4,23 @@
  */
 
 import { createHash } from 'node:crypto'
-import { resolveProductChannel, releaseTagPrefix, type ProductChannelConfig } from './channel.ts'
+import {
+  defaultUpdateRepo,
+  resolveProductChannel,
+  releaseTagPrefix,
+  type ProductChannelConfig,
+} from './channel.ts'
 import { githubReleasesUrl, parseGithubReleases, pickLatestRelease } from './releases.ts'
 import { readProductVersion, type ProductVersionRequire } from './product-version.ts'
 import type { ProductCheckResult, ProductUpdateSettings } from './update-settings.ts'
+
+export { DEFAULT_DSH_UPDATE_REPO, DEFAULT_DESKTOP_UPDATE_REPO, defaultUpdateRepo } from './channel.ts'
 
 /** Default gap between GitHub polls. */
 export const DEFAULT_CHECK_INTERVAL_MS = 86_400_000
 
 /** Default GitHub request timeout. */
 export const DEFAULT_FETCH_TIMEOUT_MS = 10_000
-
-/** Default repository whose Releases feed this checker reads. */
-export const DEFAULT_UPDATE_REPO = 'deepseek-ai/deepseek-harness'
 
 /** Injectable clock, fetch, and settings IO for tests. */
 export interface ProductUpdateCheckerOptions {
@@ -30,6 +34,8 @@ export interface ProductUpdateCheckerOptions {
   intervalMs?: number
   timeoutMs?: number
   requireFn?: ProductVersionRequire
+  /** Caller cancellation; dispose of the Host poller aborts an in-flight fetch. */
+  signal?: AbortSignal
 }
 
 /** Failure the RPC layer maps to `internal`. */
@@ -53,11 +59,12 @@ export async function checkProductUpdate(
   const fetchImpl = options.fetch ?? fetch
   const intervalMs = options.intervalMs ?? DEFAULT_CHECK_INTERVAL_MS
   const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS
-  const repo = options.repo ?? DEFAULT_UPDATE_REPO
   const channel = resolveProductChannel(options.channel ?? 'auto', env)
+  const repo = options.repo ?? defaultUpdateRepo(channel)
   const currentVersion = readProductVersion(env, options.requireFn)
   const settings = options.readSettings()
   const checkedAt = now()
+  throwIfCallerAborted(options.signal)
 
   if (
     !force
@@ -88,11 +95,14 @@ export async function checkProductUpdate(
   try {
     response = await fetchImpl(url, {
       headers,
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: mergeAbortSignals(AbortSignal.timeout(timeoutMs), options.signal),
     })
   } catch (error) {
+    throwIfCallerAborted(options.signal)
     return staleOrThrow(settings, currentVersion, channel, checkedAt, error)
   }
+
+  throwIfCallerAborted(options.signal)
 
   if (response.status === 304) {
     if (settings.lastResult === undefined) {
@@ -102,6 +112,7 @@ export async function checkProductUpdate(
       { ...settings.lastResult, currentVersion, channel, checkedAt },
       settings.dismissedTag,
     )
+    throwIfCallerAborted(options.signal)
     await options.writeSettings(persistSuccessfulCheck(settings, {
       lastCheckAt: checkedAt,
       lastResult: result,
@@ -160,6 +171,7 @@ export async function checkProductUpdate(
       { ...settings.lastResult, currentVersion, channel, checkedAt },
       settings.dismissedTag,
     )
+    throwIfCallerAborted(options.signal)
     await options.writeSettings(persistSuccessfulCheck(settings, {
       lastCheckAt: checkedAt,
       lastResult: result,
@@ -177,6 +189,7 @@ export async function checkProductUpdate(
     checkedAt,
     channel,
   }, settings.dismissedTag)
+  throwIfCallerAborted(options.signal)
   await options.writeSettings(persistSuccessfulCheck(settings, {
     lastCheckAt: checkedAt,
     lastResult: result,
@@ -238,4 +251,15 @@ function staleOrThrow(
 
 function sha256(text: string): string {
   return createHash('sha256').update(text).digest('hex')
+}
+
+function mergeAbortSignals(timeout: AbortSignal, caller?: AbortSignal): AbortSignal {
+  return caller === undefined ? timeout : AbortSignal.any([timeout, caller])
+}
+
+function throwIfCallerAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted !== true) return
+  const reason: unknown = signal.reason
+  if (reason instanceof Error) throw reason
+  throw new DOMException('The operation was aborted.', 'AbortError')
 }

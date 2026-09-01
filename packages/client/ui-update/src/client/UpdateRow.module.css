@@ -1,5 +1,4 @@
-/* Product-update preference row (figma Setting-Cell: gap 8, pad 16/0,
-   hairline separator; the section column removes the last child's border). */
+/* Product-update preference row: title, description, status, and actions. */
 
 .row {
   display: flex;

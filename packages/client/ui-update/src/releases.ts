@@ -1,5 +1,6 @@
 /** GitHub Releases JSON → the newest applicable product release. */
 
+import { isGithubHttpsUrl } from './github-url.ts'
 import { isNewer, isPrereleaseVersion, parseSemver } from './semver.ts'
 
 /** One GitHub Releases API row, narrowed to the fields the picker reads. */
@@ -51,8 +52,9 @@ export function parseGithubReleases(json: unknown): GithubRelease[] | undefined 
  * Pick the newest applicable release for the installed version and tag prefix.
  *
  * Skips drafts, tags that do not start with `prefix`, non-SemVer remainders,
- * GitHub prereleases unless the installed version is itself a prerelease, and
- * versions that are not strictly newer than `currentVersion`.
+ * GitHub prereleases unless the installed version is itself a prerelease,
+ * html_url values that are not `https://github.com/...`, and versions that
+ * are not strictly newer than `currentVersion`.
  *
  * @param releases - narrowed GitHub rows.
  * @param currentVersion - installed product version.
@@ -72,6 +74,7 @@ export function pickLatestRelease(
     const version = release.tag_name.slice(prefix.length)
     if (parseSemver(version) === undefined) continue
     if (release.prerelease && !currentIsPre) continue
+    if (!isGithubHttpsUrl(release.html_url)) continue
     if (!isNewer(version, currentVersion)) continue
     if (best === undefined || isNewer(version, best.version)) {
       best = {

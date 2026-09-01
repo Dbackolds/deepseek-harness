@@ -27,8 +27,15 @@ const DIALOG_EXPECTED = join(SNAPSHOT_DIR, 'dialog.expected.md')
 const PLUGINS_EXPECTED = join(SNAPSHOT_DIR, 'plugins.expected.md')
 // The English fallback surface: a browser naming no shipped language.
 const DIALOG_EN_EXPECTED = join(SNAPSHOT_DIR, 'dialog-en.expected.md')
+const OVERLAY = fileURLToPath(new URL('./settings-chrome.overlay.yml', import.meta.url))
 const PLUGIN_ROW_SELECTOR = '[data-plugin-entry$="ui-settings"]'
 const MODE = webSnapshotMode()
+
+function launchSettingsChrome(
+  options: Parameters<typeof launchWebScaffold>[0] = {},
+): ReturnType<typeof launchWebScaffold> {
+  return launchWebScaffold({ ...options, extraOverlayPath: OVERLAY })
+}
 
 describe('web e2e: settings modal and General preferences', () => {
   let scaffold: WebScaffold
@@ -37,7 +44,7 @@ describe('web e2e: settings modal and General preferences', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({})
+    scaffold = await launchSettingsChrome()
     browser = await chromium.launch()
     // Chinese browser: the shared page asserts the localized settings surface
     // the client derives from it (the English default has its own spec below).
@@ -66,6 +73,9 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.getByRole('button', { name: 'Workspace Write' }).waitFor({ timeout: 10_000 })
     await expect.poll(() => dialog.getByText('语言', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     await expect.poll(() => dialog.getByText('外观', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    await expect.poll(() => dialog.getByText('产品更新', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    expect(await dialog.getByRole('button', { name: '立即检查' }).count()).toBe(1)
+    await expect.poll(() => dialog.getByText('尚未检查', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     await expect.poll(() => dialog.getByText('插件热重载', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     expect(await dialog.getByRole('switch', { name: '自动热重载' }).getAttribute('aria-checked')).toBe('false')
     expect(await dialog.getByRole('button', { name: '重载插件' }).count()).toBe(1)
@@ -546,7 +556,7 @@ describe('web e2e: settings modal and General preferences', () => {
 
   it('persists unlimited retries from a trusted-host browser across reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-unlimited-retries'))
-    const remote = await launchWebScaffold({
+    const remote = await launchSettingsChrome({
       harnessHome: scaffold.harnessHome,
       remoteAuthority: 'remote.localhost',
     })
@@ -605,6 +615,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await expect.poll(() => page.evaluate(() => document.documentElement.lang), { timeout: 5_000 }).toBe('en')
     expect(await enDialog.getByRole('button', { name: 'General' }).getAttribute('aria-current')).toBe('true')
     await expect.poll(() => enDialog.getByText('Appearance', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    await expect.poll(() => enDialog.getByText('Product updates', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     await expect.poll(() => enDialog.getByText('Plugin hot reload', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     expect(await page.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
@@ -654,7 +665,7 @@ describe('web e2e: settings modal and General preferences', () => {
     // browser. English is also FALLBACK_LOCALE, so this scenario alone cannot
     // distinguish detection from the default — the zh scenarios above supply
     // the discriminating half (a Chinese browser must NOT land on the default).
-    const fresh = await launchWebScaffold({})
+    const fresh = await launchSettingsChrome()
     const enPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'en-US' })
     const enTripwire = watchConsole(enPage)
     onTestFailed(() => saveFailureShot(enPage, 'web-e2e-settings-browser-language'))
@@ -680,7 +691,7 @@ describe('web e2e: settings modal and General preferences', () => {
     // The product default for "no usable signal": a French browser ships
     // neither zh nor en, so resolution falls to FALLBACK_LOCALE (en) rather
     // than to Chinese.
-    const fresh = await launchWebScaffold({})
+    const fresh = await launchSettingsChrome()
     const frPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'fr-FR' })
     const frTripwire = watchConsole(frPage)
     onTestFailed(() => saveFailureShot(frPage, 'web-e2e-settings-unshipped-language'))

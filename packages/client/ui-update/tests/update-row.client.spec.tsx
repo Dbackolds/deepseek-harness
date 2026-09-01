@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { WorkspaceSnapshot as WorkspaceListState } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { UpdateRow, type ProductUpdateUiStatus, type UpdateRowProps } from '../src/client/UpdateRow.tsx'
 import { UpdateToast, type UpdateToastProps } from '../src/client/UpdateToast.tsx'
 import { en } from '../src/client/locales.ts'
@@ -12,20 +10,13 @@ import { en } from '../src/client/locales.ts'
 type AttentionSnapshot = Parameters<Parameters<UpdateRowProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: UpdateRowProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+const runtime = {
+  useSessions: (() => { throw new Error('unused') }) as never,
+  useSessionPendingInteraction,
+  useWorkspaces: (() => { throw new Error('unused') }) as never,
+}
 
 afterEach(cleanup)
-
-function emptySessions() {
-  return bindSnapshotSelector(createSnapshotStore<SessionListState>({
-    ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
-  }))
-}
-
-function emptyWorkspaces() {
-  return bindSnapshotSelector(createSnapshotStore<WorkspaceListState>({
-    items: [], archivedSessionIds: [], hiddenWorkspaceIds: [], state: 'idle', phase: 'ready', error: null,
-  }))
-}
 
 const latest = {
   tag: 'dsh-v1.2.4',
@@ -39,9 +30,7 @@ function mountRow(status: ProductUpdateUiStatus) {
   const dismiss = vi.fn()
   const openRelease = vi.fn()
   const props: UpdateRowProps = {
-    useSessions: emptySessions(),
-    useWorkspaces: emptyWorkspaces(),
-    useSessionPendingInteraction,
+    ...runtime,
     useStatus: bindSnapshotSelector(createSnapshotStore(status)),
     checkNow,
     dismiss,
@@ -56,9 +45,7 @@ function mountToast(status: ProductUpdateUiStatus) {
   const dismiss = vi.fn()
   const openRelease = vi.fn()
   const props: UpdateToastProps = {
-    useSessions: emptySessions(),
-    useWorkspaces: emptyWorkspaces(),
-    useSessionPendingInteraction,
+    ...runtime,
     useStatus: bindSnapshotSelector(createSnapshotStore(status)),
     dismiss,
     openRelease,
@@ -90,6 +77,7 @@ describe('UpdateRow', () => {
       },
     })
     expect(screen.getByText('Installed version: 1.2.3')).toBeDefined()
+    expect(screen.getByText('Last checked: ' + new Date(1_700_000_000_000).toLocaleString())).toBeDefined()
     expect(screen.getByText('Update available: 1.2.4')).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: 'Check now' }))
     fireEvent.click(screen.getByRole('button', { name: 'Open release notes' }))

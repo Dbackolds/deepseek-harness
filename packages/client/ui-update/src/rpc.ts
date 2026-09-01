@@ -1,11 +1,10 @@
 /** Product-update RPC payloads and result mapping. */
 
+import type { ConnectionRpcResult } from '@deepseek-ai/dsh-client-connection'
 import { checkProductUpdate, ProductUpdateCheckError, type ProductUpdateCheckerOptions } from './checker.ts'
 import type { ProductCheckResult, ProductUpdateSettings } from './update-settings.ts'
 
 export { PRODUCT_UPDATE_RPC_CHANNEL } from './rpc-channel.ts'
-
-type RpcResult<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string; details: Record<string, unknown> } }
 
 /** Check-now request. `force` skips the 24h interval gate. */
 export interface ProductUpdateCheckRequest {
@@ -29,7 +28,7 @@ export async function handleProductUpdateRpc(
   endpoint: string,
   payload: unknown,
   options: ProductUpdateCheckerOptions,
-): Promise<RpcResult<unknown>> {
+): Promise<ConnectionRpcResult<unknown>> {
   if (endpoint === 'check') {
     const force = readForce(payload)
     if (force === undefined) return badRequest('force must be a boolean when present')
@@ -37,6 +36,7 @@ export async function handleProductUpdateRpc(
       const value = await checkProductUpdate(options, force)
       return { ok: true, value }
     } catch (error) {
+      if (isAbortError(error)) throw error
       const message = error instanceof ProductUpdateCheckError
         ? error.message
         : error instanceof Error ? error.message : String(error)
@@ -72,6 +72,10 @@ function readTag(payload: unknown): string | undefined {
   return payload.tag
 }
 
-function badRequest(message: string): RpcResult<unknown> {
+function badRequest(message: string): ConnectionRpcResult<unknown> {
   return { ok: false, error: { code: 'bad-request', message, details: {} } }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
 }

@@ -12,9 +12,9 @@ Packaged desktop and CLI users had no in-app signal that a newer GitHub Release 
 
 `@deepseek-ai/dsh-client-ui-update` is a dual-face client plugin. The Host half polls GitHub Releases every 24h (ETag / body-hash, last-success cache in the `product-update` settings namespace), compares against `readProductVersion()`, and serves `/product-update` on a loopback RPC channel. The browser half renders a General Settings row and overlay toast. The plugin never downloads or installs.
 
-The compared version is `DSH_PRODUCT_VERSION` when set, else the published CLI package, else this package's own package.json. Desktop spawn sets `DSH_PRODUCT_CHANNEL=desktop` and `DSH_PRODUCT_VERSION` from Electron `app.getVersion()`. Tag prefixes are `dsh-v*` vs `desktop-v*`.
+The compared version is `DSH_PRODUCT_VERSION` when set, else the published CLI package, else this package's own package.json. Desktop spawn sets `DSH_PRODUCT_CHANNEL=desktop` and `DSH_PRODUCT_VERSION` from Electron `app.getVersion()`. Tag prefixes are `dsh-v*` vs `desktop-v*`. Default feeds are `deepseek-ai/deepseek-harness` for CLI/web and `StarPivotNet/deepseek-harness` for desktop; an explicit `repo` config still wins. Persisted release URLs and `window.open` accept only `https://github.com/...`.
 
-The Host fiber owns the 24h interval and clears it on dispose. The browser half checks once on mount so a newly opened tab sees the cached result without waiting for the next Host tick. Slot conflicts fail in the slot core. The invariant companion is empty: the settings seam validates and publishes the durable cache, and Host, checker, and client behavior specs cover check/dismiss RPC and the overlay toast.
+The Host fiber owns the 24h interval, clears it on dispose, and aborts an in-flight fetch. The browser half hydrates from the Host settings cache; **Check now** is the only client-initiated poll. Slot conflicts fail in the slot core. The invariant companion is empty: the settings seam validates and publishes the durable cache, and Host, checker, and client behavior specs cover check/dismiss RPC and the overlay toast.
 
 ## Alternatives considered
 
