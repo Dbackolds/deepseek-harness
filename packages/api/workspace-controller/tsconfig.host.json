@@ -7,7 +7,6 @@
   },
   "files": [
     "src/index.ts",
-    "src/invariant.ts",
     "src/types.ts",
     "src/commands.ts",
     "src/directory-picker.ts",

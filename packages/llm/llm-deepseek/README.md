@@ -75,46 +75,6 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 ### Streaming with thinking and images
 
 An image-capable route resolves each durable reference into a deterministic request version under its pixel and byte budgets. `imagePixelBudget` accepts a positive integer or `low`; omission uses 640,000 total pixels, `low` uses 512×512 total pixels, and `imageMaxBytes` defaults to 1 MiB. Alpha images use WebP effort 0 and opaque images use JPEG on the 85/75/60 quality ladder, keeping the smallest output when every candidate exceeds the target. Every retained image is preceded by text naming its complete attachment id and actual request dimensions. When the current filesystem maps the attachment provider's host object, that text also carries a read-only execution-world path and the extension for a writable copy. Text-only and unlisted routes receive stable attachment placeholders while durable history keeps the image references.
-    apiKeyEnv: DEEPSEEK_API_KEY  # default; resolved per request via ctx.credentials, then the environment
-    baseURL: https://api.deepseek.com # optional; $DEEPSEEK_BASE_URL then the public API when omitted
-    thinking: enabled        # optional; provider default is enabled
-    reasoningEffort: high    # optional; off | low | high | max — omitted ⇒ high
-    maxTokens: 256000        # optional positive per-request output cap; this is the default
-    streamIdleTimeoutMs: 300000 # optional; omission uses the product-wide default
-    retryPolicy:             # optional; omission uses the product-wide default
-    streamIdleTimeoutMs: 300000 # optional; positive finite Node timer delay; five-minute default
-    maxRequestFilesBytes: 134217728 # optional positive integer; 128 MiB raw request-image default
-    maxInlineRequestImageBytes: 20971520 # base64 fallback high watermark; 20 MiB default
-    maxImagesPerRequest: 600       # provider request image-count limit
-    imageOffloadByteQuantum: 67108864 # oldest-image removal advances in 64 MiB steps
-    inlineImageOffloadByteQuantum: 10485760 # fallback removal advances in 10 MiB steps
-    imageOffloadCountQuantum: 20      # count overflow advances in 20-image steps
-    filesApiTimeoutMs: 60000           # per-image Files resolution deadline; one-minute default
-    fileExpiresAfterSeconds: 604800   # uploaded image lifetime; 1 hour to 30 days
-    fileRefreshMarginSeconds: 3600    # replace ids with less lifetime remaining
-    fileQuotaCleanupBatch: 100        # oldest harness-owned files deleted before one quota retry
-    retryPolicy:             # optional; omission uses normal mode with five retries
-      mode: always           # normal | always
-      backoff:
-        initialDelayMs: 500
-        maxDelayMs: 10000
-        jitterRatio: 0.1
-    defaultContextWindow: 1000000 # optional positive-integer fallback; this is the default
-    models:                  # optional; defaults to V4 Flash, V4 Pro, and V4 Flash Vision Exp
-      - id: deepseek-v4-flash
-        name: DeepSeek-V4-Flash
-      - id: deepseek-v4-flash-vision-exp
-        name: DeepSeek-V4-Flash-Vision-Exp
-        inputModalities: [text, image]
-        imagePixelBudget: 640000
-        imageMaxBytes: 1048576
-      - id: private-reasoner
-        description: Company-hosted reasoning model
-        contextWindow: 512000
-        systemPrompt: You replace the assembled system prompt for this model.
-The plugin registers the single provider route `deepseek-official` together with its resolved `retryPolicy`. A request selects it with `provider: deepseek-official`; its `model` is passed through as the wire `model` string, so changing DeepSeek models does not require lifecycle-time registration. Omitting `models` advertises `deepseek-v4-flash` as `DeepSeek-V4-Flash` and `deepseek-v4-pro` as `DeepSeek-V4-Pro`, each with a 1,000,000-token context window; an explicit list replaces those defaults, while `models: []` advertises none. Catalog entries are exposed through `ctx.llm.listModels('deepseek-official')` for clients such as ACP editors and the Web selector, but remain advisory: unlisted model ids still pass through unchanged. An omitted entry name defaults to its id. An optional `systemPrompt` is a complete system-prompt template for that catalog id: agent-loop replaces every assembled system section with the interpolated text. Absence, whitespace, or an unlisted pass-through id keeps ordinary assembly.
-The plugin registers the single provider route `deepseek-official` together with its resolved `retryPolicy`; omission resolves to normal mode with five retries. A request selects it with `provider: deepseek-official`; its `model` is passed through as the wire `model` string, so changing DeepSeek models does not require lifecycle-time registration. Omitting `models` advertises `deepseek-v4-flash` and `deepseek-v4-pro`, each with a 1,000,000-token context window; an explicit list replaces those defaults, while `models: []` advertises none. Vision models are not advertised by default until their endpoint rollout is complete, but a deployment can add one with `inputModalities: [text, image]`. Catalog entries are exposed through `ctx.llm.listModels('deepseek-official')` for clients such as ACP editors and the Web selector, but remain advisory: unlisted model ids still pass through unchanged. An omitted entry name defaults to its id, and omitted `inputModalities` means `text` only.
-The plugin registers the single provider route `deepseek-official` together with its resolved `retryPolicy`; omission resolves to normal mode with five retries. A request selects it with `provider: deepseek-official`; its `model` is passed through as the wire `model` string, so changing DeepSeek models does not require lifecycle-time registration. Omitting `models` advertises `deepseek-v4-flash`, `deepseek-v4-pro`, and the image-capable `deepseek-v4-flash-vision-exp`, each with a 1,000,000-token context window; an explicit list replaces those defaults, while `models: []` advertises none. Catalog entries are exposed through `ctx.llm.listModels('deepseek-official')` for clients such as ACP editors and the Web selector, but remain advisory: unlisted model ids still pass through unchanged as text-only routes. An omitted entry name defaults to its id, and omitted `inputModalities` means `text` only.
 
 The adapter normally uploads those exact request bytes through the DeepSeek Files API and sends file-id blocks. A failed or timed-out file resolution rebuilds the whole chat request with the same request versions as base64 data URLs; one request never mixes file ids and inline images. Cached ids are scoped by endpoint and API key, refreshed before expiry, invalidated from provider stale-file errors, and resolved through singleflight with waiter-local cancellation. Quota failure deletes one configured batch of the oldest harness-owned files before one upload retry.
 
@@ -227,7 +187,6 @@ These limits define where the adapter stops and future work begins. They are cur
 - **`tool_choice` is not mapped** — not part of the core vocabulary (shared with the pi-ai twin).
 - **Requests use raw `fetch`, not `@cordisjs/plugin-http`** — no shared proxy or interception configuration.
 - **Plugin-added content block types are skipped** — core text and supported image blocks are serialized, and empty tool output crosses the wire as the literal `(no output)`.
-- **Video input is refused, never silently dropped** — the DeepSeek wire API accepts no video, so serialization throws `UNSUPPORTED_CONTENT` for a video block in any role. The shared LLM runtime has already projected videos into text placeholders for these models, so a video reaching this adapter means a caller bypassed that projection.
 - **Images are input-only durable attachments** — direct external URLs and assistant image output are not supported; DeepSeek input normally uses the Files API and uses inline base64 only for per-request recovery.
 
 <a id="dev-note"></a>
@@ -242,3 +201,5 @@ This Dev Note is non-authoritative working context: undecided directions and not
 - The `off` reasoning effort never crosses the wire as `reasoning_effort: 'off'`; it serializes as `thinking: { type: 'disabled' }` and omits the field, which keeps the wire spelling valid for gateways that reject unknown effort values.
 
 </details>
+
+**Runtime invariant:** No companion is published. This package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.

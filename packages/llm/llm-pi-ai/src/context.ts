@@ -99,6 +99,12 @@ async function userContent(
         })
         break
       }
+      case 'video':
+        content.push({
+          type: 'text',
+          text: requestVideoMarker(String(block.attachment.attachmentId)),
+        })
+        break
       case 'tool-result':
         {
           const nested = await userContent(block.content, requestImages, resolveImageAccess)

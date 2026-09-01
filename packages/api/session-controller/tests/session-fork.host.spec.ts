@@ -7,7 +7,7 @@ import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-ag
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
-import SessionStore from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
@@ -33,6 +33,9 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
       const session = ctx.sessions.create(options.sessionId, {
         ...options.seed === undefined ? {} : { seed: [...options.seed] },
         ...options.meta === undefined ? {} : { meta: options.meta },
+        ...options.inheritedEventCount === undefined
+          ? {}
+          : { inheritedEventCount: options.inheritedEventCount },
       })
       const agent = {} as Agent
       const agentCtx = ownerCtx.extend({ agent })
@@ -90,10 +93,10 @@ describe('sessions.fork', () => {
     const ctx = await composed()
     const source = liveAgent(ctx, 'session-source', 2)
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: 1 }))
-    expect(response.ok).toBe(true)
+    expect(response.ok ? null : response.error).toBeNull()
     if (!response.ok) return
     const child = ctx.sessions.get(response.value.sessionId)
-    expect(child?.events.map(event => event.type)).toEqual([
+    expect(child?.snapshotEvents().map(event => event.type)).toEqual([
       'turn/start', 'user/message', 'turn/end', 'session/end-seed',
     ])
     expect(child?.header.parentSession).toBe(source.id)
@@ -154,22 +157,35 @@ describe('sessions.fork', () => {
       createdAt: 1,
       cwd: '/proj',
       parentSession: parentId,
+      isSeeded: false,
       origin: 'subagent',
     }
     const events = [
-      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1, trigger: { kind: 'message', source: { kind: 'user' } } } },
+      {
+        type: 'turn/start',
+        seq: SessionSeq(0),
+        time: 1,
+        data: {
+          turn: 1,
+          trigger: { kind: 'message', source: { kind: 'user' } },
+        } as SessionEvent<'turn/start'>['data'],
+      },
       {
         type: 'user/message',
-        seq: 1,
+        seq: SessionSeq(1),
         time: 2,
         data: createUserMessage({ content: [{ type: 'text', text: 'work' }], source: { kind: 'user' } }),
         surfaceOp: 'append',
       },
-      { type: 'turn/end', seq: 2, time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
-    ] as SessionEvent[]
+      { type: 'turn/end', seq: SessionSeq(2), time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
+    ] satisfies SessionEvent[]
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
       list: () => Promise.resolve([header]),
-      inspect: () => Promise.resolve({ meta: header, events }),
+      inspect: () => Promise.resolve({
+        meta: header,
+        inheritedEventCount: SessionLogOffset(0),
+        events,
+      }),
     }) as never)
     const resume = vi.spyOn(ctx.agents, 'resume')
 
@@ -199,13 +215,13 @@ describe('sessions.fork', () => {
     const omitted = await proxy.fork(request({ sessionId: source.id }))
     expect(omitted.ok).toBe(true)
     if (omitted.ok) {
-      expect(ctx.sessions.get(omitted.value.sessionId)?.events.map(event => event.type))
+      expect(ctx.sessions.get(omitted.value.sessionId)?.snapshotEvents().map(event => event.type))
         .toEqual(expectedTypes)
     }
     const pastEnd = await proxy.fork(request({ sessionId: source.id, atSeq: 999 }))
     expect(pastEnd.ok).toBe(true)
     if (pastEnd.ok) {
-      expect(ctx.sessions.get(pastEnd.value.sessionId)?.events.map(event => event.type))
+      expect(ctx.sessions.get(pastEnd.value.sessionId)?.snapshotEvents().map(event => event.type))
         .toEqual(expectedTypes)
     }
     await ctx.fiber.dispose()
@@ -228,11 +244,11 @@ describe('sessions.fork', () => {
     const source = liveAgent(ctx, 'session-aborted', 1, 'aborted')
     // What a stopped message's fork button anchors on: the frozen node sits
     // one event before its turn/end, floored client-side to that event's seq.
-    const anchor = (source.events.at(-1)?.seq ?? 0) - 1
+    const anchor = (source.snapshotEvents().at(-1)?.seq ?? 0) - 1
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
     expect(response.ok).toBe(true)
     if (!response.ok) return
-    expect(ctx.sessions.get(response.value.sessionId)?.events.map(event => event.type)).toEqual([
+    expect(ctx.sessions.get(response.value.sessionId)?.snapshotEvents().map(event => event.type)).toEqual([
       'turn/start', 'user/message', 'turn/end',
       'turn/start', 'user/message', 'turn/end',
       'session/end-seed',
@@ -243,7 +259,7 @@ describe('sessions.fork', () => {
   it('rejects an in-log anchor whose turn is still open', async () => {
     const ctx = await composed()
     const source = liveAgent(ctx, 'session-open', 1, 'open')
-    const anchor = source.events.at(-1)?.seq ?? 0
+    const anchor = source.snapshotEvents().at(-1)?.seq ?? 0
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
     expect(response).toMatchObject({
       ok: false,
@@ -301,7 +317,7 @@ describe('sessions.rewrite', () => {
       whenIdle: () => Promise.resolve(),
     })
     const sessions = remote(ctx)
-    const userSeqs = source.events.filter(event => event.type === 'user/message').map(event => event.seq)
+    const userSeqs = source.snapshotEvents().filter(event => event.type === 'user/message').map(event => event.seq)
     const atSeq = userSeqs[0]
     if (atSeq === undefined) throw new Error('rewrite source has no user prompt')
     const beforeTail = source.surface.nodes.at(-1)
@@ -312,7 +328,7 @@ describe('sessions.rewrite', () => {
     }))
     expect(response).toEqual({ ok: true, value: { accepted: true } })
     expect(continueFromSurface).toHaveBeenCalledTimes(1)
-    const replacement = source.events.at(-1)
+    const replacement = source.snapshotEvents().at(-1)
     expect(replacement?.type).toBe('user/message')
     if (replacement?.type !== 'user/message') return
     expect(replacement.surfaceOp).toEqual({ op: 'replace', start: atSeq, end: beforeTail })
@@ -350,7 +366,7 @@ describe('sessions.rewrite', () => {
       ok: false,
       error: { code: 'session/rewrite-unavailable', details: { sessionId: source.id } },
     })
-    const turnEnd = source.events.find(event => event.type === 'turn/end')?.seq
+    const turnEnd = source.snapshotEvents().find(event => event.type === 'turn/end')?.seq
     if (turnEnd === undefined) throw new Error('turn/end missing')
     const notUser = await sessions.rewrite(request({
       sessionId: source.id,
@@ -425,7 +441,7 @@ describe('sessions.rewrite', () => {
       content: [{ type: 'text', text: 'plugin context' }],
       source: { kind: 'plugin', plugin: 'foreign' },
     }), { surfaceOp: 'append' })
-    const pluginSeq = source.events.at(-1)?.seq
+    const pluginSeq = source.snapshotEvents().at(-1)?.seq
     if (pluginSeq === undefined) throw new Error('plugin message missing')
     const agent = ctx.agents.get(source.id)
     if (agent === undefined) throw new Error('rewrite source agent missing')
@@ -458,7 +474,7 @@ describe('sessions.rewrite', () => {
       source: { kind: 'user' },
     }), { surfaceOp: 'append' })
     source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    const userSeq = source.snapshotEvents().find(event => event.type === 'user/message')?.seq
     if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
     const continueFromSurface = vi.fn()
     const agent = ctx.agents.get(source.id)
@@ -475,7 +491,7 @@ describe('sessions.rewrite', () => {
       clientTimeZone: 'UTC',
     }))
     expect(response).toEqual({ ok: true, value: { accepted: true } })
-    const replacement = source.events.at(-1)
+    const replacement = source.snapshotEvents().at(-1)
     expect(replacement?.type).toBe('user/message')
     if (replacement?.type !== 'user/message') return
     expect(replacement.data.content).toEqual([
@@ -496,7 +512,7 @@ describe('sessions.rewrite', () => {
       cancel: vi.fn(),
       whenIdle: () => Promise.resolve(),
     })
-    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    const userSeq = source.snapshotEvents().find(event => event.type === 'user/message')?.seq
     if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
     const response = await remote(ctx).rewrite(request({
       sessionId: source.id,
@@ -523,7 +539,7 @@ describe('sessions.rewrite', () => {
       cancel: vi.fn(),
       whenIdle: () => Promise.resolve(),
     })
-    const userSeq = source.events.find(event => event.type === 'user/message')?.seq
+    const userSeq = source.snapshotEvents().find(event => event.type === 'user/message')?.seq
     if (userSeq === undefined) throw new Error('rewrite source has no user prompt')
     const response = await remote(ctx).rewrite(request({
       sessionId: source.id,

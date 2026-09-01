@@ -75,46 +75,6 @@ kind: "package-reference"
 ### 带 thinking 与图片的流式调用
 
 支持图片的路由会在自身像素与字节预算内把每个持久引用解析为确定性请求版本。`imagePixelBudget` 接受正整数或 `low`；省略时使用总计 640,000 像素，`low` 使用总计 512×512 像素，`imageMaxBytes` 默认为 1 MiB。带 alpha 的图片使用 effort 0 的 WebP，不透明图片使用 JPEG，并采用 85/75/60 质量阶梯；全部候选都超过目标时保留最小输出。每张保留图片前都有文本，注明完整附件 id 与实际请求尺寸。当前文件系统可以映射附件提供方的宿主对象时，该文本还携带只读执行世界路径与可写副本使用的扩展名。纯文本与未列出路由接收稳定附件占位符，而持久历史继续保留图片引用。
-    apiKeyEnv: DEEPSEEK_API_KEY  # default; resolved per request via ctx.credentials, then the environment
-    baseURL: https://api.deepseek.com # optional; $DEEPSEEK_BASE_URL then the public API when omitted
-    thinking: enabled        # optional; provider default is enabled
-    reasoningEffort: high    # optional; off | low | high | max — omitted ⇒ high
-    maxTokens: 256000        # optional positive per-request output cap; this is the default
-    streamIdleTimeoutMs: 300000 # optional; omission uses the product-wide default
-    retryPolicy:             # optional; omission uses the product-wide default
-    streamIdleTimeoutMs: 300000 # optional; positive finite Node timer delay; five-minute default
-    maxRequestFilesBytes: 134217728 # optional positive integer; 128 MiB raw request-image default
-    maxInlineRequestImageBytes: 20971520 # base64 fallback high watermark; 20 MiB default
-    maxImagesPerRequest: 600       # provider request image-count limit
-    imageOffloadByteQuantum: 67108864 # oldest-image removal advances in 64 MiB steps
-    inlineImageOffloadByteQuantum: 10485760 # fallback removal advances in 10 MiB steps
-    imageOffloadCountQuantum: 20      # count overflow advances in 20-image steps
-    filesApiTimeoutMs: 60000           # per-image Files resolution deadline; one-minute default
-    fileExpiresAfterSeconds: 604800   # uploaded image lifetime; 1 hour to 30 days
-    fileRefreshMarginSeconds: 3600    # replace ids with less lifetime remaining
-    fileQuotaCleanupBatch: 100        # oldest harness-owned files deleted before one quota retry
-    retryPolicy:             # optional; omission uses normal mode with five retries
-      mode: always           # normal | always
-      backoff:
-        initialDelayMs: 500
-        maxDelayMs: 10000
-        jitterRatio: 0.1
-    defaultContextWindow: 1000000 # optional positive-integer fallback; this is the default
-    models:                  # optional; defaults to V4 Flash, V4 Pro, and V4 Flash Vision Exp
-      - id: deepseek-v4-flash
-        name: DeepSeek-V4-Flash
-      - id: deepseek-v4-flash-vision-exp
-        name: DeepSeek-V4-Flash-Vision-Exp
-        inputModalities: [text, image]
-        imagePixelBudget: 640000
-        imageMaxBytes: 1048576
-      - id: private-reasoner
-        description: Company-hosted reasoning model
-        contextWindow: 512000
-        systemPrompt: You replace the assembled system prompt for this model.
-该插件注册唯一提供方路由 `deepseek-official`，同时注册解析后的 `retryPolicy`。请求使用 `provider: deepseek-official` 选择该路由；其 `model` 会作为协议 `model` 字符串原样传递，因此更改 DeepSeek 模型不需要生命周期时注册。省略 `models` 会公布 `deepseek-v4-flash`（名称为 `DeepSeek-V4-Flash`）和 `deepseek-v4-pro`（名称为 `DeepSeek-V4-Pro`），两者的上下文窗口均为 1,000,000 token；显式列表会替换这些默认值，`models: []` 则不公布任何模型。Catalog 配置项通过 `ctx.llm.listModels('deepseek-official')` 公开给 ACP（Agent Client Protocol）编辑器和 Web 选择器等客户端，但仍只提供建议：未列出模型 id 仍原样传递。省略配置项 name 默认为其 id。可选的 `systemPrompt` 是该 catalog id 的完整系统提示词模板：agent-loop 会用插值后的文本替换所有已组装的系统提示词段落。缺省、仅空白，或未列入 catalog 的原样传递 id，都继续走普通组装。
-该插件注册唯一提供方路由 `deepseek-official`，并一同注册解析后的 `retryPolicy`；省略时会解析为 normal 模式并重试五次。请求使用 `provider: deepseek-official` 选择该路由；其 `model` 会作为协议 `model` 字符串原样传递，因此更改 DeepSeek 模型不需要生命周期时注册。省略 `models` 会公布 `deepseek-v4-flash` 和 `deepseek-v4-pro`，两者的上下文窗口均为 1,000,000 token；显式列表会替换这些默认值，`models: []` 则不公布任何模型。在视觉模型端点完成发布前，默认目录不会公布视觉模型，但部署方可以通过 `inputModalities: [text, image]` 主动添加。Catalog 配置项通过 `ctx.llm.listModels('deepseek-official')` 公开给 ACP（Agent Client Protocol）编辑器和 Web 选择器等客户端，但仍只提供建议：未列出模型 id 仍原样传递。省略配置项 name 默认为其 id，省略 `inputModalities` 则表示仅支持 `text`。
-该插件注册唯一提供方路由 `deepseek-official`，并一同注册解析后的 `retryPolicy`；省略时会解析为 normal 模式并重试五次。请求使用 `provider: deepseek-official` 选择该路由；其 `model` 会作为协议 `model` 字符串原样传递，因此更改 DeepSeek 模型不需要生命周期时注册。省略 `models` 会公布 `deepseek-v4-flash`、`deepseek-v4-pro` 与支持图片输入的 `deepseek-v4-flash-vision-exp`，三者的上下文窗口均为 1,000,000 token；显式列表会替换这些默认值，`models: []` 则不公布任何模型。Catalog 配置项通过 `ctx.llm.listModels('deepseek-official')` 公开给 ACP（Agent Client Protocol）编辑器和 Web 选择器等客户端，但仍只提供建议：未列出模型 id 仍原样传递，并按纯文本路由处理。省略配置项 name 默认为其 id，省略 `inputModalities` 则表示仅支持 `text`。
 
 适配器通常通过 DeepSeek Files API 上传这些确切请求字节，并发送 file-id 块。文件解析失败或超时会用相同请求版本的 base64 data URL 重建整份 chat 请求；一次请求绝不混用 file id 与内联图片。缓存 id 按端点与 API key 限定作用域，在到期前刷新，根据提供方的陈旧文件错误失效，并通过带等待方局部取消的 singleflight 解析。配额失败会先删除一批配置数量的最旧 harness 文件，再重试一次上传。
 
@@ -241,9 +201,5 @@ loop 保留的响应块会追加到下一个请求，并保留其更早的可复
 - `off` 推理强度绝不会以 `reasoning_effort: 'off'` 过线；它序列化为 `thinking: { type: 'disabled' }` 并省略该字段，从而对拒绝未知强度取值的网关保持协议拼写有效。
 
 </details>
-- **settings 的 `models` 列表会整体替换组合列表**：settings 层按字段合并，而数组是单个字段；按条目合并 catalog 需要带键的形状。
-- **未映射 `tool_choice`**：它不属于核心词汇（MVP 取舍，与 pi-ai twin 共享）。
-- **请求使用原始 `fetch`，而非 `@cordisjs/plugin-http`**：没有共享 proxy／拦截配置；采用暂缓到第二个适配器需要该功能时（`TODO(http)`）。
-- **会跳过插件添加的内容块类型**：核心文本与支持的图片块会被序列化，空工具输出会以字面 `(no output)` 通过协议发送。
-- **视频输入会被拒绝，绝不静默丢弃**：DeepSeek 线格式不接受视频，任何角色中的视频块都会让序列化抛出 `UNSUPPORTED_CONTENT`。共享 LLM 运行时已经为这些模型把视频投影为文本占位，因此到达本适配器的视频意味着调用方绕过了该投影。
-- **图片是仅输入的持久附件**：不支持直接外部 URL 和 assistant 图片输出；DeepSeek 图片输入通常使用 Files API，仅在单次请求恢复时使用内联 base64。
+
+**运行时不变式：** 不发布伴生入口。本包没有独立事件序列或可变数据关系，相关约定在所属 seam 强制执行。

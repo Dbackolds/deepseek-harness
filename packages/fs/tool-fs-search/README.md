@@ -49,8 +49,6 @@ A subprocess backend, then the tools; the spill backend is optional and makes ca
 | `grep` | `pattern`, `path?`, `include?` | Searches file contents with a ripgrep regex and returns matches grouped by file as `Line N: <preview>`; `include` is one positive glob filter, with comma-separated lists and negated values rejected up front |
 
 Routine budgets stay out of the model-facing schema: a model that needs surrounding context reads the matched file with `read`, and one that needs later results follows the returned spill locator's retrieval hint.
-The binary ships with the package on every supported platform (macOS/Linux/Windows, x64/arm64), so no host `rg` install is required and the tools register on every deployment. Returned paths are displayed relative to the resolved workdir (the calling agent's session cwd when present, else `process.cwd()`). When `path` is omitted, grep and glob search the session cwd plus every existing additional workspace folder from `sandboxPolicy.foldersOf`. Follow-up `read` of a returned path works only when that path and the filesystem root are the same workspace. That co-location requirement carries no runtime cross-service validation; remote or virtual filesystem search waits for a shared workspace contract or a provider-specific search backend.
-Node deployments receive the `@vscode/ripgrep` platform package on supported macOS, Linux, and Windows x64/arm64 targets. Python SDK Linux and macOS wheels copy the target-native binary beside the single-file runtime as `<runtime>-rg`; `deepseek_harness_runtime.bundled_runtime_path()` rejects an incomplete wheel before launch. No carrier requires a host `rg` install. Returned paths are displayed relative to the resolved workdir (the calling agent's session cwd when present, else `process.cwd()`) and are follow-up-readable with `read` only when that workdir and the filesystem root are the same workspace. That co-location requirement carries no runtime cross-service validation; remote or virtual filesystem search waits for a shared workspace contract or a provider-specific search backend.
 
 ### Configuration
 
@@ -82,10 +80,6 @@ Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep 
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
-| Tool | Arguments | Behavior |
-|---|---|---|
-| `glob` | `pattern`, `path?` | `rg --files --glob <pattern> --sort=modified --no-ignore --hidden` plus VCS metadata excludes (`.git`, `.svn`, `.hg`, `.bzr`, `.jj`, `.sl`). `path` is an optional **directory** search root; omitted means the session cwd plus existing additional workspace folders. Returns one FILE path per line; `rg --files` never emits directory entries. The pattern keeps ripgrep semantics: without a `/` it matches the basename at any depth, so `*` matches the whole tree. Complete results stay modification-time ordered; over-cap presentation follows `sampleOverCapGlobResults`. |
-| `grep` | `pattern`, `path?`, `include?` | Line-oriented `rg --json` parse (no colon-splitting ambiguity). `pattern` is a ripgrep regex; `path` is an optional **file or directory** target; `include` is ONE positive glob filter — a comma-separated list or a negated (`!…`) value is rejected up front (brace alternation like `*.{ts,tsx}` is fine). Returns matches grouped by file as `Line N: <preview>`. |
 
 <details>
 <summary>Implementation internals — click to expand</summary>
@@ -231,3 +225,5 @@ These limits define when the search tools are a poor fit or need special operati
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This model-facing adapter has no independent lifecycle stream; execution relations are owned by the capability seam it calls.

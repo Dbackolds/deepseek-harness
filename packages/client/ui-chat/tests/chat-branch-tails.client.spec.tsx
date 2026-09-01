@@ -147,7 +147,7 @@ describe('MessageItem arms', () => {
       configurable: true,
       value: { writeText },
     })
-    // Same-day clock: construct "today at 14:24" so the label stays `HH:mm`.
+    // Same-day clock: construct "today at 14:24" so the label stays the 12-hour form.
     const now = new Date()
     const time = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 24).getTime()
     render(
@@ -158,7 +158,7 @@ describe('MessageItem arms', () => {
       }}
       />,
     )
-    expect(screen.getByText('14:24')).toBeTruthy()
+    expect(screen.getByText('2:24 下午')).toBeTruthy()
     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
     expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
@@ -706,7 +706,7 @@ describe('MessageItem arms', () => {
     // reach it, and the row marker must not claim a form that did not render.
     const cases = [
       { form: 'snapshot', source: { kind: 'plugin', form: 'snapshot', sections: 'not-a-list' }, label: 'plugin' },
-      { form: 'relay', source: { kind: 'subagent-report', form: 'relay' }, label: 'subagent-report' },
+      { form: 'relay', source: { kind: 'agent-message', form: 'relay' }, label: 'agent-message' },
       { form: 'recall', source: { kind: 'session-reference', form: 'recall', references: [{ label: 'x' }] }, label: 'session-reference' },
     ] as const
     for (const { form, source, label } of cases) {
@@ -746,13 +746,13 @@ describe('MessageItem arms', () => {
         kind: 'context',
         seq: 3,
         content: [{ type: 'text', text: 'child report body' }],
-        source: { kind: 'subagent-report', form: 'relay', senderSessionId: 'child-7' },
-        provenance: { role: 'inject', label: 'subagent-report' },
+        source: { kind: 'agent-message', form: 'relay', senderSessionId: 'child-7' },
+        provenance: { role: 'inject', label: 'agent-message' },
         form: 'relay',
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*subagent-report$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-message$/ }))
     expect(view.container.querySelector('[data-context-relay-sender]')?.textContent).toBe('来自会话 child-7')
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('child report body')
   })
@@ -962,15 +962,15 @@ describe('formatMessageClock', () => {
   const now = new Date(2026, 6, 29, 10, 0).getTime()
 
   it('keeps HH:mm on the same calendar day', () => {
-    expect(formatMessageClock(new Date(2026, 6, 29, 14, 24).getTime(), t, now)).toBe('14:24')
+    expect(formatMessageClock(new Date(2026, 6, 29, 14, 24).getTime(), t, now)).toBe('2:24 下午')
   })
 
   it('prefixes month and day across days in the same year', () => {
-    expect(formatMessageClock(new Date(2026, 0, 1, 14, 24).getTime(), t, now)).toBe('1月1日 14:24')
+    expect(formatMessageClock(new Date(2026, 0, 1, 14, 24).getTime(), t, now)).toBe('1月1日 2:24 下午')
   })
 
   it('prefixes year, month, and day across years', () => {
-    expect(formatMessageClock(new Date(2025, 11, 31, 9, 5).getTime(), t, now)).toBe('2025年12月31日 09:05')
+    expect(formatMessageClock(new Date(2025, 11, 31, 9, 5).getTime(), t, now)).toBe('2025年12月31日 9:05 上午')
   })
 
   it('arms the next local midnight from an in-day instant', () => {
@@ -1000,11 +1000,11 @@ describe('useCalendarDay boundary refresh', () => {
       }}
       />,
     )
-    expect(screen.getByText('14:24')).toBeTruthy()
+    expect(screen.getByText('2:24 下午')).toBeTruthy()
     act(() => {
       vi.advanceTimersByTime(msUntilNextLocalMidnight(dayStart) + 1)
     })
-    expect(screen.getByText('7月29日 14:24')).toBeTruthy()
+    expect(screen.getByText('7月29日 2:24 下午')).toBeTruthy()
   })
 })
 
