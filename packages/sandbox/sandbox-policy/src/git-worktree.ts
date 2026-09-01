@@ -322,10 +322,10 @@ async function pathExists(path: string): Promise<boolean> {
  */
 export async function describeSessionGit(
   workspacePath: string,
-  session?: Pick<Session, 'events'>,
+  session?: Pick<Session, 'snapshotEvents'>,
   options?: DescribeSessionGitOptions,
 ): Promise<SessionGitState> {
-  const overlay = session === undefined ? undefined : effectiveWorktree(session.events)
+  const overlay = session === undefined ? undefined : effectiveWorktree(session.snapshotEvents())
   const worktreePath = resolve(overlay?.path ?? workspacePath)
   const ttlMs = options?.ttlMs ?? describeCacheTtlMs
   const now = options?.now ?? Date.now()
@@ -433,7 +433,7 @@ export async function checkoutSessionBranch(
   const workspaceBranch = await currentBranchOf(workspacePath)
     ?? await detachedCheckoutLabel(workspacePath)
   if (workspaceBranch === branch) {
-    const overlay = effectiveWorktree(session.events)
+    const overlay = effectiveWorktree(session.snapshotEvents())
     if (overlay !== undefined && resolve(overlay.path) !== resolve(workspacePath)) {
       await removeWorktree(repoRoot, overlay.path)
     }
@@ -445,7 +445,7 @@ export async function checkoutSessionBranch(
   await ensureLocalBranch(repoRoot, branch)
   const target = worktreeHome(workspaceId, session.id)
   await mkdir(dirname(target), { recursive: true })
-  const existing = effectiveWorktree(session.events)
+  const existing = effectiveWorktree(session.snapshotEvents())
   if (existing !== undefined && resolve(existing.path) !== resolve(target)
     && resolve(existing.path) !== resolve(workspacePath)) {
     await removeWorktree(repoRoot, existing.path)

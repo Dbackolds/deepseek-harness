@@ -28,7 +28,7 @@ function repo(): { cwd: string; session: Session } {
   git(cwd, ['add', '.'])
   git(cwd, ['commit', '-m', 'init'])
   const session = Session.create(SessionId('s1'), undefined, {
-    version: 0, id: SessionId('s1'), createdAt: 0, cwd,
+    version: 0, id: SessionId('s1'), createdAt: 0, isSeeded: false, cwd,
   })
   return { cwd, session }
 }

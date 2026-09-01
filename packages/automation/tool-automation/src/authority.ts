@@ -13,7 +13,7 @@ function reject(message: string, code: string): never {
 }
 /** Locate the open turn enclosing a model tool call. */
 function openTurn(agent: Agent): { start: SessionEvent; events: SessionEvent[] } {
-  const events = agent.session.events
+  const events = agent.session.snapshotEvents()
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const boundary = events[index]
     if (boundary?.type === 'turn/end') {

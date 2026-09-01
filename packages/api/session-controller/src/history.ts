@@ -348,10 +348,16 @@ function wireHeader(
   header: SessionHeader,
   inheritedEventCount: SessionLogOffsetType,
 ): SessionWireHeader {
-  const { isSeeded, ...wire } = header
   return {
-    ...wire,
-    ...isSeeded ? { seedLength: inheritedEventCount } : {},
+    version: header.version,
+    id: header.id,
+    createdAt: header.createdAt,
+    ...header.cwd === undefined ? {} : { cwd: header.cwd },
+    ...header.parentSession === undefined ? {} : { parentSession: header.parentSession },
+    ...header.isSeeded ? { seedLength: Number(inheritedEventCount) } : {},
+    ...header.origin === undefined ? {} : { origin: header.origin },
+    ...header.delegationDepth === undefined ? {} : { delegationDepth: header.delegationDepth },
+    ...header.agentPreset === undefined ? {} : { agentPreset: header.agentPreset },
   }
 }
 

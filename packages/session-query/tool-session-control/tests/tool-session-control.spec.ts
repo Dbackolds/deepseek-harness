@@ -223,7 +223,7 @@ describe('dsh-tool-session-control', () => {
     })
     expect(renamed.isError).toBe(false)
     expect(renamed.value).toMatchObject({ sessionId: 'named', title: 'Library tidy' })
-    const event = session.events.findLast(item => item.type === 'session/title')
+    const event = session.snapshotEvents().findLast(item => item.type === 'session/title')
     expect(event?.data).toMatchObject({ title: 'Library tidy', source: { kind: 'user' } })
 
     const empty = await callTool(ctx, 'session_control_rename', {
@@ -464,7 +464,7 @@ describe('dsh-tool-session-control', () => {
     expect(moved.value).toMatchObject({ sessionId: 'walker', path: newDir, cwd: newDir })
     expect(origin.sessionIds).not.toContain('walker')
     expect(ctx.workspaceRegistry.list().some(workspace => workspace.sessionIds.includes(session.id))).toBe(true)
-    expect(session.events.some(event => event.type === 'workspace/home')).toBe(true)
+    expect(session.snapshotEvents().some(event => event.type === 'workspace/home')).toBe(true)
 
     const missing = await callTool(ctx, 'session_control_rehome', {
       session_id: 'walker',
@@ -516,7 +516,7 @@ describe('dsh-tool-session-control', () => {
     })
     expect(result.isError).toBe(false)
     expect(result.value).toMatchObject({ sessionId: 'plain', path: dir })
-    expect(session.events.some(event => event.type === 'workspace/home')).toBe(true)
+    expect(session.snapshotEvents().some(event => event.type === 'workspace/home')).toBe(true)
     await ctx.fiber.dispose()
   })
 

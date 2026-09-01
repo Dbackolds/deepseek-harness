@@ -28,7 +28,7 @@ import { chatViewDefinition } from '../src/client/conversation-nodes/chat-snapsh
 import { turnProcessDefinition } from '../src/client/conversation-nodes/turn-process.ts'
 import type { AssistantChatData, ChatNode, ChatRequestHeaderChatData } from '../src/client/contract/chat-nodes.ts'
 import type { AssistantRouteOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
+import type { AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { AssistantNodeView } from '../src/client/chat/AssistantNodeView.tsx'
 import { zh } from '../src/client/locale.ts'
 
@@ -445,47 +445,4 @@ describe.skip('assistant clock-line slot', () => {
     expect(clock?.parentElement?.children).toHaveLength(1)
   })
 
-  it('stacks dispatched route content under the clock and nothing extra otherwise', () => {
-    const view = render(
-      <AssistantMarkdown
-        t={t}
-        time={4_000}
-        blocks={[{ kind: 'text', text: 'answer body' }]}
-        streaming={false}
-        renderMessageImages={renderMessageImages}
-        route={<span data-testid="route-line">Grok 4.6 · High</span>}
-      />,
-    )
-    const clock = view.container.querySelector('time')
-    const column = clock?.parentElement ?? null
-    const line = view.getByTestId('route-line')
-    expect(column?.contains(line)).toBe(true)
-    expect(line.parentElement?.parentElement).toBe(column)
-    expect(view.getByText('answer body')).toBeTruthy()
-    // No route content: the column keeps only the clock, nothing extra mounts.
-    const bare = render(
-      <AssistantMarkdown
-        t={t}
-        time={4_000}
-        blocks={[{ kind: 'text', text: 'bare' }]}
-        streaming={false}
-        renderMessageImages={renderMessageImages}
-      />,
-    )
-    const bareClock = bare.container.querySelector('time')
-    expect(bareClock?.parentElement?.children).toHaveLength(1)
-    expect(bare.container.textContent).not.toContain('·')
-    // Route without a time still mounts the column: the line stands alone.
-    const timeless = render(
-      <AssistantMarkdown
-        t={t}
-        blocks={[{ kind: 'text', text: 'timeless' }]}
-        streaming={false}
-        renderMessageImages={renderMessageImages}
-        route={<span data-testid="route-line">model-b</span>}
-      />,
-    )
-    expect(timeless.container.querySelector('time')).toBeNull()
-    expect(timeless.container.querySelector('[data-testid="route-line"]')?.textContent).toBe('model-b')
-  })
 })

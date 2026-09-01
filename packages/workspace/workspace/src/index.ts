@@ -107,7 +107,7 @@ export class WorkspaceRegistry extends Service {
     table: () => this.requireTable(),
     sessionPath: id => this.sessionPaths.get(id),
     readSessionHeader: id => this.readSessionHeader(id),
-    liveSessionEvents: id => this.ctx.get('sessions')?.get(id)?.events,
+    liveSessionEvents: id => this.ctx.get('sessions')?.get(id)?.snapshotEvents(),
     inspectSession: async (id) => {
       const inspected = await this.inspectSession(id)
       if (!inspected.ok || inspected.header === undefined) return undefined
@@ -703,7 +703,7 @@ export class WorkspaceRegistry extends Service {
   ): Promise<void> {
     this.headers.set(header.id, header)
     const live = this.ctx.get('sessions')?.get(header.id)
-    let events: readonly SessionEvent[] | undefined = live?.events
+    let events: readonly SessionEvent[] | undefined = live?.snapshotEvents()
     if (options.overlays && events === undefined && this.accountedSessionIds().has(header.id)) {
       const inspected = await this.inspectSession(header.id)
       if (inspected.ok) events = inspected.events

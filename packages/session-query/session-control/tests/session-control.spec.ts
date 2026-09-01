@@ -254,7 +254,7 @@ describe('SessionControl', () => {
     const sessionId = SessionId('persisted-cold')
     vi.spyOn(ctx.sessionQuery, 'filterSessions').mockResolvedValue([
       {
-        header: { version: 0, id: sessionId, createdAt: 1 },
+        header: { version: 0, id: sessionId, createdAt: 1, isSeeded: false },
         live: false,
         persisted: true,
       },

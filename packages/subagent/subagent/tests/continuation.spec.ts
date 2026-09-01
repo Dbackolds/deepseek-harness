@@ -757,7 +757,7 @@ describe('direct-child Queue residency routing', () => {
     const loaded = await ctx.sessionPersistence.load(started.childId)
     expect(loaded.meta.cwd).toBe('/managed/worktree')
 
-    await expect(followup(ctx, parent, started.childId, message('continue without provider')))
+    await expect(queuePrompt(ctx, parent, started.childId, message('continue without provider')))
       .resolves.toBeTypeOf('string')
     await waitNoActivation(ctx, started.childId)
     const reloaded = await ctx.sessionPersistence.load(started.childId)
@@ -780,7 +780,7 @@ describe('direct-child Queue residency routing', () => {
     const loaded = await ctx.sessionPersistence.load(started.childId)
     expect(loaded.meta.cwd).toBe('/caller/tree')
 
-    await expect(followup(ctx, parent, started.childId, message('continue please')))
+    await expect(queuePrompt(ctx, parent, started.childId, message('continue please')))
       .resolves.toBeTypeOf('string')
     await waitNoActivation(ctx, started.childId)
     const reloaded = await ctx.sessionPersistence.load(started.childId)

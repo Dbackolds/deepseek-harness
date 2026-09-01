@@ -361,7 +361,7 @@ export class PiAiAdapter extends LlmAdapter {
         throw new LlmError(`pi-ai model "${model.id}" does not support image input`, 'UNSUPPORTED_CONTENT')
       }
       const containsVideo = options.messages.some(message => contentHasVideo(message.content))
-      if (containsVideo && !model.input.includes('video')) {
+      if (containsVideo && !(model.input as readonly string[]).includes('video')) {
         throw new LlmError(`pi-ai model "${model.id}" does not support video input`, 'UNSUPPORTED_CONTENT')
       }
       const attachments = (containsImage || containsVideo) ? this.config.resolveAttachments?.() : undefined

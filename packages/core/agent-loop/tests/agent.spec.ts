@@ -173,7 +173,7 @@ describe('Agent', () => {
     const agent = ctx.agentLoop.create(SessionId('rewrite-surface'), { provider: 'mock', model: 'mock' })
     send(agent, 'original')
     await agent.whenIdle()
-    const original = agent.session.events.find(event => event.type === 'user/message')
+    const original = agent.session.snapshotEvents().find(event => event.type === 'user/message')
     if (original === undefined || original.type !== 'user/message') throw new Error('original prompt missing')
     const shadowed = [...agent.session.surface.nodes]
     const endSeq = shadowed.at(-1)
@@ -190,7 +190,7 @@ describe('Agent', () => {
     const request = JSON.stringify(adapter.requests[1]?.messages)
     expect(request).toContain('rewritten')
     expect(request).not.toContain('original')
-    expect(agent.session.events.filter(event => event.type === 'user/message')).toHaveLength(2)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message')).toHaveLength(2)
   })
 
   it('continueFromSurface throws while the agent is already running', async () => {

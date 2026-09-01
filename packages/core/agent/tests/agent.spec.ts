@@ -130,7 +130,7 @@ describe('Inbox', () => {
     inbox.append('next-turn', second)
     inbox.append('next-turn', third)
     inbox.append('next-step', step)
-    const beforeMove = session.events.length
+    const beforeMove = session.snapshotEvents().length
     const insertedBeforeMove = inserted.length
     const discardedBeforeMove = discarded.length
 
@@ -140,7 +140,7 @@ describe('Inbox', () => {
       content: [{ type: 'text', text: 'missing' }],
       source: { kind: 'user' },
     }).id, first.id)).toBe(false)
-    expect(session.events).toHaveLength(beforeMove)
+    expect(session.snapshotEvents()).toHaveLength(beforeMove)
 
     expect(inbox.move(third.id, first.id)).toBe(true)
     expect(inbox.nextTurn).toEqual([third, first, second])

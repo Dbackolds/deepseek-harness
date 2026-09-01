@@ -57,6 +57,7 @@ function fakeSession(): SessionFace {
     loadOlder: () => Promise.reject(new Error('unused fake Session operation')),
     loadThrough: () => Promise.reject(new Error('unused fake Session operation')),
     command: () => Promise.reject(new Error('unused fake Session operation')),
+    rewrite: () => Promise.reject(new Error('unused fake Session operation')),
   }
 }
 
@@ -94,6 +95,8 @@ function fakeSessions(ctx: Context): { sessions: ISessions; binding: SessionBind
     scopeOf: candidate => candidate === binding.ctx ? SESSION_ID : undefined,
     sessionOf: candidate => candidate === binding.ctx ? binding.session : undefined,
     binding: id => id === SESSION_ID ? binding : undefined,
+    rewrite: () => Promise.reject(new Error('unused fake Sessions operation')),
+    markUnread: () => {},
   } satisfies ISessions
   return { sessions, binding }
 }
