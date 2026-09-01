@@ -1,0 +1,31 @@
+/* Product-update overlay toast. The shell overlay layer is click-through;
+   children opt back into pointer events. Position is relative to that layer. */
+
+.toast {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv3);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  pointer-events: auto;
+}
+
+.toastTitle {
+  font: var(--dsw-font-xs-strong-13);
+  font-weight: 600;
+}
+
+.toastActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

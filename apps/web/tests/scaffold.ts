@@ -137,6 +137,10 @@ async function ownsReplayFixture(replayFixture: string | undefined): Promise<boo
 /** The shipped composition under test: the dsh-base and dsh-web-app bundle patches over the empty profile root. */
 const BASE_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml')
 const WEB_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/web-app/cordis.patch.yml')
+// The shipped Web bundle mounts ui-update, which polls GitHub on Host apply.
+// Keep that network off the default e2e composition; settings-chrome re-enables
+// the row with an invalid repo so its General Settings golden can pin it.
+const DISABLE_PRODUCT_UPDATE_PATH = join(REPO_ROOT, 'apps/web/tests/product-update.disable.yml')
 /** The installation anchor whose dependency surface the profile module fallback mirrors. */
 const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
 
@@ -438,10 +442,13 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   // drifting).
   const basePatches = loadOverlayPatches('web e2e scaffold', BASE_PATCH_PATH)
   const surfacePatches = loadOverlayPatches('web e2e scaffold', WEB_PATCH_PATH)
+  const disableProductUpdatePatches = loadOverlayPatches('web e2e scaffold', DISABLE_PRODUCT_UPDATE_PATH)
   const extraOverlayPatches = options.extraOverlayPath === undefined
     ? []
     : loadOverlayPatches('web e2e scaffold', options.extraOverlayPath)
-  const composedRows = composeEntries([basePatches, surfacePatches, extraOverlayPatches])
+  const composedRows = composeEntries([
+    basePatches, surfacePatches, disableProductUpdatePatches, extraOverlayPatches,
+  ])
   const webRuntimeConfig = composedRows.find(row => row.id === 'web-runtime')?.config as {
     surfaceContext?: boolean
   } | undefined
@@ -449,6 +456,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   const patches: PatchOptions[] = [
     ...basePatches,
     ...surfacePatches,
+    ...disableProductUpdatePatches,
     ...extraOverlayPatches,
     // The roster's shipped presets are the plugin's own, bundled inside
     // `dsh-agent-presets` and prepended by it. Pin only the machine-local

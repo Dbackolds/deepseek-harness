@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   findRepoRoot, isReusableListenPort, listenPortAvailable, packagedHostRoot, resolveDshInvocation,
-  resolveNodeExecutable, webHostArgs,
+  resolveNodeExecutable, webHostArgs, webHostEnv,
 } from '../src/host.ts'
 import { desktopIconPath } from '../src/icon.ts'
 import { windowsShortcutPath, windowsShortcutSpec } from '../src/shortcut.ts'
@@ -88,5 +88,16 @@ describe('desktop host resolution', () => {
       await new Promise<void>((resolve) => { occupied.close(() => { resolve() }) })
     }
     expect(await listenPortAvailable(address.port)).toBe(true)
+  })
+})
+
+describe('webHostEnv', () => {
+  it('merges extraEnv over process.env without mutating the original', () => {
+    const previous = process.env.DSH_PRODUCT_CHANNEL
+    const merged = webHostEnv({ DSH_PRODUCT_CHANNEL: 'desktop', DSH_PRODUCT_VERSION: '9.9.9' })
+    expect(merged.DSH_PRODUCT_CHANNEL).toBe('desktop')
+    expect(merged.DSH_PRODUCT_VERSION).toBe('9.9.9')
+    expect(merged).not.toBe(process.env)
+    expect(process.env.DSH_PRODUCT_CHANNEL).toBe(previous)
   })
 })
