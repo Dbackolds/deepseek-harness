@@ -20,6 +20,8 @@ Typert Remote 拆分去掉了 `connection.api`。仍按更早一元面编译的 
 
 该槽在 `ConnectionHandle` 上是可选的。Connection 不填充它；组合卸载时 Remotes 会还原先前的值。新表面必须调用 `ctx.remote`。
 
+`$mount` 把每个 namespace 装在堂兄弟 fiber 上。Remotes 客户端 fiber 只 inject 了 `remote`，因此这里读 `ctx.remote.llm` / `ctx.remote.settings` 会抛 `cannot get property "remote.<namespace>" without inject`。挂载完成后再开一个声明了这两个名字的子 fiber，由它读取 handle 并安装兼容面。
+
 ## 考虑过的方案
 
 - **只改 `$DSH_HOME/profiles` 里已装插件。** 这次修补挺不过 `dsh plugin add` 或升级，其他仍走旧面的插件也会继续坏。
@@ -32,4 +34,4 @@ Typert Remote 拆分去掉了 `connection.api`。仍按更早一元面编译的 
 
 ## 测试
 
-`packages/api/remotes/tests/connection-api.client.spec.ts` 覆盖提供方拼接、目录分组、Remote 失败转发，以及 Connection 槽的安装与还原。
+`packages/api/remotes/tests/connection-api.client.spec.ts` 覆盖提供方拼接、目录分组、Remote 失败转发，以及 Connection 槽的安装与还原。`packages/api/remotes/tests/client-apply.client.spec.ts` 覆盖加载器真实使用的堂兄弟 fiber inject 路径。

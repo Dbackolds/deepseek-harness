@@ -163,7 +163,15 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
     throw error
   }
   const connection = ctx.get('connection') as ConnectionHandle | undefined
-  const uninstallApi = connection === undefined ? undefined : installConnectionApi(connection, ctx.remote)
+  let uninstallApi: (() => void) | undefined
+  // Namespace services live on cousin fibers created by $mount. This assembly
+  // only injects `remote`, so `ctx.remote.llm` here throws "without inject".
+  // Read them from a child that declares the namespaces after they exist.
+  if (connection !== undefined) {
+    await ctx.inject(['remote.llm', 'remote.settings'], (scope) => {
+      uninstallApi = installConnectionApi(connection, scope.remote)
+    })
+  }
   // Unwound in reverse mount order, so a namespace never outlives one mounted
   // after it.
   return async () => {

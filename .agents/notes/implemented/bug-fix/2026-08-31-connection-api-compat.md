@@ -20,6 +20,8 @@ Keep `ctx.remote` as the product API. After API Remotes mounts the selected name
 
 The slot is optional on `ConnectionHandle`. Connection does not populate it; Remotes restores the previous value when the assembly unloads. New surfaces must call `ctx.remote`.
 
+`$mount` installs each namespace on a cousin fiber. The Remotes client fiber only injects `remote`, so `ctx.remote.llm` / `ctx.remote.settings` throw `cannot get property "remote.<namespace>" without inject`. After mounts settle, a child fiber that injects those two names reads the handles and installs the face.
+
 ## Alternatives considered
 
 - **Patch each installed plugin in `$DSH_HOME/profiles`.** That repair does not survive `dsh plugin add` or an upgrade, and every other plugin on the old face stays broken.
@@ -32,4 +34,4 @@ Plugins that still call `connection.api` for those four methods work after a Hos
 
 ## Testing
 
-`packages/api/remotes/tests/connection-api.client.spec.ts` covers provider joining, catalog grouping, Remote-failure forwarding, and install/restore of the Connection slot.
+`packages/api/remotes/tests/connection-api.client.spec.ts` covers provider joining, catalog grouping, Remote-failure forwarding, and install/restore of the Connection slot. `packages/api/remotes/tests/client-apply.client.spec.ts` covers the cousin-fiber inject path the loader uses.
