@@ -32,6 +32,10 @@ An external `ctx.on('subagent/end')` listener looks more decoupled and is wrong.
 
 Both rules are pinned by tests that fail when the ordering is reversed or the accounting removed.
 
+### Establishment holds ownership open
+
+The owned-child accounting also guards the creation side: `holdOwnership()` pre-registers the child id in a continuation-managed parent's owned set before the establishment or resume awaits (persistence stat, provider preparation, materialization), so an idle parent cannot be judged settled while a caller is still creating or resuming that child — an admitted delivery after settlement would find a stale parent identity. The returned releaser serves only the failure path: it removes just the hold this call added, and once a live Activation for the child exists the ownership edge belongs to that Activation and `finishDisposal`'s `releaseOwnership`. A parent with no Activation needs no hold (only this manager settles parents), and a parent whose own disposal transaction is already open rejects with `ACTIVATION_CLOSING` instead of establishing a child that could never be delivered to.
+
 ### Scheduling
 
 An idle parent gets one ordinary later turn. A busy parent follows Host `subagent-delivery.settlementBusy` at send time: `steer` (the default) admits the notice at the nearest later step, because `Inbox.claim()` takes the whole next-step batch at one boundary; `queue` opens a later turn. Steering rather than injecting is still the correctness default — the wake is a no-op while the driver is running, and it closes the window where a driver retires between the status read and the send. The field is a user placement choice, not a deployment switch that can omit the notice. Teardown injection stays fixed.
