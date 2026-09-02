@@ -143,6 +143,8 @@ New behavior attaches to a documented extension point. Changing the loop itself 
 | Open a fresh session on a timer | use `ctx.automation`; do not extend session-local Schedule |
 | Fork a live session | `ctx.sessions.fork(source, boundary?, childSessionId?)` |
 | Rewrite a settled user prompt in the same session | Host `session.rewrite` then `agent.continueFromSurface()` |
+| Fork a session at a turn boundary | `ctx.agents.create({ sessionId, seed, meta: { parentSession, seedLength } })` — only agent-loop-published sessions persist |
+| Store sessions in a new backend | implement `SessionPersistence` (`create`/`open`/`stat`/`list`/`export`) over the shared handle scaffolding |
 | Scope a registration to one agent | use that agent's `agent.ctx` |
 
 The [extension cookbook](cookbook/extension-cookbook.md) maps features to capabilities and indexes the step-by-step guides for [packages](cookbook/adding-a-package.md), [tools](cookbook/adding-a-tool.md), [LLM adapters](cookbook/adding-an-llm-adapter.md), and [settings cards](cookbook/adding-a-settings-card.md). The [Conversation subsystem](subsystems/conversation.md) owns Chat-node assembly.

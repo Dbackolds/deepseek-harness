@@ -9,6 +9,8 @@ import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import type { DomainChanged } from '@deepseek-ai/dsh-storage-domain'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
+import { SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import WorkspaceRegistry, {
   WorkspaceId,
@@ -56,8 +58,8 @@ async function harness(options: HarnessOptions = {}) {
 
   let listed = options.sessions ?? []
   const logs = options.logs
-  const list = vi.fn(async () => listed)
-  const load = vi.fn(() => { throw new Error('event bodies must not be loaded') })
+  const list = vi.fn(async (): Promise<SessionPersistenceSnapshot[]> =>
+    listed.map(header => ({ header, revision: SessionPersistenceRevision(`rev-${header.id}`) })))
   const inspectImpl = options.inspect === undefined
     ? async (id: SessionId) => {
       if (logs === undefined || !logs.has(id)) throw new Error('event bodies must not be inspected')
@@ -69,14 +71,30 @@ async function harness(options: HarnessOptions = {}) {
     }
     : options.inspect
   const inspect = inspectImpl === false ? undefined : vi.fn(inspectImpl)
-  ctx.provide('sessionPersistence', inspect === undefined
-    ? { list, load }
-    : { list, load, inspect } as never)
+  const open = inspect === undefined
+    ? undefined
+    : vi.fn(async (id: SessionId) => {
+      const inspected = await inspect(id) as { meta: SessionHeader; events: readonly SessionEvent[] }
+      return {
+        header: inspected.meta,
+        read: async () => inspected.events,
+        close: async () => {},
+      }
+    })
+  const stat = vi.fn(() => { throw new Error('per-session stat must not be needed') })
+  ctx.provide('sessionPersistence', {
+    list,
+    ...open === undefined ? {} : { open },
+    stat,
+  } as never)
 
   if (options.sessionStore === true) {
     await ctx.plugin(SessionStore)
   } else if (options.liveSessions !== undefined) {
-    const live = new Map(options.liveSessions.map(meta => [meta.id, { header: meta }]))
+    const live = new Map(options.liveSessions.map(meta => [meta.id, {
+      header: meta,
+      snapshotEvents: () => [] as const,
+    }]))
     ctx.provide('sessions', {
       get: (id: SessionId) => live.get(id),
       list: () => [...live.values()],
@@ -96,7 +114,8 @@ async function harness(options: HarnessOptions = {}) {
     changes,
     initChanges,
     list,
-    load,
+    open: open ?? vi.fn(),
+    stat,
     inspect: inspect ?? vi.fn(),
     setSessions: (headers: SessionHeader[]) => { listed = headers },
   }
@@ -216,7 +235,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     expect(ctx.get('workspaceRegistry')).toBeUndefined()
     expect(pool.media.has('workspace')).toBe(false)
 
-    const list = vi.fn(async () => [] as SessionHeader[])
+    const list = vi.fn(async () => [] as SessionPersistenceSnapshot[])
     ctx.provide('sessionPersistence', { list } as never)
     await fiber.await()
     expect(ctx.workspaceRegistry.list()).toEqual([])
@@ -244,8 +263,8 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     })
 
     expect(result.list).toHaveBeenCalledTimes(1)
-    expect(result.load).not.toHaveBeenCalled()
-    expect(result.inspect).not.toHaveBeenCalled()
+    expect(result.open).not.toHaveBeenCalled()
+    expect(result.stat).not.toHaveBeenCalled()
     expect(result.registry.list().map(workspace => workspace.path)).toEqual([newer, older])
     expect(result.registry.list().map(workspace => workspace.sessionIds)).toEqual([
       ['newer-only'],
@@ -516,8 +535,8 @@ describe('WorkspaceRegistry create and lookup', () => {
     expect(result.pool.media.get('workspace')!.tables.get('workspaces')!.has(workspace.id)).toBe(false)
     await expect(realpath(dir)).resolves.toBe(dir)
     expect(result.list).toHaveBeenCalledTimes(1)
-    expect(result.load).not.toHaveBeenCalled()
-    expect(result.inspect).not.toHaveBeenCalled()
+    expect(result.open).not.toHaveBeenCalled()
+    expect(result.stat).not.toHaveBeenCalled()
 
     const reregistered = await result.registry.create(dir)
     expect(reregistered.id).not.toBe(workspace.id)
@@ -752,9 +771,9 @@ describe('Workspace session ordering', () => {
     ctx.storage.mount('domain', facility)
     ctx.provide('storageDomain', facility)
     ctx.provide('sessionPersistence', {
-      list: async () => [],
-      load: () => { throw new Error('event bodies must not be loaded') },
-      inspect: () => { throw new Error('event bodies must not be inspected') },
+      list: async () => [] as SessionPersistenceSnapshot[],
+      open: () => { throw new Error('event bodies must not be opened') },
+      stat: () => { throw new Error('per-session stat must not be needed') },
     } as never)
     await ctx.plugin(SessionStore)
     const live = ctx.sessions.create(SessionId('moved'), { meta: { cwd: birth } })
@@ -777,7 +796,7 @@ describe('Workspace session ordering', () => {
     const workspace = await result.registry.create(home)
     await workspace.attachSession(SessionId('cold-moved'))
     expect(workspace.sessionIds).toEqual(['cold-moved'])
-    expect(result.load).not.toHaveBeenCalled()
+    expect(result.stat).not.toHaveBeenCalled()
   })
 
   it('decides detach/attach membership at domain write-chain slots', async () => {
@@ -851,7 +870,7 @@ describe('header-validated membership projection', () => {
     await workspace.setTitle('pruned')
     expect(storedRecord(pool, id).sessionIds).toEqual(['good'])
     expect(workspace.sessionIds).not.toContain('cwd-only')
-    expect(result.load).not.toHaveBeenCalled()
+    expect(result.stat).not.toHaveBeenCalled()
   })
 
   it('keeps a cold rehomed session on the overlay workspace after restart', async () => {
@@ -873,8 +892,8 @@ describe('header-validated membership projection', () => {
     })
     expect(result.registry.get(homeId)!.sessionIds).toEqual(['moved'])
     expect(result.registry.get(birthId)!.sessionIds).toEqual([])
-    expect(result.inspect).toHaveBeenCalledTimes(1)
-    expect(result.load).not.toHaveBeenCalled()
+    expect(result.open).toHaveBeenCalledTimes(1)
+    expect(result.stat).not.toHaveBeenCalled()
 
     result.setSessions([header('moved', birth), header('stayed', birth), header('late', birth)])
     await expect(result.registry.archiveSession(SessionId('unknown-late')))
@@ -941,7 +960,7 @@ describe('header-validated membership projection', () => {
       ]),
     })
     expect(result.registry.list()[0]!.sessionIds).toEqual(['good'])
-    expect(result.load).not.toHaveBeenCalled()
+    expect(result.stat).not.toHaveBeenCalled()
   })
 
   it('ignores an empty workspace/home path and keeps header cwd membership', async () => {
