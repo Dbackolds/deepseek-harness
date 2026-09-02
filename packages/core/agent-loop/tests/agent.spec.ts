@@ -170,7 +170,7 @@ describe('Agent', () => {
   it('continueFromSurface opens a turn from the current surface without claiming inbox input', async () => {
     const adapter = new MockAdapter([textResponse('first'), textResponse('rewritten')])
     const ctx = await harness(adapter)
-    const agent = ctx.agentLoop.create(SessionId('rewrite-surface'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(SessionId('rewrite-surface'), { provider: 'mock', model: 'mock' })
     send(agent, 'original')
     await agent.whenIdle()
     const original = agent.session.snapshotEvents().find(event => event.type === 'user/message')
@@ -195,7 +195,7 @@ describe('Agent', () => {
 
   it('continueFromSurface throws while the agent is already running', async () => {
     const ctx = await harness(new MockAdapter(['hang']))
-    const agent = ctx.agentLoop.create(SessionId('rewrite-busy'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(SessionId('rewrite-busy'), { provider: 'mock', model: 'mock' })
     send(agent, 'busy')
     await Promise.resolve()
     expect(() => { agent.continueFromSurface() }).toThrow(/cannot continue from the surface while running/)
@@ -206,7 +206,7 @@ describe('Agent', () => {
   it('cancel clears a pending surface continuation without a completed model call', async () => {
     const adapter = new MockAdapter(['hang'])
     const ctx = await harness(adapter)
-    const agent = ctx.agentLoop.create(SessionId('rewrite-cancel'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(SessionId('rewrite-cancel'), { provider: 'mock', model: 'mock' })
     agent.continueFromSurface()
     await Promise.resolve()
     agent.cancel({ kind: 'user' })
@@ -217,7 +217,7 @@ describe('Agent', () => {
   it('continueFromSurface still claims a parked next-turn message', async () => {
     const adapter = new MockAdapter([textResponse('parked')])
     const ctx = await harness(adapter)
-    const agent = ctx.agentLoop.create(SessionId('rewrite-parked'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(SessionId('rewrite-parked'), { provider: 'mock', model: 'mock' })
     agent.send(createUserMessage({
       content: [{ type: 'text', text: 'parked prompt' }],
       source: { kind: 'user' },
