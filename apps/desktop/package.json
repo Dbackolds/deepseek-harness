@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Electron window around the local dsh web Host",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-alpha.5",
   "private": true,
   "type": "module",
   "main": "lib/main.js",
