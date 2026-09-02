@@ -753,8 +753,7 @@ export class WorkspaceRegistry extends Service {
     try {
       const handle = await persistence.open(id, 'read')
       try {
-        const events = await handle.read()
-        return { ok: true, header: handle.header, events }
+        return { ok: true, header: handle.header, events: await handle.read() }
       } finally {
         await handle.close()
       }

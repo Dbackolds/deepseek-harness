@@ -755,16 +755,14 @@ describe('direct-child Queue residency routing', () => {
     disposeProvider()
     expect(ctx.subagents.getProvider('managed')).toBeUndefined()
 
-    const loaded = await ctx.sessionPersistence.open(started.childId, 'read')
-    expect(loaded.header.cwd).toBe('/managed/worktree')
-    await loaded.close()
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(loaded.meta.cwd).toBe('/managed/worktree')
 
     await expect(queuePrompt(ctx, parent, started.childId, message('continue without provider')))
       .resolves.toBeTypeOf('string')
     await waitNoActivation(ctx, started.childId)
-    const reloaded = await ctx.sessionPersistence.open(started.childId, 'read')
-    expect(reloaded.header.cwd).toBe('/managed/worktree')
-    await reloaded.close()
+    const reloaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(reloaded.meta.cwd).toBe('/managed/worktree')
   })
 
   it('persists a caller-supplied cwd over the provider-prepared value', async () => {
@@ -780,16 +778,14 @@ describe('direct-child Queue residency routing', () => {
     const spec = { ...startSpec(parent, 'prepared'), cwd: '/caller/tree' }
     const started = await ctx.subagents.startContinuable(spec)
     await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.open(started.childId, 'read')
-    expect(loaded.header.cwd).toBe('/caller/tree')
-    await loaded.close()
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(loaded.meta.cwd).toBe('/caller/tree')
 
     await expect(queuePrompt(ctx, parent, started.childId, message('continue please')))
       .resolves.toBeTypeOf('string')
     await waitNoActivation(ctx, started.childId)
-    const reloaded = await ctx.sessionPersistence.open(started.childId, 'read')
-    expect(reloaded.header.cwd).toBe('/caller/tree')
-    await reloaded.close()
+    const reloaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(reloaded.meta.cwd).toBe('/caller/tree')
     disposeProvider()
   })
 

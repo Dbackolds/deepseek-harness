@@ -60,27 +60,33 @@ async function harness(options: HarnessOptions = {}) {
   const logs = options.logs
   const list = vi.fn(async (): Promise<SessionPersistenceSnapshot[]> =>
     listed.map(header => ({ header, revision: SessionPersistenceRevision(`rev-${header.id}`) })))
-  const stat = vi.fn(() => { throw new Error('per-session stat must not be needed') })
   const inspectImpl = options.inspect === undefined
     ? async (id: SessionId) => {
-      if (logs === undefined || !logs.has(id)) throw new Error('event bodies must not be opened')
+      if (logs === undefined || !logs.has(id)) throw new Error('event bodies must not be inspected')
       const events = logs.get(id)
-      if (events === undefined) throw new Error(`open failed for '${id}'`)
+      if (events === undefined) throw new Error(`inspect failed for '${id}'`)
       const meta = listed.find(header => header.id === id)
       if (meta === undefined) throw new Error(`unknown session '${id}'`)
-      return {
-        header: meta,
-        read: async () => events,
-        close: async () => {},
-      }
+      return { meta, events }
     }
     : options.inspect
-  const open = inspectImpl === false
+  const inspect = inspectImpl === false ? undefined : vi.fn(inspectImpl)
+  const open = inspect === undefined
     ? undefined
-    : vi.fn(inspectImpl)
-  ctx.provide('sessionPersistence', open === undefined
-    ? { list, stat }
-    : { list, open, stat } as never)
+    : vi.fn(async (id: SessionId) => {
+      const inspected = await inspect(id) as { meta: SessionHeader; events: readonly SessionEvent[] }
+      return {
+        header: inspected.meta,
+        read: async () => inspected.events,
+        close: async () => {},
+      }
+    })
+  const stat = vi.fn(() => { throw new Error('per-session stat must not be needed') })
+  ctx.provide('sessionPersistence', {
+    list,
+    ...open === undefined ? {} : { open },
+    stat,
+  } as never)
 
   if (options.sessionStore === true) {
     await ctx.plugin(SessionStore)
@@ -110,6 +116,7 @@ async function harness(options: HarnessOptions = {}) {
     list,
     open: open ?? vi.fn(),
     stat,
+    inspect: inspect ?? vi.fn(),
     setSessions: (headers: SessionHeader[]) => { listed = headers },
   }
 }
@@ -764,7 +771,7 @@ describe('Workspace session ordering', () => {
     ctx.storage.mount('domain', facility)
     ctx.provide('storageDomain', facility)
     ctx.provide('sessionPersistence', {
-      list: async () => [],
+      list: async () => [] as SessionPersistenceSnapshot[],
       open: () => { throw new Error('event bodies must not be opened') },
       stat: () => { throw new Error('per-session stat must not be needed') },
     } as never)
