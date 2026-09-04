@@ -114,6 +114,55 @@ export const GITHUB_RELEASE_BODY_MAX_CHARS = 125_000
 /** Leave a buffer under GitHub's body cap for the truncation notice. */
 export const DESKTOP_RELEASE_NOTES_MAX_CHARS = 120_000
 
+/** One product-facing changelog group in the published Release body. */
+type DesktopReleaseSectionId =
+  | 'desktop'
+  | 'models'
+  | 'network'
+  | 'sessions'
+  | 'host'
+  | 'other'
+
+/** Display order and Chinese headings for the published changelog. */
+const DESKTOP_RELEASE_SECTIONS: readonly { id: DesktopReleaseSectionId; heading: string }[] = [
+  { id: 'desktop', heading: '桌面与安装' },
+  { id: 'models', heading: '模型与凭据' },
+  { id: 'network', heading: '网络与代理' },
+  { id: 'sessions', heading: '会话与协作' },
+  { id: 'host', heading: 'Host 与运行时' },
+  { id: 'other', heading: '其他' },
+]
+
+/**
+ * Conventional-commit scopes that belong to one published heading.
+ * Unlisted scopes fall through to `other` unless the subject is dropped.
+ */
+const DESKTOP_RELEASE_SCOPE_SECTIONS: Readonly<Record<string, DesktopReleaseSectionId>> = {
+  desktop: 'desktop',
+  electron: 'desktop',
+  installer: 'desktop',
+  pack: 'desktop',
+  llm: 'models',
+  'llm-pi-ai': 'models',
+  'llm-deepseek': 'models',
+  models: 'models',
+  credentials: 'models',
+  'http-proxy': 'network',
+  net: 'network',
+  proxy: 'network',
+  webworker: 'network',
+  session: 'sessions',
+  agent: 'sessions',
+  web: 'sessions',
+  'agent-loop': 'sessions',
+  'agent-team': 'sessions',
+  'session-control': 'sessions',
+  python: 'host',
+  'app-boot': 'host',
+  runtime: 'host',
+  cli: 'host',
+}
+
 /**
  * Keep GitHub Release notes under the API body cap.
  * @param notes - assembled markdown.
@@ -121,7 +170,7 @@ export const DESKTOP_RELEASE_NOTES_MAX_CHARS = 120_000
  */
 export function clampDesktopReleaseNotes(notes: string): string {
   if (notes.length <= DESKTOP_RELEASE_NOTES_MAX_CHARS) return notes
-  const notice = '\n\n… truncated: GitHub release body is limited to 125000 characters.\n'
+  const notice = '\n\n……已截断：GitHub Release 正文上限为 125000 个字符。\n'
   const budget = DESKTOP_RELEASE_NOTES_MAX_CHARS - notice.length
   let cut = notes.slice(0, budget)
   const lastNl = cut.lastIndexOf('\n')
@@ -132,25 +181,168 @@ export function clampDesktopReleaseNotes(notes: string): string {
     : clamped.slice(0, GITHUB_RELEASE_BODY_MAX_CHARS)
 }
 
+/** Parsed conventional-commit subject used by the published notes. */
+interface ParsedDesktopSubject {
+  readonly type: string
+  readonly scope: string | undefined
+  readonly rest: string
+  readonly reverted: boolean
+}
+
 /**
- * GitHub Release notes for one desktop tag: the archive contract plus commits
- * since the previous `desktop-v*` tag, or every commit when this is the first.
+ * Split a conventional-commit subject into type, optional scope, and rest.
+ * A GitHub-style `Revert "type(scope): rest"` line is the inner commit with
+ * `reverted: true`, so later grouping can drop a change that did not ship.
+ * @param subject - one git log `%s` line.
+ * @returns parsed fields, or `undefined` when the line is not conventional.
+ */
+function parseConventionalSubject(subject: string): ParsedDesktopSubject | undefined {
+  const reverted = /^Revert\s+"/u.test(subject)
+  const inner = reverted ? subject.replace(/^Revert\s+"/u, '').replace(/"$/u, '') : subject
+  const match = /^([a-z]+)(?:\(([^)]+)\))?!?:\s+(.+)$/iu.exec(inner)
+  if (match === null) return undefined
+  const type = match[1]
+  const rest = match[3]
+  if (type === undefined || rest === undefined) return undefined
+  return { type: type.toLowerCase(), scope: match[2], rest, reverted }
+}
+
+/**
+ * Subjects that are packaging noise, not a user-visible product change.
+ * @param subject - one git log `%s` line.
+ * @returns whether the line stays out of the published notes.
+ */
+export function isDesktopReleaseInternalSubject(subject: string): boolean {
+  const parsed = parseConventionalSubject(subject)
+  if (parsed === undefined) return /^(?:ci|chore|test|docs|perf|style|refactor)\b/iu.test(subject)
+  if (parsed.type === 'release' || parsed.type === 'revert') return true
+  if (parsed.reverted) return true
+  if (parsed.type === 'chore') return true
+  if (parsed.type === 'refactor') return true
+  if (parsed.scope === 'session-telemetry-otel') return true
+  if (/\b(?:match|follow) the (?:workspace )?version\b/iu.test(parsed.rest)) return true
+  if (/\bsettle what the master merge broke\b/iu.test(parsed.rest)) return true
+  if (/\baddress (?:model discovery )?review\b/iu.test(parsed.rest)) return true
+  return parsed.type === 'ci' || parsed.type === 'test' || parsed.type === 'docs'
+    || parsed.type === 'perf' || parsed.type === 'style'
+}
+
+/**
+ * Known English remainders rewritten as a complete Chinese product sentence.
+ * Unlisted remainders keep a typed Chinese prefix and the original rest.
+ */
+const DESKTOP_RELEASE_ENGLISH_BULLETS: Readonly<Record<string, string>> = {
+  'expand model listing discovery': '模型列表能识别更多网关字段和 Anthropic 原生目录',
+  'scope Anthropic /v1 handling to model discovery': 'Anthropic 模型发现改走原生 /v1/models，不再误用 Chat Completions 路径',
+  'route every outbound request through the configured proxy': '所有出站请求都走用户配置的代理策略',
+  'withhold NODE_USE_ENV_PROXY when the child receives a refused proxy value': '子进程拿到被拒绝的代理值时，不再强制启用 NODE_USE_ENV_PROXY',
+  'give children the user\'s environment under a layered direct policy': '直连策略下，子进程仍继承用户环境而不是空环境',
+  'keep this machine off the proxy, and refuse a literal the checks reject': '本机直连策略会拒绝检查不接受的代理字面量',
+  'route by the policy, and give a child the routing its parent has': '子进程沿用父进程的代理路由策略',
+  'register a node:https placeholder for the proxy agent factory': 'WebWorker 里补上 node:https 占位，代理工厂可以加载',
+  'stop the packaged runtime from hijacking spawned node commands': '打包运行时不再劫持子进程里的 node 命令',
+  'accept the proxy names from the Harness-home .env alone': 'Harness 主目录 .env 里的代理变量名足以生效',
+  'complete policy token guards': 'Issue 策略补齐 Project 令牌权限检查',
+  'grant policy Project read access': 'Issue 策略可以读取 GitHub Project',
+  'use Project-local Priority': 'Issue 优先级改用 Project 本地字段',
+  'support same-session message editing': '支持在同一会话里编辑用户消息',
+  'keep gzip on the fetch transport': '遥测 fetch 传输继续使用 gzip',
+}
+
+/**
+ * One published bullet: keep a Chinese subject, otherwise a short Chinese
+ * paraphrase of the conventional type and remainder.
+ * @param subject - one git log `%s` line.
+ * @returns a bullet without the leading `- `.
+ */
+export function desktopReleaseBullet(subject: string): string {
+  const parsed = parseConventionalSubject(subject)
+  const body = (parsed?.rest ?? subject).replace(/[.。]+$/u, '')
+  if (/[\u4e00-\u9fff]/u.test(body)) return body
+  const known = DESKTOP_RELEASE_ENGLISH_BULLETS[body]
+  if (known !== undefined) return known
+  const typeLabel: Record<string, string> = {
+    feat: '新增',
+    fix: '修复',
+    revert: '撤回',
+    refactor: '整理',
+    chore: '维护',
+  }
+  const prefix = parsed === undefined ? '更新' : (typeLabel[parsed.type] ?? '更新')
+  return `${prefix}：${body}`
+}
+
+/**
+ * Choose the published heading for one remaining subject.
+ * @param subject - one git log `%s` line already known to be product-facing.
+ * @returns the section that should list it.
+ */
+function desktopReleaseSection(subject: string): DesktopReleaseSectionId {
+  const parsed = parseConventionalSubject(subject)
+  if (parsed?.scope !== undefined) {
+    const mapped = DESKTOP_RELEASE_SCOPE_SECTIONS[parsed.scope]
+    if (mapped !== undefined) return mapped
+  }
+  if (/\b(?:proxy|http-proxy|NODE_USE_ENV_PROXY)\b/iu.test(subject)) return 'network'
+  if (/\b(?:model|llm|anthropic|listing)\b/iu.test(subject)) return 'models'
+  if (/\b(?:session|message edit|agent team)\b/iu.test(subject)) return 'sessions'
+  if (/\b(?:python|pkg |runtime|app-boot)\b/iu.test(subject)) return 'host'
+  return 'other'
+}
+
+/**
+ * GitHub Release notes for one desktop tag: Chinese product copy, grouped
+ * user-visible changes since the previous `desktop-v*` tag.
  * @param version - desktop package version being published.
  * @param gitLog - raw `git log` lines, already formatted as subjects or `subject\n\nbody`.
  * @returns markdown notes, never longer than GitHub's Release body cap.
  */
 export function desktopReleaseNotes(version: string, gitLog: string): string {
   const intro = [
-    `Desktop archives for DeepSeek Harness ${version}. Each archive carries the Electron window, a Node 24 binary, and a pnpm deploy of @deepseek-ai/dsh.`,
+    `DeepSeek Harness 桌面版 ${version}。每个归档都带 Electron 窗口、随包 Node 24，以及本仓库构建的 @deepseek-ai/dsh Host。`,
     '',
-    '## Changes since the previous desktop release',
+    '下载 macOS zip、Linux AppImage 或 Windows zip，解压后直接打开。首次启动可能被系统拦截，因为当前发布尚未代码签名。',
+    '',
+    '## 本版本更新',
     '',
   ]
-  const changes = gitLog.trim()
-  if (changes.length === 0) {
-    return clampDesktopReleaseNotes([...intro, 'No commits since the previous desktop tag.', ''].join('\n'))
+  const lines = gitLog.split(/\r?\n/u).map(line => line.trim()).filter(line => line.length > 0)
+  const revertedKeys = new Set(
+    lines.map(parseConventionalSubject)
+      .filter((parsed): parsed is ParsedDesktopSubject => parsed !== undefined && parsed.reverted)
+      .map(parsed => `${parsed.type}\0${parsed.scope ?? ''}\0${parsed.rest}`),
+  )
+  const subjects = lines.filter((line) => {
+    if (isDesktopReleaseInternalSubject(line)) return false
+    const parsed = parseConventionalSubject(line)
+    if (parsed === undefined) return true
+    return !revertedKeys.has(`${parsed.type}\0${parsed.scope ?? ''}\0${parsed.rest}`)
+  })
+  const unique: string[] = []
+  const seen = new Set<string>()
+  for (const subject of subjects) {
+    const bullet = desktopReleaseBullet(subject)
+    if (seen.has(bullet)) continue
+    seen.add(bullet)
+    unique.push(subject)
   }
-  return clampDesktopReleaseNotes([...intro, changes, ''].join('\n'))
+  if (unique.length === 0) {
+    return clampDesktopReleaseNotes([...intro, '相对上一桌面标签，没有面向用户的产品改动。', ''].join('\n'))
+  }
+  const grouped = new Map<DesktopReleaseSectionId, string[]>()
+  for (const subject of unique) {
+    const id = desktopReleaseSection(subject)
+    const bullets = grouped.get(id) ?? []
+    bullets.push(`- ${desktopReleaseBullet(subject)}`)
+    grouped.set(id, bullets)
+  }
+  const sections: string[] = []
+  for (const section of DESKTOP_RELEASE_SECTIONS) {
+    const bullets = grouped.get(section.id)
+    if (bullets === undefined || bullets.length === 0) continue
+    sections.push(`### ${section.heading}`, '', ...bullets, '')
+  }
+  return clampDesktopReleaseNotes([...intro, ...sections].join('\n'))
 }
 
 /**

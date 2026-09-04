@@ -195,7 +195,7 @@ jobs:
           shopt -s nullglob
           archives=(dist-desktop/release/*.zip dist-desktop/release/*.AppImage)
           gh release create "$tag" \
-            --title "DeepSeek Harness Desktop ${version}" \
+            --title "DeepSeek Harness 桌面版 ${version}" \
             --notes-file /tmp/dsh-desktop-notes.md \
             --verify-tag \
             --prerelease \

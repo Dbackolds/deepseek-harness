@@ -44,27 +44,53 @@ describe('desktop release naming', () => {
     expect(() => verifyDesktopTag('0.1.0-rc.5', 'refs/tags/dsh-v0.1.0-rc.5')).toThrow(/desktop-v0\.1\.0-rc\.5/)
   })
 
-  it('summarizes commits since the previous desktop tag', () => {
-    const notes = desktopReleaseNotes('0.1.0-rc.5.1', [
+  it('groups user-visible commits into Chinese product notes', () => {
+    const notes = desktopReleaseNotes('0.1.2-rc.1', [
+      'chore(desktop): 发布 0.1.2-rc.1',
       'feat(web): 内置插件目录源与插件市场',
-      '',
       '将 StarPivot catalog.json 作为 Host 具名路由随 web profile 交付。',
-      '',
+      'feat(net): route every outbound request through the configured proxy',
+      'fix(llm): expand model listing discovery',
+      'test(llm): archive recorded provider model listings',
+      'docs(http-proxy): state the shipped library, not the retired plugin',
+      'release(dsh): 0.1.2-rc.1',
     ].join('\n'))
-    expect(notes).toContain('Desktop archives for DeepSeek Harness 0.1.0-rc.5.1.')
-    expect(notes).toContain('## Changes since the previous desktop release')
-    expect(notes).toContain('feat(web): 内置插件目录源与插件市场')
-    expect(notes).toContain('将 StarPivot catalog.json 作为 Host 具名路由随 web profile 交付。')
+    expect(notes).toContain('DeepSeek Harness 桌面版 0.1.2-rc.1。')
+    expect(notes).toContain('## 本版本更新')
+    expect(notes).toContain('### 模型与凭据')
+    expect(notes).toContain('### 网络与代理')
+    expect(notes).toContain('### 会话与协作')
+    expect(notes).toContain('- 内置插件目录源与插件市场')
+    expect(notes).toContain('- 所有出站请求都走用户配置的代理策略')
+    expect(notes).toContain('- 模型列表能识别更多网关字段和 Anthropic 原生目录')
+    expect(notes).not.toContain('chore(desktop): 发布')
+    expect(notes).not.toContain('test(llm):')
+    expect(notes).not.toContain('docs(http-proxy):')
+    expect(notes).not.toContain('release(dsh):')
+    expect(notes).not.toContain('## Changes since the previous desktop release')
   })
 
-  it('says so when the previous desktop tag has no later commits', () => {
-    expect(desktopReleaseNotes('0.1.0-rc.5.1', '  \n')).toContain('No commits since the previous desktop tag.')
+  it('omits a feature that the same range later reverts', () => {
+    const notes = desktopReleaseNotes('0.1.2-rc.1', [
+      'Revert "feat(session, agent, web): support same-session message editing"',
+      'feat(session, agent, web): support same-session message editing',
+      'feat(net): route every outbound request through the configured proxy',
+    ].join('\n'))
+    expect(notes).toContain('所有出站请求都走用户配置的代理策略')
+    expect(notes).not.toContain('支持在同一会话里编辑用户消息')
+    expect(notes).not.toContain('message editing')
+  })
+
+  it('says so when the previous desktop tag has no later product commits', () => {
+    expect(desktopReleaseNotes('0.1.0-rc.5.1', 'chore(desktop): 发布 0.1.0-rc.5.1\n')).toContain(
+      '相对上一桌面标签，没有面向用户的产品改动。',
+    )
   })
 
   it('keeps GitHub Release notes under the API body cap', () => {
-    const huge = desktopReleaseNotes('0.1.2-alpha.1', 'x'.repeat(DESKTOP_RELEASE_NOTES_MAX_CHARS + 50_000))
+    const huge = desktopReleaseNotes('0.1.2-alpha.1', `feat(web): ${'x'.repeat(DESKTOP_RELEASE_NOTES_MAX_CHARS + 50_000)}`)
     expect(huge.length).toBeLessThanOrEqual(GITHUB_RELEASE_BODY_MAX_CHARS)
-    expect(huge).toContain('truncated: GitHub release body is limited to 125000 characters.')
+    expect(huge).toContain('已截断：GitHub Release 正文上限为 125000 个字符。')
     expect(clampDesktopReleaseNotes('short').length).toBeLessThan(100)
   })
 })
