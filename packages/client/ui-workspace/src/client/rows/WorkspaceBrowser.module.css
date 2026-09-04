@@ -447,7 +447,7 @@
   margin-top: 2px;
 }
 
-.activitySection > .sessionOverflowButton {
+.activitySection > .sessionOverflowRow {
   margin-top: 0;
 }
 
@@ -528,8 +528,16 @@
   bottom: -8px;
 }
 
-.sessionOverflowButton {
+.sessionOverflowRow {
+  display: flex;
+  align-items: center;
   width: 100%;
+  min-height: 28px;
+}
+
+.sessionOverflowButton {
+  flex: 1 1 auto;
+  min-width: 0;
   height: 28px;
   border: none;
   border-radius: 8px;
@@ -541,7 +549,15 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.groupSection > .sessionOverflowButton {
+.sessionOverflowCollapse {
+  flex: 0 0 auto;
+  width: auto;
+  margin-left: auto;
+  padding: 0 12px;
+  text-align: right;
+}
+
+.groupSection > .sessionOverflowRow {
   margin-top: 0;
 }
 

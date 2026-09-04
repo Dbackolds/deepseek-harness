@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   nextSessionOverflowLimit, ordinarySessionCount, resolvedSessionOverflowLimit,
-  sessionOverflowBaseLimit, sessionOverflowRevealCount, sessionOverflowStep,
+  sessionOverflowBaseLimit, sessionOverflowCanCollapse, sessionOverflowRevealCount,
+  sessionOverflowStep,
 } from '../src/client/session-overflow.ts'
 
 describe('session overflow math', () => {
@@ -18,6 +19,10 @@ describe('session overflow math', () => {
     expect(nextSessionOverflowLimit(10, 5, 12)).toBe(12)
     expect(sessionOverflowRevealCount(5, 5, 12)).toBe(5)
     expect(sessionOverflowRevealCount(10, 5, 12)).toBe(2)
+    expect(sessionOverflowCanCollapse(undefined, 5)).toBe(false)
+    expect(sessionOverflowCanCollapse(5, 5)).toBe(false)
+    expect(sessionOverflowCanCollapse(10, 5)).toBe(true)
+    expect(sessionOverflowCanCollapse(20, 'all')).toBe(false)
   })
 
   it('ignores blank New Session rows when counting the ordinary quota', () => {

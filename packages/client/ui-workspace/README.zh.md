@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用侧边栏浏览 Workspace 及其 Session、重排它们并新建会话；在 Session Intent 主视觉区用选择器为新会话选择 Workspace。打开的 Workspace 默认显示五条非空白 Session，并在首条提示词落地前把当前选中的空白**新会话**作为一条临时额外行。**再展开**会按**设置 → 侧栏会话展开条数**的步长再显示一批（默认五条；全部展开时默认不折叠空闲／历史）。关闭再打开 Workspace 会恢复折叠基础上限。
+用侧边栏浏览 Workspace 及其 Session、重排它们并新建会话；在 Session Intent 主视觉区用选择器为新会话选择 Workspace。打开的 Workspace 默认显示五条非空白 Session，并在首条提示词落地前把当前选中的空白**新会话**作为一条临时额外行。**再展开**会按**设置 → 侧栏会话展开条数**的步长再显示一批（默认五条；全部展开时默认不折叠空闲／历史）。本地展开后，**收起**会在不关闭 Workspace 的情况下恢复该折叠基础上限。关闭再打开 Workspace 也会恢复折叠基础上限。
 
 ### 重排序与视图选项
 

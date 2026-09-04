@@ -77,6 +77,20 @@ export function nextSessionOverflowLimit(
 }
 
 /**
+ * Whether one account currently shows more ordinary rows than the Settings-owned base.
+ * @param stored - absolute limit stored for this mount, when the user already expanded.
+ * @param preference - Settings-owned overflow preference.
+ * @returns true when Show less can restore the folded base projection.
+ */
+export function sessionOverflowCanCollapse(
+  stored: number | undefined,
+  preference: SessionOverflowLimit,
+): boolean {
+  const base = sessionOverflowBaseLimit(preference)
+  return base !== null && stored !== undefined && stored > base
+}
+
+/**
  * Count ordinary (non-blank) rows that charge against the overflow quota.
  * @param sessions - rows in the folded cluster.
  * @returns ordinary-row count.

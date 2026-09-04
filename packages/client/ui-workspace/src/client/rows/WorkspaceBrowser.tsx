@@ -33,7 +33,8 @@ import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY, type SessionActivityLayout, type SessionEmptyWorkspaces } from '../stores.ts'
 import {
   nextSessionOverflowLimit, ordinarySessionCount, resolvedSessionOverflowLimit,
-  sessionOverflowRevealCount, sessionOverflowStep, type SessionOverflowLimit,
+  sessionOverflowCanCollapse, sessionOverflowRevealCount, sessionOverflowStep,
+  type SessionOverflowLimit,
 } from '../session-overflow.ts'
 import { WorkspacePickFlow } from '../WorkspacePicker.tsx'
 import css from './WorkspaceBrowser.module.css'
@@ -68,6 +69,61 @@ function collapsedSessionRows(sessions: readonly SessionNode[], limit: number | 
     return true
   })
   return { rows, hiddenCount: sessions.length - rows.length, ordinaryCount }
+}
+
+/** Expand-more and optional Show less controls for one idle/History overflow cluster. */
+function SessionOverflowControls({
+  t,
+  hiddenCount,
+  ordinaryCount,
+  overflowStep,
+  visibleLimit,
+  canCollapse,
+  tabIndex,
+  onExpand,
+  onCollapse,
+}: {
+  t: WorkspaceBrowserProps['t']
+  hiddenCount: number
+  ordinaryCount: number
+  overflowStep: number | null
+  visibleLimit: number | null
+  canCollapse: boolean
+  tabIndex?: number | undefined
+  onExpand: () => void
+  onCollapse: () => void
+}) {
+  if (overflowStep === null) return null
+  const showExpand = hiddenCount > 0
+  if (!showExpand && !canCollapse) return null
+  return (
+    <div className={css.sessionOverflowRow}>
+      {showExpand && (
+        <button
+          type="button"
+          className={css.sessionOverflowButton}
+          aria-expanded={false}
+          tabIndex={tabIndex}
+          onClick={onExpand}
+        >
+          {t('sessions.expand', {
+            n: sessionOverflowRevealCount(visibleLimit ?? 0, overflowStep, ordinaryCount),
+          })}
+        </button>
+      )}
+      {canCollapse && (
+        <button
+          type="button"
+          className={clsx(css.sessionOverflowButton, css.sessionOverflowCollapse)}
+          aria-expanded={true}
+          tabIndex={tabIndex}
+          onClick={onCollapse}
+        >
+          {t('sessions.collapse')}
+        </button>
+      )}
+    </div>
+  )
 }
 
 /** Localized heading for one activity section. */
@@ -876,39 +932,38 @@ function SessionTree({
                               t={t}
                             />
                           ))}
-                          {section.bucket === 'history' && collapsedHistory.hiddenCount > 0 && overflowStep !== null && (
-                            <button
-                              type="button"
-                              className={css.sessionOverflowButton}
-                              aria-expanded={false}
+                          {section.bucket === 'history' && (
+                            <SessionOverflowControls
+                              t={t}
+                              hiddenCount={collapsedHistory.hiddenCount}
+                              ordinaryCount={collapsedHistory.ordinaryCount}
+                              overflowStep={overflowStep}
+                              visibleLimit={historyLimit}
+                              canCollapse={sessionOverflowCanCollapse(
+                                sessionOverflowByAccount[group.key],
+                                sessionOverflowLimit,
+                              )}
                               tabIndex={sectionExpanded ? undefined : -1}
-                              onClick={() => {
-                                const visibleLimit = resolvedSessionOverflowLimit(
-                                  sessionOverflowByAccount[group.key],
-                                  sessionOverflowLimit,
-                                )
-                                if (visibleLimit === null || overflowStep === null) return
+                              onExpand={() => {
+                                if (historyLimit === null || overflowStep === null) return
                                 setSessionOverflowByAccount(currentLimits => ({
                                   ...currentLimits,
                                   [group.key]: nextSessionOverflowLimit(
-                                    visibleLimit,
+                                    historyLimit,
                                     overflowStep,
                                     collapsedHistory.ordinaryCount,
                                   ),
                                 }))
                               }}
-                            >
-                              {t('sessions.expand', {
-                                n: sessionOverflowRevealCount(
-                                  resolvedSessionOverflowLimit(
-                                    sessionOverflowByAccount[group.key],
-                                    sessionOverflowLimit,
-                                  ) ?? 0,
-                                  overflowStep ?? 0,
-                                  collapsedHistory.ordinaryCount,
-                                ),
-                              })}
-                            </button>
+                              onCollapse={() => {
+                                setSessionOverflowByAccount((currentLimits) => {
+                                  if (!(group.key in currentLimits)) return currentLimits
+                                  return Object.fromEntries(
+                                    Object.entries(currentLimits).filter(([key]) => key !== group.key),
+                                  )
+                                })
+                              }}
+                            />
                           )}
                         </div>
                       </div>
@@ -937,39 +992,36 @@ function SessionTree({
                           t={t}
                         />
                       ))}
-                      {collapsedIdle.hiddenCount > 0 && overflowStep !== null && (
-                        <button
-                          type="button"
-                          className={css.sessionOverflowButton}
-                          aria-expanded={false}
-                          onClick={() => {
-                            const visibleLimit = resolvedSessionOverflowLimit(
-                              sessionOverflowByAccount[group.key],
-                              sessionOverflowLimit,
-                            )
-                            if (visibleLimit === null || overflowStep === null) return
-                            setSessionOverflowByAccount(currentLimits => ({
-                              ...currentLimits,
-                              [group.key]: nextSessionOverflowLimit(
-                                visibleLimit,
-                                overflowStep,
-                                collapsedIdle.ordinaryCount,
-                              ),
-                            }))
-                          }}
-                        >
-                          {t('sessions.expand', {
-                            n: sessionOverflowRevealCount(
-                              resolvedSessionOverflowLimit(
-                                sessionOverflowByAccount[group.key],
-                                sessionOverflowLimit,
-                              ) ?? 0,
-                              overflowStep ?? 0,
+                      <SessionOverflowControls
+                        t={t}
+                        hiddenCount={collapsedIdle.hiddenCount}
+                        ordinaryCount={collapsedIdle.ordinaryCount}
+                        overflowStep={overflowStep}
+                        visibleLimit={idleLimit}
+                        canCollapse={sessionOverflowCanCollapse(
+                          sessionOverflowByAccount[group.key],
+                          sessionOverflowLimit,
+                        )}
+                        onExpand={() => {
+                          if (idleLimit === null || overflowStep === null) return
+                          setSessionOverflowByAccount(currentLimits => ({
+                            ...currentLimits,
+                            [group.key]: nextSessionOverflowLimit(
+                              idleLimit,
+                              overflowStep,
                               collapsedIdle.ordinaryCount,
                             ),
-                          })}
-                        </button>
-                      )}
+                          }))
+                        }}
+                        onCollapse={() => {
+                          setSessionOverflowByAccount((currentLimits) => {
+                            if (!(group.key in currentLimits)) return currentLimits
+                            return Object.fromEntries(
+                              Object.entries(currentLimits).filter(([key]) => key !== group.key),
+                            )
+                          })
+                        }}
+                      />
                     </div>
                   </div>
                 )}
@@ -1073,39 +1125,38 @@ function SessionTree({
                                   t={t}
                                 />
                               ))}
-                              {section.bucket === 'history' && collapsedHistory.hiddenCount > 0 && overflowStep !== null && (
-                                <button
-                                  type="button"
-                                  className={css.sessionOverflowButton}
-                                  aria-expanded={false}
+                              {section.bucket === 'history' && (
+                                <SessionOverflowControls
+                                  t={t}
+                                  hiddenCount={collapsedHistory.hiddenCount}
+                                  ordinaryCount={collapsedHistory.ordinaryCount}
+                                  overflowStep={overflowStep}
+                                  visibleLimit={historyLimit}
+                                  canCollapse={sessionOverflowCanCollapse(
+                                    sessionOverflowByAccount[group.key],
+                                    sessionOverflowLimit,
+                                  )}
                                   tabIndex={sectionExpanded ? undefined : -1}
-                                  onClick={() => {
-                                    const visibleLimit = resolvedSessionOverflowLimit(
-                                      sessionOverflowByAccount[group.key],
-                                      sessionOverflowLimit,
-                                    )
-                                    if (visibleLimit === null || overflowStep === null) return
+                                  onExpand={() => {
+                                    if (historyLimit === null || overflowStep === null) return
                                     setSessionOverflowByAccount(currentLimits => ({
                                       ...currentLimits,
                                       [group.key]: nextSessionOverflowLimit(
-                                        visibleLimit,
+                                        historyLimit,
                                         overflowStep,
                                         collapsedHistory.ordinaryCount,
                                       ),
                                     }))
                                   }}
-                                >
-                                  {t('sessions.expand', {
-                                    n: sessionOverflowRevealCount(
-                                      resolvedSessionOverflowLimit(
-                                        sessionOverflowByAccount[group.key],
-                                        sessionOverflowLimit,
-                                      ) ?? 0,
-                                      overflowStep ?? 0,
-                                      collapsedHistory.ordinaryCount,
-                                    ),
-                                  })}
-                                </button>
+                                  onCollapse={() => {
+                                    setSessionOverflowByAccount((currentLimits) => {
+                                      if (!(group.key in currentLimits)) return currentLimits
+                                      return Object.fromEntries(
+                                        Object.entries(currentLimits).filter(([key]) => key !== group.key),
+                                      )
+                                    })
+                                  }}
+                                />
                               )}
                             </div>
                           </div>
@@ -1133,39 +1184,36 @@ function SessionTree({
                               t={t}
                             />
                           ))}
-                          {collapsedIdle.hiddenCount > 0 && overflowStep !== null && (
-                            <button
-                              type="button"
-                              className={css.sessionOverflowButton}
-                              aria-expanded={false}
-                              onClick={() => {
-                                const visibleLimit = resolvedSessionOverflowLimit(
-                                  sessionOverflowByAccount[group.key],
-                                  sessionOverflowLimit,
-                                )
-                                if (visibleLimit === null || overflowStep === null) return
-                                setSessionOverflowByAccount(currentLimits => ({
-                                  ...currentLimits,
-                                  [group.key]: nextSessionOverflowLimit(
-                                    visibleLimit,
-                                    overflowStep,
-                                    collapsedIdle.ordinaryCount,
-                                  ),
-                                }))
-                              }}
-                            >
-                              {t('sessions.expand', {
-                                n: sessionOverflowRevealCount(
-                                  resolvedSessionOverflowLimit(
-                                    sessionOverflowByAccount[group.key],
-                                    sessionOverflowLimit,
-                                  ) ?? 0,
-                                  overflowStep ?? 0,
+                          <SessionOverflowControls
+                            t={t}
+                            hiddenCount={collapsedIdle.hiddenCount}
+                            ordinaryCount={collapsedIdle.ordinaryCount}
+                            overflowStep={overflowStep}
+                            visibleLimit={idleLimit}
+                            canCollapse={sessionOverflowCanCollapse(
+                              sessionOverflowByAccount[group.key],
+                              sessionOverflowLimit,
+                            )}
+                            onExpand={() => {
+                              if (idleLimit === null || overflowStep === null) return
+                              setSessionOverflowByAccount(currentLimits => ({
+                                ...currentLimits,
+                                [group.key]: nextSessionOverflowLimit(
+                                  idleLimit,
+                                  overflowStep,
                                   collapsedIdle.ordinaryCount,
                                 ),
-                              })}
-                            </button>
-                          )}
+                              }))
+                            }}
+                            onCollapse={() => {
+                              setSessionOverflowByAccount((currentLimits) => {
+                                if (!(group.key in currentLimits)) return currentLimits
+                                return Object.fromEntries(
+                                  Object.entries(currentLimits).filter(([key]) => key !== group.key),
+                                )
+                              })
+                            }}
+                          />
                         </div>
                       </div>
                     )}
@@ -1416,29 +1464,25 @@ function FlatList({
                       t={t}
                     />
                   ))}
-                  {section.bucket === 'history' && collapsedHistory.hiddenCount > 0 && overflowStep !== null && (
-                    <button
-                      type="button"
-                      className={css.sessionOverflowButton}
-                      aria-expanded={false}
+                  {section.bucket === 'history' && (
+                    <SessionOverflowControls
+                      t={t}
+                      hiddenCount={collapsedHistory.hiddenCount}
+                      ordinaryCount={collapsedHistory.ordinaryCount}
+                      overflowStep={overflowStep}
+                      visibleLimit={historyLimit}
+                      canCollapse={sessionOverflowCanCollapse(flatOverflowLimit, sessionOverflowLimit)}
                       tabIndex={sectionExpanded ? undefined : -1}
-                      onClick={() => {
-                        if (flatVisibleLimit === null) return
+                      onExpand={() => {
+                        if (historyLimit === null || overflowStep === null) return
                         setFlatOverflowLimit(nextSessionOverflowLimit(
-                          flatVisibleLimit,
+                          historyLimit,
                           overflowStep,
                           collapsedHistory.ordinaryCount,
                         ))
                       }}
-                    >
-                      {t('sessions.expand', {
-                        n: sessionOverflowRevealCount(
-                          flatVisibleLimit ?? 0,
-                          overflowStep,
-                          collapsedHistory.ordinaryCount,
-                        ),
-                      })}
-                    </button>
+                      onCollapse={() => { setFlatOverflowLimit(undefined) }}
+                    />
                   )}
                 </div>
               </div>
@@ -1468,29 +1512,23 @@ function FlatList({
                   t={t}
                 />
               ))}
-              {collapsedIdle.hiddenCount > 0 && overflowStep !== null && (
-                <button
-                  type="button"
-                  className={css.sessionOverflowButton}
-                  aria-expanded={false}
-                  onClick={() => {
-                    if (flatVisibleLimit === null) return
-                    setFlatOverflowLimit(nextSessionOverflowLimit(
-                      flatVisibleLimit,
-                      overflowStep,
-                      collapsedIdle.ordinaryCount,
-                    ))
-                  }}
-                >
-                  {t('sessions.expand', {
-                    n: sessionOverflowRevealCount(
-                      flatVisibleLimit ?? 0,
-                      overflowStep,
-                      collapsedIdle.ordinaryCount,
-                    ),
-                  })}
-                </button>
-              )}
+              <SessionOverflowControls
+                t={t}
+                hiddenCount={collapsedIdle.hiddenCount}
+                ordinaryCount={collapsedIdle.ordinaryCount}
+                overflowStep={overflowStep}
+                visibleLimit={flatVisibleLimit}
+                canCollapse={sessionOverflowCanCollapse(flatOverflowLimit, sessionOverflowLimit)}
+                onExpand={() => {
+                  if (flatVisibleLimit === null || overflowStep === null) return
+                  setFlatOverflowLimit(nextSessionOverflowLimit(
+                    flatVisibleLimit,
+                    overflowStep,
+                    collapsedIdle.ordinaryCount,
+                  ))
+                }}
+                onCollapse={() => { setFlatOverflowLimit(undefined) }}
+              />
             </div>
           </div>
         )}

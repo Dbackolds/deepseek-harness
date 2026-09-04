@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Use the sidebar to browse Workspaces and their Sessions, reorder them, and start new ones; use the picker in the Session Intent hero to choose a Workspace for a new session. An open Workspace shows five non-blank Sessions by default and keeps the selected blank **New Session** as one provisional extra row until its first prompt. **Show more** reveals the next batch sized by **Settings → Sidebar session expansion** (default five; Expand all leaves idle/History unfolded). Closing and reopening the Workspace restores the folded base projection.
+Use the sidebar to browse Workspaces and their Sessions, reorder them, and start new ones; use the picker in the Session Intent hero to choose a Workspace for a new session. An open Workspace shows five non-blank Sessions by default and keeps the selected blank **New Session** as one provisional extra row until its first prompt. **Show more** reveals the next batch sized by **Settings → Sidebar session expansion** (default five; Expand all leaves idle/History unfolded). After a local expansion, **Show less** restores that base projection without closing the Workspace. Closing and reopening the Workspace also restores the folded base projection.
 
 ### Reordering and view options
 
