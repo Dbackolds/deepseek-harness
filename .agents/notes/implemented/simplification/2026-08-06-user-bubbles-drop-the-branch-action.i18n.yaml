@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-06-user-bubbles-drop-the-branch-action.md
 2026-08-06-user-bubbles-drop-the-branch-action.md: 7829e8d9451b7f1cf8704e13623a9f9c8c651567
-2026-08-06-user-bubbles-drop-the-branch-action.zh.md: e67d2b577e2a6c1f78e30c9a91f8febd97df64b8
+2026-08-06-user-bubbles-drop-the-branch-action.zh.md: 9528fb86b5cedadbba6259ab560735dcc965bf66

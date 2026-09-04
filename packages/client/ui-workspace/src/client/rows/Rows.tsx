@@ -6,7 +6,7 @@
  * separate pointer-placed context menu uses the text-only task list. Hover
  * cards are suppressed while either menu is open.
  */
-import { useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import clsx from 'clsx'
 import {
   HoverCard, IconAlarmClockOutline16, IconArchiveOutline20, IconBranchOutline16,
@@ -44,7 +44,7 @@ type SessionContextMenuActions = SessionRowMenuActions & {
   onUnpin?: ((id: SessionNode['id']) => void) | undefined
   onMarkUnread: (id: SessionNode['id']) => void
   onSplit: (id: SessionNode['id']) => void
-  onReveal: (path: string) => void
+  onRevealPath: (path: string) => void
   onCopy: (text: string) => void
 }
 
@@ -77,7 +77,7 @@ function selectSessionContextMenu(
   if (id === 'archive') actions.onArchive(node.id)
   if (id === 'unread') actions.onMarkUnread(node.id)
   if (id === 'split') actions.onSplit(node.id)
-  if (id === 'reveal' && node.cwd !== undefined) actions.onReveal(node.cwd)
+  if (id === 'reveal' && node.cwd !== undefined) actions.onRevealPath(node.cwd)
   if (id === 'copyPath' && node.cwd !== undefined) actions.onCopy(node.cwd)
   if (id === 'copyTaskPath' && node.cwd !== undefined) actions.onCopy(node.cwd)
   if (id === 'copyLogPath') actions.onCopy(sessionLogPath(node))
@@ -513,6 +513,8 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  * @param props.onRename - open the session rename dialog (id + current title).
  * @param props.onFork - fork a session at its last completed turn.
  * @param props.onArchive - archive a session by id.
+ * @param props.onRevealRow - scroll this row into view after search navigation, then acknowledge it.
+ * @param props.onRevealPath - reveal a filesystem path in the Host operating system.
  * @param props.drag - optional draggable-row wiring.
  * @param props.flat - omit the empty status slot in the hierarchy-free flat list.
  * @param props.t - the browser root's locale seat.
@@ -520,8 +522,8 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  */
 export function SessionNodeItem({
   node, currentId, now, onOpen, onRename, onFork, onArchive,
-  onPin, onUnpin, onMarkUnread = () => {}, onSplit = () => {}, onReveal = () => {},
-  drag, flat = false, t,
+  onPin, onUnpin, onMarkUnread = () => {}, onSplit = () => {}, onRevealPath = () => {},
+  onRevealRow, drag, flat = false, t,
 }: {
   node: SessionNode
   currentId: string | undefined
@@ -542,7 +544,9 @@ export function SessionNodeItem({
   /** Open this session and show it beside the current conversation. */
   onSplit?: (id: SessionNode['id']) => void
   /** Reveal a filesystem path in the Host operating system. */
-  onReveal?: (path: string) => void
+  onRevealPath?: (path: string) => void
+  /** Scroll this row into view after search navigation, then acknowledge it. */
+  onRevealRow?: (() => void) | undefined
   /** Present only on draggable rows (workspace-group sessions outside search). */
   drag?: RowDragProps | undefined
   /** The row is rendered without a parent Workspace header. */
@@ -557,6 +561,12 @@ export function SessionNodeItem({
   const showStatus = primaryStatus.state !== 'done' || row.completed
   const [menuOpen, setMenuOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState<DOMRect | null>(null)
+  const rowRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (onRevealRow === undefined) return
+    rowRef.current?.scrollIntoView({ block: 'nearest' })
+    onRevealRow()
+  }, [onRevealRow])
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
   // confirmation dialog.
@@ -594,6 +604,7 @@ export function SessionNodeItem({
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
     <div
+      ref={rowRef}
       className={clsx(
         css.sessionRow, selected && css.selected, (menuOpen || contextMenu !== null) && css.menuOpen,
         flat && !showStatus && css.flatSessionRowWithoutStatus,
@@ -657,7 +668,7 @@ export function SessionNodeItem({
           onSelect={(id) => {
             setContextMenu(null)
             selectSessionContextMenu(id, node, {
-              onRename, onFork, onArchive, onPin, onUnpin, onMarkUnread, onSplit, onReveal,
+              onRename, onFork, onArchive, onPin, onUnpin, onMarkUnread, onSplit, onRevealPath,
               onCopy: (text) => { void writeClipboard(text) },
             })
           }}

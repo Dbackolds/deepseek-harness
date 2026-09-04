@@ -20,7 +20,7 @@ user 与 steering 气泡不再渲染分支操作。`MessageItem` 移除其 fork 
 
 **保留可见但不可用的控件（现状）。** 否决：[已完成轮次尾部决策](../bug-fix/2026-08-02-message-fork-actions-require-completed-turn-tail.zh.md)选择可见，是为了让 tooltip 解释一个读者可以到达的边界；在 user 与 steering 气泡上这个边界实际不可达，解释文本是在为一个不该存在于此的控件打补丁。
 
-**在 user 气泡上采用切在消息之前的分支语义。** 作为 fork 否决：在本会话从自己的 prompt 重问由[同一会话内改写 user prompt](../feature/2026-08-20-same-session-user-prompt-rewrite.md)拥有，而不是子会话裁剪。
+**在 user 气泡上采用切在消息之前的分支语义。** 作为 fork 否决：在本会话从自己的 prompt 重问由[同一会话内改写 user prompt](../feature/2026-08-20-same-session-user-prompt-rewrite.zh.md)拥有，而不是子会话裁剪。
 
 ## 后果
 

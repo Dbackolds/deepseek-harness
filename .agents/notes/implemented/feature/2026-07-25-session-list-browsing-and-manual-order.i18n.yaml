@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-25-session-list-browsing-and-manual-order.md
 2026-07-25-session-list-browsing-and-manual-order.md: 84bd094c18d1a325ceef272ae41e2514b62f61fe
-2026-07-25-session-list-browsing-and-manual-order.zh.md: 838ce106adb6581b6d35bba945a3d71bf6a3eb0e
+2026-07-25-session-list-browsing-and-manual-order.zh.md: 658968d727061bb55eb2525a54e24e6a2a48fa2e

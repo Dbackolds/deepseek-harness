@@ -5,7 +5,7 @@
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { ImageAttachmentRef, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef, VideoAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ToolCallId, ProviderRequestId, ReasoningEffortId } from './brand.ts'
 import type { Message } from './message.ts'
 
@@ -86,6 +86,19 @@ export interface VideoBlock {
   attachment: VideoAttachmentRef
 }
 
+/**
+ * A durable verbatim file reference, valid in user content. Files never reach
+ * a provider natively: request assembly projects every occurrence to
+ * deterministic handle text (name, byte size, and the read-only saved path),
+ * so adapters and providers see text in its place while the durable log keeps
+ * the structured reference for presentation and authorization.
+ */
+export interface FileBlock {
+  type: 'file'
+  /** Immutable verbatim bytes and display metadata owned by the attachment service. */
+  attachment: FileAttachmentRef
+}
+
 /** A tool invocation requested by the model. */
 export interface ToolCallBlock {
   type: 'tool-call'
@@ -113,6 +126,7 @@ export interface ContentBlockMap {
   'reasoning': ReasoningBlock
   'image': ImageBlock
   'video': VideoBlock
+  'file': FileBlock
   'tool-call': ToolCallBlock
   'tool-result': ToolResultBlock
 }

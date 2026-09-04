@@ -1,13 +1,15 @@
-/** Wire-form admission of base64-encoded image and video uploads. @module @deepseek-ai/dsh-attachment/admission */
+/** Wire-form admission of base64-encoded image, video, and file uploads. @module @deepseek-ai/dsh-attachment/admission */
 
 import { Buffer } from 'node:buffer'
 import { AttachmentError } from './error.ts'
-import type { AttachmentErrorCode } from './error.ts'
 import type { AttachmentStore } from './index.ts'
 import type {
   AdmittedPromptContentPart,
+  AttachmentAdmissionPart,
+  EncodedFileAttachment,
   EncodedImageAttachment,
   EncodedVideoAttachment,
+  FileAttachmentRef,
   ImageAttachmentRef,
   PromptContentPart,
   SaveImageAttachment,
@@ -16,10 +18,21 @@ import type {
 } from './types.ts'
 
 /** Decode one upload payload while rejecting non-canonical base64 forms. */
-function decodeBase64(data: string, invalid: string, code: AttachmentErrorCode): Uint8Array {
+function decodeCanonicalBase64(
+  data: string,
+  empty: 'reject' | 'accept',
+  code: 'INVALID_IMAGE_BASE64' | 'INVALID_FILE_BASE64' | 'INVALID_VIDEO',
+): Uint8Array {
   const decoded = Buffer.from(data, 'base64')
-  if (data.length === 0 || decoded.toString('base64') !== data) {
-    throw new AttachmentError(invalid, code)
+  if ((data.length === 0 && empty === 'reject') || decoded.toString('base64') !== data) {
+    throw new AttachmentError(
+      code === 'INVALID_IMAGE_BASE64'
+        ? 'Image upload is not canonical base64.'
+        : code === 'INVALID_FILE_BASE64'
+          ? 'File upload is not canonical base64.'
+          : 'Video upload is not canonical base64.',
+      code,
+    )
   }
   return new Uint8Array(decoded)
 }
@@ -27,7 +40,7 @@ function decodeBase64(data: string, invalid: string, code: AttachmentErrorCode):
 /** Store input for one decoded image upload. */
 function imageInput(image: EncodedImageAttachment): SaveImageAttachment {
   return {
-    data: decodeBase64(image.data, 'Image upload is not canonical base64.', 'INVALID_IMAGE_BASE64'),
+    data: decodeCanonicalBase64(image.data, 'reject', 'INVALID_IMAGE_BASE64'),
     mediaType: image.mediaType,
     ...image.name === undefined ? {} : { name: image.name },
   }
@@ -36,7 +49,7 @@ function imageInput(image: EncodedImageAttachment): SaveImageAttachment {
 /** Store input for one decoded video upload. */
 function videoInput(video: EncodedVideoAttachment): SaveVideoAttachment {
   return {
-    data: decodeBase64(video.data, 'Video upload is not canonical base64.', 'INVALID_VIDEO'),
+    data: decodeCanonicalBase64(video.data, 'reject', 'INVALID_VIDEO'),
     mediaType: video.mediaType,
     ...video.name === undefined ? {} : { name: video.name },
   }
@@ -77,31 +90,54 @@ export async function admitEncodedVideos(
 }
 
 /**
+ * Admit one wire file upload: enforce canonical base64 (an empty file is a
+ * valid zero-byte payload), then delegate verbatim commit to
+ * {@link AttachmentStore.saveFile}. The shared entry for every RPC endpoint
+ * accepting browser file uploads.
+ * @param attachments - the deployment attachment store.
+ * @param file - base64-encoded upload and optional display name.
+ * @returns the durable content-addressed file reference.
+ * @throws AttachmentError on a non-canonical payload or a storage failure.
+ */
+export async function admitEncodedFile(
+  attachments: AttachmentStore,
+  file: EncodedFileAttachment,
+): Promise<FileAttachmentRef> {
+  return attachments.saveFile({
+    data: decodeCanonicalBase64(file.data, 'accept', 'INVALID_FILE_BASE64'),
+    ...file.name === undefined ? {} : { name: file.name },
+  })
+}
+
+/**
  * Admit one browser prompt and replace each uploaded image or video with its durable reference.
- * Text-only prompts do not access the attachment store.
+ * Durable file references pass through unchanged. Text-only prompts do not access the attachment store.
  * @param attachments - the deployment attachment store owning batch policy.
- * @param content - browser prompt parts in message order.
+ * @param content - prompt parts in message order after file receipt resolution.
  * @returns admitted prompt parts in the same order as `content`.
  * @throws AttachmentError when an image or video batch is refused.
  */
 export async function admitPromptContent(
   attachments: AttachmentStore,
-  content: readonly PromptContentPart[],
+  content: readonly AttachmentAdmissionPart[],
 ): Promise<AdmittedPromptContentPart[]> {
-  if (content.every(part => part.type === 'text')) {
-    return content.map(part => ({ type: 'text', text: part.text }))
+  if (content.every(part => part.type === 'text' || part.type === 'file')) {
+    return content.map(part => part.type === 'text'
+      ? { type: 'text', text: part.text }
+      : { type: 'file', attachment: part.attachment })
   }
-  const images = content.filter(part => part.type === 'image')
-  const videos = content.filter(part => part.type === 'video')
+  const images = content.filter((part): part is Extract<PromptContentPart, { type: 'image' }> => part.type === 'image')
+  const videos = content.filter((part): part is Extract<PromptContentPart, { type: 'video' }> => part.type === 'video')
   const [imageRefs, videoRefs] = await Promise.all([
     images.length > 0 ? admitEncodedImages(attachments, images) : [],
     videos.length > 0 ? admitEncodedVideos(attachments, videos) : [],
   ])
   let nextImage = 0
   let nextVideo = 0
-  return content.map((part): AdmittedPromptContentPart => part.type === 'text'
-    ? { type: 'text', text: part.text }
-    : part.type === 'image'
-      ? { type: 'image', attachment: imageRefs[nextImage++] as ImageAttachmentRef }
-      : { type: 'video', attachment: videoRefs[nextVideo++] as VideoAttachmentRef })
+  return content.map((part): AdmittedPromptContentPart => {
+    if (part.type === 'text') return { type: 'text', text: part.text }
+    if (part.type === 'file') return { type: 'file', attachment: part.attachment }
+    if (part.type === 'image') return { type: 'image', attachment: imageRefs[nextImage++] as ImageAttachmentRef }
+    return { type: 'video', attachment: videoRefs[nextVideo++] as VideoAttachmentRef }
+  })
 }

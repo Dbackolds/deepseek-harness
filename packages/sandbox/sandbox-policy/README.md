@@ -175,7 +175,6 @@ The stable system prompt remains byte-identical across mode changes. A changed f
 
 These limits define the policy surface this package provides. They are current package constraints, not a general sandbox comparison or a task backlog.
 
-- **One primary workspace root per session** — policy resolves `SessionHeader.cwd`; extra writable roots are not part of `SandboxExecutionPolicy`.
 - **One primary workspace root per session** — policy resolves the last `workspace/home` or `git/worktree` overlay, else `SessionHeader.cwd`, as the process cwd; extra folders remain the owning workspace folders and appear in `workspace:folders` plus default grep/glob roots.
 - **File-effect modes only** — `SandboxMode` governs file effects; network and process policy are outside its vocabulary, so no knob here restricts them.
 - **Temporary areas are deliberately summarized** — enforcing backends grant different platform temporary areas, which are selected after policy resolution and therefore cannot be enumerated truthfully in the current context.

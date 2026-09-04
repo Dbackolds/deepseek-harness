@@ -43,6 +43,20 @@ export function isNoRepoWorkspace(
     || workspace.path.endsWith('\no-repo')
 }
 
+/**
+ * Resolve the Workspace browser group that owns one Session.
+ * @param workspaces - authoritative Workspace membership.
+ * @param sessionId - Session whose browser group is required.
+ * @returns owning Workspace id, or {@link UNGROUPED_KEY} when no Workspace accounts for it.
+ */
+export function owningGroupKey(
+  workspaces: readonly WorkspaceView[],
+  sessionId: SessionId,
+): string {
+  return (workspaces.find(workspace => workspace.sessionIds.includes(sessionId))
+    ?.workspaceId as string | undefined) ?? UNGROUPED_KEY
+}
+
 /** Pending interaction kinds with dedicated Workspace-row presentation. */
 export type SessionPendingInteractionStatus = 'approval' | 'plan-review' | 'question'
 type SessionPendingInteractions = ReadonlyMap<SessionId, SessionPendingInteractionBase>

@@ -1,25 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
-import { admitEncodedImages, admitEncodedVideos, admitPromptContent } from '@deepseek-ai/dsh-attachment'
+import AttachmentStore, { admitEncodedFile, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type {
-  ImageAttachmentRef,
-  SaveImageAttachment,
-  SaveVideoAttachment,
-  VideoAttachmentRef,
+  FileAttachmentRef, ImageAttachmentRef, SaveImageAttachment,
 } from '@deepseek-ai/dsh-attachment/types'
 
 const PNG = 'AAAA' // canonical base64, 3 bytes
-const MP4 = 'QUJD' // canonical base64, 3 bytes; the double only records and replays
+const FILE_REF: FileAttachmentRef = {
+  attachmentId: 'file-1' as FileAttachmentRef['attachmentId'],
+  name: 'notes.md',
+  bytes: 12,
+}
 
-/** Delegation double: records the exact save batch and answers ordered refs. */
+/** Delegation double: records the exact saveImages batch and answers ordered refs. */
 function storeOf() {
-  const store = {
-    saveVideos: vi.fn((inputs: readonly SaveVideoAttachment[]) => Promise.resolve(inputs.map((input, index): VideoAttachmentRef => ({
-      attachmentId: `att-${index + 1}` as VideoAttachmentRef['attachmentId'],
-      mediaType: input.mediaType,
-      bytes: input.data.byteLength,
-      ...input.name === undefined ? {} : { name: input.name },
-    })))),
+  const mocks = {
     saveImages: vi.fn((inputs: readonly SaveImageAttachment[]) => Promise.resolve(inputs.map((input, index): ImageAttachmentRef => ({
       attachmentId: `att-${index + 1}` as ImageAttachmentRef['attachmentId'],
       mediaType: input.mediaType,
@@ -29,7 +23,8 @@ function storeOf() {
       ...input.name === undefined ? {} : { name: input.name },
     })))),
   }
-  return { store: store as unknown as AttachmentStore, mocks: store }
+  const store = Object.setPrototypeOf(mocks, AttachmentStore.prototype) as AttachmentStore
+  return { store, mocks }
 }
 
 describe('admitEncodedImages', () => {
@@ -77,100 +72,70 @@ describe('admitEncodedImages', () => {
   })
 })
 
-describe('admitEncodedVideos', () => {
-  it('decodes every member and delegates one ordered batch to saveVideos', async () => {
-    const { store, mocks } = storeOf()
-    const refs = await admitEncodedVideos(store, [
-      { mediaType: 'video/mp4', data: MP4, name: 'first.mp4' },
-      { mediaType: 'video/x-matroska', data: MP4, name: 'second.mkv' },
-    ])
-    expect(mocks.saveVideos).toHaveBeenCalledTimes(1)
-    const batch = mocks.saveVideos.mock.calls[0]?.[0] as readonly SaveVideoAttachment[]
-    expect(batch.map(input => [input.name, input.mediaType, input.data.byteLength]))
-      .toEqual([['first.mp4', 'video/mp4', 3], ['second.mkv', 'video/x-matroska', 3]])
-    expect(refs.map(ref => ref.attachmentId)).toEqual(['att-1', 'att-2'])
-  })
-
-  it('omits the name from store inputs when the upload has none', async () => {
-    const { store, mocks } = storeOf()
-    const refs = await admitEncodedVideos(store, [{ mediaType: 'video/quicktime', data: MP4 }])
-    const batch = mocks.saveVideos.mock.calls[0]?.[0] as readonly SaveVideoAttachment[]
-    expect('name' in (batch[0] as object)).toBe(false)
-    expect(refs[0]?.name).toBeUndefined()
-  })
-
-  it('delegates an empty batch unchanged', async () => {
-    const { store, mocks } = storeOf()
-    await expect(admitEncodedVideos(store, [])).resolves.toEqual([])
-    expect(mocks.saveVideos).toHaveBeenCalledWith([])
-  })
-
-  it('rejects non-canonical and empty base64 payloads before any store call', async () => {
-    const { store, mocks } = storeOf()
-    for (const data of ['', 'AAA', '!!!!']) {
-      await expect(admitEncodedVideos(store, [{ mediaType: 'video/mp4', data }]))
-        .rejects.toMatchObject({ name: 'AttachmentError', code: 'INVALID_VIDEO' })
+describe('admitEncodedFile', () => {
+  /** Delegation double: records the exact saveFile input and answers a fixed ref. */
+  function fileStoreOf() {
+    const store = {
+      saveFile: vi.fn((input: { data: Uint8Array; name?: string }) => Promise.resolve({
+        attachmentId: 'file-1' as never,
+        name: input.name ?? 'file',
+        bytes: input.data.byteLength,
+      })),
     }
-    expect(mocks.saveVideos).not.toHaveBeenCalled()
+    return { store: store as unknown as AttachmentStore, mocks: store }
+  }
+
+  it('decodes canonical base64 and delegates verbatim commit to saveFile', async () => {
+    const { store, mocks } = fileStoreOf()
+    const ref = await admitEncodedFile(store, { data: 'AAAA', name: 'blob.bin' })
+    expect(mocks.saveFile).toHaveBeenCalledTimes(1)
+    const input = mocks.saveFile.mock.calls[0]?.[0] as { data: Uint8Array; name?: string }
+    expect([input.name, input.data.byteLength]).toEqual(['blob.bin', 3])
+    expect(ref.bytes).toBe(3)
   })
 
-  it('propagates the store batch rejection unchanged', async () => {
-    const { store, mocks } = storeOf()
-    const refused = Object.assign(new Error('Video batch exceeds the configured video-count limit.'), { code: 'TOO_MANY_VIDEOS' })
-    mocks.saveVideos.mockRejectedValueOnce(refused)
-    await expect(admitEncodedVideos(store, [{ mediaType: 'video/mp4', data: MP4 }])).rejects.toBe(refused)
+  it('accepts an empty payload as a zero-byte file and omits an absent name', async () => {
+    const { store, mocks } = fileStoreOf()
+    const ref = await admitEncodedFile(store, { data: '' })
+    const input = mocks.saveFile.mock.calls[0]?.[0] as object
+    expect('name' in input).toBe(false)
+    expect(ref.bytes).toBe(0)
+  })
+
+  it('rejects non-canonical base64 without touching the store', async () => {
+    const { store, mocks } = fileStoreOf()
+    await expect(admitEncodedFile(store, { data: 'not base64!!' }))
+      .rejects.toMatchObject({ code: 'INVALID_FILE_BASE64' })
+    expect(mocks.saveFile).not.toHaveBeenCalled()
   })
 })
 
-describe('admitPromptContent', () => {
-  it('converts text-only prompts without touching the attachment store', async () => {
-    const store = {
-      saveImages: () => { throw new Error('text-only prompts must not reach the store') },
-      saveVideos: () => { throw new Error('text-only prompts must not reach the store') },
-    }
-    await expect(admitPromptContent(store as unknown as AttachmentStore, [
+describe('AttachmentStore.admitPromptContent', () => {
+  it('passes through text and durable files without touching image storage', async () => {
+    const store = Object.setPrototypeOf({
+      saveImages: () => { throw new Error('prompts without image uploads must not reach the store') },
+    }, AttachmentStore.prototype) as AttachmentStore
+    await expect(store.admitPromptContent([
       { type: 'text', text: 'hello' },
-    ])).resolves.toEqual([{ type: 'text', text: 'hello' }])
+      { type: 'file', attachment: FILE_REF },
+    ])).resolves.toEqual([
+      { type: 'text', text: 'hello' },
+      { type: 'file', attachment: FILE_REF },
+    ])
   })
 
-  it('replaces image parts with admitted references in part order', async () => {
+  it('replaces images and passes through files in part order', async () => {
     const { store } = storeOf()
-    await expect(admitPromptContent(store, [
+    await expect(store.admitPromptContent([
       { type: 'image', mediaType: 'image/png', data: 'AQ==' },
+      { type: 'file', attachment: FILE_REF },
       { type: 'text', text: 'between' },
       { type: 'image', mediaType: 'image/png', data: 'Ag==' },
     ])).resolves.toEqual([
       { type: 'image', attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
+      { type: 'file', attachment: FILE_REF },
       { type: 'text', text: 'between' },
       { type: 'image', attachment: { attachmentId: 'att-2', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
     ])
-  })
-
-  it('replaces video-only parts without touching the image store', async () => {
-    const { store, mocks } = storeOf()
-    await expect(admitPromptContent(store, [
-      { type: 'text', text: 'clip' },
-      { type: 'video', mediaType: 'video/mp4', data: MP4, name: 'clip.mp4' },
-    ])).resolves.toEqual([
-      { type: 'text', text: 'clip' },
-      { type: 'video', attachment: { attachmentId: 'att-1', mediaType: 'video/mp4', bytes: 3, name: 'clip.mp4' } },
-    ])
-    expect(mocks.saveImages).not.toHaveBeenCalled()
-    expect(mocks.saveVideos).toHaveBeenCalledTimes(1)
-  })
-
-  it('replaces mixed image and video parts with admitted references in part order', async () => {
-    const { store, mocks } = storeOf()
-    await expect(admitPromptContent(store, [
-      { type: 'image', mediaType: 'image/png', data: 'AQ==' },
-      { type: 'text', text: 'between' },
-      { type: 'video', mediaType: 'video/mp4', data: MP4, name: 'clip.mp4' },
-    ])).resolves.toEqual([
-      { type: 'image', attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
-      { type: 'text', text: 'between' },
-      { type: 'video', attachment: { attachmentId: 'att-1', mediaType: 'video/mp4', bytes: 3, name: 'clip.mp4' } },
-    ])
-    expect(mocks.saveImages).toHaveBeenCalledTimes(1)
-    expect(mocks.saveVideos).toHaveBeenCalledTimes(1)
   })
 })

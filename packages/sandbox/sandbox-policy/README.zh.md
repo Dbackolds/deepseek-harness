@@ -175,7 +175,7 @@ These additional folders are part of the same workspace. Use their absolute path
 
 这些限制定义了本包提供的策略表面。它们是当前包约束，不是通用沙箱对比或任务积压。
 
-- **每个会话只有一个主要工作区根目录**——策略解析 `SessionHeader.cwd`；额外可写根目录不属于 `SandboxExecutionPolicy`。
+- **每个会话只有一个主要工作区根目录**——策略把最后一条 `workspace/home` 或 `git/worktree` overlay，否则 `SessionHeader.cwd`，解析为进程 cwd；附加文件夹仍属于所属 workspace，并出现在 `workspace:folders` 以及默认 grep／glob 根目录中。
 - **仅限文件操作模式**——`SandboxMode` 管控文件操作；网络和进程策略不在其词汇中，因此这里没有限制它们的旋钮。
 - **有意概述临时区域**——强制执行后端会授予不同的平台临时区域，这些区域在策略解析后才会选定，因此无法在当前上下文中如实枚举。
 
@@ -188,6 +188,3 @@ These additional folders are part of the same workspace. Use their absolute path
 无。
 
 </details>
-- **每个会话只有一个主要工作区根目录**：策略把最后一条 `workspace/home` 或 `git/worktree` overlay，否则 `SessionHeader.cwd`，解析为进程 cwd；附加文件夹仍属于所属 workspace，并出现在 `workspace:folders` 以及默认 grep／glob 根目录中。
-- **仅限文件操作模式**：`SandboxMode` 管控文件操作；网络和进程策略不在其词汇中，因此这里没有限制它们的旋钮。
-- **有意概述临时区域**：强制执行后端会授予不同的平台临时区域，这些区域在策略解析后才会选定，因此无法在当前上下文中如实枚举。

@@ -4,19 +4,15 @@ import AttachmentStore, {
   AttachmentError,
   AttachmentId,
   ImageVariantId,
+  isAttachmentError,
   isImageAdmissionError,
-  isVideoAdmissionError,
   type ImageAttachmentRef,
   type ImageMediaType,
   type ImageRequestPolicy,
   type RequestImageAttachment,
+  type SaveFileAttachment,
   type SaveImageAttachment,
   type StoredImageAttachment,
-  type VideoAttachmentRef,
-  type VideoMediaType,
-  type VideoAttachmentLimits,
-  type SaveVideoAttachment,
-  type StoredVideoAttachment,
 } from '../src/index.ts'
 
 const LIMITS = {
@@ -28,21 +24,11 @@ const LIMITS = {
   mediaTypes: ['image/png'] as const,
 }
 
-const VIDEO_LIMITS: VideoAttachmentLimits = {
-  maxVideoBytes: 4,
-  maxVideosPerMessage: 2,
-  maxMessageVideoBytes: 5,
-  mediaTypes: ['video/mp4'] as const,
-}
-
 class RecordingStore extends AttachmentStore {
   readonly imageLimits = LIMITS
-  override readonly videoLimits = VIDEO_LIMITS
   readonly calls: string[] = []
   rejectValidationAt: number | undefined
   rejectSaveAt: number | undefined
-  rejectVideoValidationAt: number | undefined
-  rejectVideoSaveAt: number | undefined
 
   async validateImage(input: SaveImageAttachment): Promise<void> {
     const value = input.data[0] ?? 0
@@ -86,32 +72,9 @@ class RecordingStore extends AttachmentStore {
       hasAlpha: false,
     })
   }
-
-  override async validateVideo(input: SaveVideoAttachment): Promise<void> {
-    const value = input.data[0] ?? 0
-    this.calls.push(`validate-video:${value}`)
-    if (value === this.rejectVideoValidationAt) throw new Error(`invalid-video:${value}`)
-  }
-
-  override async saveVideo(input: SaveVideoAttachment): Promise<VideoAttachmentRef> {
-    const value = input.data[0] ?? 0
-    this.calls.push(`save-video:${value}`)
-    if (value === this.rejectVideoSaveAt) throw new Error(`write-video:${value}`)
-    return {
-      attachmentId: AttachmentId(`sha256:${String(value).padStart(64, '0')}`),
-      mediaType: input.mediaType,
-      bytes: input.data.byteLength,
-      ...input.name === undefined ? {} : { name: input.name },
-    }
-  }
-
-  override readVideo(_ref: VideoAttachmentRef): Promise<StoredVideoAttachment> {
-    throw new Error('not used')
-  }
 }
 
-/** Image-only double: exercises the AttachmentStore video defaults unchanged. */
-class ImageOnlyStore extends AttachmentStore {
+class UnsupportedProjectionStore extends AttachmentStore {
   readonly imageLimits = LIMITS
 
   validateImage(): Promise<void> {
@@ -127,16 +90,21 @@ class ImageOnlyStore extends AttachmentStore {
   }
 }
 
-class UnsupportedProjectionStore extends ImageOnlyStore {
-  override readonly videoLimits = VIDEO_LIMITS
+class RecordingFileStore extends RecordingStore {
+  fileInput: SaveFileAttachment | undefined
+
+  override saveFile(input: SaveFileAttachment) {
+    this.fileInput = input
+    return Promise.resolve({
+      attachmentId: AttachmentId(`sha256:${'cd'.repeat(32)}`),
+      name: input.name ?? 'unnamed',
+      bytes: input.data.byteLength,
+    })
+  }
 }
 
 function image(value: number, mediaType: ImageMediaType = 'image/png'): SaveImageAttachment {
   return { data: Uint8Array.of(value), mediaType, name: `${value}.png` }
-}
-
-function video(value: number, mediaType: VideoMediaType = 'video/mp4'): SaveVideoAttachment {
-  return { data: Uint8Array.of(value), mediaType, name: `${value}.mp4` }
 }
 
 describe('AttachmentStore.saveImages', () => {
@@ -194,103 +162,47 @@ describe('AttachmentStore.readImageRequest', () => {
     expect(() => store.readImageRequest(ref, { maxPixels: 1, maxBytes: 1 }, controller.signal)).toThrow(reason)
   })
 
-  it('exposes no provider-owned host path by default', async () => {
+  it('rejects generic-file storage and exposes no provider-owned host path by default', async () => {
     const store = new RecordingStore(new Context())
     const ref = await store.saveImage(image(1))
     expect(store.imageHostPath(ref)).toBeUndefined()
-  })
-})
-
-describe('AttachmentStore.saveVideos', () => {
-  it('validates the complete batch before saving in input order', async () => {
-    const store = new RecordingStore(new Context())
-
-    const refs = await store.saveVideos([video(1), video(2)])
-
-    expect(store.calls).toEqual(['validate-video:1', 'validate-video:2', 'save-video:1', 'save-video:2'])
-    expect(refs.map(ref => ref.name)).toEqual(['1.mp4', '2.mp4'])
-  })
-
-  it('rejects count, aggregate bytes, and deployment media types before validation', async () => {
-    const store = new RecordingStore(new Context())
-
-    await expect(store.saveVideos([video(1), video(2), video(3)]))
-      .rejects.toMatchObject({ code: 'TOO_MANY_VIDEOS' })
-    await expect(store.saveVideos([
-      { data: Uint8Array.of(1, 2, 3), mediaType: 'video/mp4' },
-      { data: Uint8Array.of(4, 5, 6), mediaType: 'video/mp4' },
-    ])).rejects.toMatchObject({ code: 'VIDEOS_TOO_LARGE' })
-    await expect(store.saveVideos([video(1, 'video/quicktime')]))
-      .rejects.toMatchObject({ code: 'UNSUPPORTED_VIDEO_TYPE' })
-    expect(store.calls).toEqual([])
-  })
-
-  it('starts no writes when any member fails validation', async () => {
-    const store = new RecordingStore(new Context())
-    store.rejectVideoValidationAt = 2
-
-    await expect(store.saveVideos([video(1), video(2)]))
-      .rejects.toThrow('invalid-video:2')
-    expect(store.calls).toEqual(['validate-video:1', 'validate-video:2'])
-  })
-
-  it('returns no partial references when storage fails after an earlier commit', async () => {
-    const store = new RecordingStore(new Context())
-    store.rejectVideoSaveAt = 2
-
-    await expect(store.saveVideos([video(1), video(2)]))
-      .rejects.toThrow('write-video:2')
-    expect(store.calls).toEqual(['validate-video:1', 'validate-video:2', 'save-video:1', 'save-video:2'])
-  })
-})
-
-describe('AttachmentStore.readVideoRequest', () => {
-  it('reports unsupported request projection while preserving cancellation', async () => {
-    const store = new UnsupportedProjectionStore(new Context())
-    const ref = await new RecordingStore(new Context()).saveVideo(video(1))
-    await expect(store.readVideoRequest(ref))
-      .rejects.toMatchObject({ code: 'ATTACHMENT_PROJECTION_UNSUPPORTED' })
+    await expect(store.saveFile({ data: Uint8Array.of(1), name: 'notes.txt' }))
+      .rejects.toMatchObject({ code: 'ATTACHMENT_FILES_UNSUPPORTED' })
+    await expect(store.saveFileStream({
+      data: (async function* (): AsyncIterable<Uint8Array> { yield Uint8Array.of(1) })(),
+      name: 'notes.txt',
+    })).rejects.toMatchObject({ code: 'ATTACHMENT_FILES_UNSUPPORTED' })
+    const fileRef = {
+      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      name: 'notes.txt',
+      bytes: 1,
+    }
+    expect(store.fileHostPath(fileRef)).toBeUndefined()
+    const read = async (signal?: AbortSignal): Promise<void> => {
+      for await (const chunk of store.readFileStream(fileRef, signal)) {
+        void chunk
+        throw new Error('unsupported store yielded a chunk')
+      }
+    }
+    await expect(read()).rejects.toMatchObject({ code: 'ATTACHMENT_FILES_UNSUPPORTED' })
     const controller = new AbortController()
-    const reason = new Error('cancel unsupported video projection')
+    const reason = new Error('cancel unsupported file read')
     controller.abort(reason)
-    expect(() => store.readVideoRequest(ref, controller.signal)).toThrow(reason)
+    await expect(read(controller.signal)).rejects.toBe(reason)
   })
 })
 
-describe('AttachmentStore video defaults', () => {
-  it('refuses every video operation on an image-only deployment as caller-correctable', async () => {
-    const store = new ImageOnlyStore(new Context())
-    expect(store.videoLimits).toEqual({
-      maxVideoBytes: 0,
-      maxVideosPerMessage: 0,
-      maxMessageVideoBytes: 0,
-      mediaTypes: [],
+describe('AttachmentStore file admission', () => {
+  it('decodes encoded files through the service and exposes attachment errors', async () => {
+    const store = new RecordingFileStore(new Context())
+
+    await expect(store.admitEncodedFile({ data: 'AQID', name: 'notes.bin' })).resolves.toMatchObject({
+      name: 'notes.bin',
+      bytes: 3,
     })
-
-    await expect(store.validateVideo(video(1)))
-      .rejects.toMatchObject({ code: 'UNSUPPORTED_VIDEO_TYPE' })
-    await expect(store.saveVideo(video(1)))
-      .rejects.toMatchObject({ code: 'UNSUPPORTED_VIDEO_TYPE' })
-    await expect(store.readVideo({
-      attachmentId: AttachmentId(`sha256:${'0'.repeat(64)}`),
-      mediaType: 'video/mp4',
-      bytes: 1,
-    })).rejects.toMatchObject({ code: 'UNSUPPORTED_VIDEO_TYPE' })
-
-    const controller = new AbortController()
-    const reason = new Error('cancel unsupported video read')
-    controller.abort(reason)
-    expect(() => store.readVideo({
-      attachmentId: AttachmentId(`sha256:${'0'.repeat(64)}`),
-      mediaType: 'video/mp4',
-      bytes: 1,
-    }, controller.signal)).toThrow(reason)
-  })
-
-  it('admits an empty video batch and refuses a non-empty one through the zero limits', async () => {
-    const store = new ImageOnlyStore(new Context())
-    await expect(store.saveVideos([])).resolves.toEqual([])
-    await expect(store.saveVideos([video(1)])).rejects.toMatchObject({ code: 'TOO_MANY_VIDEOS' })
+    expect(store.fileInput).toEqual({ data: Uint8Array.of(1, 2, 3), name: 'notes.bin' })
+    expect(store.isAttachmentError(new AttachmentError('disk failed', 'ATTACHMENT_WRITE_FAILED'))).toBe(true)
+    expect(store.isAttachmentError(new Error('unknown failure'))).toBe(false)
   })
 })
 
@@ -306,16 +218,13 @@ describe('isImageAdmissionError', () => {
   })
 })
 
-describe('isVideoAdmissionError', () => {
-  it('separates caller-correctable video admission failures from storage and image faults', () => {
-    expect(isVideoAdmissionError(new AttachmentError('bad bytes', 'INVALID_VIDEO'))).toBe(true)
-    expect(isVideoAdmissionError(new AttachmentError('too many', 'TOO_MANY_VIDEOS'))).toBe(true)
-    expect(isVideoAdmissionError(new AttachmentError('too large', 'VIDEO_TOO_LARGE'))).toBe(true)
-    expect(isVideoAdmissionError(new AttachmentError('webm', 'UNSUPPORTED_VIDEO_TYPE'))).toBe(true)
-    expect(isVideoAdmissionError(Object.assign(new Error('foreign policy error'), { code: 'VIDEOS_TOO_LARGE' }))).toBe(true)
-    expect(isVideoAdmissionError(new AttachmentError('image code stays image-scoped', 'INVALID_IMAGE'))).toBe(false)
-    expect(isVideoAdmissionError(new AttachmentError('corrupt object', 'ATTACHMENT_CORRUPT'))).toBe(false)
-    expect(isVideoAdmissionError(new AttachmentError('disk failed', 'ATTACHMENT_WRITE_FAILED'))).toBe(false)
-    expect(isVideoAdmissionError(new Error('unknown failure'))).toBe(false)
+describe('isAttachmentError', () => {
+  it('recognizes attachment failures from another package installation by code', () => {
+    expect(isAttachmentError(new AttachmentError('bad base64', 'INVALID_FILE_BASE64'))).toBe(true)
+    expect(isAttachmentError(Object.assign(new Error('foreign storage error'), {
+      code: 'ATTACHMENT_WRITE_FAILED',
+    }))).toBe(true)
+    expect(isAttachmentError(Object.assign(new Error('other failure'), { code: 'OTHER' }))).toBe(false)
+    expect(isAttachmentError({ code: 'ATTACHMENT_WRITE_FAILED' })).toBe(false)
   })
 })
