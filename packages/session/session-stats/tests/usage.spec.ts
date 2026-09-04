@@ -89,8 +89,8 @@ describe('sessionUsage projection unit', () => {
     }, { surfaceOp: 'append', sourceEventSeqs: [] })
     session.append('step/end', { turn: 1, step: 1 })
     const view = ctx.sessionProjections.snapshot(session).values.sessionUsage
-    expect(view.tokens).toBe(30)
-    expect(view.models).toEqual([{ model: 'glm-flash', tokens: 30 }])
+    expect(view?.tokens).toBe(30)
+    expect(view?.models).toEqual([{ model: 'glm-flash', tokens: 30 }])
   })
 })
 
