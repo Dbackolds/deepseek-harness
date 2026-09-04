@@ -7,6 +7,8 @@
  * The settings SLOT types (what registrants contribute) stay in ui-settings.
  */
 import type { ConnectionGenerationState, ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
+import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
+import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-sidebar's SlotMap merge (the 'sidebar.settings' entry)
 // into every program that sees this contract.
@@ -36,6 +38,12 @@ export interface SettingsOnboardingStep {
 export type SettingsRootInjected = {
   /** Request a fresh logical generation and physical WebSocket immediately. */
   reconnect: () => void
+  /** Switch the active locale from the account menu. */
+  setLocale: (id: string) => void
+  /** Switch the theme preference from the account menu. */
+  setTheme: (id: string) => void
+  /** Change the conversation content font size from the account menu. */
+  setFontSize: (px: number) => void
   hooks: {
     /** Connection-owned state for the current Host connection. */
     connectionState: HostObservable<ConnectionState | undefined>
@@ -45,6 +53,10 @@ export type SettingsRootInjected = {
     onboardingSteps: HostObservable<readonly SettingsOnboardingStep[]>
     /** Host-process start time and start count. */
     hostStart: HostObservable<HostStartMetaView>
+    /** Active locale and selectable language catalog. */
+    locale: HostObservable<LocaleSnapshot>
+    /** Active appearance preference and content font size. */
+    theme: HostObservable<ThemeSnapshot>
   }
 }
 

@@ -199,6 +199,11 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.submenuChevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 /* Selected cell keeps the plain fill (marker is the trailing check); the
  * class remains as a hook for owner-side emphasis. */
 .selected {

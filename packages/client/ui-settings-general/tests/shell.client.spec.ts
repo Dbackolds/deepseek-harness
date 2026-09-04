@@ -13,11 +13,21 @@ async function bench() {
   await ctx.plugin(SlotRegistry).await()
   // Copy machinery the shell only reads a revision from; the real locale
   // plugin would drag its own settings-row dependencies into this bench.
+  const setLocale = vi.fn()
+  const setTheme = vi.fn()
+  const setFontSize = vi.fn()
+  const getTheme = vi.fn(() => ({ preference: 'system', fontSize: 14, revision: 1 }))
   ctx.provide('locale', {
     register: () => () => {},
     bind: () => (key: string) => key,
+    setLocale,
     getSnapshot: () => ({ active: 'zh', locales: [], revision: 0 }),
     subscribe: () => () => {},
+  } as never)
+  ctx.provide('theme', {
+    getTheme,
+    setTheme,
+    setFontSize,
   } as never)
   // The shell mounts ui-settings, which injects `remote.settings`; without the
   // namespace provided its fiber parks and no slot is ever declared.
@@ -43,7 +53,7 @@ async function bench() {
   } as never)
   ctx.provide('remote.settings', settings as never)
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, connectionState, reconnect }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, connectionState, reconnect, setLocale, setTheme, setFontSize, getTheme }
 }
 
 function declare(slots: SlotRegistry): () => void {
@@ -71,7 +81,7 @@ const CHILD_SPECS = {
 describe('ui-settings apply', () => {
   it('declares only the slot registry (a pure composition face, no locale)', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'connection', 'remote', 'remote.settings', 'settingsScope',
+      'slots', 'locale', 'theme', 'connection', 'remote', 'remote.settings', 'settingsScope',
     ])
   })
 
@@ -131,6 +141,16 @@ describe('ui-settings apply', () => {
     expect(injected.hooks.connectionState).toBe(b.connectionState)
     injected.reconnect()
     expect(b.reconnect).toHaveBeenCalledOnce()
+    injected.setLocale('en')
+    injected.setTheme('dark')
+    injected.setFontSize(12)
+    expect(b.setLocale).toHaveBeenCalledWith('en')
+    expect(b.setTheme).toHaveBeenCalledWith('dark')
+    expect(b.setFontSize).toHaveBeenCalledWith(12)
+    expect(injected.hooks.theme.getSnapshot()).toEqual({ preference: 'system', fontSize: 14, revision: 1 })
+    const off = injected.hooks.theme.subscribe(() => {})
+    b.ctx.emit('theme/change', { preference: 'dark' } as never)
+    off()
   })
 
   it('projects onboarding entries into stable coordinator order', async () => {

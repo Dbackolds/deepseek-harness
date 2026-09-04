@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-29-sidebar-account-settings-trigger.md
-2026-08-29-sidebar-account-settings-trigger.md: b9c9f158bc37e89b037718394d18c60ac2da568c
-2026-08-29-sidebar-account-settings-trigger.zh.md: 872d6a1c87c22e62b6abd97873bf61cc1065c1d7
+2026-08-29-sidebar-account-settings-trigger.md: e1ddc9d970634d5b71b19fc015dab110c8c272a4
+2026-08-29-sidebar-account-settings-trigger.zh.md: 6f820f74d45adad26e3d3744a34d8f8875cacf9e

@@ -32,6 +32,7 @@ function mount({
   wide = true,
   connectionState = 'connected',
   onboardingActive = true,
+  themePreference = 'system',
   rows = [
     { id: 'general', order: 0, label: 'General' },
     { id: 'models', order: 10, label: 'Models' },
@@ -45,6 +46,7 @@ function mount({
   wide?: boolean
   connectionState?: ConnectionSnapshot
   onboardingActive?: boolean
+  themePreference?: 'light' | 'dark' | 'system'
   rows?: Row[]
   steps?: Step[]
 } = {}) {
@@ -55,6 +57,9 @@ function mount({
   const listeners = new Set<() => void>()
   const connectionListeners = new Set<() => void>()
   const reconnect = vi.fn()
+  const setLocale = vi.fn()
+  const setTheme = vi.fn()
+  const setFontSize = vi.fn()
   const renderSlot = vi.fn(
     ((key: string, _owner: unknown, opts?: { only?: string }) => {
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
@@ -75,6 +80,21 @@ function mount({
     useWorkspaces: unusedHook,
     wide,
     reconnect,
+    setLocale,
+    setTheme,
+    setFontSize,
+    useLocale: select => select({
+      active: 'en',
+      locales: [{ id: 'en', label: 'English' }, { id: 'zh', label: '中文' }],
+      revision: 1,
+    }),
+    useTheme: select => select({
+      preference: themePreference,
+      fontSize: 14,
+      active: { id: 'light', colorScheme: 'light', tokens: {} },
+      themes: [],
+      revision: 1,
+    }),
     t: (key, params) => {
       if (key === 'hostStart.meta') return `Started ${String(params?.['time'])} · launched ${String(params?.['count'])} times`
       const translated = makeTranslate(en)(key, params)
@@ -119,7 +139,7 @@ function mount({
       for (const fn of [...connectionListeners]) fn()
     })
   }
-  return { view, renderSlot, bump, listeners, reconnect, setConnectionState }
+  return { view, renderSlot, bump, listeners, reconnect, setLocale, setTheme, setFontSize, setConnectionState }
 }
 
 function openPanel() {
@@ -174,6 +194,48 @@ describe('SettingsRoot trigger', () => {
   it('keeps the reconnect indicator out of the collapsed rail', () => {
     mount({ wide: false, connectionState: 'disconnected' })
     expect(screen.queryByRole('button', { name: 'Disconnected, reconnect now' })).toBeNull()
+  })
+
+  it('opens the account menu from the chip without opening settings, then applies submenu choices', () => {
+    const mounted = mount()
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface language' }).parentElement as HTMLElement)
+    fireEvent.click(screen.getByRole('menuitem', { name: '中文' }))
+    expect(mounted.setLocale).toHaveBeenCalledWith('zh')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Appearance' }).parentElement as HTMLElement)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Dark' }))
+    expect(mounted.setTheme).toHaveBeenCalledWith('dark')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface scale' }).parentElement as HTMLElement)
+    fireEvent.click(screen.getByRole('menuitem', { name: '12px' }))
+    expect(mounted.setFontSize).toHaveBeenCalledWith(12)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('keeps the account menu off the collapsed rail', () => {
+    mount({ wide: false })
+    expect(screen.queryByRole('button', { name: 'Account menu' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeTruthy()
+  })
+
+  it('closes the account menu on outside pointerdown and renders theme icons for each preference', () => {
+    mount({ themePreference: 'dark' })
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    cleanup()
+    mount({ themePreference: 'light' })
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    expect(screen.getByRole('menuitem', { name: 'Appearance' })).toBeTruthy()
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface language' }).parentElement as HTMLElement)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Interface language' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
 

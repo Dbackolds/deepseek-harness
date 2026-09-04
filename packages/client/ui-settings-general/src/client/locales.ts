@@ -3,7 +3,15 @@
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'trigger': '设置',
+  'account.menu': '账号菜单',
   'account.fallback': '本地',
+  'menu.language': '界面语言',
+  'menu.theme': '界面主题',
+  'menu.theme.light': '浅色',
+  'menu.theme.dark': '深色',
+  'menu.theme.system': '跟随系统',
+  'menu.fontSize': '界面缩放',
+  'menu.fontSize.value': '{size}px',
   'title': '设置',
   'hostStart.meta': '启动于 {time} · 已启动 {count} 次',
   'close': '关闭',
@@ -24,7 +32,15 @@ export type SettingsKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'trigger': 'Settings',
+  'account.menu': 'Account menu',
   'account.fallback': 'Local',
+  'menu.language': 'Interface language',
+  'menu.theme': 'Appearance',
+  'menu.theme.light': 'Light',
+  'menu.theme.dark': 'Dark',
+  'menu.theme.system': 'System',
+  'menu.fontSize': 'Interface scale',
+  'menu.fontSize.value': '{size}px',
   'title': 'Settings',
   'hostStart.meta': 'Started {time} · launched {count} times',
   'close': 'Close',

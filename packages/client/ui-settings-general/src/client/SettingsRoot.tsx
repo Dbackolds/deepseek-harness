@@ -3,9 +3,10 @@
  * panel (figma 501:29947, 1080x700) with the section nav rail. The shell is
  * a pure composition face — every piece of text (trigger label, panel title,
  * close label, sections) arrives from registrants through slots; accessible
- * names resolve to that content (trigger: its own text; dialog:
- * aria-labelledby the title node; close: visually-hidden slot text). Modal
- * open state and the active section id are component-local viewing state;
+ * names resolve to that content (settings trigger: its own text; dialog:
+ * aria-labelledby the title node; close: visually-hidden slot text). The wide
+ * foot splits the account chip (menu) from the trailing settings glyph. Modal
+ * open state, the account menu, and the active section id are component-local viewing state;
  * the onboarding coordinator mounts exactly one ordered registrant while the
  * sessions-derived empty-Hero fact is active. Visible dialog chrome belongs
  * to the step, so a mounted-but-deciding step paints nothing here.
@@ -15,15 +16,21 @@ import clsx from 'clsx'
 import {
   ConnectionIndicator,
   IconAgentPresetOutline16, IconBranchOutline16, IconCloseOutline16, IconDataOutline16,
+  IconDarkOutline16, IconFollowsystemOutline16, IconGlobeOutline14, IconLightOutline16,
   IconListPenOutline16, IconPersonalizationOutline16, IconSettingsOutline16, IconSkillOutline16,
+  Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ConnectionIndicatorState } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ConnectionIndicatorState, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
 import { HostStartMeta } from './HostStartMeta.tsx'
 import type { HostStartMetaView } from './host-start-meta.ts'
 import css from './SettingsRoot.module.css'
 
 const RECOVERY_CONFIRMATION_MS = 2_000
+
+/** Same integer px range as the Appearance font-size row. */
+const CONTENT_FONT_SIZE_MIN = 12
+const CONTENT_FONT_SIZE_MAX = 17
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
 function navIcon(id: string) {
@@ -115,9 +122,11 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose, t, hostS
  */
 export function SettingsRoot(props: SettingsRootComponentProps) {
   const {
-    wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, useHostStart, renderSlot, t,
+    wide, reconnect, setLocale, setTheme, setFontSize, useConnectionState, useSections, useOnboardingSteps,
+    useSessions, useHostStart, useLocale, useTheme, renderSlot, t,
   } = props
   const [open, setOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | undefined>(undefined)
   const [completedOnboarding, setCompletedOnboarding] = useState<ReadonlySet<string>>(() => new Set())
   const [showRecovery, setShowRecovery] = useState(false)
@@ -126,6 +135,10 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
   const close = useCallback(() => {
     setOpen(false)
     setActiveId(undefined)
+  }, [])
+  const openSettings = useCallback(() => {
+    setMenuOpen(false)
+    setOpen(true)
   }, [])
   // Restore after the close commit, when the dialog can no longer own focus.
   useEffect(() => {
@@ -145,6 +158,8 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
   const previousConnectionState = useRef(connectionState)
   const onboardingSteps = useOnboardingSteps(s => s)
   const hostStart = useHostStart(s => s)
+  const locale = useLocale(s => s)
+  const theme = useTheme(s => s)
   const onboardingActive = useSessions(state =>
     state.phase === 'ready'
     && (state.current === undefined || state.byId[state.current]?.blank === true))
@@ -186,19 +201,98 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
     connectionIndicator = 'recovered'
   }
 
+  const fontSizes: MenuItem[] = []
+  for (let px = CONTENT_FONT_SIZE_MIN; px <= CONTENT_FONT_SIZE_MAX; px += 1) {
+    fontSizes.push({ id: `font:${String(px)}`, label: t('menu.fontSize.value', { size: String(px) }) })
+  }
+  const menuItems: MenuItem[] = [
+    {
+      id: 'language',
+      label: t('menu.language'),
+      icon: <IconGlobeOutline14 size={16} />,
+      submenu: locale.locales.map(option => ({ id: `locale:${option.id}`, label: option.label })),
+    },
+    {
+      id: 'theme',
+      label: t('menu.theme'),
+      icon: theme.preference === 'dark'
+        ? <IconDarkOutline16 />
+        : theme.preference === 'light'
+          ? <IconLightOutline16 />
+          : <IconFollowsystemOutline16 />,
+      submenu: [
+        { id: 'theme:light', label: t('menu.theme.light'), icon: <IconLightOutline16 /> },
+        { id: 'theme:dark', label: t('menu.theme.dark'), icon: <IconDarkOutline16 /> },
+        { id: 'theme:system', label: t('menu.theme.system'), icon: <IconFollowsystemOutline16 /> },
+      ],
+    },
+    {
+      id: 'fontSize',
+      label: t('menu.fontSize'),
+      icon: <IconSettingsOutline16 />,
+      submenu: fontSizes,
+    },
+  ]
+  const selectedIds = [
+    `locale:${locale.active}`,
+    `theme:${theme.preference}`,
+    `font:${String(theme.fontSize)}`,
+  ]
+  const settingsTrigger = (
+    <button
+      ref={triggerButton}
+      type="button"
+      className={clsx(css.trigger, !wide && css.rail, wide && css.settingsTrigger)}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onClick={openSettings}
+    >
+      {renderSlot('settings.trigger', { wide })}
+    </button>
+  )
+
   return (
     <>
       <div className={clsx(css.triggerRow, !wide && css.railRow)}>
-        <button
-          ref={triggerButton}
-          type="button"
-          className={clsx(css.trigger, !wide && css.rail)}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={() => { setOpen(true) }}
-        >
-          {renderSlot('settings.trigger', { wide })}
-        </button>
+        {wide ? (
+          <div className={css.splitTrigger}>
+            <Menu
+              className={css.accountMenu ?? ''}
+              open={menuOpen}
+              onClose={() => { setMenuOpen(false) }}
+              items={menuItems}
+              selectedIds={selectedIds}
+              onSelect={(id) => {
+                if (id.startsWith('locale:')) {
+                  setLocale(id.slice('locale:'.length))
+                  setMenuOpen(false)
+                  return
+                }
+                if (id.startsWith('theme:')) {
+                  setTheme(id.slice('theme:'.length))
+                  setMenuOpen(false)
+                  return
+                }
+                setFontSize(Number(id.slice('font:'.length)))
+                setMenuOpen(false)
+              }}
+              side="top"
+              portal
+              anchor={(
+                <button
+                  type="button"
+                  className={css.accountTrigger}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => { setMenuOpen(value => !value) }}
+                >
+                  <span className={css.hiddenLabel}>{t('account.menu')}</span>
+                </button>
+              )}
+            />
+            {settingsTrigger}
+          </div>
+        ) : settingsTrigger}
         <ConnectionIndicator
           state={wide ? connectionIndicator : undefined}
           disconnectedLabel={t('connection.error')}

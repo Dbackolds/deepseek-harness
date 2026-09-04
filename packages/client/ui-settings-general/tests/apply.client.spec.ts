@@ -52,6 +52,11 @@ async function bench(isLoopback = true) {
     state: { getSnapshot: () => 'connected', subscribe: () => () => {} },
     reconnect: () => {},
   } as never)
+  ctx.provide('theme', {
+    getTheme: () => ({ preference: 'system', fontSize: 14, revision: 1 }),
+    setTheme: () => {},
+    setFontSize: () => {},
+  } as never)
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, settingsDescribe, settingsOpenDocument }
 }
@@ -80,7 +85,7 @@ function generalEntry(slots: SlotRegistry) {
 
 describe('ui-settings-general apply', () => {
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.settings', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'locale', 'theme', 'connection', 'remote', 'remote.settings', 'settingsScope'])
   })
 
   it('fills all five seats for declarations before or after apply', async () => {

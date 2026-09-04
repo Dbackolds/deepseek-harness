@@ -36,6 +36,9 @@
       "path": "../locale"
     },
     {
+      "path": "../ui-theme"
+    },
+    {
       "path": "../connection/tsconfig.client.json"
     },
     {

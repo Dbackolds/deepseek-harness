@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import { IconCheckOutline16 } from './icons/index.tsx'
+import { IconCheckOutline16, IconChevronRightOutline14 } from './icons/index.tsx'
 import { usePointerGrace } from './pointer-grace.ts'
 import css from './Menu.module.css'
 
@@ -228,24 +228,29 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
         >
           {entry.icon !== undefined && <span className={css.itemIcon}>{entry.icon}</span>}
           <span className={css.itemLabel}>{entry.label}</span>
+          {hasSub && <IconChevronRightOutline14 className={css.submenuChevron} />}
           {/* Selection marker is a trailing check (figma .Menu_cell), not a fill. */}
           {selected && <IconCheckOutline16 className={css.check} />}
         </button>
         {subOpen && entry.submenu !== undefined && (
           <div className={clsx(css.submenu, compact && css.compactList)} role="menu">
-            {entry.submenu.map(sub => (
-              <button
-                key={sub.id}
-                type="button"
-                role="menuitem"
-                className={css.item}
-                disabled={sub.disabled}
-                onClick={() => { onSelect(sub.id) }}
-              >
-                {sub.icon !== undefined && <span className={css.itemIcon}>{sub.icon}</span>}
-                <span className={css.itemLabel}>{sub.label}</span>
-              </button>
-            ))}
+            {entry.submenu.map((sub) => {
+              const subSelected = sub.id === selectedId || selectedIds?.includes(sub.id) === true
+              return (
+                <button
+                  key={sub.id}
+                  type="button"
+                  role="menuitem"
+                  className={clsx(css.item, subSelected && css.selected)}
+                  disabled={sub.disabled}
+                  onClick={() => { onSelect(sub.id) }}
+                >
+                  {sub.icon !== undefined && <span className={css.itemIcon}>{sub.icon}</span>}
+                  <span className={css.itemLabel}>{sub.label}</span>
+                  {subSelected && <IconCheckOutline16 className={css.check} />}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

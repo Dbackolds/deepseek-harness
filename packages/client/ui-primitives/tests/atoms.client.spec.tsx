@@ -268,6 +268,7 @@ describe('Menu', () => {
     fireEvent.mouseEnter(plain.parentElement as HTMLElement)
     fireEvent.focus(plain)
     const parent = screen.getByRole('menuitem', { name: 'New Workspace' })
+    expect(parent.querySelector('svg')).toBeTruthy()
     const wrap = parent.parentElement as HTMLElement
     fireEvent.click(parent)
     expect(onSelect).not.toHaveBeenCalled()

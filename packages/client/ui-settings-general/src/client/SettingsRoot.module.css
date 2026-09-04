@@ -41,6 +41,65 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.splitTrigger {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.accountMenu {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  display: block;
+  width: calc(100% - 42px);
+  height: 100%;
+}
+
+.accountTrigger {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 12px 0 0 12px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.accountTrigger:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.settingsTrigger {
+  position: relative;
+  z-index: 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.settingsTrigger:hover {
+  background: transparent;
+}
+
+.settingsTrigger::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  bottom: 4px;
+  width: 36px;
+  border-radius: 10px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.settingsTrigger:hover::after {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 /* Rail trigger: the same 36x36 circle box as the other rail controls. */
 .trigger.rail {
   flex: none;

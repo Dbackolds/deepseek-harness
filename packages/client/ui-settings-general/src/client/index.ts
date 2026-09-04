@@ -18,6 +18,7 @@ import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: pulls ctx.locale into this program.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {
@@ -60,7 +61,7 @@ const NS = 'settings'
  * ui-settings' apply, whose activation order relative to this one is NOT
  * constrained; registrations depend on their slots through `slots.inject()`.
  */
-export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settings', 'settingsScope']
+export const inject = ['slots', 'locale', 'theme', 'connection', 'remote', 'remote.settings', 'settingsScope']
 
 /**
  * Register the `settings` dictionaries, the chrome content, and the General
@@ -99,8 +100,16 @@ export function apply(ctx: ClientContext): void {
   let rows: readonly SettingsSectionRow[] = []
   let onboardingVersion = -1
   let onboardingSteps: readonly SettingsOnboardingStep[] = []
+  const theme = ctx.theme
+  const themeSource = {
+    getSnapshot: () => theme.getTheme(),
+    subscribe: (listener: () => void) => ctx.on('theme/change', listener),
+  }
   const shellInjected = (): SettingsRootInjected => ({
     reconnect: () => { connection.reconnect() },
+    setLocale: (id) => { ctx.locale.setLocale(id) },
+    setTheme: (id) => { theme.setTheme(id) },
+    setFontSize: (px) => { theme.setFontSize(px) },
     hooks: {
       connectionState: connection.state,
       sections: {
@@ -148,6 +157,8 @@ export function apply(ctx: ClientContext): void {
         subscribe: listener => ctx.slots.subscribe('settings.onboarding', listener),
       },
       hostStart: hostStart.store,
+      locale: ctx.locale,
+      theme: themeSource,
     },
   })
   ctx.slots.inject('sidebar.settings', () => ctx.slots.register({

@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-`ui-settings-general` 的 `settings.trigger` 占用方是账号条。可见名称取连接 generation 的 Host `home` 最后一段路径（POSIX 或 Windows）；home 缺失时用本地化的「本地」/ Local。展开栏显示该名称和右侧设置图标；收起轨只显示圆形首字母。「设置」文案仍留在树里并视觉隐藏，因此外壳按钮的无障碍名称仍是「设置」/ Settings，现有 `getByRole('button', { name: '设置', exact: true })` 调用方继续有效。账号名带 `aria-hidden`。触发器按 Tool 和 Workspace 的同一方式注入 `connection.generation`。
+`ui-settings-general` 的 `settings.trigger` 占用方是账号条。可见名称取连接 generation 的 Host `home` 最后一段路径（POSIX 或 Windows）；home 缺失时用本地化的「本地」/ Local。展开栏显示该名称和右侧设置图标；收起轨只显示圆形首字母。「设置」文案仍留在树里并视觉隐藏，因此设置点击区的无障碍名称仍是「设置」/ Settings，现有 `getByRole('button', { name: '设置', exact: true })` 调用方继续有效。账号名带 `aria-hidden`。触发器按 Tool 和 Workspace 的同一方式注入 `connection.generation`。展开栏后来把账号条与齿轮拆成两个点击区；见 `2026-09-12-sidebar-account-menu-split-trigger.md`。
 
 这不是登录。连接 generation 仍然只发布账号 home 路径；账号条从该路径派生显示用户名，不在线路上新增 username 字段。
 
