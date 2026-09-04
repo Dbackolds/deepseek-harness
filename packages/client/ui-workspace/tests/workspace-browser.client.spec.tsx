@@ -348,7 +348,7 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(history)
     expect(history.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(history)
-    fireEvent.click(screen.getByRole('button', { name: '展开其余 1 个会话' }))
+    fireEvent.click(screen.getByRole('button', { name: '再展开1个会话' }))
     expect(screen.getByText('old-6')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '不分区' }))
@@ -386,23 +386,23 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('session-11')).toBeNull()
 
     expect(screen.getByRole('button', { name: '历史记录' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '展开其余 5 个会话' }))
+    fireEvent.click(screen.getByRole('button', { name: '再展开5个会话' }))
     expect(screen.getByText('session-6')).toBeTruthy()
     expect(screen.getByText('session-10')).toBeTruthy()
     expect(screen.queryByText('session-11')).toBeNull()
-    expect(screen.getByRole('button', { name: '展开其余 2 个会话' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '再展开2个会话' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: '展开其余 2 个会话' }))
+    fireEvent.click(screen.getByRole('button', { name: '再展开2个会话' }))
     expect(screen.getByText('session-11')).toBeTruthy()
     expect(screen.getByText('session-12')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /展开其余/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /再展开/ })).toBeNull()
 
     fireEvent.click(screen.getByText('alpha'))
     expect(b.store.getSnapshot().groupExpansion).toEqual({ alpha: false })
     fireEvent.click(screen.getByText('alpha'))
     expect(b.store.getSnapshot().groupExpansion).toEqual({ alpha: true })
     expect(screen.queryByText('session-6')).toBeNull()
-    expect(screen.getByRole('button', { name: '展开其余 5 个会话' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '再展开5个会话' })).toBeTruthy()
   })
 
   it('keeps the blank New Session outside the five-row folding quota', () => {
@@ -415,22 +415,22 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByText('新会话')).toBeTruthy()
     for (const item of ordinary.slice(0, 5)) expect(screen.getByText(item.displayTitle)).toBeTruthy()
     expect(screen.queryByText('session-6')).toBeNull()
-    expect(screen.getByRole('button', { name: '展开其余 1 个会话' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '再展开1个会话' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: '展开其余 1 个会话' }))
+    fireEvent.click(screen.getByRole('button', { name: '再展开1个会话' }))
     expect(screen.getByText('session-6')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /展开其余/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /再展开/ })).toBeNull()
 
     fireEvent.click(screen.getByText('alpha'))
     fireEvent.click(screen.getByText('alpha'))
-    expect(screen.getByRole('button', { name: '展开其余 1 个会话' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '再展开1个会话' })).toBeTruthy()
 
     rerender(b, {
       useSessions: hook(sessionState([{ ...blank, blank: false }, ...ordinary], { current: blank.id })),
     })
     expect(screen.getByText('blank')).toBeTruthy()
     expect(screen.queryByText('session-5')).toBeNull()
-    expect(screen.getByRole('button', { name: '展开其余 2 个会话' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '再展开2个会话' })).toBeTruthy()
   })
 
   it('anchors collapsed drags before hidden rows so the source stays visible', async () => {
@@ -447,7 +447,7 @@ describe('WorkspaceBrowser', () => {
         .toEqual(['blank', 'session-1', 'session-2', 'session-3', 'session-4', 'session-5', 'session-6'])
     })
 
-    fireEvent.click(screen.getByRole('button', { name: '展开其余 1 个会话' }))
+    fireEvent.click(screen.getByRole('button', { name: '再展开1个会话' }))
     const blankRow = screen.getByText('新会话').closest('[role="treeitem"]') as HTMLElement
     const session6 = screen.getByText('session-6').closest('[role="treeitem"]') as HTMLElement
     session6.getBoundingClientRect = () => ({
