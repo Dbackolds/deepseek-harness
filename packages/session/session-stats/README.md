@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-stats` serves whole-log conversation figures — turn and step counts plus LLM, tool, first-token, and decode wall times — as the `sessionStats` projection unit. Clients read the figures from the registry's snapshot and change feed, and paging or compaction cannot change them because they fold from the complete durable log. Choose it in compositions that already mount the projection registry, such as the web chat bundle whose stats strip is the reference consumer; assemblies without the registry are unaffected and their consumers fall back to window-scoped counting. Setup and field semantics come first; the fold internals live in a collapsible developer section below.
+`dsh-session-stats` serves whole-log conversation figures — turn and step counts plus LLM, tool, first-token, and decode wall times — as the `sessionStats` projection unit, and whole-log tokens, duration, and UTC calendar/model rows as the `sessionUsage` unit. Clients read the figures from the registry's snapshot and change feed, and paging or compaction cannot change them because they fold from the complete durable log. Choose it in compositions that already mount the projection registry, such as the web chat bundle whose stats strip is the reference consumer; assemblies without the registry are unaffected and their consumers fall back to window-scoped counting. Setup and field semantics come first; the fold internals live in a collapsible developer section below.
 
 ## Table of Contents
 
@@ -45,6 +45,9 @@ Mount the plugin beside the session store and the projection registry when clien
 | `toolMs` | Summed matched `tool/call` → `tool/result` wall time |
 | `ttftMs` / `ttftSteps` | Summed first-token latency and the steps carrying it |
 | `decodeMs` / `decodeTokens` | Summed decode wall time and provider output tokens over usage-reporting steps |
+| `sessionUsage.tokens` | Summed four-bucket provider-reported tokens |
+| `sessionUsage.days` | UTC `YYYY-MM-DD` token and duration rows, plus per-model tokens |
+| `sessionUsage.models` | Whole-log token totals keyed by request-header model id |
 
 Every field is 0 until its first contributing event; the composed registry always serves the key, so clients read the value rather than key presence. Clients render whole-log figures through the projection seam's snapshot and change feed; the reference consumer is the web chat stats strip, whose window fold mirrors these field names as its no-unit fallback.
 
@@ -72,7 +75,9 @@ The unit is a pure fold over committed session events: `step/end` is the counted
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `inject`, unit registration on the mounting fiber |
 | [`src/projection.ts`](src/projection.ts) | The fold: state shape, per-event transitions, wire view |
-| [`src/types.ts`](src/types.ts) | One home of the `sessionStats` projection-key declaration and field types |
+| [`src/types.ts`](src/types.ts) | One home of the `sessionStats` and `sessionUsage` projection-key declarations and field types |
+| [`src/usage.ts`](src/usage.ts) | The `sessionUsage` fold: tokens, duration, UTC days, and model rows |
+| [`src/aggregate.ts`](src/aggregate.ts) | Host-wide timezone rebase, streak, and model-share aggregation |
 
 ### Data model
 
@@ -119,7 +124,8 @@ These limits define what the figures describe and when the unit is absent. They 
 - **Steps count work attempted, not visible output** — a step that failed before producing visible content still closes with `step/end` and counts; a step interrupted by a crash counts after the session reloads, when crash recovery appends its synthetic `step/end`.
 - **A cancelled step is counted but untimed** — no assistant message assembles, so its partial stream time enters no wall-time figure; a max-tokens usage-host message conversely contributes model time the surface does not show.
 - **Counts are log-scoped, not surface-scoped** — steps whose messages were later compacted away stay counted; the figures describe the whole session, not the current model-visible surface.
-- **Mounted only where the projection registry is composed** — other assemblies serve no `sessionStats` key, and their consumers fall back to window-scoped counting.
+- **Mounted only where the projection registry is composed** — other assemblies serve no `sessionStats` or `sessionUsage` key, and their consumers fall back to window-scoped counting.
+- **`sessionUsage` calendar rows are UTC** — the Host usage Remote rebases them onto the caller IANA zone before the Settings page renders.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -104,6 +104,7 @@
     { "path": "./packages/client/ui-settings-models" },
     { "path": "./packages/client/ui-settings-subagents" },
     { "path": "./packages/client/ui-settings-skills" },
+    { "path": "./packages/client/ui-settings-usage" },
     { "path": "./packages/client/ui-settings-plugin-inventory" },
     { "path": "./packages/client/locale" },
     { "path": "./packages/client/ui-renderer" },

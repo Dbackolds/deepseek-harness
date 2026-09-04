@@ -181,4 +181,4 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
 }
 
 export type IApiClient = ClientRemote
-export type { SkillCatalogEntry } from '@deepseek-ai/dsh-api-session-controller/client'
+export type { SkillCatalogEntry, UsageOverviewValue, UsageDay, UsageModelShare } from '@deepseek-ai/dsh-api-session-controller/client'

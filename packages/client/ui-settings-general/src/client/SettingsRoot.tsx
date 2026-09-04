@@ -17,7 +17,7 @@ import {
   ConnectionIndicator,
   IconAgentPresetOutline16, IconBranchOutline16, IconCloseOutline16, IconDataOutline16,
   IconDarkOutline16, IconFollowsystemOutline16, IconGlobeOutline14, IconLightOutline16,
-  IconListPenOutline16, IconPersonalizationOutline16, IconRefreshOutline16, IconSearchOutline16,
+  IconClockOutline16, IconListPenOutline16, IconPersonalizationOutline16, IconRefreshOutline16, IconSearchOutline16,
   IconSettingsOutline16, IconSkillOutline16,
   Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -42,6 +42,7 @@ function navIcon(id: string) {
   if (id === 'plugins') return <IconPersonalizationOutline16 className={css.navIcon} size={16} />
   if (id === 'skills') return <IconSkillOutline16 className={css.navIcon} size={16} />
   if (id === 'system-prompts') return <IconListPenOutline16 className={css.navIcon} size={16} />
+  if (id === 'usage') return <IconClockOutline16 className={css.navIcon} size={16} />
   return <IconSettingsOutline16 className={css.navIcon} size={16} />
 }
 

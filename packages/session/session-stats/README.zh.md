@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-stats` 提供全日志会话数字——轮/步计数以及 LLM、工具、首 token、解码墙钟时间——以 `sessionStats` 投影单元的形式对外提供。客户端从注册表的快照与变更流中读取数字，且由于它们从完整持久日志折叠而来，分页或压缩都无法改变它们。在已挂载投影注册表的组合中选择它，例如 Web 聊天包（其统计条是参考消费者）；没有注册表的装配不受影响，其消费者回退到窗口口径计数。设置与字段语义在前；折叠内部细节放在下方可折叠的开发者章节中。
+`dsh-session-stats` 提供全日志会话数字——轮/步计数以及 LLM、工具、首 token、解码墙钟时间——以 `sessionStats` 投影单元的形式对外提供，并以 `sessionUsage` 单元提供全日志 token、时长以及 UTC 日历/模型行。客户端从注册表的快照与变更流中读取数字，且由于它们从完整持久日志折叠而来，分页或压缩都无法改变它们。在已挂载投影注册表的组合中选择它，例如 Web 聊天包（其统计条是参考消费者）；没有注册表的装配不受影响，其消费者回退到窗口口径计数。设置与字段语义在前；折叠内部细节放在下方可折叠的开发者章节中。
 
 ## 目录
 
@@ -45,6 +45,9 @@ kind: "package-reference"
 | `toolMs` | 匹配的 `tool/call` → `tool/result` 墙钟时间之和 |
 | `ttftMs` / `ttftSteps` | 首 token 延迟之和及其承载步数 |
 | `decodeMs` / `decodeTokens` | 上报用量的步的解码墙钟时间与提供方输出 token 之和 |
+| `sessionUsage.tokens` | 四桶提供方报告 token 之和 |
+| `sessionUsage.days` | UTC `YYYY-MM-DD` 的 token 与时长行，以及按模型的 token |
+| `sessionUsage.models` | 按 request-header 模型 id 汇总的全日志 token |
 
 每个字段在首个贡献事件之前均为 0；已装配的注册表恒提供该键，因此客户端读取值本身，而非键的存在性。客户端通过投影 seam 的快照与变更流渲染全日志数字；参考消费者是 Web 聊天统计条，其窗口折叠以相同字段名充当无单元时的回退。
 
@@ -72,7 +75,9 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`inject`、在挂载 fiber 上注册单元 |
 | [`src/projection.ts`](src/projection.ts) | 折叠：状态形状、逐事件转换、wire 视图 |
-| [`src/types.ts`](src/types.ts) | `sessionStats` 投影键声明与字段类型的唯一归属 |
+| [`src/types.ts`](src/types.ts) | `sessionStats` 与 `sessionUsage` 投影键声明与字段类型的唯一归属 |
+| [`src/usage.ts`](src/usage.ts) | `sessionUsage` 折叠：token、时长、UTC 日与模型行 |
+| [`src/aggregate.ts`](src/aggregate.ts) | Host 范围时区重基准、连续天数与模型占比聚合 |
 
 ### 数据模型
 
@@ -119,7 +124,8 @@ kind: "package-reference"
 - **步数统计的是已发生的工作，而非可见输出**——在产生任何可见内容前就失败的步仍以 `step/end` 关闭并计入；被崩溃打断的步在会话重新加载后计入，届时崩溃恢复补写合成的 `step/end`。
 - **被取消的步计数但不计时**——没有组装出 assistant 消息，其部分流式时间不进入任何墙钟数字；反之 max-tokens 的 usage 宿主消息贡献 surface 上看不到的模型时间。
 - **计数是日志口径，不是 surface 口径**——消息后来被压缩掉的步仍然计入；数字描述整个会话，而非当前模型可见 surface。
-- **仅在组合了投影注册表时挂载**——其他装配不提供 `sessionStats` 键，其消费者回退到窗口口径计数。
+- **仅在组合了投影注册表时挂载**——其他装配不提供 `sessionStats` 或 `sessionUsage` 键，其消费者回退到窗口口径计数。
+- **`sessionUsage` 日历行是 UTC**——Host usage Remote 在 Settings 页渲染前把它们重基准到调用方 IANA 时区。
 
 <a id="dev-note"></a>
 ### 开发备注

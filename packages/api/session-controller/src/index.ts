@@ -25,6 +25,7 @@ import {
 import { buildModelCatalog } from './catalog.ts'
 import { installModelSelectionProjection } from './model-selection-projection.ts'
 import { SessionSkillCatalog } from './skill-catalog.ts'
+import { SessionUsageController } from './usage.ts'
 import { SessionGitController } from './git.ts'
 import type {
   ModelCatalog,
@@ -65,6 +66,7 @@ export type * from './types.ts'
 export { ApiSessionNotFound } from './agent.ts'
 export { SessionFileReferences } from './file-references.ts'
 export { SessionSkillCatalog } from './skill-catalog.ts'
+export { SessionUsageController } from './usage.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -146,6 +148,7 @@ export class SessionController extends TypertRemoteService {
       ?? (() => config.nativeOpen ?? (internals.openPath !== undefined || canOpenNativePath()))
     ctx.plugin(SessionFileReferences)
     ctx.plugin(SessionSkillCatalog)
+    ctx.plugin(SessionUsageController)
     ctx.plugin(SessionGitController)
 
     ctx.on('session/created', (session) => {

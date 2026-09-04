@@ -254,6 +254,46 @@ export interface SkillListValue {
   readonly skills: readonly SkillEntry[]
 }
 
+/** Browser-submitted IANA zone for the Host-wide usage calendar. */
+export interface UsageOverviewRequest {
+  /** Canonical IANA time zone used to rebase UTC calendar rows. */
+  readonly timeZone: string
+}
+
+/** One local calendar day of Host-wide usage. */
+export interface UsageDay {
+  /** Local calendar day `YYYY-MM-DD` in the requested time zone. */
+  readonly day: string
+  /** Provider-reported tokens recorded on this day. */
+  readonly tokens: number
+  /** Summed model wall time recorded on this day, milliseconds. */
+  readonly durationMs: number
+  /** Tokens recorded on this day, keyed by model id. */
+  readonly models: Readonly<Record<string, number>>
+}
+
+/** One model id and its Host-wide token total. */
+export interface UsageModelShare {
+  /** Provider-owned model id. */
+  readonly model: string
+  /** Provider-reported tokens attributed to this model. */
+  readonly tokens: number
+}
+
+/** Host-wide usage snapshot for the Settings usage page. */
+export interface UsageOverviewValue {
+  readonly tokens: number
+  readonly peakTokens: number
+  readonly durationMs: number
+  readonly peakDurationMs: number
+  readonly currentStreakDays: number
+  readonly longestStreakDays: number
+  readonly firstActivityAt: number | null
+  readonly lastActivityAt: number | null
+  readonly days: readonly UsageDay[]
+  readonly models: readonly UsageModelShare[]
+}
+
 /** Session list request. */
 export interface SessionListRequest {
   readonly cursor?: string

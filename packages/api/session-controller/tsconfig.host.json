@@ -18,7 +18,8 @@
     "src/history.ts",
     "src/list.ts",
     "src/model-selection-projection.ts",
-    "src/skill-catalog.ts"
+    "src/skill-catalog.ts",
+    "src/usage.ts"
   ],
   "references": [
     { "path": "../../../vendor/cordis" },
@@ -38,6 +39,7 @@
     { "path": "../../session/session-persistence" },
     { "path": "../../session/session-projection" },
     { "path": "../../session/session-projection-cache" },
+    { "path": "../../session/session-stats" },
     { "path": "../../session/session-title" },
     { "path": "../../session-query/session-query" },
     { "path": "../../skill/skill" },
