@@ -100,7 +100,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 - `Workspace.folders`：按持久添加顺序保存的附加规范目录，永不包含主 `path`。
 - `Workspace.addFolder(path)` / `removeFolder(path)`：追加或移除一个已存在的附加目录。主路径不能被移除。已被其他 workspace 声明的路径会被拒绝。已消失的附加文件夹仍可按存储拼写移除。
 - `Workspace.status()`：未缓存的目录检查，返回 `'ok' | 'missing-dir'`；目录缺失绝不会改动记录。
-`storageDomain` 和 `sessionPersistence` 是启动必需依赖。任一依赖服务不可用时，插件保持待处理，且不能提交空的已初始化标记。首次成功启动时，注册表调用 `SessionPersistence.list()`，仅使用头部 `id`、`cwd` 和 `createdAt` 对有效历史目录分组并持久化初始顺序；它绝不读取事件正文。已初始化标记写入后，已记账会话按最后一条 `workspace/home`（否则 header cwd）投影，通过非变更性 `inspect` 读取；单个会话 inspect 失败时回退到 header cwd，启动继续。后续没有 overlay 事件的 header 查找会保留已索引的 overlay 家。后续仅能通过 cwd 识别的会话仍属于 Ungrouped。
+`storageDomain` 和 `sessionPersistence` 是启动必需依赖。任一依赖服务不可用时，插件保持待处理，且不能提交空的已初始化标记。首次成功启动时，注册表调用 `SessionPersistence.list()`，仅使用头部 `id`、`cwd` 和 `createdAt` 对有效历史目录分组并持久化初始顺序；它绝不读取事件正文。已初始化标记写入后，已记账会话按最后一条 `workspace/home`（否则 header cwd）投影，通过非变更性 `inspect` 读取；单个会话 inspect 失败时回退到 header cwd，启动继续。每次解析结果都以持久化 artifact 的 revision 为键记入域状态，此后对未变化的 artifact，启动直接凭记忆重放、不再读取日志——拒绝回退也在记忆之列，否则一次被拒绝的格式迁移会在每次启动时重复支付整份读取。实时日志仍优先于记忆，revision 变化会重新 inspect，离开存储的会话的记忆会被清除。后续没有 overlay 事件的 header 查找会保留已索引的 overlay 家。后续仅能通过 cwd 识别的会话仍属于 Ungrouped。
 
 ### 源码地图
 

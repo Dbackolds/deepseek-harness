@@ -45,6 +45,8 @@ interface HarnessOptions {
   liveSessions?: SessionHeader[]
   sessionStore?: boolean
   backend?: StorageBackend
+  /** Revision prefix the listing hands out; vary it across restarts to simulate artifact growth. */
+  revisionPrefix?: string
 }
 
 /** Boot the real storage/domain/registry composition over controllable header-only peers. */
@@ -60,7 +62,7 @@ async function harness(options: HarnessOptions = {}) {
   let listed = options.sessions ?? []
   const logs = options.logs
   const list = vi.fn(async (): Promise<SessionPersistenceSnapshot[]> =>
-    listed.map(header => ({ header, revision: SessionPersistenceRevision(`rev-${header.id}`) })))
+    listed.map(header => ({ header, revision: SessionPersistenceRevision(`${options.revisionPrefix ?? 'rev'}-${header.id}`) })))
   const inspectImpl = options.inspect === undefined
     ? async (id: SessionId) => {
       if (logs === undefined || !logs.has(id)) throw new Error('event bodies must not be inspected')
@@ -188,8 +190,8 @@ function record(path: string, sessionIds: string[], createdAt = '2026-07-24T00:0
  * the fields; keeping the fixtures in that shape continuously proves the
  * schema defaults upgrade them.
  */
-type StoredDomainState = Omit<WorkspaceDomainState, 'archivedSessionIds' | 'hiddenWorkspaceIds'>
-  & Partial<Pick<WorkspaceDomainState, 'archivedSessionIds' | 'hiddenWorkspaceIds'>>
+type StoredDomainState = Omit<WorkspaceDomainState, 'archivedSessionIds' | 'hiddenWorkspaceIds' | 'sessionHomes'>
+  & Partial<Pick<WorkspaceDomainState, 'archivedSessionIds' | 'hiddenWorkspaceIds' | 'sessionHomes'>>
 
 function storedPool(
   entries: Array<[string, WorkspaceRecord]>,
@@ -241,7 +243,13 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     await fiber.await()
     expect(ctx.workspaceRegistry.list()).toEqual([])
     expect(list).toHaveBeenCalledTimes(1)
-    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
+    expect(storedState(pool)).toEqual({
+      initialized: true,
+      workspaceIds: [],
+      archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
+      sessionHomes: {},
+    })
   })
 
   it('bootstraps once from list headers only, in workspace/session createdAt order', async () => {
@@ -276,6 +284,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
       workspaceIds: result.registry.list().map(workspace => workspace.id),
       archivedSessionIds: [],
       hiddenWorkspaceIds: [],
+      sessionHomes: {},
     })
   })
 
@@ -304,7 +313,13 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     const second = await harness({ pool, sessions: [header('late', late, 100)] })
     expect(second.list).not.toHaveBeenCalled()
     expect(second.registry.list()).toEqual([])
-    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
+    expect(storedState(pool)).toEqual({
+      initialized: true,
+      workspaceIds: [],
+      archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
+      sessionHomes: {},
+    })
   })
 
   it('reuses partial records after a bootstrap record write fails', async () => {
@@ -558,7 +573,13 @@ describe('WorkspaceRegistry create and lookup', () => {
     await expect(result.registry.delete(workspace.id)).resolves.toBe(false)
     expect(result.registry.get(workspace.id)).toBeUndefined()
     expect(result.registry.list()).toEqual([])
-    expect(storedState(result.pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
+    expect(storedState(result.pool)).toEqual({
+      initialized: true,
+      workspaceIds: [],
+      archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
+      sessionHomes: {},
+    })
     expect(result.pool.media.get('workspace')!.tables.get('workspaces')!.has(workspace.id)).toBe(false)
     await expect(realpath(dir)).resolves.toBe(dir)
     expect(result.list).toHaveBeenCalledTimes(1)
@@ -603,6 +624,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       workspaceIds: [],
       archivedSessionIds: [],
       hiddenWorkspaceIds: [],
+      sessionHomes: {},
       pendingMutation: { operation: 'delete', workspaceId: workspace.id },
     })
     const reregistered = await first.registry.create(dir)
@@ -612,6 +634,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       workspaceIds: [reregistered.id],
       archivedSessionIds: [],
       hiddenWorkspaceIds: [],
+      sessionHomes: {},
     })
     await first.fiber.dispose()
 
@@ -1107,7 +1130,13 @@ describe('header-validated membership projection', () => {
     const createRecovery = await harness({ pool: interruptedCreate })
     expect(createRecovery.registry.list()).toEqual([])
     expect(interruptedCreate.media.get('workspace')!.tables.get('workspaces')!.has(createId)).toBe(false)
-    expect(storedState(interruptedCreate)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
+    expect(storedState(interruptedCreate)).toEqual({
+      initialized: true,
+      workspaceIds: [],
+      archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
+      sessionHomes: {},
+    })
 
     const interruptedDelete = storedPool(
       [[deleteId, record(deleteDir, [])]],
@@ -1120,7 +1149,13 @@ describe('header-validated membership projection', () => {
     const deleteRecovery = await harness({ pool: interruptedDelete })
     expect(deleteRecovery.registry.list()).toEqual([])
     expect(interruptedDelete.media.get('workspace')!.tables.get('workspaces')!.has(deleteId)).toBe(false)
-    expect(storedState(interruptedDelete)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] })
+    expect(storedState(interruptedDelete)).toEqual({
+      initialized: true,
+      workspaceIds: [],
+      archivedSessionIds: [],
+      hiddenWorkspaceIds: [],
+      sessionHomes: {},
+    })
 
     const corruptPending = storedPool(
       [[deleteId, record(deleteDir, [])]],
@@ -1281,6 +1316,134 @@ describe('registry-global session archive', () => {
 
     const second = await harness({ pool, sessions: [header('s1', dir, 100), header('s2', dir, 200)] })
     expect(second.registry.archivedSessionIds).toEqual(['s2'])
+  })
+})
+
+describe('session-home memory', () => {
+  it('replays an unchanged artifact from memory on restart without inspecting it', async () => {
+    const birth = await makeDir('memory-birth')
+    const home = await makeDir('memory-home')
+    const birthId = WorkspaceId('00000000-0000-4000-8000-000000000040')
+    const homeId = WorkspaceId('00000000-0000-4000-8000-000000000041')
+    const pool = storedPool(
+      [
+        [birthId, record(birth, [])],
+        [homeId, record(home, ['moved'])],
+      ],
+      { initialized: true, workspaceIds: [homeId, birthId] },
+    )
+    const sessions = [header('moved', birth), header('stayed', birth)]
+    const logs = new Map([[SessionId('moved'), [overlay('workspace/home', home)]]])
+    const first = await harness({ pool, sessions, logs })
+    expect(first.open).toHaveBeenCalledTimes(1)
+    expect(first.registry.get(homeId)!.sessionIds).toEqual(['moved'])
+    expect(storedState(first.pool).sessionHomes['moved']).toMatchObject({ revision: 'rev-moved' })
+    await first.fiber.dispose()
+
+    const second = await harness({ pool: first.pool, sessions, logs })
+    expect(second.open).toHaveBeenCalledTimes(0)
+    expect(second.registry.get(homeId)!.sessionIds).toEqual(['moved'])
+  })
+
+  it('re-inspects and rewrites the memory when the artifact revision changes', async () => {
+    const birth = await makeDir('memory-revision-birth')
+    const home = await makeDir('memory-revision-home')
+    const birthId = WorkspaceId('00000000-0000-4000-8000-000000000042')
+    const homeId = WorkspaceId('00000000-0000-4000-8000-000000000043')
+    const pool = storedPool(
+      [
+        [birthId, record(birth, [])],
+        [homeId, record(home, ['moved'])],
+      ],
+      { initialized: true, workspaceIds: [homeId, birthId] },
+    )
+    const sessions = [header('moved', birth)]
+    const logs = new Map([[SessionId('moved'), [overlay('workspace/home', home)]]])
+    const first = await harness({ pool, sessions, logs })
+    expect(first.open).toHaveBeenCalledTimes(1)
+    await first.fiber.dispose()
+
+    const second = await harness({ pool: first.pool, sessions, logs, revisionPrefix: 'grown' })
+    expect(second.open).toHaveBeenCalledTimes(1)
+    expect(second.registry.get(homeId)!.sessionIds).toEqual(['moved'])
+    expect(storedState(second.pool).sessionHomes['moved']).toMatchObject({ revision: 'grown-moved' })
+  })
+
+  it('remembers a refused inspection as the header-cwd fallback and never retries it', async () => {
+    const birth = await makeDir('memory-refused-birth')
+    const other = await makeDir('memory-refused-other')
+    const birthId = WorkspaceId('00000000-0000-4000-8000-000000000044')
+    const otherId = WorkspaceId('00000000-0000-4000-8000-000000000045')
+    const pool = storedPool(
+      [
+        [birthId, record(birth, ['refused'])],
+        [otherId, record(other, [])],
+      ],
+      { initialized: true, workspaceIds: [otherId, birthId] },
+    )
+    const sessions = [header('refused', birth)]
+    // No log entry: every cold inspection of 'refused' fails, the way a
+    // migration refusal fails on every read of an unchanged artifact.
+    const first = await harness({ pool, sessions, logs: new Map() })
+    expect(first.open).toHaveBeenCalledTimes(1)
+    expect(first.registry.get(birthId)!.sessionIds).toEqual(['refused'])
+    expect(storedState(first.pool).sessionHomes['refused']).toMatchObject({ revision: 'rev-refused', home: birth })
+    await first.fiber.dispose()
+
+    const second = await harness({ pool: first.pool, sessions, logs: new Map() })
+    expect(second.open).toHaveBeenCalledTimes(0)
+    expect(second.registry.get(birthId)!.sessionIds).toEqual(['refused'])
+  })
+
+  it('drops memories for sessions that left the store', async () => {
+    const birth = await makeDir('memory-sweep-birth')
+    const home = await makeDir('memory-sweep-home')
+    const birthId = WorkspaceId('00000000-0000-4000-8000-000000000046')
+    const homeId = WorkspaceId('00000000-0000-4000-8000-000000000047')
+    const pool = storedPool(
+      [
+        [birthId, record(birth, [])],
+        [homeId, record(home, ['moved', 'stayed'])],
+      ],
+      { initialized: true, workspaceIds: [homeId, birthId] },
+    )
+    const logs = new Map([[SessionId('moved'), [overlay('workspace/home', home)]]])
+    const first = await harness({
+      pool,
+      sessions: [header('moved', birth), header('stayed', birth)],
+      logs,
+    })
+    expect(Object.keys(storedState(first.pool).sessionHomes).sort()).toEqual(['moved', 'stayed'])
+    await first.fiber.dispose()
+
+    const second = await harness({ pool: first.pool, sessions: [header('stayed', birth)], logs })
+    expect(Object.keys(storedState(second.pool).sessionHomes)).toEqual(['stayed'])
+  })
+
+  it('prefers a live snapshot over the stored memory', async () => {
+    const birth = await makeDir('memory-live-birth')
+    const home = await makeDir('memory-live-home')
+    const birthId = WorkspaceId('00000000-0000-4000-8000-000000000048')
+    const homeId = WorkspaceId('00000000-0000-4000-8000-000000000049')
+    const pool = storedPool(
+      [
+        [birthId, record(birth, [])],
+        [homeId, record(home, ['moved'])],
+      ],
+      // The memory still says the rehomed session belongs to `home`…
+      { initialized: true, workspaceIds: [homeId, birthId], sessionHomes: { moved: { revision: 'rev-moved', home } } },
+    )
+    // …but a live owner is present, and its (empty) snapshot wins without any read.
+    const result = await harness({
+      pool,
+      sessions: [header('moved', birth)],
+      liveSessions: [header('moved', birth)],
+    })
+    expect(result.open).toHaveBeenCalledTimes(0)
+    // The pruning pass consults membership: the live (empty) snapshot places
+    // the session at its birth cwd, so the remembered home loses its account.
+    await result.registry.get(homeId)!.setTitle('pruned')
+    expect(result.registry.get(homeId)!.sessionIds).toEqual([])
   })
 })
 

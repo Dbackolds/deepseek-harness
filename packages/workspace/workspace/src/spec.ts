@@ -44,6 +44,21 @@ const workspacePendingMutation = z.discriminatedUnion('operation', [
 ])
 
 /**
+ * One remembered membership-home resolution for one stored session, keyed by
+ * the persistence artifact revision it was computed from. `home` records the
+ * exact {@link membershipHome} answer — including `undefined` for "no home" —
+ * so an unchanged artifact replays from memory instead of a full log read.
+ * The value is derived data: dropping or stale-reading it costs one re-inspect.
+ */
+export const sessionHomeMemory = z.object({
+  revision: z.string(),
+  home: z.string().optional(),
+})
+
+/** One stored session-home memory, inferred from {@link sessionHomeMemory}. */
+export type SessionHomeMemory = z.infer<typeof sessionHomeMemory>
+
+/**
  * Durable registry state. `initialized` distinguishes a valid empty registry
  * from one that still needs the header-only history bootstrap;
  * `workspaceIds` is the authoritative display order. `archivedSessionIds` is
@@ -53,8 +68,11 @@ const workspacePendingMutation = z.discriminatedUnion('operation', [
  * invariant. `hiddenWorkspaceIds` is the registry-global hidden set layered
  * over registry order: a hidden workspace keeps its `workspaceIds` slot and
  * its `sessionIds` account (showing must restore the position), so the set
- * never participates in the one-owner accounting invariant. Both sets are
- * defaulted so records written before either field parse unchanged.
+ * never participates in the one-owner accounting invariant. `sessionHomes`
+ * remembers each stored session's membership-home resolution keyed by its
+ * persistence artifact revision, so startup replays an unchanged artifact
+ * from memory instead of reading and decoding its full log. All three
+ * defaulted sets parse records written before the field exists unchanged.
  */
 export const workspaceDomainState = z.object({
   initialized: z.boolean(),
@@ -62,6 +80,7 @@ export const workspaceDomainState = z.object({
   archivedSessionIds: z.array(z.string().transform(value => brandString<SessionId>(value))).default([]),
   hiddenWorkspaceIds: z.array(workspaceId).default([]),
   pendingMutation: workspacePendingMutation.optional(),
+  sessionHomes: z.record(z.string(), sessionHomeMemory).default({}),
 })
 
 /** Durable registry state inferred from {@link workspaceDomainState}. */
@@ -78,7 +97,7 @@ export const workspaceDomainSpec = defineDomain({
   version: 2,
   global: {
     schema: workspaceDomainState,
-    initial: { initialized: false, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [] },
+    initial: { initialized: false, workspaceIds: [], archivedSessionIds: [], hiddenWorkspaceIds: [], sessionHomes: {} },
   },
   tables: { workspaces: domainTable<WorkspaceId, WorkspaceRecord>(workspaceRecord) },
 })

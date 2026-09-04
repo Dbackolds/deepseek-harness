@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-session-persistence'
+import type { SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence'
 import type { DomainGlobal, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { membershipHome, WorkspaceEntity } from './entity.ts'
 import type { WorkspaceEntityHost } from './entity.ts'
@@ -17,7 +17,7 @@ import type { WorkspaceEntityHost } from './entity.ts'
 export { membershipHome, WorkspaceMoveInvalidError } from './entity.ts'
 import { defaultWorkspaceTitle, realpathNormalize } from './paths.ts'
 import { workspaceDomainSpec } from './spec.ts'
-import type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
+import type { SessionHomeMemory, WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
 import type { Workspace, WorkspaceId as WorkspaceIdBrand } from './types.ts'
 
 export type { Workspace } from './types.ts'
@@ -83,6 +83,15 @@ const compareHeaders = (left: SessionHeader, right: SessionHeader): number =>
   right.createdAt - left.createdAt || String(left.id).localeCompare(String(right.id))
 
 /**
+ * One stored session as the registry indexes it: the header plus the
+ * persistence artifact revision the home memory is keyed by.
+ */
+interface StoredHeaderEntry {
+  header: SessionHeader
+  revision?: SessionPersistenceRevision
+}
+
+/**
  * Durable workspace registry. Startup waits for `sessionPersistence`, builds
  * one membership-home index (last `workspace/home`, else header cwd), and
  * completes the one-time history bootstrap before the service becomes active.
@@ -141,7 +150,7 @@ export class WorkspaceRegistry extends Service {
     if (!this.state.initialized) {
       const headers = await this.listStoredHeaders()
       await this.replaceHeaderIndex(headers, { overlays: false })
-      await this.bootstrap(headers)
+      await this.bootstrap(headers.map(entry => entry.header))
     } else if (this.table.size > 0) {
       await this.replaceHeaderIndex(await this.listStoredHeaders(), { overlays: true })
     }
@@ -428,6 +437,7 @@ export class WorkspaceRegistry extends Service {
         workspaceIds: [id, ...state.workspaceIds],
         archivedSessionIds: state.archivedSessionIds,
         hiddenWorkspaceIds: state.hiddenWorkspaceIds,
+        sessionHomes: state.sessionHomes,
       })
     } catch (error) {
       this.entities.delete(id)
@@ -461,6 +471,7 @@ export class WorkspaceRegistry extends Service {
       workspaceIds: state.workspaceIds.filter(workspaceId => workspaceId !== id),
       archivedSessionIds: state.archivedSessionIds,
       hiddenWorkspaceIds: state.hiddenWorkspaceIds.filter(workspaceId => workspaceId !== id),
+      sessionHomes: state.sessionHomes,
     }
     await this.setState({
       ...nextState,
@@ -519,6 +530,7 @@ export class WorkspaceRegistry extends Service {
       workspaceIds: state.workspaceIds,
       archivedSessionIds: state.archivedSessionIds,
       hiddenWorkspaceIds: state.hiddenWorkspaceIds,
+      sessionHomes: state.sessionHomes,
     })
   }
 
@@ -607,6 +619,7 @@ export class WorkspaceRegistry extends Service {
         workspaceIds,
         archivedSessionIds: state.archivedSessionIds,
         hiddenWorkspaceIds: state.hiddenWorkspaceIds,
+        sessionHomes: state.sessionHomes,
       })
     }
     await this.setState({
@@ -614,6 +627,7 @@ export class WorkspaceRegistry extends Service {
       workspaceIds,
       archivedSessionIds: state.archivedSessionIds,
       hiddenWorkspaceIds: state.hiddenWorkspaceIds,
+      sessionHomes: state.sessionHomes,
     })
   }
 
@@ -680,40 +694,64 @@ export class WorkspaceRegistry extends Service {
   }
 
   private async replaceHeaderIndex(
-    headers: readonly SessionHeader[],
+    headers: readonly StoredHeaderEntry[],
     options: { overlays: boolean },
   ): Promise<void> {
     this.headers.clear()
     this.sessionPaths.clear()
     this.invalidSessionPaths.clear()
-    await this.indexHeaders(headers, options)
+    const updates = await this.indexHeaders(headers, options)
+    await this.flushSessionHomes(updates, headers)
   }
 
   private async indexHeaders(
-    headers: readonly SessionHeader[],
+    headers: readonly StoredHeaderEntry[],
     options: { overlays: boolean } = { overlays: false },
-  ): Promise<void> {
-    for (const header of headers) await this.indexHeader(header, options)
+  ): Promise<Map<SessionId, SessionHomeMemory>> {
+    const memoryUpdates = new Map<SessionId, SessionHomeMemory>()
+    for (const entry of headers) {
+      await this.indexHeader(entry.header, options, entry.revision, memoryUpdates)
+    }
+    return memoryUpdates
   }
 
   private async indexHeader(
     header: SessionHeader,
     options: { overlays: boolean } = { overlays: false },
+    revision?: SessionPersistenceRevision,
+    memoryUpdates?: Map<SessionId, SessionHomeMemory>,
   ): Promise<void> {
     this.headers.set(header.id, header)
     const live = this.ctx.get('sessions')?.get(header.id)
     let events: readonly SessionEvent[] | undefined = live?.snapshotEvents()
+    let rememberedHome: string | undefined
+    let remembered = false
     if (options.overlays && events === undefined && this.accountedSessionIds().has(header.id)) {
-      const inspected = await this.inspectSession(header.id)
-      if (inspected.ok) events = inspected.events
-      else {
-        this.ctx.logger.warn(
-          `workspace ignored overlay for session '${header.id}': inspect failed: ${inspected.reason}`,
-        )
+      const memo = live === undefined && revision !== undefined
+        ? this.requireState().sessionHomes[header.id]
+        : undefined
+      if (memo !== undefined && memo.revision === revision) {
+        rememberedHome = memo.home
+        remembered = true
+      } else {
+        const inspected = await this.inspectSession(header.id)
+        if (inspected.ok) {
+          if (inspected.events !== undefined) events = inspected.events
+        } else {
+          this.ctx.logger.warn(
+            `workspace ignored overlay for session '${header.id}': inspect failed: ${inspected.reason}`,
+          )
+        }
+        // A refused migration repeats identically on every read, so the
+        // header-cwd fallback is remembered too: the next boot with the same
+        // artifact revision must not pay for the same refusal again.
+        if (live === undefined && revision !== undefined) {
+          memoryUpdates?.set(header.id, { revision, home: membershipHome(header.cwd, events) })
+        }
       }
     }
     if (!options.overlays && events === undefined && this.sessionPaths.has(header.id)) return
-    const home = membershipHome(header.cwd, events)
+    const home = remembered ? rememberedHome : membershipHome(header.cwd, events)
     if (home === undefined) {
       this.sessionPaths.delete(header.id)
       this.invalidSessionPaths.set(header.id, 'header has no home')
@@ -762,15 +800,58 @@ export class WorkspaceRegistry extends Service {
   }
 
   /** Every stored session's header, projected from the persistence snapshot listing. */
-  private async listStoredHeaders(): Promise<SessionHeader[]> {
+  private async listStoredHeaders(): Promise<readonly StoredHeaderEntry[]> {
     const snapshots = await this.ctx.sessionPersistence.list()
-    return snapshots.map(snapshot => snapshot.header)
+    return snapshots.map(snapshot => ({ header: snapshot.header, revision: snapshot.revision }))
+  }
+
+  /**
+   * Commit session-home memories from one indexing pass. Entries in
+   * `listed` (a full stored listing) bound the table: memories for sessions
+   * absent from it are dropped so the table cannot outgrow the store.
+   * @param updates - memories resolved during indexing; an artifact whose
+   *   revision already remembers the same answer is not rewritten.
+   * @param listed - the full stored listing this pass indexed, when it was one.
+   */
+  private async flushSessionHomes(
+    updates: ReadonlyMap<SessionId, SessionHomeMemory>,
+    listed?: readonly StoredHeaderEntry[],
+  ): Promise<void> {
+    let changed = false
+    const state = this.requireState()
+    const pending = new Map([...updates].map(([id, memory]) => [String(id), memory] as const))
+    const present = listed === undefined ? undefined : new Set(listed.map(entry => String(entry.header.id)))
+    // Rebuilt forward rather than deleted in place: the table is a plain JSON
+    // record, and dynamic deletes would push it into dictionary mode.
+    const next: Record<string, SessionHomeMemory> = {}
+    for (const [key, memory] of Object.entries(state.sessionHomes)) {
+      if (present !== undefined && !present.has(key)) {
+        changed = true
+        continue
+      }
+      const update = pending.get(key)
+      pending.delete(key)
+      if (update !== undefined && (update.revision !== memory.revision || update.home !== memory.home)) {
+        next[key] = update
+        changed = true
+        continue
+      }
+      next[key] = memory
+    }
+    for (const [key, memory] of pending) {
+      next[key] = memory
+      changed = true
+    }
+    if (!changed) return
+    await this.setState({ ...state, sessionHomes: next })
   }
 
   private async indexLiveSessions(): Promise<void> {
     const sessions = this.ctx.get('sessions')
     if (sessions === undefined) return
-    await this.indexHeaders(sessions.list().map(session => session.header), { overlays: true })
+    // Live sessions carry no stored revision yet; their snapshotEvents() answer is
+    // free, so no memory is consulted or written for them.
+    await this.indexHeaders(sessions.list().map(session => ({ header: session.header })), { overlays: true })
   }
 
   private reportFilteredCandidates(): void {
@@ -800,7 +881,8 @@ export class WorkspaceRegistry extends Service {
     if (cached !== undefined) return cached
 
     const headers = await this.listStoredHeaders()
-    await this.indexHeaders(headers, { overlays: true })
+    const updates = await this.indexHeaders(headers, { overlays: true })
+    await this.flushSessionHomes(updates, headers)
     const header = this.headers.get(id)
     if (header === undefined) {
       throw new Error(`cannot validate session '${id}': session persistence holds no such session`)
