@@ -14,6 +14,7 @@ async function bench() {
   // Copy machinery the shell only reads a revision from; the real locale
   // plugin would drag its own settings-row dependencies into this bench.
   const setLocale = vi.fn()
+  const clearLocale = vi.fn()
   const setTheme = vi.fn()
   const setFontSize = vi.fn()
   const getTheme = vi.fn(() => ({ preference: 'system', fontSize: 14, revision: 1 }))
@@ -21,6 +22,7 @@ async function bench() {
     register: () => () => {},
     bind: () => (key: string) => key,
     setLocale,
+    clearLocale,
     getSnapshot: () => ({ active: 'zh', locales: [], revision: 0 }),
     subscribe: () => () => {},
   } as never)
@@ -53,7 +55,7 @@ async function bench() {
   } as never)
   ctx.provide('remote.settings', settings as never)
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, connectionState, reconnect, setLocale, setTheme, setFontSize, getTheme }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, connectionState, reconnect, setLocale, clearLocale, setTheme, setFontSize, getTheme }
 }
 
 function declare(slots: SlotRegistry): () => void {
@@ -142,9 +144,11 @@ describe('ui-settings apply', () => {
     injected.reconnect()
     expect(b.reconnect).toHaveBeenCalledOnce()
     injected.setLocale('en')
+    injected.clearLocale()
     injected.setTheme('dark')
     injected.setFontSize(12)
     expect(b.setLocale).toHaveBeenCalledWith('en')
+    expect(b.clearLocale).toHaveBeenCalledOnce()
     expect(b.setTheme).toHaveBeenCalledWith('dark')
     expect(b.setFontSize).toHaveBeenCalledWith(12)
     expect(injected.hooks.theme.getSnapshot()).toEqual({ preference: 'system', fontSize: 14, revision: 1 })

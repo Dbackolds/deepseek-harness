@@ -17,7 +17,8 @@ import {
   ConnectionIndicator,
   IconAgentPresetOutline16, IconBranchOutline16, IconCloseOutline16, IconDataOutline16,
   IconDarkOutline16, IconFollowsystemOutline16, IconGlobeOutline14, IconLightOutline16,
-  IconListPenOutline16, IconPersonalizationOutline16, IconSettingsOutline16, IconSkillOutline16,
+  IconListPenOutline16, IconPersonalizationOutline16, IconRefreshOutline16, IconSearchOutline16,
+  IconSettingsOutline16, IconSkillOutline16,
   Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConnectionIndicatorState, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -31,6 +32,7 @@ const RECOVERY_CONFIRMATION_MS = 2_000
 /** Same integer px range as the Appearance font-size row. */
 const CONTENT_FONT_SIZE_MIN = 12
 const CONTENT_FONT_SIZE_MAX = 17
+const CONTENT_FONT_SIZE_DEFAULT = 14
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
 function navIcon(id: string) {
@@ -122,7 +124,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose, t, hostS
  */
 export function SettingsRoot(props: SettingsRootComponentProps) {
   const {
-    wide, reconnect, setLocale, setTheme, setFontSize, useConnectionState, useSections, useOnboardingSteps,
+    wide, reconnect, setLocale, clearLocale, setTheme, setFontSize, useConnectionState, useSections, useOnboardingSteps,
     useSessions, useHostStart, useLocale, useTheme, renderSlot, t,
   } = props
   const [open, setOpen] = useState(false)
@@ -201,16 +203,22 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
     connectionIndicator = 'recovered'
   }
 
-  const fontSizes: MenuItem[] = []
-  for (let px = CONTENT_FONT_SIZE_MIN; px <= CONTENT_FONT_SIZE_MAX; px += 1) {
-    fontSizes.push({ id: `font:${String(px)}`, label: t('menu.fontSize.value', { size: String(px) }) })
+  const languageLabels: Record<string, string> = {
+    en: t('menu.language.en'),
+    zh: t('menu.language.zh'),
   }
   const menuItems: MenuItem[] = [
     {
       id: 'language',
       label: t('menu.language'),
       icon: <IconGlobeOutline14 size={16} />,
-      submenu: locale.locales.map(option => ({ id: `locale:${option.id}`, label: option.label })),
+      submenu: [
+        { id: 'locale:system', label: t('menu.language.system') },
+        ...locale.locales.map(option => ({
+          id: `locale:${option.id}`,
+          label: languageLabels[option.id] ?? option.label,
+        })),
+      ],
     },
     {
       id: 'theme',
@@ -221,22 +229,43 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           ? <IconLightOutline16 />
           : <IconFollowsystemOutline16 />,
       submenu: [
-        { id: 'theme:light', label: t('menu.theme.light'), icon: <IconLightOutline16 /> },
-        { id: 'theme:dark', label: t('menu.theme.dark'), icon: <IconDarkOutline16 /> },
-        { id: 'theme:system', label: t('menu.theme.system'), icon: <IconFollowsystemOutline16 /> },
+        { id: 'theme:system', label: t('menu.theme.system') },
+        { id: 'theme:dark', label: t('menu.theme.dark') },
+        { id: 'theme:light', label: t('menu.theme.light') },
       ],
     },
     {
       id: 'fontSize',
       label: t('menu.fontSize'),
-      icon: <IconSettingsOutline16 />,
-      submenu: fontSizes,
+      icon: <IconSearchOutline16 />,
+      submenu: [
+        {
+          id: 'font:increase',
+          label: t('menu.fontSize.increase'),
+          icon: <IconSearchOutline16 />,
+          shortcut: t('menu.fontSize.increaseShortcut'),
+          disabled: theme.fontSize >= CONTENT_FONT_SIZE_MAX,
+        },
+        {
+          id: 'font:decrease',
+          label: t('menu.fontSize.decrease'),
+          icon: <IconSearchOutline16 />,
+          shortcut: t('menu.fontSize.decreaseShortcut'),
+          disabled: theme.fontSize <= CONTENT_FONT_SIZE_MIN,
+        },
+        {
+          id: 'font:reset',
+          label: t('menu.fontSize.reset'),
+          icon: <IconRefreshOutline16 />,
+          shortcut: t('menu.fontSize.resetShortcut'),
+          disabled: theme.fontSize === CONTENT_FONT_SIZE_DEFAULT,
+        },
+      ],
     },
   ]
   const selectedIds = [
-    `locale:${locale.active}`,
+    `locale:${locale.preference === undefined ? 'system' : locale.preference}`,
     `theme:${theme.preference}`,
-    `font:${String(theme.fontSize)}`,
   ]
   const settingsTrigger = (
     <button
@@ -257,12 +286,17 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         {wide ? (
           <div className={css.splitTrigger}>
             <Menu
-              className={css.accountMenu ?? ''}
+              className={css.accountMenu as string}
               open={menuOpen}
               onClose={() => { setMenuOpen(false) }}
               items={menuItems}
               selectedIds={selectedIds}
               onSelect={(id) => {
+                if (id === 'locale:system') {
+                  clearLocale()
+                  setMenuOpen(false)
+                  return
+                }
                 if (id.startsWith('locale:')) {
                   setLocale(id.slice('locale:'.length))
                   setMenuOpen(false)
@@ -273,8 +307,15 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
                   setMenuOpen(false)
                   return
                 }
-                setFontSize(Number(id.slice('font:'.length)))
-                setMenuOpen(false)
+                if (id === 'font:increase') {
+                  setFontSize(theme.fontSize + 1)
+                  return
+                }
+                if (id === 'font:decrease') {
+                  setFontSize(theme.fontSize - 1)
+                  return
+                }
+                setFontSize(CONTENT_FONT_SIZE_DEFAULT)
               }}
               side="top"
               portal

@@ -72,6 +72,8 @@ export interface LocaleDefinition {
 export interface LocaleSnapshot {
   /** Active locale id. */
   active: LocaleId
+  /** Explicit Host selection; absent means the browser-derived locale. */
+  preference: LocaleId | undefined
   /** Selectable locales in display order. */
   locales: readonly LocaleDefinition[]
   /** Monotonic change counter (registry or active changes). */
@@ -185,7 +187,7 @@ export class LocaleRuntime {
     for (const locale of BUILT_IN_LOCALES) this.catalog.set(localeKey(locale.id), locale)
     const locales = this.localeList()
     this.provisional = resolveInitialLocale(locales)
-    this.snapshot = Object.freeze({ active: this.provisional, locales, revision: 0 })
+    this.snapshot = Object.freeze({ active: this.provisional, preference: undefined, locales, revision: 0 })
     if (host !== undefined) {
       ctx.effect(() => host.subscribe(() => { this.adopt(host) }), 'locale: settings scope adoption')
       this.adopt(host)
@@ -239,6 +241,17 @@ export class LocaleRuntime {
     this.preference = match.id
     if (this.snapshot.active !== match.id) this.publish(match.id, true)
     void this.host?.set(LOCALE_PREFERENCE_FIELD, match.id)
+  }
+
+  /**
+   * Clear the explicit locale selection so the browser-derived locale is used.
+   * The Host field is unset when a settings scope is present.
+   */
+  clearLocale(): void {
+    this.preference = undefined
+    const active = this.resolveActive()
+    if (this.snapshot.active !== active) this.publish(active, true)
+    void this.host?.unset(LOCALE_PREFERENCE_FIELD)
   }
 
   /**
@@ -477,6 +490,7 @@ export class LocaleRuntime {
   ): void {
     this.snapshot = Object.freeze({
       active,
+      preference: this.preference,
       locales,
       revision: this.snapshot.revision + 1,
     })

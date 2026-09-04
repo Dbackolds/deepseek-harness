@@ -10,9 +10,9 @@ The sidebar foot account bar was a single Settings button. Clicking the account 
 
 ## Decision
 
-In the wide sidebar column, `SettingsRoot` splits the foot into two click targets. The left overlay is an account menu (interface language, appearance, interface scale) anchored above the chip. The right overlay is the existing Settings glyph and keeps the localized Settings accessible name. The collapsed rail stays a single circular chip that opens Settings.
+In the wide sidebar column, `SettingsRoot` splits the foot into two click targets. The left overlay is an account menu (interface language, appearance, interface scale) anchored above the chip. Language offers System default plus the shipped locales; appearance is System default, Dark theme, Light theme; scale is Zoom in / Zoom out / Actual size against the conversation font-size range. The right overlay is the existing Settings glyph and keeps the localized Settings accessible name. The collapsed rail stays a single circular chip that opens Settings.
 
-The menu writes through injected `setLocale` / `setTheme` / `setFontSize` callbacks and reads locale plus theme snapshots from the shell inject hooks. Submenu parents show a trailing chevron; selected submenu rows show a check. There is no disconnect command because Connection exposes reconnect, not a user-initiated disconnect.
+The menu writes through injected `setLocale` / `clearLocale` / `setTheme` / `setFontSize` callbacks and reads locale plus theme snapshots from the shell inject hooks. `LocaleSnapshot.preference` distinguishes an explicit pick from the browser-derived locale so System default can show a check. Submenu parents show a trailing chevron; selected submenu rows show a check. There is no disconnect command because Connection exposes reconnect, not a user-initiated disconnect.
 
 ## Alternatives considered
 

@@ -244,6 +244,23 @@ describe('Menu', () => {
     expect(rowClick).not.toHaveBeenCalled()
   })
 
+  it('renders a trailing shortcut on a submenu row', () => {
+    render(
+      <Menu
+        open
+        anchor={<span>trigger</span>}
+        items={[{
+          id: 'zoom',
+          label: 'Zoom',
+          submenu: [{ id: 'in', label: 'Zoom in', shortcut: '⌘ +' }],
+        }]}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />)
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Zoom' }).parentElement as HTMLElement)
+    expect(screen.getByRole('menuitem', { name: 'Zoom in⌘ +' })).toBeTruthy()
+  })
+
   it('opens a submenu on hover and selects a nested item', () => {
     const onSelect = vi.fn()
     render(

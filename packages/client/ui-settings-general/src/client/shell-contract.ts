@@ -40,6 +40,8 @@ export type SettingsRootInjected = {
   reconnect: () => void
   /** Switch the active locale from the account menu. */
   setLocale: (id: string) => void
+  /** Clear the explicit locale so the browser-derived locale is used. */
+  clearLocale: () => void
   /** Switch the theme preference from the account menu. */
   setTheme: (id: string) => void
   /** Change the conversation content font size from the account menu. */

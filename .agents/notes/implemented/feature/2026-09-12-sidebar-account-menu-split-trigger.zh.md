@@ -10,9 +10,9 @@ Status: implemented
 
 ## Decision
 
-展开栏里，`SettingsRoot` 把底部控件拆成两个点击区。左侧覆盖层是账号菜单（界面语言、界面主题、界面缩放），锚在账号条上方。右侧覆盖层仍是设置齿轮，并保留本地化的「设置」无障碍名称。收起轨仍用单个圆形账号标打开设置。
+展开栏里，`SettingsRoot` 把底部控件拆成两个点击区。左侧覆盖层是账号菜单（界面语言、界面主题、界面缩放），锚在账号条上方。语言子菜单是系统默认加已注册语言；主题是系统默认、深色主题、浅色主题；缩放是放大 / 缩小 / 实际大小，作用在会话内容字号范围上。右侧覆盖层仍是设置齿轮，并保留本地化的「设置」无障碍名称。收起轨仍用单个圆形账号标打开设置。
 
-菜单通过注入的 `setLocale` / `setTheme` / `setFontSize` 写入，并从外壳 inject hooks 读取 locale 与 theme 快照。带子菜单的行显示右箭头；选中的子项显示勾选。没有「断开连接」命令，因为 Connection 只暴露 reconnect，没有用户主动断开。
+菜单通过注入的 `setLocale` / `clearLocale` / `setTheme` / `setFontSize` 写入，并从外壳 inject hooks 读取 locale 与 theme 快照。`LocaleSnapshot.preference` 区分显式选择与浏览器派生语言，这样「系统默认」才能显示勾选。带子菜单的行显示右箭头；选中的子项显示勾选。没有「断开连接」命令，因为 Connection 只暴露 reconnect，没有用户主动断开。
 
 ## Alternatives considered
 

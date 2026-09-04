@@ -170,6 +170,19 @@ describe('LocaleRuntime', () => {
     expect(host.set).toHaveBeenCalledWith('preference', 'en')
   })
 
+  it('clearLocale unsets the Host preference and returns to the browser-derived locale', () => {
+    const host = stubSettingsScope<LocaleSettings>()
+    const { svc, events } = make(host)
+    svc.setLocale('en')
+    expect(svc.getLocale().active).toBe('en')
+    expect(svc.getLocale().preference).toBe('en')
+    svc.clearLocale()
+    expect(svc.getLocale().active).toBe('zh')
+    expect(svc.getLocale().preference).toBeUndefined()
+    expect(host.unset).toHaveBeenCalledWith('preference')
+    expect(events.map(snapshot => snapshot.active)).toEqual(['en', 'zh'])
+  })
+
   it('setLocale without a host scope stays process-local', () => {
     const { svc, events } = make()
     svc.setLocale('en')

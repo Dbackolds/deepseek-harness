@@ -33,6 +33,9 @@ function mount({
   connectionState = 'connected',
   onboardingActive = true,
   themePreference = 'system',
+  fontSize = 14,
+  localePreference = 'en' as string | undefined,
+  extraLocales = [] as Array<{ id: string; label: string }>,
   rows = [
     { id: 'general', order: 0, label: 'General' },
     { id: 'models', order: 10, label: 'Models' },
@@ -47,6 +50,9 @@ function mount({
   connectionState?: ConnectionSnapshot
   onboardingActive?: boolean
   themePreference?: 'light' | 'dark' | 'system'
+  fontSize?: number
+  localePreference?: string | undefined
+  extraLocales?: Array<{ id: string; label: string }>
   rows?: Row[]
   steps?: Step[]
 } = {}) {
@@ -58,6 +64,7 @@ function mount({
   const connectionListeners = new Set<() => void>()
   const reconnect = vi.fn()
   const setLocale = vi.fn()
+  const clearLocale = vi.fn()
   const setTheme = vi.fn()
   const setFontSize = vi.fn()
   const renderSlot = vi.fn(
@@ -81,16 +88,18 @@ function mount({
     wide,
     reconnect,
     setLocale,
+    clearLocale,
     setTheme,
     setFontSize,
     useLocale: select => select({
-      active: 'en',
-      locales: [{ id: 'en', label: 'English' }, { id: 'zh', label: '中文' }],
+      active: localePreference === undefined ? 'en' : localePreference,
+      preference: localePreference,
+      locales: [{ id: 'en', label: 'English' }, { id: 'zh', label: '中文' }, ...extraLocales],
       revision: 1,
     }),
     useTheme: select => select({
       preference: themePreference,
-      fontSize: 14,
+      fontSize,
       active: { id: 'light', colorScheme: 'light', tokens: {} },
       themes: [],
       revision: 1,
@@ -139,7 +148,7 @@ function mount({
       for (const fn of [...connectionListeners]) fn()
     })
   }
-  return { view, renderSlot, bump, listeners, reconnect, setLocale, setTheme, setFontSize, setConnectionState }
+  return { view, renderSlot, bump, listeners, reconnect, setLocale, clearLocale, setTheme, setFontSize, setConnectionState }
 }
 
 function openPanel() {
@@ -201,19 +210,35 @@ describe('SettingsRoot trigger', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface language' }).parentElement as HTMLElement)
-    fireEvent.click(screen.getByRole('menuitem', { name: '中文' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'System default' }))
+    expect(mounted.clearLocale).toHaveBeenCalledOnce()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface language' }).parentElement as HTMLElement)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Simplified Chinese' }))
     expect(mounted.setLocale).toHaveBeenCalledWith('zh')
 
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Appearance' }).parentElement as HTMLElement)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Dark' }))
+    expect(screen.getByRole('menuitem', { name: 'System default' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Dark theme' }))
     expect(mounted.setTheme).toHaveBeenCalledWith('dark')
 
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface scale' }).parentElement as HTMLElement)
-    fireEvent.click(screen.getByRole('menuitem', { name: '12px' }))
-    expect(mounted.setFontSize).toHaveBeenCalledWith(12)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Zoom in⌘ +' }))
+    expect(mounted.setFontSize).toHaveBeenCalledWith(15)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Zoom out⌘ -' }))
+    expect(mounted.setFontSize).toHaveBeenCalledWith(13)
+    expect(screen.getByRole('menuitem', { name: 'Actual size⌘ 0' })).toHaveProperty('disabled', true)
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('checks System default when no explicit locale preference is stored', () => {
+    mount({ localePreference: undefined })
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface language' }).parentElement as HTMLElement)
+    expect(screen.getByRole('menuitem', { name: 'System default' })).toBeTruthy()
   })
 
   it('keeps the account menu off the collapsed rail', () => {
@@ -230,12 +255,21 @@ describe('SettingsRoot trigger', () => {
     expect(screen.queryByRole('menu')).toBeNull()
 
     cleanup()
-    mount({ themePreference: 'light' })
+    const mounted = mount({ themePreference: 'light', fontSize: 16 })
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
     expect(screen.getByRole('menuitem', { name: 'Appearance' })).toBeTruthy()
-    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface language' }).parentElement as HTMLElement)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Interface language' }))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface scale' }).parentElement as HTMLElement)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Actual size⌘ 0' }))
+    expect(mounted.setFontSize).toHaveBeenCalledWith(14)
     expect(screen.queryByRole('dialog')).toBeNull()
+
+    cleanup()
+    mount({ localePreference: undefined, extraLocales: [{ id: 'ja', label: '日本語' }], fontSize: 12 })
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface language' }).parentElement as HTMLElement)
+    expect(screen.getByRole('menuitem', { name: '日本語' })).toBeTruthy()
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Interface scale' }).parentElement as HTMLElement)
+    expect(screen.getByRole('menuitem', { name: 'Zoom out⌘ -' })).toHaveProperty('disabled', true)
   })
 })
 

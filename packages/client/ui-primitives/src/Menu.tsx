@@ -17,6 +17,8 @@ export interface MenuItem {
   danger?: boolean
   /** Nested card opened to the right on hover/focus. */
   submenu?: readonly MenuItem[]
+  /** Trailing accelerator hint, shown muted after the label. */
+  shortcut?: ReactNode
 }
 
 /** Hairline between item groups (not selectable). */
@@ -228,6 +230,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
         >
           {entry.icon !== undefined && <span className={css.itemIcon}>{entry.icon}</span>}
           <span className={css.itemLabel}>{entry.label}</span>
+          {entry.shortcut !== undefined && <span className={css.shortcut}>{entry.shortcut}</span>}
           {hasSub && <IconChevronRightOutline14 className={css.submenuChevron} />}
           {/* Selection marker is a trailing check (figma .Menu_cell), not a fill. */}
           {selected && <IconCheckOutline16 className={css.check} />}
@@ -247,6 +250,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
                 >
                   {sub.icon !== undefined && <span className={css.itemIcon}>{sub.icon}</span>}
                   <span className={css.itemLabel}>{sub.label}</span>
+                  {sub.shortcut !== undefined && <span className={css.shortcut}>{sub.shortcut}</span>}
                   {subSelected && <IconCheckOutline16 className={css.check} />}
                 </button>
               )

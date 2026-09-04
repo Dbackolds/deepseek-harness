@@ -204,6 +204,15 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.shortcut {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Selected cell keeps the plain fill (marker is the trailing check); the
  * class remains as a hook for owner-side emphasis. */
 .selected {

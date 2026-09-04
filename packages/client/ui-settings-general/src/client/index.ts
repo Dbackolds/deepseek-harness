@@ -108,6 +108,7 @@ export function apply(ctx: ClientContext): void {
   const shellInjected = (): SettingsRootInjected => ({
     reconnect: () => { connection.reconnect() },
     setLocale: (id) => { ctx.locale.setLocale(id) },
+    clearLocale: () => { ctx.locale.clearLocale() },
     setTheme: (id) => { theme.setTheme(id) },
     setFontSize: (px) => { theme.setFontSize(px) },
     hooks: {
