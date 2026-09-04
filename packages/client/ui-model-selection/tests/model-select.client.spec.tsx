@@ -88,6 +88,65 @@ describe('ModelSelect reasoning effort', () => {
     })
   })
 
+  it('keeps the effort pane open after the root cell unmounts with no relatedTarget', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state())
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    const trigger = screen.getByRole('button', {
+      name: '选择模型，当前 DeepSeek-V4-Flash，推理等级 High',
+    })
+    fireEvent.click(trigger)
+    const effort = screen.getByRole('menuitem', { name: /推理等级/ })
+    effort.focus()
+    fireEvent.click(effort)
+    // Chrome: the focused cell unmounts, so the bubbling focusout that reaches
+    // the seat has no relatedTarget. That must not dismiss the drilled pane.
+    fireEvent.focusOut(trigger.parentElement!, { relatedTarget: null })
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
+      .toEqual(['Off', 'High', 'Max'])
+
+    const detached = document.createElement('button')
+    const leave = new FocusEvent('focusout', { bubbles: true, relatedTarget: null })
+    Object.defineProperty(leave, 'target', { value: detached })
+    trigger.parentElement!.dispatchEvent(leave)
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
+      .toEqual(['Off', 'High', 'Max'])
+  })
+
+  it('still closes when focus leaves the seat for a node outside it', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state())
+    const { container } = render(
+      <div>
+        <button type="button">outside</button>
+        <ModelSelect
+          locked={false}
+          available
+          directory={directory}
+          load={vi.fn()}
+          select={vi.fn().mockResolvedValue(true)}
+          t={t}
+        />
+      </div>,
+    )
+
+    fireEvent.click(screen.getByRole('button', {
+      name: '选择模型，当前 DeepSeek-V4-Flash，推理等级 High',
+    }))
+    expect(screen.getByRole('menu')).toBeTruthy()
+    const outside = screen.getByRole('button', { name: 'outside' })
+    fireEvent.focusOut(container.querySelector('[aria-haspopup="menu"]')!.parentElement!, {
+      relatedTarget: outside,
+    })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
   it('offers provider default only when the adapter does not configure a model default', () => {
     const directory = createSnapshotStore(state({
       groups: [{

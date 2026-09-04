@@ -153,6 +153,13 @@ export function ModelSelect(
 
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
     if (event.relatedTarget instanceof Node && rootRef.current?.contains(event.relatedTarget)) return
+    // Drilling Model / Effort unmounts the focused cell. Chrome then fires a
+    // bubbling focusout with no relatedTarget. The event target is still inside
+    // the seat, or already disconnected (the removed cell). Treating either as
+    // an outside leave would close the menu before the drilled pane paints.
+    if (!(event.relatedTarget instanceof Node) && event.target instanceof Node) {
+      if (rootRef.current?.contains(event.target) || !event.target.isConnected) return
+    }
     close()
   }
 
