@@ -37,7 +37,11 @@ describe('reference submission', () => {
     const shell = new SessionInputShell({
       actx: {} as Context,
       defaultSink: vi.fn(),
-      commandImages,
+      commandAttachments: {
+        serialize: async () => [],
+        release() {},
+        unsupportedNotice: () => '',
+      },
     })
     expect(shell.snapshot.detectLength).toBe(0)
     const longPath = `/workspace/.dsh-filess/session-a/${'a'.repeat(80)}.txt`

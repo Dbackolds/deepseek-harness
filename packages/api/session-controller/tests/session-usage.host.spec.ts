@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { describe, expect, it, vi } from 'vitest'
 import { SessionUsageController } from '../src/usage.ts'
@@ -10,7 +10,7 @@ function observation(sessionId: SessionId, usage = EMPTY_SESSION_USAGE): Session
   const events = Object.freeze([])
   const lease = (): SessionObservation => ({
     source: 'live',
-    header: { version: 0, id: sessionId, createdAt: 1, isSeeded: false, cwd: '/project' },
+    header: { version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, isSeeded: false, cwd: '/project' },
     events,
     inheritedEventCount: SessionLogOffset(0),
     cursor: -1,
@@ -98,7 +98,7 @@ describe('SessionUsageController', () => {
       listSessions: () => Promise.resolve([{ header: { id: sessionId } }]),
       observeSession: () => Promise.resolve({
         source: 'live',
-        header: { version: 0, id: sessionId, createdAt: 1, isSeeded: false, cwd: '/project' },
+        header: { version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, isSeeded: false, cwd: '/project' },
         events,
         inheritedEventCount: SessionLogOffset(0),
         cursor: -1,

@@ -593,7 +593,7 @@ describe('workspace browser rows', () => {
     const onMarkUnread = vi.fn()
     rerender(<SessionNodeItem node={{ ...node, cwd: '/projects/project' }} currentId={undefined} now={0} onOpen={onOpen}
       onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} onPin={onPin} onUnpin={onUnpin}
-      onMarkUnread={onMarkUnread} onSplit={onSplit} onReveal={onReveal} t={t} />)
+      onMarkUnread={onMarkUnread} onSplit={onSplit} onRevealPath={onReveal} t={t} />)
     const sessionRow = screen.getByRole('treeitem')
     expect(fireEvent.contextMenu(sessionRow, { clientX: 72, clientY: 140 })).toBe(false)
     expect(onOpen).not.toHaveBeenCalled()
@@ -648,7 +648,7 @@ describe('workspace browser rows', () => {
 
     rerender(<SessionNodeItem node={{ ...node, cwd: '/projects/project', pinned: true }} currentId={undefined} now={0} onOpen={onOpen}
       onRename={onRenameSession} onFork={vi.fn()} onArchive={vi.fn()} onPin={onPin} onUnpin={onUnpin}
-      onMarkUnread={onMarkUnread} onSplit={onSplit} onReveal={onReveal} t={t} />)
+      onMarkUnread={onMarkUnread} onSplit={onSplit} onRevealPath={onReveal} t={t} />)
     expect(fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 72, clientY: 140 })).toBe(false)
     fireEvent.click(screen.getByRole('menuitem', { name: '取消置顶' }))
     expect(onUnpin).toHaveBeenCalledWith(node.id)

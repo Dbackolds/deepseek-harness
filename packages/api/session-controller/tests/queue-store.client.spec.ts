@@ -89,17 +89,14 @@ describe('Session queue snapshot intake', () => {
     expect(queue).toMatchObject([
       {
         id: 'q-image', placement: 'queued',
-        content: [{ type: 'text', text: 'hi' }, { type: 'image', data: 'x' }],
-        // Image blocks render as thumbnails from `content`, so the preview
-        // carries only the text; non-image foreign blocks keep their marker.
-        preview: 'hi', text: 'hi',        content: [
+        content: [
           { type: 'text', text: 'hi' },
           { type: 'image', data: 'x' },
           { type: 'file', attachment: { attachmentId: 'file-1', name: 'notes.txt', bytes: 5 } },
         ],
         // Attachment blocks render from `content`, so the preview carries
         // only text; other foreign blocks keep their marker.
-        preview: 'hi', text: null,
+        preview: 'hi', text: 'hi',
       },
     ])
   })

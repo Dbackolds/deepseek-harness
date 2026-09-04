@@ -305,22 +305,36 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                 {rowCount === 1 && <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>}
                 {submission.attachments.length > 0 && (
                   <span className={css.attachments}>
-                    {submission.attachments.map((attachment, index) => attachment.type === 'image'
-                      ? (
-                        <img
-                          key={`${attachment.value.previewUrl}:${index}`}
-                          className={css.thumb}
-                          src={attachment.value.previewUrl}
-                          alt={t('queue.image')}
-                        />
-                      )
-                      : (
+                    {submission.attachments.map((attachment, index) => {
+                      if (attachment.type === 'image') {
+                        return (
+                          <img
+                            key={`${attachment.value.previewUrl}:${index}`}
+                            className={css.thumb}
+                            src={attachment.value.previewUrl}
+                            alt={t('queue.image')}
+                          />
+                        )
+                      }
+                      if (attachment.type === 'video') {
+                        return (
+                          <video
+                            key={`${attachment.value.previewUrl}:${index}`}
+                            className={css.thumb}
+                            src={attachment.value.previewUrl}
+                            aria-label={attachment.value.name ?? t('queue.image')}
+                            preload="metadata"
+                          />
+                        )
+                      }
+                      return (
                         <QueueFile
                           key={`${attachment.value.attachmentId}:${attachment.value.name}:${index}`}
                           attachment={attachment.value}
                           label={t('queue.file', { name: attachment.value.name })}
                         />
-                      ))}
+                      )
+                    })}
                   </span>
                 )}
                 <span className={css.preview}>{projectUserText(submission.text, [])}</span>

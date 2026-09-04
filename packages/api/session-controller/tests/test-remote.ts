@@ -261,7 +261,9 @@ function installControllers(
       ): Promise<AdmittedPromptContentPart[]> => {
         const admitted: AdmittedPromptContentPart[] = []
         for (const part of content) {
-          if (part.type === 'image') throw new Error('test did not configure image persistence')
+          if (part.type === 'image' || part.type === 'video') {
+            throw new Error('test did not configure image persistence')
+          }
           admitted.push(part)
         }
         return admitted

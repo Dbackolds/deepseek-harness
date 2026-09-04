@@ -279,7 +279,11 @@ export class SessionCommandController {
             )
           }
         }
-        const durable = await admitPromptContent(this.ctx.attachments, request.content)
+        const admission = resolvePromptFileReceipts(
+          request.content,
+          receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
+        )
+        const durable = await this.ctx.attachments.admitPromptContent(admission.content)
         const merged = mergeQueueEditText(target.data.content, durable)
         const message: UserMessage = createUserMessage({
           content: merged ?? durable,

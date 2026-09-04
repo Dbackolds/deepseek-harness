@@ -15,6 +15,7 @@ type UserFile = Extract<UserMessageNode['content'][number], { type: 'file' }>
 type PresentedAttachment =
   | { readonly type: 'image'; readonly image: MessageImageSource }
   | { readonly type: 'file'; readonly file: UserFile['attachment'] }
+  | { readonly type: 'video'; readonly previewUrl: string; readonly name?: string }
 
 function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.')
@@ -194,17 +195,31 @@ function UserStyleBubble({
       <div className={css.userStack}>
         {attachments.length > 0 && (
           <div className={css.attachmentRow} data-message-attachments>
-            {attachments.map((attachment, index) => attachment.type === 'image'
-              ? (
-                <Fragment key={`image:${index}`}>
-                  {renderMessageImages({
-                    images: [attachment.image],
-                    align: 'end',
-                    compact: compactImages,
-                  })}
-                </Fragment>
-              )
-              : (
+            {attachments.map((attachment, index) => {
+              if (attachment.type === 'image') {
+                return (
+                  <Fragment key={`image:${index}`}>
+                    {renderMessageImages({
+                      images: [attachment.image],
+                      align: 'end',
+                      compact: compactImages,
+                    })}
+                  </Fragment>
+                )
+              }
+              if (attachment.type === 'video') {
+                return (
+                  <video
+                    key={`video:${index}`}
+                    className={css.fileCard}
+                    src={attachment.previewUrl}
+                    controls
+                    preload="metadata"
+                    aria-label={attachment.name}
+                  />
+                )
+              }
+              return (
                 <span key={`file:${index}`} className={css.fileCard} title={attachment.file.name}>
                   <DocumentFileIcon className={css.fileIcon} />
                   <span className={css.fileContent}>
@@ -215,7 +230,8 @@ function UserStyleBubble({
                     </span>
                   </span>
                 </span>
-              ))}
+              )
+            })}
           </div>
         )}
         {showBubble && <div className={css.bubble}>
@@ -280,19 +296,29 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
     [submission.text],
   )
   const previewAttachments = useMemo<readonly PresentedAttachment[]>(
-    () => submission.attachments.map(attachment => attachment.type === 'image'
-      ? {
-        type: 'image',
-        image: {
-          preview: {
-            url: attachment.value.previewUrl,
-            ...(attachment.value.name === undefined ? {} : { name: attachment.value.name }),
-            ...(attachment.value.width === undefined ? {} : { width: attachment.value.width }),
-            ...(attachment.value.height === undefined ? {} : { height: attachment.value.height }),
+    () => submission.attachments.map((attachment) => {
+      if (attachment.type === 'image') {
+        return {
+          type: 'image' as const,
+          image: {
+            preview: {
+              url: attachment.value.previewUrl,
+              ...(attachment.value.name === undefined ? {} : { name: attachment.value.name }),
+              ...(attachment.value.width === undefined ? {} : { width: attachment.value.width }),
+              ...(attachment.value.height === undefined ? {} : { height: attachment.value.height }),
+            },
           },
-        },
+        }
       }
-      : { type: 'file', file: attachment.value }),
+      if (attachment.type === 'video') {
+        return {
+          type: 'video' as const,
+          previewUrl: attachment.value.previewUrl,
+          ...(attachment.value.name === undefined ? {} : { name: attachment.value.name }),
+        }
+      }
+      return { type: 'file' as const, file: attachment.value }
+    }),
     [submission.attachments],
   )
   return (

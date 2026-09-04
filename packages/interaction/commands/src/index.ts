@@ -523,6 +523,7 @@ async function admitCommandAttachments(
       blocks.push(Object.freeze({ type: 'image', attachment: ref }))
       continue
     }
+    if (attachment.type !== 'file') continue
     blocks.push(Object.freeze({
       type: 'file', attachment: files.get(attachment.receiptId) as FileAttachmentRef,
     }))

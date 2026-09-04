@@ -4,7 +4,7 @@ import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import {
   checkoutSessionBranch, createSessionBranch, describeSessionGit, discoverRepoRoot,
   GitWorktreeError, invalidateGitDescribeCache, isValidBranchName, setGitDescribeCacheMs,
@@ -28,7 +28,7 @@ function repo(): { cwd: string; session: Session } {
   git(cwd, ['add', '.'])
   git(cwd, ['commit', '-m', 'init'])
   const session = Session.create(SessionId('s1'), undefined, {
-    version: 0, id: SessionId('s1'), createdAt: 0, isSeeded: false, cwd,
+    version: SESSION_FORMAT_VERSION, id: SessionId('s1'), createdAt: 0, isSeeded: false, cwd,
   })
   return { cwd, session }
 }

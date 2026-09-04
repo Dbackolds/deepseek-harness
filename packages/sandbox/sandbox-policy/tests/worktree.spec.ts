@@ -1,6 +1,6 @@
 /** Fold and write path for the per-session git/worktree overlay. */
 import { describe, expect, it } from 'vitest'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import {
   effectiveHome, effectiveWorktree, sessionWorkingDirectory, setSessionHome, setSessionWorktree,
 } from '../src/session-worktree.ts'
@@ -9,7 +9,7 @@ import { isValidBranchName } from '../src/git-worktree.ts'
 function session(id: string, cwd?: string): Session {
   const sessionId = SessionId(id)
   return Session.create(sessionId, undefined, {
-    version: 0,
+    version: SESSION_FORMAT_VERSION,
     id: sessionId,
     createdAt: 0,
     isSeeded: false,

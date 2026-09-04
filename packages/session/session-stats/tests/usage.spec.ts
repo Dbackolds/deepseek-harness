@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createMessage } from '@deepseek-ai/dsh-llm'
-import type { TokenUsage } from '@deepseek-ai/dsh-llm'
+import type { AssistantStreamRecord, TokenUsage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -85,8 +85,9 @@ describe('sessionUsage projection unit', () => {
         content: [],
         source: { kind: 'model', provider: 'mock', model: 'mock' },
       }),
+      stream: [] as AssistantStreamRecord[],
       usage: usage(10, 20),
-    }, { surfaceOp: 'append', sourceEventSeqs: [] })
+    }, { surfaceOp: 'append' })
     session.append('step/end', { turn: 1, step: 1 })
     const view = ctx.sessionProjections.snapshot(session).values.sessionUsage
     expect(view?.tokens).toBe(30)

@@ -55,8 +55,8 @@ export function assertReleasedV2Header(header: SessionFormatHeader): void {
       throw new SessionFormatError(`format v2 header ${key} must be a string`)
     }
   }
-  if (record['origin'] !== undefined && record['origin'] !== 'subagent') {
-    throw new SessionFormatError('format v2 header origin must be "subagent"')
+  if (record['origin'] !== undefined && record['origin'] !== 'subagent' && record['origin'] !== 'automation') {
+    throw new SessionFormatError('format v2 header origin must be "subagent" or "automation"')
   }
 }
 

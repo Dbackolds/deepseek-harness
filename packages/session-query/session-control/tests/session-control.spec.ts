@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import SessionControl, {
   DEFAULT_SEARCH_LIMIT,
@@ -254,7 +254,7 @@ describe('SessionControl', () => {
     const sessionId = SessionId('persisted-cold')
     vi.spyOn(ctx.sessionQuery, 'filterSessions').mockResolvedValue([
       {
-        header: { version: 0, id: sessionId, createdAt: 1, isSeeded: false },
+        header: { version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, isSeeded: false },
         live: false,
         persisted: true,
       },

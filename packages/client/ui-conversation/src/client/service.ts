@@ -18,7 +18,7 @@ import type {
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-file-upload/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { ImageMediaType, VideoMediaType } from '@deepseek-ai/dsh-attachment'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
@@ -254,11 +254,25 @@ export class ConversationController extends Service implements IConversation {
           ...(attachment.height === undefined ? {} : { height: attachment.height }),
         },
       }
-      : { type: 'file' as const, value: uploadFor(attachment).file })
+      : attachment.kind === 'video'
+        ? {
+          type: 'video' as const,
+          value: {
+            previewUrl: attachment.previewUrl,
+            ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+          },
+        }
+        : { type: 'file' as const, value: uploadFor(attachment).file })
     const serializeAttachments = (): Promise<Parameters<SessionFace['prompt']>[0]> => Promise.all(
-      attachments.map(async attachment => attachment.kind === 'image'
-        ? { type: 'image' as const, ...await this.encodeImage(attachment.file) }
-        : { type: 'file' as const, receiptId: uploadFor(attachment).receiptId }),
+      attachments.map(async (attachment) => {
+        if (attachment.kind === 'image') {
+          return { type: 'image' as const, ...await this.encodeImage(attachment.file) }
+        }
+        if (attachment.kind === 'video') {
+          return { type: 'video' as const, ...await this.encodeVideo(attachment.file) }
+        }
+        return { type: 'file' as const, receiptId: uploadFor(attachment).receiptId }
+      }),
     )
     const snapshot = session.getSnapshot()
     if (snapshot.subagent !== null) {
@@ -452,6 +466,7 @@ export class ConversationController extends Service implements IConversation {
     return {
       attachments: await Promise.all(attachments.map(async (attachment) => {
         if (attachment.kind === 'image') return { type: 'image' as const, ...await this.encodeImage(attachment.file) }
+        if (attachment.kind === 'video') return { type: 'video' as const, ...await this.encodeVideo(attachment.file) }
         const upload = uploads[attachment.id]
         if (upload === undefined || upload.status !== 'ready') {
           throw new Error('conversation.serializeDraftAttachments: one or more files have not finished uploading')
@@ -579,6 +594,15 @@ export class ConversationController extends Service implements IConversation {
       ...(file.name === '' ? {} : { name: file.name }),
     }
   }
+
+  /** Canonical base64 wire form of one browser video file. */
+  private async encodeVideo(file: File): Promise<Omit<Extract<SubmitAttachment, { type: 'video' }>, 'type'>> {
+    return {
+      mediaType: videoMediaType(file.type),
+      data: await base64ImageOf(file),
+      ...(file.name === '' ? {} : { name: file.name }),
+    }
+  }
 }
 
 function imageMediaType(value: string): ImageMediaType {
@@ -590,6 +614,17 @@ function imageMediaType(value: string): ImageMediaType {
       return value
     default:
       throw new UnsupportedImageMediaTypeError(value)
+  }
+}
+
+function videoMediaType(value: string): VideoMediaType {
+  switch (value) {
+    case 'video/mp4':
+    case 'video/x-matroska':
+    case 'video/quicktime':
+      return value
+    default:
+      throw new Error(`unsupported video media type: ${value}`)
   }
 }
 

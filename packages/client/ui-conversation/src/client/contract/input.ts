@@ -28,6 +28,12 @@ export type SubmitAttachment =
     readonly data: string
     readonly name?: string
   }
+  | {
+    readonly type: 'video'
+    readonly mediaType: 'video/mp4' | 'video/x-matroska' | 'video/quicktime'
+    readonly data: string
+    readonly name?: string
+  }
   | { readonly type: 'file'; readonly receiptId: string }
 
 /** Command serialization result for one ordered attachment draft. */

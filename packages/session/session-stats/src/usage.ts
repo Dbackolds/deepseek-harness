@@ -224,10 +224,6 @@ export const sessionUsageProjectionDefinition = {
         if (open === null || open.turn !== event.data.turn || open.step !== event.data.step) return state
         return open.last === null ? state : { ...state, openStep: { ...open, last: null } }
       }
-      case 'assistant/chunk': {
-        if (event.data.chunk.type !== 'usage') return state
-        return applyUsage(state, event.time, event.data.turn, event.data.step, bucketsFromUsage(event.data.chunk.usage))
-      }
       case 'assistant/message': {
         let next = state
         if (event.data.usage !== undefined) {

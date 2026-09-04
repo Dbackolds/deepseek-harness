@@ -43,10 +43,20 @@ export interface PendingSubmissionFileAttachment {
   readonly value: FileAttachmentRef
 }
 
+/** Video branch of a local submission echo attachment. */
+export interface PendingSubmissionVideoAttachment {
+  readonly type: 'video'
+  readonly value: {
+    readonly previewUrl: string
+    readonly name?: string
+  }
+}
+
 /** One attachment displayed by a local submission echo, in prompt order. */
 export type PendingSubmissionAttachment =
   | PendingSubmissionImageAttachment
   | PendingSubmissionFileAttachment
+  | PendingSubmissionVideoAttachment
 
 /** Client surface selected when a local submission begins. */
 export type PendingSubmissionPlacement = 'transcript' | 'queued' | 'steering'
