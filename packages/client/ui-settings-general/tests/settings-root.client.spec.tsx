@@ -68,8 +68,9 @@ function mount({
   const setTheme = vi.fn()
   const setFontSize = vi.fn()
   const renderSlot = vi.fn(
-    ((key: string, _owner: unknown, opts?: { only?: string }) => {
+    ((key: string, owner?: { part?: 'account' | 'settings' }, opts?: { only?: string }) => {
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
+      if (key === 'settings.trigger' && owner?.part === 'account') return null
       return SEAT_CONTENT[key]
     }) as SettingsRootComponentProps['renderSlot'],
   )
@@ -163,7 +164,8 @@ describe('SettingsRoot trigger', () => {
     const { renderSlot } = mount()
     const trigger = screen.getByRole('button', { name: 'Settings' })
     expect(trigger.hasAttribute('aria-label')).toBe(false)
-    expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: true })
+    expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: true, part: 'settings' })
+    expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: true, part: 'account' })
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(trigger)
     expect(screen.getByRole('dialog')).toBeTruthy()

@@ -30,7 +30,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: auto;
   color: var(--dsw-alias-label-secondary);
 }
 

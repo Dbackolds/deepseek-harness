@@ -277,7 +277,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
       aria-expanded={open}
       onClick={openSettings}
     >
-      {renderSlot('settings.trigger', { wide })}
+      {renderSlot('settings.trigger', wide ? { wide, part: 'settings' } : { wide })}
     </button>
   )
 
@@ -286,52 +286,55 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
       <div className={clsx(css.triggerRow, !wide && css.railRow)}>
         {wide ? (
           <div className={css.splitTrigger}>
-            <Menu
-              className={css.accountMenu as string}
-              open={menuOpen}
-              onClose={() => { setMenuOpen(false) }}
-              items={menuItems}
-              selectedIds={selectedIds}
-              onSelect={(id) => {
-                if (id === 'locale:system') {
-                  clearLocale()
-                  setMenuOpen(false)
-                  return
-                }
-                if (id.startsWith('locale:')) {
-                  setLocale(id.slice('locale:'.length))
-                  setMenuOpen(false)
-                  return
-                }
-                if (id.startsWith('theme:')) {
-                  setTheme(id.slice('theme:'.length))
-                  setMenuOpen(false)
-                  return
-                }
-                if (id === 'font:increase') {
-                  setFontSize(theme.fontSize + 1)
-                  return
-                }
-                if (id === 'font:decrease') {
-                  setFontSize(theme.fontSize - 1)
-                  return
-                }
-                setFontSize(CONTENT_FONT_SIZE_DEFAULT)
-              }}
-              side="top"
-              portal
-              anchor={(
-                <button
-                  type="button"
-                  className={css.accountTrigger}
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  onClick={() => { setMenuOpen(value => !value) }}
-                >
-                  <span className={css.hiddenLabel}>{t('account.menu')}</span>
-                </button>
-              )}
-            />
+            <div className={css.accountMenu}>
+              <Menu
+                className={css.accountMenuAnchor as string}
+                open={menuOpen}
+                onClose={() => { setMenuOpen(false) }}
+                items={menuItems}
+                selectedIds={selectedIds}
+                onSelect={(id) => {
+                  if (id === 'locale:system') {
+                    clearLocale()
+                    setMenuOpen(false)
+                    return
+                  }
+                  if (id.startsWith('locale:')) {
+                    setLocale(id.slice('locale:'.length))
+                    setMenuOpen(false)
+                    return
+                  }
+                  if (id.startsWith('theme:')) {
+                    setTheme(id.slice('theme:'.length))
+                    setMenuOpen(false)
+                    return
+                  }
+                  if (id === 'font:increase') {
+                    setFontSize(theme.fontSize + 1)
+                    return
+                  }
+                  if (id === 'font:decrease') {
+                    setFontSize(theme.fontSize - 1)
+                    return
+                  }
+                  setFontSize(CONTENT_FONT_SIZE_DEFAULT)
+                }}
+                side="top"
+                portal
+                anchor={(
+                  <button
+                    type="button"
+                    className={css.accountTrigger}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    onClick={() => { setMenuOpen(value => !value) }}
+                  >
+                    {renderSlot('settings.trigger', { wide, part: 'account' })}
+                    <span className={css.hiddenLabel}>{t('account.menu')}</span>
+                  </button>
+                )}
+              />
+            </div>
             {settingsTrigger}
           </div>
         ) : settingsTrigger}

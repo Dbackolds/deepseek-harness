@@ -79,15 +79,43 @@ describe('SessionUsageController', () => {
     await expect(controller.overview({ timeZone: 'UTC' }, new AbortController().signal)).resolves.toMatchObject({ tokens: 0, days: [], models: [] })
   })
 
-  it('maps other observation failures to an internal RemoteError', async () => {
+  it('treats an unreadable Session as empty usage and still sums the rest', async () => {
     const ctx = await context()
-    const sessionId = SessionId('broken')
+    const broken = SessionId('broken')
+    const ok = SessionId('ok')
     ctx.provide('sessionQuery', {
-      listSessions: () => Promise.resolve([{ header: { id: sessionId } }]),
-      observeSession: () => Promise.reject(new Error('disk')),
+      listSessions: () => Promise.resolve([{ header: { id: broken } }, { header: { id: ok } }]),
+      observeSession: (sessionId: SessionId) => sessionId === broken
+        ? Promise.reject(new Error('disk'))
+        : Promise.resolve(observation(sessionId, {
+          ...EMPTY_SESSION_USAGE,
+          tokens: 9,
+          peakTokens: 9,
+          durationMs: 100,
+          peakDurationMs: 100,
+          firstActivityAt: Date.parse('2026-03-01T00:00:00.000Z'),
+          lastActivityAt: Date.parse('2026-03-01T00:00:00.000Z'),
+          days: [{ day: '2026-03-01', tokens: 9, durationMs: 100, models: { a: 9 } }],
+          models: [{ model: 'a', tokens: 9 }],
+        })),
     } as never)
     const controller = new SessionUsageController(ctx)
-    await expect(controller.overview({ timeZone: 'UTC' }, new AbortController().signal)).rejects.toMatchObject({ code: 'gateway/internal' })
+    await expect(controller.overview({ timeZone: 'UTC' }, new AbortController().signal)).resolves.toMatchObject({ tokens: 9 })
+  })
+
+  it('propagates abort while inspecting a Session', async () => {
+    const ctx = await context()
+    const sessionId = SessionId('live')
+    const abort = new AbortController()
+    ctx.provide('sessionQuery', {
+      listSessions: () => Promise.resolve([{ header: { id: sessionId } }]),
+      observeSession: () => {
+        abort.abort()
+        return Promise.reject(new Error('disk'))
+      },
+    } as never)
+    const controller = new SessionUsageController(ctx)
+    await expect(controller.overview({ timeZone: 'UTC' }, abort.signal)).rejects.toThrow()
   })
 
   it('uses empty usage when a Session observation has no sessionUsage view', async () => {

@@ -19,5 +19,6 @@ None; this package neither assembles nor sends a provider request.
 ## Known Limitations and Deferred Work
 
 - **Read-only snapshot** — the page does not subscribe to live usage updates.
+- **Unreadable Sessions are skipped** — a missing, corrupt, or otherwise unreadable Session contributes empty usage instead of failing the page.
 - **Personal-plan tab is absent** — only local application usage is shown.
 - **UTC days rebase onto the local day that contains UTC midnight** — a late-evening Session in a negative-offset zone can land on the previous local day.

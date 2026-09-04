@@ -51,6 +51,26 @@ describe('chrome content', () => {
     expect(screen.getByText('Settings')).toBeTruthy()
   })
 
+  it('TriggerContent paints only the account chip on the account part', () => {
+    const { container } = render(
+      <TriggerContent {...kit} wide part="account" t={t} useConnectionGeneration={connectionGeneration('/Users/cat7street')} />,
+    )
+    expect(container.querySelector('svg')).toBeNull()
+    expect(screen.getByText('C')).toBeTruthy()
+    expect(screen.getByText('cat7street')).toBeTruthy()
+    expect(screen.queryByText('Settings')).toBeNull()
+  })
+
+  it('TriggerContent paints only the settings glyph on the settings part', () => {
+    const { container } = render(
+      <TriggerContent {...kit} wide part="settings" t={t} useConnectionGeneration={connectionGeneration('/Users/cat7street')} />,
+    )
+    expect(container.querySelector('svg')).toBeTruthy()
+    expect(screen.queryByText('C')).toBeNull()
+    expect(screen.queryByText('cat7street')).toBeNull()
+    expect(screen.getByText('Settings')).toBeTruthy()
+  })
+
   it('TriggerContent falls back to Local when Host home is absent and hides the name on the rail', () => {
     const { container } = render(
       <TriggerContent {...kit} wide={false} t={t} useConnectionGeneration={connectionGeneration()} />,

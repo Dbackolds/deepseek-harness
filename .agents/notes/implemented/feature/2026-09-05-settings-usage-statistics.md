@@ -24,10 +24,10 @@ The page is local application usage only. A personal-plan tab is not part of thi
 
 ## Consequences
 
-Opening Usage observes every visible Session. Large Hosts pay that cost on each mount or retry. Missing Sessions contribute empty usage rather than failing the page.
+Opening Usage observes every visible Session. Large Hosts pay that cost on each mount or retry. Missing, corrupt, or otherwise unreadable Sessions contribute empty usage rather than failing the page.
 
 ## Required verification
 
 - `packages/session/session-stats/tests/usage.spec.ts` covers the fold, UTC days, in-step replacement, timezone rebase, and streaks.
-- `packages/api/session-controller/tests/session-usage.host.spec.ts` covers invalid zones, cross-session totals, and missing Sessions.
+- `packages/api/session-controller/tests/session-usage.host.spec.ts` covers invalid zones, cross-session totals, missing Sessions, and unreadable Sessions.
 - `packages/client/ui-settings-usage/tests/` covers formatters, empty/error/retry UI, and Settings slot registration.

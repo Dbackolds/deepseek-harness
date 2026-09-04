@@ -1,7 +1,6 @@
 /** Host-wide usage Remote for the Settings usage page. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import { aggregateUsage, EMPTY_SESSION_USAGE } from '@deepseek-ai/dsh-session-stats'
 import type { SessionUsageProjection } from '@deepseek-ai/dsh-session-stats/types'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
@@ -39,7 +38,7 @@ export class SessionUsageController extends TypertRemoteService {
    * @param request - caller IANA zone used to rebase UTC calendar rows.
    * @param signal - caller lifetime carried by the Remote transport.
    * @returns Host-wide totals, calendar rows, streaks, and model shares.
-   * @throws RemoteError when the time zone is invalid or a Session cannot be inspected.
+   * @throws RemoteError when the time zone is invalid or the caller aborts.
    */
   @Remote
   async overview(request: UsageOverviewRequest, signal: AbortSignal): Promise<UsageOverviewValue> {
@@ -65,10 +64,13 @@ export class SessionUsageController extends TypertRemoteService {
     try {
       using observation = await this.ctx.sessionQuery.observeSession(sessionId, { signal, projectionMode: 'all' })
       return observation.projections?.values.sessionUsage ?? EMPTY_SESSION_USAGE
-    } catch (error: unknown) {
+    } catch (unreadableSession: unknown) {
+      // Abort must still fail the Remote; every other observation failure
+      // (missing, corrupt, or unreadable) contributes empty usage so one
+      // bad Session cannot fail the Host-wide page.
       signal.throwIfAborted()
-      if (error instanceof SessionQueryError && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') return EMPTY_SESSION_USAGE
-      throw new RemoteError('gateway/internal', 'session could not be inspected', {})
+      void unreadableSession
+      return EMPTY_SESSION_USAGE
     }
   }
 }

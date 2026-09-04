@@ -24,10 +24,10 @@ Web 设置壳没有 Host 范围的提供方 token、聊天时长或模型占比�
 
 ## 后果
 
-打开使用统计会观察每个可见会话。大型 Host 在每次挂载或重试时承担该成本。缺失的会话贡献空用量，而不是让页面失败。
+打开使用统计会观察每个可见会话。大型 Host 在每次挂载或重试时承担该成本。缺失、损坏或其他无法读取的会话贡献空用量，而不是让页面失败。
 
 ## 必要验证
 
 - `packages/session/session-stats/tests/usage.spec.ts` 覆盖折叠、UTC 日、步内替换、时区重基准与连续天数。
-- `packages/api/session-controller/tests/session-usage.host.spec.ts` 覆盖非法时区、跨会话合计与缺失会话。
+- `packages/api/session-controller/tests/session-usage.host.spec.ts` 覆盖非法时区、跨会话合计、缺失会话与无法读取的会话。
 - `packages/client/ui-settings-usage/tests/` 覆盖格式化、空/错误/重试 UI，以及设置槽注册。
