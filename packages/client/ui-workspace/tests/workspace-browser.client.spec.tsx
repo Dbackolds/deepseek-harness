@@ -392,6 +392,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('session-11')).toBeNull()
 
     expect(screen.getByRole('button', { name: '历史记录' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '再展开5个会话' }))
     expect(screen.getByText('session-6')).toBeTruthy()
     expect(screen.getByText('session-10')).toBeTruthy()
@@ -406,7 +407,7 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(screen.getByRole('button', { name: '收起' }))
     expect(screen.queryByText('session-6')).toBeNull()
     expect(screen.getByRole('button', { name: '再展开5个会话' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
+    expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
 
     fireEvent.click(screen.getByText('alpha'))
     expect(b.store.getSnapshot().groupExpansion).toEqual({ alpha: false })

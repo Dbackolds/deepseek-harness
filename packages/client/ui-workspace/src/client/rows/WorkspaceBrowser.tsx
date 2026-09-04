@@ -111,17 +111,15 @@ function SessionOverflowControls({
           })}
         </button>
       )}
-      {canCollapse && (
-        <button
-          type="button"
-          className={clsx(css.sessionOverflowButton, css.sessionOverflowCollapse)}
-          aria-expanded={true}
-          tabIndex={tabIndex}
-          onClick={onCollapse}
-        >
-          {t('sessions.collapse')}
-        </button>
-      )}
+      <button
+        type="button"
+        className={clsx(css.sessionOverflowButton, css.sessionOverflowCollapse)}
+        aria-expanded={canCollapse}
+        tabIndex={tabIndex}
+        onClick={onCollapse}
+      >
+        {t('sessions.collapse')}
+      </button>
     </div>
   )
 }
@@ -982,7 +980,10 @@ function SessionTree({
                               }}
                               onCollapse={() => {
                                 setSessionOverflowByAccount((currentLimits) => {
-                                  if (!(group.key in currentLimits)) return currentLimits
+                                  if (!(group.key in currentLimits)) {
+                                    setGroupExpanded(group.key, false)
+                                    return currentLimits
+                                  }
                                   return Object.fromEntries(
                                     Object.entries(currentLimits).filter(([key]) => key !== group.key),
                                   )
@@ -1043,7 +1044,10 @@ function SessionTree({
                         }}
                         onCollapse={() => {
                           setSessionOverflowByAccount((currentLimits) => {
-                            if (!(group.key in currentLimits)) return currentLimits
+                            if (!(group.key in currentLimits)) {
+                              setGroupExpanded(group.key, false)
+                              return currentLimits
+                            }
                             return Object.fromEntries(
                               Object.entries(currentLimits).filter(([key]) => key !== group.key),
                             )
@@ -1181,7 +1185,10 @@ function SessionTree({
                                   }}
                                   onCollapse={() => {
                                     setSessionOverflowByAccount((currentLimits) => {
-                                      if (!(group.key in currentLimits)) return currentLimits
+                                      if (!(group.key in currentLimits)) {
+                                        setGroupExpanded(group.key, false)
+                                        return currentLimits
+                                      }
                                       return Object.fromEntries(
                                         Object.entries(currentLimits).filter(([key]) => key !== group.key),
                                       )
@@ -1241,7 +1248,10 @@ function SessionTree({
                             }}
                             onCollapse={() => {
                               setSessionOverflowByAccount((currentLimits) => {
-                                if (!(group.key in currentLimits)) return currentLimits
+                                if (!(group.key in currentLimits)) {
+                                  setGroupExpanded(group.key, false)
+                                  return currentLimits
+                                }
                                 return Object.fromEntries(
                                   Object.entries(currentLimits).filter(([key]) => key !== group.key),
                                 )
