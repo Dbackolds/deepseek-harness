@@ -252,14 +252,18 @@ export function listenPortAvailable(port: number): Promise<boolean> {
  * An explicit `--port` in extra args wins. Otherwise reuse the last successful
  * loopback port so Chromium keeps the same origin (and therefore the same
  * localStorage) across restarts. Occupied or invalid remembered ports select `0`.
+ * The invocation always carries `--no-open`: the desktop window is the Web UI's
+ * only surface, and a bare `dsh web` would additionally open its readiness URL
+ * in the system default browser.
  * @param extraArgs - flags forwarded to `dsh web`.
  * @param rememberedPort - last successful Host port, when one exists.
  * @returns argv after the CLI entry, starting with `web`.
  */
 export function webHostArgs(extraArgs: readonly string[] = [], rememberedPort?: number): string[] {
-  if (extraArgs.includes('--port')) return ['web', ...extraArgs]
+  const forwarded = extraArgs.includes('--no-open') ? extraArgs : [...extraArgs, '--no-open']
+  if (extraArgs.includes('--port')) return ['web', ...forwarded]
   const port = isReusableListenPort(rememberedPort) ? String(rememberedPort) : '0'
-  return ['web', '--port', port, ...extraArgs]
+  return ['web', '--port', port, ...forwarded]
 }
 
 /**

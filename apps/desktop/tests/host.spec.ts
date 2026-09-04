@@ -65,10 +65,15 @@ describe('desktop host resolution', () => {
     expect(isReusableListenPort(0)).toBe(false)
     expect(isReusableListenPort(65536)).toBe(false)
     expect(isReusableListenPort(49344.5)).toBe(false)
-    expect(webHostArgs()).toEqual(['web', '--port', '0'])
+    expect(webHostArgs()).toEqual(['web', '--port', '0', '--no-open'])
+    expect(webHostArgs([], 49344)).toEqual(['web', '--port', '49344', '--no-open'])
+    expect(webHostArgs(['--port', '8080'], 49344)).toEqual(['web', '--port', '8080', '--no-open'])
+    expect(webHostArgs([], 0)).toEqual(['web', '--port', '0', '--no-open'])
+  })
+
+  it('always forwards --no-open so the Host never opens the system browser beside the window', () => {
+    expect(webHostArgs()).toEqual(['web', '--port', '0', '--no-open'])
     expect(webHostArgs(['--no-open'], 49344)).toEqual(['web', '--port', '49344', '--no-open'])
-    expect(webHostArgs(['--port', '8080'], 49344)).toEqual(['web', '--port', '8080'])
-    expect(webHostArgs([], 0)).toEqual(['web', '--port', '0'])
   })
 
   it('reports whether a remembered loopback port can be bound again', async () => {
