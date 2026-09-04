@@ -110,7 +110,9 @@ export function effectiveHome(events: readonly SessionEvent[]): string | undefin
  */
 export function sessionWorkingDirectory(session: {
   header: { cwd?: string }
+  snapshotEvents?: () => readonly SessionEvent[]
   events?: readonly SessionEvent[]
 }): string | undefined {
-  return effectiveHome(session.events ?? []) ?? session.header.cwd
+  const events = session.snapshotEvents?.() ?? session.events ?? []
+  return effectiveHome(events) ?? session.header.cwd
 }

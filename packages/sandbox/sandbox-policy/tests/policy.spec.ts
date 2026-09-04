@@ -82,6 +82,7 @@ describe('SandboxPolicyService', () => {
 
   it('rejects a negative git.describe cache TTL', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await expect(ctx.plugin(SandboxPolicyService, { gitDescribeCacheMs: -1 }))
       .rejects.toThrow(/gitDescribeCacheMs/)
   })

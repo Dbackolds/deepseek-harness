@@ -77,7 +77,6 @@ async function run(test: Harness, suffix = ''): Promise<NonNullable<Awaited<Retu
     test.agent,
     `/goal${suffix}`,
     [],
-    [],
     new AbortController().signal,
   )
   if (execution === undefined) throw new Error('goal command was not registered')

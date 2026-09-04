@@ -630,9 +630,9 @@ describe('/plan', () => {
     ])
 
     const signal = new AbortController().signal
-    expect(await ctx.commands.execute(plainAgent, '/mode', [], [], signal)).toBeUndefined()
-    expect(await ctx.commands.execute(plainAgent, '/review', [], [], signal)).toBeUndefined()
-    const plain = await ctx.commands.execute(plainAgent, '/plan', [], [], signal)
+    expect(await ctx.commands.execute(plainAgent, '/mode', [], signal)).toBeUndefined()
+    expect(await ctx.commands.execute(plainAgent, '/review', [], signal)).toBeUndefined()
+    const plain = await ctx.commands.execute(plainAgent, '/plan', [], signal)
     expect(plain?.result).toEqual({
       kind: 'success',
       text: 'Entering plan mode (applies from the next step). Use /plan off to leave.',
@@ -644,7 +644,7 @@ describe('/plan', () => {
     openTurn(messageAgent.session)
     const messageSteer = vi.fn()
     ;(messageAgent as unknown as { steer: typeof messageSteer }).steer = messageSteer
-    const plan = await ctx.commands.execute(messageAgent, '/plan   draft the migration  ', [], [], signal)
+    const plan = await ctx.commands.execute(messageAgent, '/plan   draft the migration  ', [], signal)
     expect(plan?.result).toEqual({
       kind: 'success',
       text: 'Entering plan mode (applies from the next step). Use /plan off to leave.',
@@ -665,7 +665,7 @@ describe('/plan', () => {
     const signal = new AbortController().signal
 
     const inactive = await agentWithSession(ctx, 'inactive-plan-command')
-    expect((await ctx.commands.execute(inactive, '/plan off', [], [], signal))?.result)
+    expect((await ctx.commands.execute(inactive, '/plan off', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Plan mode is already inactive.' })
     expect(ctx.planMode.get(inactive)).toEqual({ active: false })
 
@@ -673,8 +673,8 @@ describe('/plan', () => {
     openTurn(entering.session)
     const enteringSteer = vi.fn()
     ;(entering as unknown as { steer: typeof enteringSteer }).steer = enteringSteer
-    await ctx.commands.execute(entering, '/plan', [], [], signal)
-    expect((await ctx.commands.execute(entering, '/plan off', [], [], signal))?.result)
+    await ctx.commands.execute(entering, '/plan', [], signal)
+    expect((await ctx.commands.execute(entering, '/plan off', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Plan mode entry cancelled.' })
     expect(ctx.planMode.get(entering)).toEqual({ active: false, pending: false })
     expect(enteringSteer).not.toHaveBeenCalled()
@@ -686,10 +686,10 @@ describe('/plan', () => {
     openTurn(active.session)
     const activeSteer = vi.fn()
     ;(active as unknown as { steer: typeof activeSteer }).steer = activeSteer
-    expect((await ctx.commands.execute(active, '/plan off', [], [], signal))?.result)
+    expect((await ctx.commands.execute(active, '/plan off', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Leaving plan mode (applies from the next step).' })
     expect(ctx.planMode.get(active)).toEqual({ active: true, pending: false })
-    expect((await ctx.commands.execute(active, '/plan off', [], [], signal))?.result)
+    expect((await ctx.commands.execute(active, '/plan off', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Leaving plan mode (applies from the next step).' })
     expect(activeSteer).not.toHaveBeenCalled()
     await boundary(ctx, active, 'step-start')
@@ -702,10 +702,10 @@ describe('/plan', () => {
     await new Promise(resolve => setImmediate(resolve))
     const signal = new AbortController().signal
     const agent = await agentWithSession(ctx, 'idle-plan-command')
-    expect((await ctx.commands.execute(agent, '/plan', [], [], signal))?.result)
+    expect((await ctx.commands.execute(agent, '/plan', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Plan mode on. Use /plan off to leave.' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
-    expect((await ctx.commands.execute(agent, '/plan off', [], [], signal))?.result)
+    expect((await ctx.commands.execute(agent, '/plan off', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Plan mode off.' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
   })
