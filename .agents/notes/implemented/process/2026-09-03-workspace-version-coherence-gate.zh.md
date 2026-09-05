@@ -12,9 +12,9 @@ dsh 发布序列在全部可发布成员（`packages/` 非实验成员与 `apps/
 
 ## 决策
 
-`check-workspace-constraints` 现在拥有覆盖整个家族的版本规则。其 `checkDshFamilyVersion` 划定边界：任何被扫描的工作区清单，名字为 `@deepseek-ai/dsh` 或 `@deepseek-ai/dsh-*`，都必须携带工作区根的版本。该测试基于名字而非目录，因此覆盖 `packages/`（可发布与私有/实验成员）、`apps/` 与根清单本身，并让 vendored 框架与 Landlock 序列留在各自的版本线上。原 `packages/` 作用域的比较曾是该规则唯一的静态家园；与它相邻的形态检查（cordis peer/dev 配对、`type`、`main`/`types`/`exports`、发布 `files`）仍限定在 `packages/`。
+`check-workspace-constraints` 现在拥有覆盖整个家族的版本规则。其 `checkDshFamilyVersion` 划定边界：任何被扫描的工作区清单，名字为 `@deepseek-ai/dsh` 或 `@deepseek-ai/dsh-*`，都必须携带工作区根的版本，但 `@deepseek-ai/dsh-desktop` 除外，它从 `desktop-v*` 发布并保留自己的版本线。该测试基于名字而非目录，因此覆盖 `packages/`（可发布与私有/实验成员）、desktop 以外的 `apps/` 与根清单本身，并让 vendored 框架、Landlock 序列与桌面应用留在各自的版本线上。原 `packages/` 作用域的比较曾是该规则唯一的静态家园；与它相邻的形态检查（cordis peer/dev 配对、`type`、`main`/`types`/`exports`、发布 `files`）仍限定在 `packages/`。
 
-边界与 `release:dsh` 所写一致：根、可发布成员、以及 `packages/*/*` 下每个私有 dsh 包。因此分歧会让零构建静态通道失败——`ci-static`、`ci-primary` 与 `hygiene` 中的 `constraints`，它们跑在每次 PR 与 master 推送——而不是只在一个新快照的发布通道中浮现。
+边界与 `release:dsh` 所写一致：根、可发布成员、以及 `packages/*/*` 下每个私有 dsh 包。desktop 是私有的，不在该写入集合内。因此分歧会让零构建静态通道失败——`ci-static`、`ci-primary` 与 `hygiene` 中的 `constraints`，它们跑在每次 PR 与 master 推送——而不是只在一个新快照的发布通道中浮现。
 
 ## 曾考虑的替代方案
 
@@ -26,4 +26,4 @@ dsh 发布序列在全部可发布成员（`packages/` 非实验成员与 `apps/
 
 ## 后果
 
-当前每个 dsh 命名清单都携带根版本——截至 2026-09-03 有 252 个清单为 `0.1.2-rc.1`，根亦然——所以强化后的门禁通过现状树。家族内任何清单漂移都会让静态 CI 失败，报错点名清单、根的版本与该清单实际版本。门禁不能阻止过期 base 合入：它只观察其运行被触发时所处的快照，因此让合入后的状态被检查仍要求合入后的状态真正跑过检查，那是分支保护设置的职责。[发布序列笔记](2026-08-10-npm-release-sequences.zh.md) 保留版本方案决策；本笔记记录规则在哪里被强制，以及此前强制留下的窟窿。
+当前每个 dsh 命名清单除 desktop 外都携带根版本。家族内任何清单漂移都会让静态 CI 失败，报错点名清单、根的版本与该清单实际版本。门禁不能阻止过期 base 合入：它只观察其运行被触发时所处的快照，因此让合入后的状态被检查仍要求合入后的状态真正跑过检查，那是分支保护设置的职责。[发布序列笔记](2026-08-10-npm-release-sequences.zh.md) 保留版本方案决策；本笔记记录规则在哪里被强制，以及此前强制留下的窟窿。

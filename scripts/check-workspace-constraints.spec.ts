@@ -106,6 +106,10 @@ describe('dsh family version coherence', () => {
       '0.1.2-rc.1',
     )).toBeUndefined()
     expect(checkDshFamilyVersion({ version: '0.1.2-alpha.5' }, '0.1.2-rc.1')).toBeUndefined()
+    expect(checkDshFamilyVersion(
+      { name: '@deepseek-ai/dsh-desktop', version: '0.1.3-alpha.2' },
+      '0.1.3-alpha.1',
+    )).toBeUndefined()
   })
 })
 

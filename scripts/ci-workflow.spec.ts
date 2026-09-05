@@ -389,6 +389,13 @@ describe('CI workflow', () => {
 })
 
 describe('DeepSeek e2e workflow', () => {
+  it('is manual-only and fails loud before running the live suite', () => {
+    const workflow = loadWorkflow('.github/workflows/e2e.yml')
+    expect(workflow.on).toEqual({ workflow_dispatch: null })
+    const e2e = workflowJob(workflow, 'e2e')
+    expect(e2e.if).toBeUndefined()
+  })
+
   it('prepares bubblewrap from the pinned payload without a package transaction', () => {
     const workflow = loadWorkflow('.github/workflows/e2e.yml')
     const e2e = workflowJob(workflow, 'e2e')

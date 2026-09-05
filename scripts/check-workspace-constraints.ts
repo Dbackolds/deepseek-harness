@@ -269,7 +269,8 @@ export function checkExperimentalManifest({ dir, manifest }: WorkspaceManifest):
  * private dsh package on one shared version, written by `release:dsh` and
  * shared with the workspace root. This name test is that boundary: it covers
  * the family wherever the manifest lives, so apps/ members cannot drift with
- * only the release lane noticing.
+ * only the release lane noticing. The private desktop app is the exception:
+ * it publishes from `desktop-v*` and keeps its own version line.
  * @param manifest - the workspace package manifest.
  * @param expected - the version every dsh-family manifest must carry (the root's).
  * @returns one violation naming the manifest and the expected version, or
@@ -277,6 +278,7 @@ export function checkExperimentalManifest({ dir, manifest }: WorkspaceManifest):
  */
 export function checkDshFamilyVersion(manifest: PackageManifest, expected: string | undefined): string | undefined {
   const name = manifest.name
+  if (name === '@deepseek-ai/dsh-desktop') return undefined
   if (name !== '@deepseek-ai/dsh' && name?.startsWith('@deepseek-ai/dsh-') !== true) return undefined
   if (manifest.version !== expected) {
     return `${name}: package.json version must match root version ${expected ?? '(missing)'}`
@@ -312,7 +314,7 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
       || manifest.repository.directory !== expectedDirectory) {
       errors.push(`${label}: published Landlock package repository must use ${repositoryUrl} with directory ${expectedDirectory} for trusted publishing`)
     }
-  } else if (releaseMemberDirectory.test(dir)) {
+  } else if (releaseMemberDirectory.test(dir) && manifest.name !== '@deepseek-ai/dsh-desktop') {
     // Release members state that they are publishable: npm refuses a private
     // package, and the repository field is how a consumer finds the source of
     // the package it installed.
@@ -351,7 +353,7 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     }
   }
 
-  if (dir.startsWith('apps/') && manifest.name?.startsWith('@deepseek-ai/')) {
+  if (dir.startsWith('apps/') && manifest.name?.startsWith('@deepseek-ai/') && manifest.name !== '@deepseek-ai/dsh-desktop') {
     const expectedFiles = appPackageFiles[manifest.name]
     if (expectedFiles === undefined) {
       errors.push(`${label}: app package has no publication files policy`)
