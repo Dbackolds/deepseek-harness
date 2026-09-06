@@ -39,13 +39,23 @@ export interface JsonlDecodedGeneration {
 /** Current JSONL values returned by the format catalog for physical encoding. */
 export interface JsonlCurrentGeneration extends JsonlDecodedGeneration {}
 
-/** Pure adapter between backend-owned JSONL framing and the format catalog. */
+/** Adapter between backend-owned JSONL framing and synchronous or off-thread format computation. */
 export interface JsonlGenerationFormatAdapter {
   readonly currentVersion: number
-  /** Convert one detached historical generation to exact current JSON values. */
-  migrate(source: JsonlDecodedGeneration): JsonlCurrentGeneration
-  /** Validate one decoded current generation, including after committed reopen. */
-  validateCurrent(candidate: JsonlCurrentGeneration): void
+  /**
+   * Convert one detached historical generation to exact current JSON values.
+   * @param source - detached historical values from a stable physical snapshot.
+   * @param signal - optional cancellation of catalog computation.
+   * @returns current values, synchronously or after off-thread computation.
+   */
+  migrate(source: JsonlDecodedGeneration, signal?: AbortSignal): JsonlCurrentGeneration | Promise<JsonlCurrentGeneration>
+  /**
+   * Validate one decoded current generation, including after committed reopen.
+   * @param candidate - values read from the candidate physical file.
+   * @param signal - optional cancellation of catalog computation.
+   * @returns completion of validation, or throws/rejects on invalid values.
+   */
+  validateCurrent(candidate: JsonlCurrentGeneration, signal?: AbortSignal): void | Promise<void>
   /** Classify a supported-version artifact that policy refuses to migrate. */
   isUnsupportedMigrationError?(error: unknown): error is Error
 }
@@ -564,7 +574,7 @@ async function validatePhysicalCurrent(
   if (storedVersion(generation.header) !== format.currentVersion) {
     throw new Error(`staged session generation is not current v${format.currentVersion}`)
   }
-  format.validateCurrent(generation)
+  await format.validateCurrent(generation, signal)
   const headerEnd = decoded.bytes.indexOf(0x0A)
   /* v8 ignore next -- parseGeneration already required the header newline. */
   if (headerEnd === -1) throw new Error('empty or header-less session log')
@@ -703,7 +713,7 @@ async function ensureCurrent(
 
     let migrated: JsonlCurrentGeneration
     try {
-      migrated = format.migrate(parsedSource)
+      migrated = await format.migrate(parsedSource, signal)
     } catch (error: unknown) {
       if (format.isUnsupportedMigrationError?.(error) === true) {
         throw new JsonlGenerationUnsupportedMigrationError(fromVersion, error)

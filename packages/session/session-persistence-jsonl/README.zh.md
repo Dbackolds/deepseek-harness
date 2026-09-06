@@ -77,6 +77,8 @@ kind: "package-reference"
 
 `open(id, 'read'|'write')` 选择最高规范 generation，并在返回句柄前为受支持的历史源发布一个并列的当前后继；源保持逐字节不变。句柄的 `read(offset?, length?)` 随后提供经过验证的连续切片，绝不包含撕裂尾部。撕裂的最终 Zstandard 帧会被部分解码：其中已刷入的完整 JSONL 记录被恢复进逻辑日志，写句柄的第一次修改会截掉当前 generation 的撕裂字节并在自己的批次之前持久重写这些恢复的记录。写 open 会用已验证的存储前缀预热句柄，一个按 revision 为键的有界 memo 让紧接的观察到恢复交接复用该解析。`stat(id)` 与 `list()` 只选择并转换最高 generation 的 header，不读取事件行，也不发布迁移输出；快照携带所选文件的 `sizeBytes` 与尽力而为的 stat 派生修订号。选择 `compression: 'none'` 后，日志是外部读取方可直接消费的换行分隔文本；压缩默认值必须经后端读取。
 
+同一后端串行执行完整的历史迁移，并在一个专用 Worker 中运行 catalog 转换和验证，使这些计算离开宿主事件循环。一次迁移在暂存验证及提交后重开期间复用该线程，然后等待线程退出才放行下一个读取者。每个读取者保留独立取消语义；等待者重新从磁盘选择最高 generation，发布失败时独立重试。后端卸载会取消新任务准入，并等待迁移文件清理及 Worker 退出。协调状态不保留已完成的字节快照或文件修订号；跨进程发布与源文件身份检查仍然生效。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -103,6 +105,8 @@ kind: "package-reference"
 | [`src/storage.ts`](src/storage.ts) | JSONL 句柄、已路由实时事件缓冲、进程内写入者记账、监听器、teardown |
 | [`src/format.ts`](src/format.ts) | 日志路径派生、header 编码与当前记录扫描 |
 | [`src/generation.ts`](src/generation.ts) | 稳定 generation 读取、格式 adapter 调用、排他后继发布与已提交 reopen |
+| [`src/format-worker-host.ts`](src/format-worker-host.ts) | 后端拥有的 Worker 准入、取消、错误还原与卸载 |
+| [`src/format-worker.ts`](src/format-worker.ts) | 纯 catalog 迁移与验证；源码和构建入口均使用 ESM |
 | [`src/zstd.ts`](src/zstd.ts) | Zstandard 帧压缩、解码与帧扫描 |
 | [`src/win32.ts`](src/win32.ts) | Windows write-through 发布与目录创建 |
 | — | 不发布运行时不变式伴生入口；身份在存储层强制。 |
@@ -148,6 +152,7 @@ JSONL 存储不修改实时请求前缀。只有重建历史、当前 envelope �
 
 这些限制说明本后端何时不合适，或何时需要特别的运维注意。它们是当前包约束，不是任务积压。
 
+- **迁移仍会在内存中构造完整 generation** — catalog 计算在 Worker 中运行，但 JSONL 解析、编码和消息克隆仍在宿主分配内存；这不是流式迁移。
 - **格式迁移保留已配置编码，且只支持 catalog 中的链**——本 build 把已发布 v0 或 v1 迁移到当前 v2；更改压缩需要独立根，保留的前任不提供自动 fallback 或 downgrade 支持。
 - **平铺文件存储布局不加载**——加载前使用独立根，或将预发布产物移入项目/会话目录布局。
 - **压缩文件不能直接按行读取**——使用后端加载；或在写入新根前选择 `compression: 'none'`，供外部行读取方使用。

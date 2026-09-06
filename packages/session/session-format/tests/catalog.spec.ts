@@ -78,6 +78,7 @@ describe('Session format catalog', () => {
     expect(decoded.header.version).toBe(0)
     expect(catalog.migrate(decoded).header.version).toBe(1)
     expect(migrate).toHaveBeenCalledOnce()
+    expect(migrate.mock.calls[0]?.[0]).toBe(decoded)
   })
 
   it('uses the current codec directly for recovery and encoding', () => {

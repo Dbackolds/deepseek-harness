@@ -50,3 +50,5 @@ On the representative profile, incremental scanning reduced JSONL scan time from
 The fast decoder depends on runtime-probed Node internals, but incompatibility selects the public implementation rather than changing correctness. Cancellation is observed around cooperative frame-boundary yields; the deadline is not a hard wall-clock bound inside one frame. The complete event array remains resident because it is the active session's authoritative log; the pipeline removes duplicate representations rather than paginating that state.
 
 Tests force both decoder implementations, compare their frame order and corruption behavior, exercise cooperative cancellation and torn-tail recovery, and retain the existing session envelope, surface, and immutability contracts.
+
+The [snapshot and migration reuse decision](../bug-fix/2026-09-06-session-json-traversal-and-migration-reuse.md) complements restore ownership with cheaper generic JSON traversal and validated format-artifact reuse.

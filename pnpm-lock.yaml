@@ -8051,6 +8051,9 @@ importers:
 
   packages/session/session-persistence-jsonl:
     dependencies:
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
       '@deepseek-ai/dsh-session-format':
         specifier: workspace:^
         version: link:../session-format
@@ -8082,6 +8085,9 @@ importers:
       '@types/fs-ext':
         specifier: 2.0.3
         version: 2.0.3
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
 
   packages/session/session-projection:
     dependencies:

@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-util-values` 为运行时包提供统一的无损 JSON 值、不可变对象图、JSON 结构相等和封闭联合类型穷尽失败实现。调用方可以校验不受信任的值、分离 JSON 快照、冻结待发布值、比较 JSON 兼容数据，或终止不可达分支，而无需导入某个能力包。这些 helper 不持有共享注册表、constructor identity 或可变模块状态。
+`dsh-util-values` 为运行时包提供统一的无损 JSON 值、不可变对象图、JSON 结构相等和封闭联合类型穷尽失败实现。调用方可以校验不受信任的值、分离 JSON 快照、冻结待发布值、比较 JSON 兼容数据，或终止不可达分支，而无需导入某个能力包。这些 helper 不持有共享注册表或可变模块状态，并接受其他 JavaScript realm 的内建容器。
 
 ## 目录
 
@@ -53,7 +53,7 @@ const snapshot = snapshotJsonValue(input) as JsonValue
 <details>
 <summary>实现细节——点击展开</summary>
 
-JSON 校验器使用显式工作栈，并只跟踪当前祖先链，因此深层嵌套值不会消耗 JavaScript 调用栈，重复但无循环的引用仍然有效。快照写入使用自有数据属性，包括 `__proto__` 等名称。其他 helper 的结果只取决于传入参数，不在调用之间保留状态。
+JSON 校验器为每个活跃容器保留一个游标，并只跟踪当前祖先链，因此待处理的同级项不会各自分配遍历任务，深层嵌套值不会消耗 JavaScript 调用栈，重复但无循环的引用仍然有效。每次调用都会重新校验可变值及其原型。快照写入使用自有数据属性，包括 `__proto__` 等名称。其他 helper 的结果只取决于传入参数，不在调用之间保留状态。
 
 ### 源码地图
 
@@ -88,6 +88,6 @@ JSON 校验器使用显式工作栈，并只跟踪当前祖先链，因此深层
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
 
-无。
+在仓库根目录运行 `node --import tsx/esm packages/util/values/tests/traversal.bench.ts`，测量 20,000 条合成事件记录的校验与快照遍历耗时。可将基线模块的绝对路径作为最后一个参数，以比较优化前后表现；ESM 包之外的独立 TypeScript 基线使用 `.mts` 扩展名。
 
 </details>

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-format` lets persistence code restore a current Session directly or compose a unique sequence of adjacent whole-artifact migrations. It snapshots every durable input and output as detached lossless JSON, validates exact version progress, and keeps header-only listing separate from body reads. Physical framing, compression, immutable generation naming, exclusive publication, and Cordis lifecycle behavior remain outside this pure library.
+`dsh-session-format` lets persistence code restore a current Session directly or compose a unique sequence of adjacent whole-artifact migrations. It snapshots borrowed durable inputs and outputs as detached lossless JSON, validates exact version progress, and keeps header-only listing separate from body reads. Physical framing, compression, immutable generation naming, exclusive publication, and Cordis lifecycle behavior remain outside this pure library.
 
 ## Table of Contents
 
@@ -47,6 +47,8 @@ The recoverable decoder returns the accepted logical prefix. A codec may drop on
 
 <details>
 <summary>Implementation internals — click to expand</summary>
+
+Artifact snapshots that this module has fully validated and deeply frozen are reused across codec and migration calls through a private weak identity set. Borrowed artifacts, including externally frozen objects and JSON-only snapshots, still require detachment and shared-coordinate validation; version-specific validators and restorers still run.
 
 The chain validates unique gap-free ordering at construction. A current artifact bypasses every migration callback and passes through only the current restorer. An old artifact runs each adjacent whole-document function in memory; only the caller decides whether and how to publish the final result.
 

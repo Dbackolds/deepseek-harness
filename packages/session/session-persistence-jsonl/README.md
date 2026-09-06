@@ -77,6 +77,8 @@ A session is materialized lazily: `create(header)` writes nothing and returns th
 
 `open(id, 'read'|'write')` selects the highest canonical generation and publishes a current successor beside a supported historical source before returning the handle; the source remains byte-identical. The handle's `read(offset?, length?)` then serves validated contiguous slices, never a torn tail. A torn final Zstandard frame is partially decoded: complete JSONL records already flushed into it are recovered into the logical log, and the write handle's first mutation truncates current-generation torn bytes and durably rewrites the recovered records ahead of its own batch. A write open primes the handle with the validated stored prefix, and a bounded revision-keyed memo lets an immediate observe-to-resume handoff reuse that parse. `stat(id)` and `list()` select and translate only the highest generation header without reading event rows or publishing migration output; snapshots carry `sizeBytes` and a best-effort stat-derived revision for the selected file. With `compression: 'none'`, the log is newline-delimited text an external reader can consume directly; the compressed default must be read through the backend.
 
+Historical opens within one backend serialize complete migrations and run catalog conversion and validation in one dedicated Worker, keeping that computation off the host event loop. A migration reuses its thread through staged validation and committed reopen, then waits for thread exit before releasing the next reader. Each reader retains independent cancellation; waiting readers reselect the highest generation from disk and retry independently if publication failed. Backend disposal cancels admission and waits for migration file cleanup and Worker exit. Coordination retains no completed byte snapshot or file revision; cross-process publication and source-identity checks still apply.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -103,6 +105,8 @@ The default artifact is a standard concatenation of independent [Zstandard frame
 | [`src/storage.ts`](src/storage.ts) | The JSONL handle, routed live-event buffer, in-process writer bookkeeping, listeners, teardown |
 | [`src/format.ts`](src/format.ts) | Log path derivation, header encoding, and current record scanning |
 | [`src/generation.ts`](src/generation.ts) | Stable generation reads, format-adapter invocation, exclusive successor publication, committed reopen |
+| [`src/format-worker-host.ts`](src/format-worker-host.ts) | Backend-owned Worker admission, cancellation, failure reconstruction, and teardown |
+| [`src/format-worker.ts`](src/format-worker.ts) | Pure catalog migration and validation; source and built entries use ESM |
 | [`src/zstd.ts`](src/zstd.ts) | Zstandard frame compression, decoding, and frame scanning |
 | [`src/win32.ts`](src/win32.ts) | Windows write-through publish and directory creation |
 | — | No runtime invariant companion is published; persistence correctness requires backend round-trip and crash-tail tests; this package exposes no continuously observable in-process relation. |
@@ -149,6 +153,7 @@ JSONL storage does not mutate live request prefixes. A resumed loop can reuse pr
 These limits define when this backend is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
 - **Format migration preserves the configured encoding and supports only the catalogued chain** — this build migrates released v0 or v1 to current v2; changing compression requires a separate root, and retained predecessors do not provide automatic fallback or downgrade support.
+- **Migration still materializes the complete generation** — catalog computation runs in a Worker, while JSONL parsing, encoding, and message cloning still allocate on the host; this is not a streaming migration.
 - **The flat-file storage layout does not load** — use a separate root or move pre-release artifacts into the project/session directory layout before loading.
 - **Compressed files are not directly line-readable** — use the backend to load them, or select `compression: 'none'` before writing a fresh root when external line readers are required.
 - **Nothing deletes session files** — logs accumulate under `root` until removed externally; the seam has no deletion API.

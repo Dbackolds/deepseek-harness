@@ -31,6 +31,7 @@ import {
 } from '@deepseek-ai/dsh-session-persistence'
 import { JsonlBackendTracker, JsonlSessionHandle } from './storage.ts'
 import { SessionWriteLease } from './lease.ts'
+import { JsonlFormatWorker, waitForFormatWork } from './format-worker-host.ts'
 import { SESSION_FORMAT_VERSION, SessionId as makeSessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId, SessionHeader, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import {
@@ -157,6 +158,7 @@ class JsonlSessionPersistence extends SessionPersistence {
   private rootEncodingCheck: Promise<void> | undefined
   private readonly tracker = new JsonlBackendTracker(this.name)
   private readonly generationFormat: JsonlGenerationFormatAdapter
+  private readonly formatWorker: JsonlFormatWorker
   /**
    * Bounded LRU of parsed, validated stored logs keyed by session id and
    * guarded by the stat-derived revision, so an immediate cold-read handoff
@@ -165,6 +167,8 @@ class JsonlSessionPersistence extends SessionPersistence {
    * revision guard.
    */
   private readonly coldLogMemo = new Map<SessionId, StoredLog>()
+  /** One complete historical migration owns the backend's worker until publication and thread exit. */
+  private migration: Promise<undefined> | undefined
 
   constructor(ctx: Context, public config: Config) {
     super(ctx)
@@ -178,17 +182,15 @@ class JsonlSessionPersistence extends SessionPersistence {
     // Resolve once so later process.cwd() changes cannot split one backend across roots.
     this.root = resolve(config.root)
     this.compression = config.compression ?? DEFAULT_COMPRESSION
+    const formatWorker = this.formatWorker = new JsonlFormatWorker(ctx, () => this.migration)
     this.generationFormat = {
       currentVersion: sessionFormatCatalog.currentVersion,
-      migrate: (source) => {
-        const decoded = sessionFormatCatalog.decodeRecoverableArtifact(source.header, source.rows)
-        const current = sessionFormatCatalog.migrate(decoded)
-        return sessionFormatCatalog.encodeCurrent(current)
+      migrate: async (source, signal) => {
+        const current = await formatWorker.run('migrate', source, signal)
+        if (current === undefined) throw new Error('format worker returned no migrated generation')
+        return current
       },
-      validateCurrent: (candidate) => {
-        const decoded = sessionFormatCatalog.decodeArtifact(candidate.header, candidate.rows)
-        sessionFormatCatalog.migrate(decoded)
-      },
+      validateCurrent: async (candidate, signal) => { await formatWorker.run('validate', candidate, signal) },
       isUnsupportedMigrationError: (error): error is SessionFormatUnsupportedMigrationError =>
         error instanceof SessionFormatUnsupportedMigrationError,
     }
@@ -397,7 +399,6 @@ class JsonlSessionPersistence extends SessionPersistence {
       }
     }
     const current = await this.ensureCurrentLog(id, signal, selected)
-    /* v8 ignore next -- supplying a resolved generation makes absence unreachable. */
     if (current === undefined) throw new SessionPersistenceNotFoundError(id)
     return this.decodeStoredLog(
       current.path,
@@ -414,9 +415,42 @@ class JsonlSessionPersistence extends SessionPersistence {
     signal?: AbortSignal,
     resolved?: ResolvedJsonlGeneration,
   ): Promise<EnsureJsonlGenerationResult | undefined> {
-    signal?.throwIfAborted()
+    signal = signal === undefined ? this.formatWorker.signal : AbortSignal.any([signal, this.formatWorker.signal])
+    signal.throwIfAborted()
     const selected = resolved ?? await this.findLog(id, signal)
     if (selected === undefined) return undefined
+    if (selected.sourceVersion >= SESSION_FORMAT_VERSION) {
+      return this.ensureSelectedCurrentLog(id, selected, signal)
+    }
+    for (;;) {
+      const pending = this.migration
+      if (pending === undefined) break
+      signal.throwIfAborted()
+      await waitForFormatWork(pending, signal)
+    }
+    signal.throwIfAborted()
+    const completion = Promise.withResolvers<undefined>()
+    this.migration = completion.promise
+    try {
+      // Re-select even without a wait: discovery may have overlapped a completed migration.
+      const latest = await this.findLog(id, signal)
+      return latest === undefined ? undefined : await this.ensureSelectedCurrentLog(id, latest, signal)
+    } finally {
+      try {
+        await this.formatWorker.close()
+      } finally {
+        this.migration = undefined
+        completion.resolve(undefined)
+      }
+    }
+  }
+
+  /** Validate the selected generation and preserve storage and format refusal errors. */
+  private async ensureSelectedCurrentLog(
+    id: SessionId,
+    selected: ResolvedJsonlGeneration,
+    signal?: AbortSignal,
+  ): Promise<EnsureJsonlGenerationResult> {
     try {
       return await ensureJsonlGenerationCurrent({
         sourcePath: selected.sourcePath,

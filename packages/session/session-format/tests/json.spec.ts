@@ -6,6 +6,7 @@ import {
   snapshotSessionFormatArtifact,
   snapshotSessionFormatHeader,
   snapshotSessionFormatJson,
+  type SessionFormatArtifact,
 } from '../src/index.ts'
 
 describe('lossless Session format JSON snapshots', () => {
@@ -60,6 +61,41 @@ describe('lossless Session format JSON snapshots', () => {
     ['oversized cut', { header: { version: 1 }, inheritedEventCount: 1, events: [] }],
   ])('refuses an artifact with %s', (_name, artifact) => {
     expect(() => snapshotSessionFormatArtifact(artifact as never)).toThrow()
+    expect(() => snapshotSessionFormatArtifact(Object.freeze(artifact) as never)).toThrow()
+    expect(() => snapshotSessionFormatArtifact(snapshotSessionFormatJson(artifact) as never)).toThrow()
+  })
+
+  it('reuses validated immutable artifacts while keeping borrowed mutable input isolated', () => {
+    const source = {
+      header: { version: 1, id: 'snapshot', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      inheritedEventCount: 0,
+      events: [{ type: 'x', seq: 0, time: 1, data: { value: 1 } }],
+    }
+    const snapshot = snapshotSessionFormatArtifact(source)
+    expect(snapshot).not.toBe(source)
+    expect(snapshotSessionFormatArtifact(snapshot)).toBe(snapshot)
+    expect(Object.isFrozen(snapshot.events[0]?.data)).toBe(true)
+    source.events[0]!.data.value = 2
+    expect(snapshot.events[0]?.data).toEqual({ value: 1 })
+    expect(snapshotSessionFormatArtifact(source).events[0]?.data).toEqual({ value: 2 })
+    source.events[0]!.seq = 1
+    expect(() => snapshotSessionFormatArtifact(source)).toThrow(/non-dense seq/)
+  })
+
+  it('detaches externally frozen artifacts and validates replacements of trusted artifacts', () => {
+    const source = {
+      header: { version: 1, id: 'snapshot', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      inheritedEventCount: 0,
+      events: [{ type: 'x', seq: 0, time: 1, data: { value: 1 } }],
+    }
+    const frozen = Object.freeze(source)
+    const snapshot = snapshotSessionFormatArtifact(frozen)
+    source.events[0]!.data.value = 2
+    expect(snapshot.events[0]?.data).toEqual({ value: 1 })
+    expect(snapshot).not.toBe(frozen)
+    const jsonOnly = snapshotSessionFormatJson(source) as unknown as SessionFormatArtifact
+    expect(snapshotSessionFormatArtifact(jsonOnly)).not.toBe(jsonOnly)
+    expect(() => snapshotSessionFormatArtifact({ ...snapshot, inheritedEventCount: 2 })).toThrow(/exceeds/)
   })
 
   it('refuses a non-object header snapshot', () => {

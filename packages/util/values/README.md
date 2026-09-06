@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-util-values` gives runtime packages one implementation for lossless JSON values, immutable object graphs, structural JSON equality, and exhaustive closed-union failures. Callers can validate untrusted values, detach a JSON snapshot, freeze a published value, compare JSON-compatible data, or terminate an unreachable branch without importing a capability package. The helpers hold no shared registry, constructor identity, or mutable module state.
+`dsh-util-values` gives runtime packages one implementation for lossless JSON values, immutable object graphs, structural JSON equality, and exhaustive closed-union failures. Callers can validate untrusted values, detach a JSON snapshot, freeze a published value, compare JSON-compatible data, or terminate an unreachable branch without importing a capability package. The helpers hold no shared registry or mutable module state and accept intrinsic containers from other JavaScript realms.
 
 ## Table of Contents
 
@@ -53,7 +53,7 @@ Use `assertNever(value, context?)` in the default branch of a closed discriminat
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The JSON validator uses an explicit work stack and tracks only the active ancestor chain, so deeply nested values do not consume the JavaScript call stack and repeated non-cyclic references remain valid. Snapshot writes use own data properties, including for names such as `__proto__`. The other helpers derive their result only from their arguments and retain no state between calls.
+The JSON validator keeps one cursor per active container and tracks only the active ancestor chain, so pending siblings do not allocate individual traversal tasks, deeply nested values do not consume the JavaScript call stack, and repeated non-cyclic references remain valid. Every call revalidates mutable values and their prototypes. Snapshot writes use own data properties, including for names such as `__proto__`. The other helpers derive their result only from their arguments and retain no state between calls.
 
 ### Source map
 
@@ -88,6 +88,6 @@ The JSON validator uses an explicit work stack and tracks only the active ancest
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-None.
+Run `node --import tsx/esm packages/util/values/tests/traversal.bench.ts` from the repository root to measure validation and snapshot traversal over 20,000 synthetic event records. Pass an absolute baseline module path as the final argument for a before/after comparison; standalone TypeScript baselines outside an ESM package use `.mts`.
 
 </details>

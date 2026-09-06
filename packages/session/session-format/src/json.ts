@@ -7,6 +7,9 @@ import type {
   SessionFormatJsonValue,
 } from './types.ts'
 
+// Only complete, detached, deeply frozen artifacts that passed every shared check qualify.
+const validatedArtifacts = new WeakSet<SessionFormatArtifact>()
+
 /**
  * Test whether a value is a non-null, non-array object.
  * @param value - candidate value.
@@ -79,15 +82,16 @@ export function snapshotSessionFormatJson(value: unknown, label = 'Session value
 }
 
 /**
- * Snapshot one complete artifact and validate its shared coordinates.
+ * Snapshot one complete artifact and validate its shared coordinates, reusing this module's validated snapshots.
  * @param artifact - borrowed logical artifact.
  * @param label - diagnostic subject.
- * @returns immutable detached artifact.
+ * @returns immutable artifact detached from mutable input; validated snapshots retain their identity.
  */
 export function snapshotSessionFormatArtifact(
   artifact: SessionFormatArtifact,
   label = 'Session artifact',
 ): SessionFormatArtifact {
+  if (validatedArtifacts.has(artifact)) return artifact
   const snapshot = snapshotSessionFormatJson(artifact, label) as SessionFormatJsonObject
   const header = snapshot['header']
   const inheritedEventCount = snapshot['inheritedEventCount']
@@ -111,7 +115,9 @@ export function snapshotSessionFormatArtifact(
   if (inheritedEventCount as number > events.length) {
     throw new SessionFormatError(`${label} inheritedEventCount exceeds its event count`)
   }
-  return snapshot as unknown as SessionFormatArtifact
+  const validated = snapshot as unknown as SessionFormatArtifact
+  validatedArtifacts.add(validated)
+  return validated
 }
 
 /**

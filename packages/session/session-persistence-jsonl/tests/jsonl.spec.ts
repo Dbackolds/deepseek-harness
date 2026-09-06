@@ -598,6 +598,124 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     await expect(stat(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it('waits for an admitted historical read to leave its I/O barrier before disposal completes', async () => {
+    const header = meta('migration-dispose-barrier', '/work')
+    const sourcePath = historicalLogPath(root, header.cwd, header.id)
+    const source = Buffer.from(
+      `${JSON.stringify(releasedV0Header(header))}\n${eventLines(releasedV1OneTurnLog())}\n`,
+    )
+    await mkdir(dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, source)
+    const internals = ctx.sessionPersistence as unknown as {
+      validateSourceIdentity(...args: unknown[]): void | Promise<void>
+      formatWorker: { signal: AbortSignal }
+    }
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const validate = internals.validateSourceIdentity.bind(internals)
+    vi.spyOn(internals, 'validateSourceIdentity').mockImplementationOnce(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      await validate(...args)
+    })
+    const read = readAll(ctx.sessionPersistence, header.id)
+      .then(value => ({ value }), (error: unknown) => ({ error }))
+    let disposal: Promise<void> | undefined
+    try {
+      await entered.promise
+      let disposed = false
+      disposal = ctx.fiber.dispose().then(() => { disposed = true })
+      // Disposal owns the signal immediately but must also await the pending physical operation.
+      await vi.waitFor(() => { expect(internals.formatWorker.signal.aborted).toBe(true) })
+      expect(disposed).toBe(false)
+      release.resolve(undefined)
+      await expect(read).resolves.toEqual({ error: internals.formatWorker.signal.reason as unknown })
+      await disposal
+      expect(disposed).toBe(true)
+      expect(await readFile(sourcePath)).toEqual(source)
+      expect(await readdir(dirname(sourcePath))).toEqual(['session.jsonl'])
+    } finally {
+      release.resolve(undefined)
+      await read
+      await disposal
+    }
+  })
+
+  it.each(['success', 'cancel-owner', 'cancel-waiter', 'failure'] as const)(
+    'serializes overlapping historical reads with independent cancellation: %s',
+    async (outcome) => {
+      const header = meta(`concurrent-migration-${outcome}`, '/work')
+      const sourcePath = historicalLogPath(root, header.cwd, header.id)
+      const source = Buffer.from(
+        `${JSON.stringify(releasedV0Header(header))}\n${eventLines(releasedV1OneTurnLog())}\n`,
+      )
+      await mkdir(dirname(sourcePath), { recursive: true })
+      await writeFile(sourcePath, source)
+      const internals = ctx.sessionPersistence as unknown as {
+        validateSourceIdentity(...args: unknown[]): Promise<void>
+        ensureCurrentLog(...args: unknown[]): Promise<unknown>
+        generationFormat: { migrate(...args: unknown[]): unknown }
+      }
+      const entered = Promise.withResolvers<undefined>()
+      const release = Promise.withResolvers<undefined>()
+      const overlapping = Promise.withResolvers<undefined>()
+      const validate = internals.validateSourceIdentity.bind(internals)
+      const failure = new Error('injected historical header read failure')
+      vi.spyOn(internals, 'validateSourceIdentity').mockImplementationOnce(async (...args) => {
+        entered.resolve(undefined)
+        await release.promise
+        if (outcome === 'failure') throw failure
+        await validate(...args)
+      })
+      const ensure = internals.ensureCurrentLog.bind(internals)
+      let calls = 0
+      vi.spyOn(internals, 'ensureCurrentLog').mockImplementation(async (...args) => {
+        calls += 1
+        if (calls === 2) overlapping.resolve(undefined)
+        return ensure(...args)
+      })
+      const migrate = vi.spyOn(internals.generationFormat, 'migrate')
+      const owner = new AbortController()
+      const waiter = new AbortController()
+      const reason = new Error('reader cancelled')
+      const read = async (signal: AbortSignal): Promise<readonly SessionEvent[]> => {
+        const handle = await ctx.sessionPersistence.open(header.id, 'read', { signal })
+        try {
+          return await handle.read()
+        } finally {
+          await handle.close()
+        }
+      }
+      const first = read(owner.signal)
+      // Observe rejections immediately, including the deliberate failures before publication.
+      const firstResult = first.then(value => ({ value }), (error: unknown) => ({ error }))
+      let secondResult: Promise<{ value: readonly SessionEvent[] } | { error: unknown }> | undefined
+      try {
+        await entered.promise
+        const second = read(waiter.signal)
+        secondResult = second.then(value => ({ value }), (error: unknown) => ({ error }))
+        await overlapping.promise
+        if (outcome === 'cancel-owner') owner.abort(reason)
+        if (outcome === 'cancel-waiter') {
+          waiter.abort(reason)
+          expect(await secondResult).toEqual({ error: reason })
+        }
+        release.resolve(undefined)
+        if (outcome === 'cancel-owner') expect(await firstResult).toEqual({ error: reason })
+        else if (outcome === 'failure') expect(await firstResult).toMatchObject({ error: { cause: failure } })
+        else expect(await firstResult).toEqual({ value: oneTurnLog() })
+        if (outcome !== 'cancel-waiter') expect(await secondResult).toEqual({ value: oneTurnLog() })
+        expect(migrate).toHaveBeenCalledTimes(1)
+        expect(await readFile(sourcePath)).toEqual(source)
+        expect(JSON.parse((await readFile(rawLogPath(root, header.cwd, header.id), 'utf8')).split('\n')[0]!))
+          .toMatchObject({ id: header.id, version: SESSION_FORMAT_VERSION })
+      } finally {
+        release.resolve(undefined)
+        await Promise.all([firstResult, secondResult])
+      }
+    },
+  )
+
   it('publishes v2 beside an unchanged v0 source before returning a read handle', async () => {
     const header = meta('released-v0-read', '/work')
     const sourcePath = historicalLogPath(root, header.cwd, header.id)

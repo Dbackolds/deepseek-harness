@@ -55,3 +55,5 @@ The assembled headless profile test stages `session.jsonl`, resumes it through t
 - **Persist every intermediate version** — consumes space and creates recovery states with no runtime consumer; only the source and final generation are durable.
 - **Let mounted event-owner plugins register migrations** — makes historical readability deployment-dependent; the static catalog must work before feature plugins mount.
 - **Reuse one filename for every current format and relocate its predecessor** — rejected because migration would move or overwrite committed evidence, require collision and retention rules, and make the filename disagree with the stored format. Canonical immutable generation names let discovery select the highest version directly.
+
+The [snapshot and migration reuse decision](../bug-fix/2026-09-06-session-json-traversal-and-migration-reuse.md) reduces repeated validation and coordinates overlapping historical reads without changing generation publication.
