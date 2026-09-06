@@ -102,6 +102,7 @@
     { "path": "./packages/client/ui-settings-general" },
     { "path": "./packages/client/ui-update/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-llm-policy" },
+    { "path": "./packages/client/ui-session-history-gate" },
     { "path": "./packages/client/ui-settings-models" },
     { "path": "./packages/client/ui-settings-subagents" },
     { "path": "./packages/client/ui-settings-skills" },

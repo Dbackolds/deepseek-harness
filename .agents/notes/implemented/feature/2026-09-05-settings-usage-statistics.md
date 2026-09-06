@@ -1,8 +1,8 @@
 # Agent Note: Settings usage statistics page
 
-English | [中文](2026-09-05-settings-usage-statistics.zh.md)
-
 Status: implemented
+
+English | [中文](2026-09-05-settings-usage-statistics.zh.md)
 
 ## Problem
 

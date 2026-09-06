@@ -26,6 +26,7 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
   const layer = (): Record<string, unknown> => ({ ...host.scope.getSnapshot().user as object })
   host.set.mockImplementation((field: string, value: unknown) => {
     host.publish({ value: { ...section(), [field]: value } as T, user: { ...layer(), [field]: value } })
+    return Promise.resolve()
   })
   host.mutate.mockImplementation((ops: readonly SettingsPathOpView[]) => {
     const value = { ...section() }
@@ -38,11 +39,13 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
       }
     }
     host.publish({ value: value as T, user })
+    return Promise.resolve()
   })
   host.unset.mockImplementation((field: string) => {
     const user = Object.fromEntries(Object.entries(layer()).filter(([key]) => key !== field))
     const base = host.scope.getSnapshot().base as Record<string, unknown> | undefined
     host.publish({ value: { ...section(), [field]: base?.[field] } as T, user })
+    return Promise.resolve()
   })
 }
 

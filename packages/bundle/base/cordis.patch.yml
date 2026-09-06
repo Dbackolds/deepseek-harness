@@ -153,6 +153,13 @@
     - id: tool-session-control
       name: '@deepseek-ai/dsh-tool-session-control'
 
+    # Settings-owned gate over the session-history search/read tools: closed
+    # (default) hides the configured tool names from every Agent and serves a
+    # compensating prompt section; the live `session-history-tools` user
+    # setting re-exposes them. Fails closed without a settings provider.
+    - id: session-history-gate
+      name: '@deepseek-ai/dsh-session-history-gate'
+
     # Shared projection registry: subagent catalog identity (mode/label) folds
     # through its registered units, so the `list_agents` surface below fails
     # loud without it; web layers reuse this same mount for list rows.

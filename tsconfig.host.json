@@ -341,6 +341,7 @@
     { "path": "./packages/session/session-route" },
     { "path": "./packages/session-query/session-control" },
     { "path": "./packages/session-query/tool-session-control" },
+    { "path": "./packages/session-query/session-history-gate" },
     { "path": "./packages/core/user-system-prompts" },
     { "path": "./packages/subagent/user-subagents" },
     { "path": "./packages/automation/automation" },
