@@ -30,6 +30,9 @@ type AttentionSnapshot = Parameters<Parameters<SessionHistoryGateRowProps['useSe
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: SessionHistoryGateRowProps['useSessionPendingInteraction'] =
   selector => selector(noAttention)
+const useResource = (() => ({
+  status: 'none' as const, value: undefined, failure: undefined, reload: () => {},
+})) as SessionHistoryGateRowProps['useResource']
 
 /** Render the row over a real preference bound to a fresh stubbed scope. */
 function mount(options: { enabled?: boolean; writable?: boolean } = {}) {
@@ -44,6 +47,7 @@ function mount(options: { enabled?: boolean; writable?: boolean } = {}) {
   const props: SessionHistoryGateRowProps = {
     useSessions: emptySessions(),
     useSessionPendingInteraction,
+    useResource,
     useWorkspaces: emptyWorkspaces(),
     useEnabled: bindSnapshotSelector(preference.enabled),
     useWritable: bindSnapshotSelector(preference.writable),

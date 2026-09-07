@@ -53,6 +53,7 @@ async function harness(withJobs: boolean): Promise<{
     ctx,
     send: () => {},
     followup: () => {},
+    continueFromSurface: () => {},
     steer: () => {},
     inject: () => {},
     cancel: () => {},

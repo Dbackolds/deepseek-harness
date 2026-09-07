@@ -203,7 +203,9 @@ function pngChunk(type: string, data: Buffer): Buffer {
   body.copy(chunk, 4)
   let crc = 0xffffffff
   for (let i = 0; i < body.length; i += 1) {
-    crc = CRC_TABLE[(crc ^ (body[i] ?? 0)) & 255] ^ (crc >>> 8)
+    const mixed = CRC_TABLE[(crc ^ (body[i] ?? 0)) & 255]
+    if (mixed === undefined) throw new Error('dsh desktop: CRC table is incomplete')
+    crc = mixed ^ (crc >>> 8)
   }
   chunk.writeUInt32BE((crc ^ 0xffffffff) >>> 0, 8 + data.length)
   return chunk

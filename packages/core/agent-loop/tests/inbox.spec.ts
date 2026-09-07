@@ -30,6 +30,7 @@ function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
     ctx,
     send: () => {},
     followup: () => {},
+    continueFromSurface: () => {},
     steer: () => {},
     inject: () => {},
     cancel() {},

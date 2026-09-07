@@ -28,6 +28,7 @@ function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
     ctx,
     send: () => {},
     followup: () => {},
+    continueFromSurface: () => {},
     steer: () => ({ outcome: Promise.resolve({ status: 'rejected' as const }) }),
     inject: () => {},
     cancel() {},

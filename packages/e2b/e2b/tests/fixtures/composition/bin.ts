@@ -30,6 +30,7 @@ const owner: Agent = {
     prepend: unsupportedInboxMutation,
     replace: unsupportedInboxMutation,
     remove: unsupportedInboxMutation,
+    move: unsupportedInboxMutation,
     splice: unsupportedInboxMutation,
   },
   status: 'idle',

@@ -13,6 +13,7 @@ const useSessionPendingInteraction: UpdateRowProps['useSessionPendingInteraction
 const runtime = {
   useSessions: (() => { throw new Error('unused') }) as never,
   useSessionPendingInteraction,
+  useResource: (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as never,
   useWorkspaces: (() => { throw new Error('unused') }) as never,
 }
 
