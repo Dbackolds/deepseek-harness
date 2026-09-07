@@ -102,6 +102,10 @@ jobs:
           NODE_ENV: development
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
+          smoke_home="$(mktemp -d "${RUNNER_TEMP:-/tmp}/dsh-smoke-home.XXXXXX")"
+          export HOME="$smoke_home"
+          export DSH_HOME="$smoke_home/.dsh"
+          mkdir -p "$DSH_HOME"
           # Capture a short raw Host boot attempt for triage if smoke fails.
           set +e
           dist-desktop/staging/host/node dist-desktop/staging/host/dsh/lib/bin.js web --port 0 --no-open             > /tmp/dsh-staged-host-boot.log 2>&1 &

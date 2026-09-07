@@ -457,6 +457,7 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
       version,
     },
     electronVersion: installedElectronVersion(),
+    nodeGypRebuild: false,
     npmRebuild: false,
     executableName: 'DeepSeekHarness',
     files: [
@@ -549,8 +550,9 @@ function stageApp(): void {
   pinStagedElectronVersion(join(appRoot, 'package.json'))
   // Windows electron-builder still runs `pnpm list --json` in appDir even
   // when the staged shell has no dependencies. An empty lockfile makes that
-  // command return JSON instead of failing the pack.
-  writeFileSync(join(appRoot, 'pnpm-lock.yaml'), 'lockfileVersion: \'9.0\'\n')
+  // command return JSON instead of failing the pack, and keeps the collector
+  // from walking the repository workspace.
+  writeFileSync(join(appRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n')
 }
 
 /**
@@ -575,7 +577,7 @@ function packDesktop(platform: DesktopPlatform, skipBuild = false): void {
     'never',
     target.flag,
     target.target,
-  ], desktopRoot)
+  ], appRoot)
   for (const name of expectedArtifacts(version, platform)) {
     const path = join(outDir, name)
     if (!existsSync(path)) throw new Error(`desktop pack: missing artifact ${path}`)
