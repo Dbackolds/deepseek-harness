@@ -100,7 +100,7 @@ member scope 上的一个 `team:policy` 段落教每个成员自己的角色与�
 
 ### 按作用域注册与拆除
 
-`maybeInstall` 对每个 live Agent 运行，并订阅 `agent/created`；它跳过没有 Team 成员关系的 Agent。Agent dispose 会运行已安装的 disposer，插件 HMR 会在重新安装前处置每个已安装的 scope。每个 disposer 按逆序展开注册，因此失败的安装不会留下残缺 scope。
+`maybeInstall` 对每个 live Agent 运行，并订阅 `agent/created`；它跳过没有 Team 成员关系的 Agent，包括发布时尚未写入 `subagent/descriptor` 的一次性 child。Agent dispose 会运行已安装的 disposer，插件 HMR 会在重新安装前处置每个已安装的 scope。每个 disposer 按逆序展开注册，因此失败的安装不会留下残缺 scope。
 
 </details>
 

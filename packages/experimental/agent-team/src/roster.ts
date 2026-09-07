@@ -86,6 +86,8 @@ export class TeamRoster {
 
   /**
    * Resolve a caller without throwing for scoped installation and lifecycle observers.
+   * Non-roster provider-owned children, including one-shot Agents whose descriptor
+   * is still absent, return undefined.
    * @param agent - candidate exact live Agent.
    * @returns Team membership, or undefined for non-Team subagents and stale identities.
    */
@@ -101,17 +103,17 @@ export class TeamRoster {
             return { root, id: TeamId(root.id), role: 'teammate', name: member.name }
           }
           // A direct child outside the durable roster is not a teammate. Ordinary
-          // host forks are independent roots; subagent descriptors distinguish
-          // provider-owned workers that must not receive a nested Team identity.
-          if (this.subagentDescriptor(agent)) return undefined
+          // host forks are independent roots; provider-owned subagents must not
+          // receive a nested Team identity.
+          if (this.isProviderOwnedSubagent(agent)) return undefined
           return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' }
         }
       }
       // A continuation can briefly outlive its parent during child-first teardown.
       // Do not reinterpret that durable child as a new implicit root Team. A host-
-      // resumed ordinary fork has no descriptor in its own suffix and remains a
-      // valid new root whose inherited Team records stay outside its projected Team state.
-      if (this.subagentDescriptor(agent)) return undefined
+      // resumed ordinary fork is not provider-owned and remains a valid new root
+      // whose inherited Team records stay outside its projected Team state.
+      if (this.isProviderOwnedSubagent(agent)) return undefined
       return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' }
     } catch {
       // This method is used by lifecycle observers and teardown discovery. A
@@ -478,6 +480,19 @@ export class TeamRoster {
       })
       return terminal.phase === 'active' ? 'active' : 'failed'
     })
+  }
+
+  /**
+   * Whether this Agent is a provider-owned subagent rather than an implicit Team Lead.
+   * `SessionHeader.origin` is present at publication. A one-shot provider appends
+   * `subagent/descriptor` only after the first prompt assembly, so origin must
+   * classify the child before that event exists. The descriptor remains a fallback
+   * for logs that omit origin.
+   * @param agent - candidate live Agent.
+   * @returns true when origin or a suffix descriptor identifies a provider-owned child.
+   */
+  private isProviderOwnedSubagent(agent: Agent): boolean {
+    return agent.session.header.origin === 'subagent' || this.subagentDescriptor(agent)
   }
 
   /** Whether a Session's own suffix identifies a provider-owned subagent child. */

@@ -227,6 +227,8 @@ export class TeamService extends TypertRemoteService {
 
   /**
    * Resolve a caller without throwing, used by scoped-tool installation and observers.
+   * Non-roster provider-owned children, including one-shot Agents whose descriptor
+   * is still absent, return undefined.
    * @param agent - candidate exact live Agent.
    * @returns Team membership, or undefined for non-Team subagents and stale identities.
    */

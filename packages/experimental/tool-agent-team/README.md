@@ -100,7 +100,7 @@ One `team:policy` section on the member scope teaches each member its role and t
 
 ### Scoped registration and teardown
 
-`maybeInstall` runs for every live Agent and subscribes to `agent/created`; it skips Agents without Team membership. Disposal of an Agent runs the installed disposer, and plugin HMR disposes every installed scope before reinstall. Each disposer unwinds registrations in reverse order, so a failed install cannot leave a partial scope.
+`maybeInstall` runs for every live Agent and subscribes to `agent/created`; it skips Agents without Team membership, including one-shot children whose `subagent/descriptor` is still absent at publication. Disposal of an Agent runs the installed disposer, and plugin HMR disposes every installed scope before reinstall. Each disposer unwinds registrations in reverse order, so a failed install cannot leave a partial scope.
 
 </details>
 

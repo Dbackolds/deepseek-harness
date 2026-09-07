@@ -10,7 +10,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SubagentService from '@deepseek-ai/dsh-subagent'
+import SubagentService, { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { deliverSubagentPrompt, type HostPromptDeliverer } from '@deepseek-ai/dsh-subagent/internal'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -511,6 +511,36 @@ describe('Team identity and provisioning', () => {
     })
     expect(ctx.agentTeams.membership(orphanRoot.agent)).toMatchObject({ role: 'lead', name: 'lead' })
     await orphanRoot.dispose()
+  })
+
+  it('does not treat a one-shot child as a nested Lead before its descriptor exists', async () => {
+    const { ctx, lead } = await setup([])
+    const child = await ctx.agents.create({
+      sessionId: SessionId('one-shot-before-descriptor'),
+      meta: { parentSession: lead.id, origin: 'subagent', delegationDepth: 1 },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    expect(child.agent.session.snapshotEvents().some(event => event.type === 'subagent/descriptor')).toBe(false)
+    expect(ctx.agentTeams.tryMembership(child.agent)).toBeUndefined()
+    expect(() => ctx.agentTeams.membership(child.agent)).toThrow(expect.objectContaining({ code: 'TEAM_NOT_MEMBER' }))
+    await child.dispose()
+  })
+
+  it('classifies a descriptor-bearing child without origin as provider-owned', async () => {
+    const { ctx, lead } = await setup([])
+    const child = await ctx.agents.create({
+      sessionId: SessionId('descriptor-only-child'),
+      meta: { parentSession: lead.id },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    child.agent.session.append('subagent/descriptor', snapshotSubagentDescriptor({
+      mode: 'one-shot',
+      provider: 'spawn',
+      label: 'synthetic one-shot',
+    }))
+    expect(ctx.agentTeams.tryMembership(child.agent)).toBeUndefined()
+    expect(() => ctx.agentTeams.membership(child.agent)).toThrow(expect.objectContaining({ code: 'TEAM_NOT_MEMBER' }))
+    await child.dispose()
   })
 
   it('does not reinterpret an orphaned provider child or malformed parent stream as a Team root', async () => {

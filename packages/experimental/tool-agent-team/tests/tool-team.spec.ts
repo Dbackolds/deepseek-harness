@@ -398,6 +398,31 @@ describe('dsh-tool-team', () => {
     expect(renderPrompt(assembled)).not.toContain('Your Team role is lead')
   })
 
+  it('does not install Team tools on a one-shot child across its first prompt assembly', async () => {
+    const { ctx, lead } = await setup(['hang'])
+    const created: Array<{ hasDescriptor: boolean; membership: unknown }> = []
+    ctx.on('agent/created', ({ agent }) => {
+      if (agent === lead) return
+      created.push({
+        hasDescriptor: agent.session.snapshotEvents().some(event => event.type === 'subagent/descriptor'),
+        membership: ctx.agentTeams.tryMembership(agent),
+      })
+    })
+
+    const run = await ctx.subagents.start('spawn', {
+      label: 'plain reviewer',
+      prompt: [{ type: 'text', text: 'review the delivery' }],
+      parent: lead,
+      signal: SIGNAL,
+    })
+    const child = await waitRunning(ctx, run.id)
+    expect(created).toEqual([{ hasDescriptor: false, membership: undefined }])
+    const childAssembly = await assembly(ctx, child)
+    expect(childAssembly.tools.map(schema => schema.name).some(name => TOOL_NAMES.includes(name))).toBe(false)
+    expect(renderPrompt(childAssembly)).not.toContain('Your Team role')
+    await run.dispose()
+  })
+
   it('resolves direct-apply defaults without Loader schema normalization', async () => {
     const { ctx, lead, fiber } = await setup([textResponse('ordinary child')])
     await fiber.dispose()
