@@ -547,6 +547,10 @@ function stageApp(): void {
     cpSync(join(desktopRoot, name), join(appRoot, name), { recursive: true })
   }
   pinStagedElectronVersion(join(appRoot, 'package.json'))
+  // Windows electron-builder still runs `pnpm list --json` in appDir even
+  // when the staged shell has no dependencies. An empty lockfile makes that
+  // command return JSON instead of failing the pack.
+  writeFileSync(join(appRoot, 'pnpm-lock.yaml'), 'lockfileVersion: \'9.0\'\n')
 }
 
 /**
