@@ -124,4 +124,19 @@ describe('package payload constraints', () => {
       'lib/types/**/*.d.ts',
     ])
   })
+
+  it('includes lib/host.js when ./host exports that artifact', () => {
+    expect(expectedDshPackageFiles({
+      name: '@deepseek-ai/dsh-client-ui-settings-plugin-marketplace',
+      exports: {
+        './host': { default: './lib/host.js' },
+        './client': { default: './lib/client.js' },
+      },
+    })).toEqual([
+      'lib/index.js',
+      'lib/client.js',
+      'lib/host.js',
+      'lib/types/**/*.d.ts',
+    ])
+  })
 })

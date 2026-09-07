@@ -96,6 +96,7 @@
     "lib/index.js",
     "lib/invariant.js",
     "lib/client.js",
+    "lib/host.js",
     "lib/types/**/*.d.ts"
   ],
   "dependencies": {
