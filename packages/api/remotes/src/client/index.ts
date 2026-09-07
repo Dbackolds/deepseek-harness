@@ -14,10 +14,11 @@ import sessionReferencesRemote from '@deepseek-ai/dsh-session-reference/remote'
 import subagentsRemote from '@deepseek-ai/dsh-subagent/remote'
 import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
 import workspaceRemote from '@deepseek-ai/dsh-api-workspace-controller/remote'
+import workspaceFilesRemote from '@deepseek-ai/dsh-api-workspace-files/remote'
 import automationRemote from '@deepseek-ai/dsh-automation/remote'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
-import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 import { installConnectionApi } from './connection-api.ts'
+import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 
 export type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 export type { PluginInventorySnapshot } from '@deepseek-ai/dsh-host-plugin-inventory/types'
@@ -37,6 +38,8 @@ export type * from '@deepseek-ai/dsh-api-session-controller/types'
 export type {} from '@deepseek-ai/dsh-api-workspace-controller/remote'
 export type {} from '@deepseek-ai/dsh-automation/remote'
 export type * from '@deepseek-ai/dsh-api-workspace-controller/types'
+export type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
+export type * from '@deepseek-ai/dsh-api-workspace-files/types'
 export type { SessionJob as JobView } from '@deepseek-ai/dsh-api-session-controller/types'
 // The forwarded-event allowlist's selection seat: without it in the consumer's
 // compilation face `TypertRemoteEvent` is `never` and every `$on` call fails.
@@ -105,10 +108,6 @@ export type {
   DynamicCordisUndefineReceipt,
   RequestRunOutcome,
 } from '@deepseek-ai/dsh-cordis-host-runner/types'
-// The JSON vocabulary those payloads are built from, re-exported for the same
-// reason: a Client contribution names what it sends without importing a Host
-// package, and this assembly is where both planes legitimately meet.
-export type { JsonValue } from '@deepseek-ai/dsh-util-values'
 // Credential state vocabulary for the credentials namespace (values never ride it).
 export type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
 // Redacted namespace vocabulary for the settings namespace (secrets never ride
@@ -156,7 +155,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
     for (const contribution of [
       agentPresetsRemote, commandsRemote, settingsControllerRemote, goalsRemote, llmRemote, dynamicRemote,
       pluginInventoryRemote, messageFeedbackRemote, fileUploadsRemote, sessionReferencesRemote,
-      subagentsRemote, sessionRemote, workspaceRemote, automationRemote,
+      subagentsRemote, sessionRemote, workspaceRemote, workspaceFilesRemote, automationRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))
     }

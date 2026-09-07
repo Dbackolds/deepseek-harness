@@ -35,7 +35,7 @@ const RULES = { id: 'rules', name: 'Rules', text: 'Never guess.' }
 async function boot(): Promise<{ ctx: Context }> {
   const ctx = new Context()
   await ctx.plugin(MemorySettings).await()
-  await ctx.plugin(SystemPrompt, { persona: 'You are the deployment persona.' })
+  await ctx.plugin(SystemPrompt, { personaPrefix: 'You are the deployment persona.' })
   await ctx.plugin(UserSystemPrompts)
   ctx.systemPrompt.variable('provider', () => 'deepseek-official')
   ctx.systemPrompt.variable('model', () => 'deepseek-v4-flash')

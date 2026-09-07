@@ -24,14 +24,14 @@ import {
   SessionAlreadyExistsError, SessionPersistenceNotFoundError,
   assertStoredId, materializeCreateHeader, sessionFormatVersionRefusal, validateStoredEvents,
   type SessionAccess, type SessionHandle,
+  type SessionHandleReadResult,
   type SessionLocation, type SessionPersistenceCreateOptions,
   type SessionPersistenceListOptions, type SessionPersistenceOpenOptions,
   type SessionPersistenceSnapshot, type SessionPersistenceStatOptions,
   type SessionPersistenceRevision as PersistenceRevision,
 } from '@deepseek-ai/dsh-session-persistence'
-import { JsonlBackendTracker, JsonlSessionHandle } from './storage.ts'
+import { JsonlBackendTracker, JsonlSessionHandle, type StorageHandleState } from './storage.ts'
 import { SessionWriteLease } from './lease.ts'
-import { JsonlFormatWorker, waitForFormatWork } from './format-worker-host.ts'
 import { SESSION_FORMAT_VERSION, SessionId as makeSessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId, SessionHeader, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import {
@@ -43,14 +43,15 @@ import {
   compressZstdFrame, createZstdFrameDecoder, decompressZstdFrame, decompressZstdPrefix, scanZstdFrames,
 } from './zstd.ts'
 import { ensureDurableDirectoryWin32, publishNewFileWin32 } from './win32.ts'
+import { verifyCurrentGenerationInWorker } from './migration-verifier.ts'
 import {
-  ensureJsonlGenerationCurrent,
-  JsonlGenerationNewerVersionError,
+  JsonlGenerationSourceChangedError,
   JsonlGenerationUnsupportedMigrationError,
+  prepareJsonlMigration,
   readStableJsonlFile,
-  type EnsureJsonlGenerationResult,
   type JsonlGenerationFormatAdapter,
   type JsonlPhysicalIdentity,
+  type PreparedJsonlMigration,
 } from './generation.ts'
 
 export type { JsonlCompression } from './format.ts'
@@ -97,11 +98,14 @@ export interface Config {
   compression?: JsonlCompression
 }
 
-/** A parsed, validated stored log: header, logical events, and any torn-tail repair state. */
-interface StoredLog {
+/** One stored event graph whose producer has established immutable sharing. */
+interface FrozenStoredEvents extends SessionHandleReadResult {
+  readonly eventState: 'shared-frozen'
+}
+
+/** State shared by prepared historical and published current logs. */
+interface StoredLogBase extends FrozenStoredEvents {
   readonly meta: SessionHeader
-  /** The logical log, including any events recovered from a torn final frame. */
-  readonly events: SessionEvent[]
   readonly tornTruncateTo: number | undefined
   /** Complete events recovered from the torn final frame; the write path rewrites them durably. */
   readonly recoveredTail: SessionEvent[]
@@ -110,11 +114,60 @@ interface StoredLog {
   readonly revision: PersistenceRevision
 }
 
+/** A decoded current generation that is already durable. */
+interface CurrentStoredLog extends StoredLogBase {
+  readonly status: 'current'
+}
+
+/** A migrated historical generation retained until an explicit write open publishes it. */
+interface PreparedStoredLog extends StoredLogBase {
+  readonly status: 'prepared'
+  readonly publication: {
+    readonly source: ResolvedJsonlGeneration
+    readonly value: PreparedJsonlMigration
+  }
+}
+
+/** A validated logical log, either durable current state or prepared historical state. */
+type StoredLog = CurrentStoredLog | PreparedStoredLog
+
+/** Deep-freeze one acyclic stored JSON event without recursive calls. */
+function freezeStoredEvent(event: SessionEvent): void {
+  const pending: object[] = [event]
+  while (pending.length > 0) {
+    // The non-empty check proves an object remains to visit.
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    const current = pending.pop()!
+    Object.freeze(current)
+    for (const key in current) {
+      const child = (current as Record<string, unknown>)[key]
+      if (child !== null && typeof child === 'object') pending.push(child)
+    }
+  }
+}
+
+/** Establish immutable sharing for one decoded event graph and report that state. */
+function freezeStoredEvents(events: SessionEvent[]): FrozenStoredEvents {
+  for (const event of events) freezeStoredEvent(event)
+  Object.freeze(events)
+  return { eventState: 'shared-frozen', events }
+}
+
 /** One authoritative immutable generation selected from a Session directory. */
 interface ResolvedJsonlGeneration {
   readonly sourcePath: string
   readonly sourceVersion: number
   readonly currentPath: string
+}
+
+/** One backend-owned historical preparation shared by its current callers. */
+interface MigrationPreparation {
+  readonly sourcePath: string
+  readonly sourceRevision: PersistenceRevision
+  readonly controller: AbortController
+  readonly promise: Promise<PreparedStoredLog>
+  settled: boolean
+  waiters: number
 }
 
 /** Build the stat-derived best-effort change token shared by full and lightweight reads. */
@@ -138,6 +191,41 @@ function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return typeof (error as NodeJS.ErrnoException | null)?.code === 'string'
 }
 
+/** Preserve an Error abort reason and normalize hostile non-Error reasons. */
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new Error('session migration preparation aborted', { cause: signal.reason })
+}
+
+/** Let one caller stop waiting without transferring cancellation ownership to shared work. */
+function waitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (signal === undefined) return operation
+  /* v8 ignore next -- requireStoredLog synchronously rechecks the signal immediately before waiting. */
+  if (signal.aborted) return Promise.reject(abortError(signal))
+  return new Promise<T>((resolve, reject) => {
+    const stopWaiting = (): void => {
+      reject(abortError(signal))
+    }
+    signal.addEventListener('abort', stopWaiting, { once: true })
+    void operation.then(
+      (value) => {
+        signal.removeEventListener('abort', stopWaiting)
+        resolve(value)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', stopWaiting)
+        /* v8 ignore else -- the preparation owner normalizes every rejection before this waiter sees it. */
+        if (error instanceof Error) {
+          reject(error)
+        } else {
+          reject(new Error('session migration preparation failed', { cause: error }))
+        }
+      },
+    )
+  })
+}
+
 /**
  * The JSONL persistence backend. Load as a plugin; it registers as
  * `ctx.sessionPersistence`. Sessions materialize lazily: a created session is
@@ -158,7 +246,6 @@ class JsonlSessionPersistence extends SessionPersistence {
   private rootEncodingCheck: Promise<void> | undefined
   private readonly tracker = new JsonlBackendTracker(this.name)
   private readonly generationFormat: JsonlGenerationFormatAdapter
-  private readonly formatWorker: JsonlFormatWorker
   /**
    * Bounded LRU of parsed, validated stored logs keyed by session id and
    * guarded by the stat-derived revision, so an immediate cold-read handoff
@@ -167,8 +254,8 @@ class JsonlSessionPersistence extends SessionPersistence {
    * revision guard.
    */
   private readonly coldLogMemo = new Map<SessionId, StoredLog>()
-  /** One complete historical migration owns the backend's worker until publication and thread exit. */
-  private migration: Promise<undefined> | undefined
+  /** One joinable decode/migration operation per selected historical Session file revision. */
+  private readonly migrationPreparations = new Map<SessionId, MigrationPreparation>()
 
   constructor(ctx: Context, public config: Config) {
     super(ctx)
@@ -182,15 +269,15 @@ class JsonlSessionPersistence extends SessionPersistence {
     // Resolve once so later process.cwd() changes cannot split one backend across roots.
     this.root = resolve(config.root)
     this.compression = config.compression ?? DEFAULT_COMPRESSION
-    const formatWorker = this.formatWorker = new JsonlFormatWorker(ctx, () => this.migration)
     this.generationFormat = {
       currentVersion: sessionFormatCatalog.currentVersion,
-      migrate: async (source, signal) => {
-        const current = await formatWorker.run('migrate', source, signal)
-        if (current === undefined) throw new Error('format worker returned no migrated generation')
-        return current
-      },
-      validateCurrent: async (candidate, signal) => { await formatWorker.run('validate', candidate, signal) },
+      createRestore: header => sessionFormatCatalog.createRestore(header, {
+        recovery: 'recoverable',
+        validation: 'transformed',
+      }),
+      encodeHeader: (header, inheritedEventCount) =>
+        sessionFormatCatalog.encodeCurrentHeader(header, inheritedEventCount),
+      encodeEvent: event => sessionFormatCatalog.encodeCurrentEvent(event),
       isUnsupportedMigrationError: (error): error is SessionFormatUnsupportedMigrationError =>
         error instanceof SessionFormatUnsupportedMigrationError,
     }
@@ -256,11 +343,22 @@ class JsonlSessionPersistence extends SessionPersistence {
         return this.tracker.adopt(new JsonlSessionHandle(this, id, pending.header, 'read', { cursor: 0, materialized: false, inheritedEventCount: pending.inheritedEventCount }))
       }
       const stored = await this.requireStoredLog(id, options?.signal)
-      return this.tracker.adopt(new JsonlSessionHandle(this, id, stored.meta, 'read', {
-        cursor: 0,
-        materialized: true,
-        inheritedEventCount: stored.inheritedEventCount,
-      }))
+      let state: StorageHandleState
+      if (stored.status === 'prepared') {
+        state = {
+          cursor: 0,
+          materialized: true,
+          inheritedEventCount: stored.inheritedEventCount,
+          primed: stored,
+        }
+      } else {
+        state = {
+          cursor: 0,
+          materialized: true,
+          inheritedEventCount: stored.inheritedEventCount,
+        }
+      }
+      return this.tracker.adopt(new JsonlSessionHandle(this, id, stored.meta, 'read', state))
     }
     // A pending entry always belongs to an ACTIVE creator handle (close erases
     // it), so the claim below rejects that case as already owned.
@@ -270,14 +368,22 @@ class JsonlSessionPersistence extends SessionPersistence {
       const resolved = await this.findLog(id, options?.signal)
       if (resolved === undefined) throw new SessionPersistenceNotFoundError(id)
       lease = await this.acquireLease(id, undefined, dirname(resolved.currentPath))
-      const stored = await this.requireStoredLog(id, options?.signal)
+      const prepared = await this.requireStoredLog(id, options?.signal)
+      options?.signal?.throwIfAborted()
+      let stored: CurrentStoredLog
+      if (prepared.status === 'prepared') {
+        stored = await this.publishStoredMigration(id, prepared)
+      } else {
+        stored = prepared
+      }
+      options?.signal?.throwIfAborted()
       return this.tracker.adopt(new JsonlSessionHandle(this, id, stored.meta, 'write', {
         cursor: stored.events.length,
         materialized: true,
         tornTruncateTo: stored.tornTruncateTo,
         recoveredTail: stored.recoveredTail,
         inheritedEventCount: stored.inheritedEventCount,
-        primed: stored.events,
+        primed: stored,
       }, lease))
     } catch (error) {
       // Free the in-process claim no matter how the kernel-lock release
@@ -389,107 +495,196 @@ class JsonlSessionPersistence extends SessionPersistence {
   private async requireStoredLog(id: SessionId, signal?: AbortSignal): Promise<StoredLog> {
     const selected = await this.findLog(id, signal)
     if (selected === undefined) throw new SessionPersistenceNotFoundError(id)
-    if (selected.sourceVersion === SESSION_FORMAT_VERSION) {
-      const probe = fileRevision(await stat(selected.sourcePath, { bigint: true }))
-      const memoized = this.coldLogMemo.get(id)
-      if (memoized !== undefined && memoized.revision === probe) {
-        this.coldLogMemo.delete(id)
-        this.coldLogMemo.set(id, memoized)
-        return memoized
+    if (selected.sourceVersion < SESSION_FORMAT_VERSION) {
+      const sourceRevision = fileRevision(await stat(selected.sourcePath, { bigint: true }))
+      signal?.throwIfAborted()
+      let preparation = this.migrationPreparations.get(id)
+      if (preparation === undefined
+        || preparation.sourcePath !== selected.sourcePath
+        || preparation.sourceRevision !== sourceRevision) {
+        const controller = new AbortController()
+        const promise = this.loadStoredMigration(id, selected, sourceRevision, controller.signal)
+        preparation = {
+          sourcePath: selected.sourcePath,
+          sourceRevision,
+          controller,
+          promise,
+          settled: false,
+          waiters: 0,
+        }
+        this.migrationPreparations.set(id, preparation)
+        const created = preparation
+        const release = (): void => {
+          created.settled = true
+          if (this.migrationPreparations.get(id) === created) {
+            this.migrationPreparations.delete(id)
+          }
+        }
+        void promise.then(release, release)
       }
+      signal?.throwIfAborted()
+      return this.waitForPreparation(id, preparation, signal)
     }
-    const current = await this.ensureCurrentLog(id, signal, selected)
-    if (current === undefined) throw new SessionPersistenceNotFoundError(id)
+    if (selected.sourceVersion > SESSION_FORMAT_VERSION) {
+      const header = await this.readGenerationHeader(selected, id, signal)
+      /* v8 ignore else -- a readable future header is rejected inside readGenerationHeader. */
+      if (header === undefined) {
+        throw new SessionPersistenceCorruptionError(
+          `session "${id}": stored log has a malformed header (raw log: ${selected.sourcePath})`,
+          { cause: new Error('malformed Session header') },
+        )
+      }
+      /* v8 ignore next -- readGenerationHeader rejects every future version. */
+      throw new SessionFormatUnsupportedError(
+        `${sessionFormatVersionRefusal(id, selected.sourceVersion)} (raw log: ${selected.sourcePath})`,
+        { kind: 'jsonl', path: selected.sourcePath },
+      )
+    }
+    const probe = fileRevision(await stat(selected.sourcePath, { bigint: true }))
+    const memoized = this.coldLogMemo.get(id)
+    if (memoized?.status === 'current' && memoized.revision === probe) {
+      this.coldLogMemo.delete(id)
+      this.coldLogMemo.set(id, memoized)
+      return memoized
+    }
+    const current = await readStableJsonlFile(selected.sourcePath, signal)
     return this.decodeStoredLog(
-      current.path,
+      selected.sourcePath,
       id,
-      current.snapshot.bytes,
-      fileRevision(current.snapshot.identity),
+      current.bytes,
+      fileRevision(current.identity),
       signal,
     )
   }
 
-  /** Select and, when required, publish one immutable current generation. */
-  private async ensureCurrentLog(
+  /** Probe the memo and otherwise decode one historical generation under backend cancellation. */
+  private async loadStoredMigration(
     id: SessionId,
+    selected: ResolvedJsonlGeneration,
+    sourceRevision: PersistenceRevision,
+    signal: AbortSignal,
+  ): Promise<PreparedStoredLog> {
+    signal.throwIfAborted()
+    const memoized = this.coldLogMemo.get(id)
+    if (memoized?.status === 'prepared' && memoized.revision === sourceRevision) {
+      this.coldLogMemo.delete(id)
+      this.coldLogMemo.set(id, memoized)
+      return memoized
+    }
+    return this.prepareStoredMigration(id, selected, signal)
+  }
+
+  /** Await shared preparation for one caller and abort it only after its last waiter leaves. */
+  private async waitForPreparation(
+    id: SessionId,
+    preparation: MigrationPreparation,
     signal?: AbortSignal,
-    resolved?: ResolvedJsonlGeneration,
-  ): Promise<EnsureJsonlGenerationResult | undefined> {
-    signal = signal === undefined ? this.formatWorker.signal : AbortSignal.any([signal, this.formatWorker.signal])
-    signal.throwIfAborted()
-    const selected = resolved ?? await this.findLog(id, signal)
-    if (selected === undefined) return undefined
-    if (selected.sourceVersion >= SESSION_FORMAT_VERSION) {
-      return this.ensureSelectedCurrentLog(id, selected, signal)
-    }
-    for (;;) {
-      const pending = this.migration
-      if (pending === undefined) break
-      signal.throwIfAborted()
-      await waitForFormatWork(pending, signal)
-    }
-    signal.throwIfAborted()
-    const completion = Promise.withResolvers<undefined>()
-    this.migration = completion.promise
+  ): Promise<PreparedStoredLog> {
+    preparation.waiters += 1
     try {
-      // Re-select even without a wait: discovery may have overlapped a completed migration.
-      const latest = await this.findLog(id, signal)
-      return latest === undefined ? undefined : await this.ensureSelectedCurrentLog(id, latest, signal)
+      return await waitWithAbort(preparation.promise, signal)
     } finally {
-      try {
-        await this.formatWorker.close()
-      } finally {
-        this.migration = undefined
-        completion.resolve(undefined)
+      preparation.waiters -= 1
+      if (preparation.waiters === 0 && !preparation.settled) {
+        /* v8 ignore else -- a newer selected source may already own this id's preparation slot. */
+        if (this.migrationPreparations.get(id) === preparation) {
+          this.migrationPreparations.delete(id)
+        }
+        preparation.controller.abort()
       }
     }
   }
 
-  /** Validate the selected generation and preserve storage and format refusal errors. */
-  private async ensureSelectedCurrentLog(
+  /** Decode one historical generation without publishing a successor. */
+  private async prepareStoredMigration(
     id: SessionId,
     selected: ResolvedJsonlGeneration,
-    signal?: AbortSignal,
-  ): Promise<EnsureJsonlGenerationResult> {
+    signal: AbortSignal,
+  ): Promise<PreparedStoredLog> {
+    let prepared: Awaited<ReturnType<typeof prepareJsonlMigration>>
     try {
-      return await ensureJsonlGenerationCurrent({
+      prepared = await prepareJsonlMigration({
         sourcePath: selected.sourcePath,
         sourceVersion: selected.sourceVersion,
         currentPath: selected.currentPath,
         compression: this.compression,
         format: this.generationFormat,
+        verifyCurrentFile: verifyCurrentGenerationInWorker,
         validateHistoricalHeader: headerValue => this.validateSourceIdentity(
           selected,
           headerValue,
           id,
           signal,
         ),
-        ...(signal === undefined ? {} : { signal }),
+        signal,
       })
     } catch (error: unknown) {
-      signal?.throwIfAborted()
-      if (error instanceof JsonlGenerationNewerVersionError) {
-        const reason = sessionFormatVersionRefusal(error.storedId, error.storedVersion)
-        throw new SessionFormatUnsupportedError(
-          `${reason} (raw log: ${selected.sourcePath})`,
-          { kind: 'jsonl', path: selected.sourcePath },
-        )
-      }
-      if (error instanceof JsonlGenerationUnsupportedMigrationError) {
-        throw new SessionFormatUnsupportedError(
-          `${error.message}; source v${error.fromVersion} artifact remains unchanged (raw log: ${selected.sourcePath})`,
-          { kind: 'jsonl', path: selected.sourcePath },
-        )
-      }
-      if (error instanceof SessionFormatUnsupportedError
-        || error instanceof SessionPersistenceCorruptionError
-        || isErrnoException(error)
-        || error instanceof DOMException && error.name === 'AbortError') throw error
-      throw new SessionPersistenceCorruptionError(
-        `session "${id}": stored log is corrupt: ${String(error)} (raw log: ${selected.sourcePath})`,
-        { cause: error },
+      throw this.generationFailure(id, selected, error)
+    }
+    const meta = this.currentHeader(prepared.artifact.header)
+    assertStoredId(id, meta)
+    const events = prepared.artifact.events as SessionEvent[]
+    validateStoredEvents(meta, events, { kind: 'jsonl', path: selected.sourcePath })
+    const stored: PreparedStoredLog = {
+      status: 'prepared',
+      meta,
+      ...freezeStoredEvents(events),
+      tornTruncateTo: undefined,
+      recoveredTail: [],
+      inheritedEventCount: SessionLogOffset(prepared.artifact.inheritedEventCount),
+      revision: fileRevision(prepared.sourceIdentity),
+      publication: { source: selected, value: prepared },
+    }
+    this.memoizeStoredLog(id, stored)
+    return stored
+  }
+
+  /** Publish a prepared historical log before granting write access. */
+  private async publishStoredMigration(id: SessionId, stored: PreparedStoredLog): Promise<CurrentStoredLog> {
+    const migration = stored.publication
+    let identity: JsonlPhysicalIdentity
+    try {
+      identity = await migration.value.publish()
+    } catch (error: unknown) {
+      /* v8 ignore else -- a newer preparation may have replaced this stale cache entry. */
+      if (this.coldLogMemo.get(id) === stored) this.coldLogMemo.delete(id)
+      throw this.generationFailure(id, migration.source, error)
+    }
+    const published: CurrentStoredLog = {
+      status: 'current',
+      meta: stored.meta,
+      eventState: stored.eventState,
+      events: stored.events,
+      tornTruncateTo: stored.tornTruncateTo,
+      recoveredTail: stored.recoveredTail,
+      inheritedEventCount: stored.inheritedEventCount,
+      revision: fileRevision(identity),
+    }
+    this.memoizeStoredLog(id, published)
+    return published
+  }
+
+  /** Translate generation-layer failures into the persistence seam's error vocabulary. */
+  private generationFailure(
+    id: SessionId,
+    selected: ResolvedJsonlGeneration,
+    error: unknown,
+  ): Error {
+    if (error instanceof JsonlGenerationUnsupportedMigrationError) {
+      return new SessionFormatUnsupportedError(
+        `${error.message}; source v${error.fromVersion} artifact remains unchanged (raw log: ${selected.sourcePath})`,
+        { kind: 'jsonl', path: selected.sourcePath },
       )
     }
+    if (error instanceof JsonlGenerationSourceChangedError) return error
+    if (error instanceof SessionFormatUnsupportedError
+      || error instanceof SessionPersistenceCorruptionError
+      || isErrnoException(error)
+      || error instanceof DOMException && error.name === 'AbortError') return error
+    return new SessionPersistenceCorruptionError(
+      `session "${id}": stored log is corrupt: ${String(error)} (raw log: ${selected.sourcePath})`,
+      { cause: error },
+    )
   }
 
   /**
@@ -499,11 +694,11 @@ class JsonlSessionPersistence extends SessionPersistence {
    * @param signal - optional cancellation for the stat/read/decode work.
    * @returns the validated stored log with any torn-tail truncation point.
    */
-  async readStoredLog(path: string, expectedId: SessionId, signal?: AbortSignal): Promise<StoredLog> {
+  async readStoredLog(path: string, expectedId: SessionId, signal?: AbortSignal): Promise<CurrentStoredLog> {
     signal?.throwIfAborted()
     const probe = fileRevision(await stat(path, { bigint: true }))
     const memoized = this.coldLogMemo.get(expectedId)
-    if (memoized !== undefined && memoized.revision === probe) {
+    if (memoized?.status === 'current' && memoized.revision === probe) {
       this.coldLogMemo.delete(expectedId)
       this.coldLogMemo.set(expectedId, memoized)
       return memoized
@@ -519,7 +714,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     buffer: Buffer,
     revision: PersistenceRevision,
     signal?: AbortSignal,
-  ): Promise<StoredLog> {
+  ): Promise<CurrentStoredLog> {
     let parsed: {
       meta: SessionHeader
       inheritedEventCount: SessionLogOffsetType
@@ -561,30 +756,45 @@ class JsonlSessionPersistence extends SessionPersistence {
     assertStoredId(expectedId, parsed.meta)
     const location = this.locate(parsed.meta)
     validateStoredEvents(parsed.meta, parsed.events, location)
-    const stored: StoredLog = { ...parsed, revision }
-    this.coldLogMemo.delete(expectedId)
-    this.coldLogMemo.set(expectedId, stored)
+    const { events, ...rest } = parsed
+    const stored: CurrentStoredLog = {
+      status: 'current',
+      ...rest,
+      ...freezeStoredEvents(events),
+      revision,
+    }
+    this.memoizeStoredLog(expectedId, stored)
+    return stored
+  }
+
+  /** Insert one parsed log into the bounded handoff cache. */
+  private memoizeStoredLog(id: SessionId, stored: StoredLog): void {
+    this.coldLogMemo.delete(id)
+    this.coldLogMemo.set(id, stored)
     for (const oldest of this.coldLogMemo.keys()) {
       if (this.coldLogMemo.size <= COLD_LOG_MEMO_MAX_ENTRIES) break
       this.coldLogMemo.delete(oldest)
     }
-    return stored
   }
 
   /**
-   * Resolve a session's unique log path.
+   * Resolve a session's current-generation log path.
    * @param id - the stored session to locate.
    * @param signal - optional cancellation for the directory scans.
-   * @returns the artifact path, or `undefined` when absent.
+   * @returns the current artifact path, or `undefined` while only a historical generation exists.
    */
-  async resolveLog(id: SessionId, signal?: AbortSignal): Promise<string | undefined> {
+  async resolveCurrentLog(id: SessionId, signal?: AbortSignal): Promise<string | undefined> {
     await this.ensureRootEncoding()
     signal?.throwIfAborted()
     const selected = await this.findLog(id, signal)
     if (selected === undefined) return undefined
     if (selected.sourceVersion === SESSION_FORMAT_VERSION) return selected.sourcePath
-    const current = await this.ensureCurrentLog(id, signal)
-    return current?.path
+    if (selected.sourceVersion < SESSION_FORMAT_VERSION) return undefined
+    const reason = sessionFormatVersionRefusal(id, selected.sourceVersion)
+    throw new SessionFormatUnsupportedError(
+      `${reason} (raw log: ${selected.sourcePath})`,
+      { kind: 'jsonl', path: selected.sourcePath },
+    )
   }
 
   /**
@@ -828,8 +1038,14 @@ class JsonlSessionPersistence extends SessionPersistence {
       )
     }
     if (result.status === 'unsupported') {
+      const physicalId = String((value as { id?: unknown }).id)
+      let reason = result.reason
+      /* v8 ignore else -- released historical header migrations cannot refuse after physical decoding. */
+      if (result.storedVersion > SESSION_FORMAT_VERSION) {
+        reason = sessionFormatVersionRefusal(physicalId, result.storedVersion)
+      }
       throw new SessionFormatUnsupportedError(
-        `${result.reason} (raw log: ${selected.sourcePath})`,
+        `${reason} (raw log: ${selected.sourcePath})`,
         { kind: 'jsonl', path: selected.sourcePath },
       )
     }
@@ -850,12 +1066,12 @@ class JsonlSessionPersistence extends SessionPersistence {
     readonly version: number
     readonly id: string
     readonly createdAt: number
-    readonly cwd?: string
-    readonly parentSession?: string
+    readonly cwd?: string | undefined
+    readonly parentSession?: string | undefined
     readonly isSeeded: boolean
-    readonly origin?: 'subagent' | 'automation'
+    readonly origin?: string | undefined
     readonly delegationDepth: number
-    readonly agentPreset?: string
+    readonly agentPreset?: string | undefined
   }): SessionHeader {
     /* v8 ignore next 3 -- readable catalog results are restored to its configured current version. */
     if (header.version !== SESSION_FORMAT_VERSION) {
@@ -870,7 +1086,7 @@ class JsonlSessionPersistence extends SessionPersistence {
         ? {}
         : { parentSession: makeSessionId(header.parentSession) }),
       isSeeded: header.isSeeded,
-      ...(header.origin === undefined ? {} : { origin: header.origin }),
+      ...(header.origin === 'subagent' || header.origin === 'automation' ? { origin: header.origin } : {}),
       delegationDepth: header.delegationDepth,
       ...(header.agentPreset === undefined ? {} : { agentPreset: header.agentPreset }),
     }

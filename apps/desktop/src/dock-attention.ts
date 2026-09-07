@@ -229,8 +229,8 @@ export function decodeRgbaPng(png: Buffer): RgbaPng {
       if (chunk.length < 13) throw new Error('dsh desktop: dock icon PNG is truncated')
       width = chunk.readUInt32BE(0)
       height = chunk.readUInt32BE(4)
-      bitDepth = chunk[8]
-      colorType = chunk[9]
+      bitDepth = chunk[8] ?? 0
+      colorType = chunk[9] ?? 0
     } else if (type === 'IDAT') {
       idat.push(chunk)
     } else if (type === 'IEND') {
@@ -315,7 +315,9 @@ for (let n = 0; n < 256; n += 1) {
 function crc32(data: Buffer): number {
   let crc = 0xffffffff
   for (const byte of data) {
-    crc = CRC_TABLE[(crc ^ byte) & 255] ^ (crc >>> 8)
+    const entry = CRC_TABLE[(crc ^ byte) & 255]
+    if (entry === undefined) continue
+    crc = entry ^ (crc >>> 8)
   }
   return (crc ^ 0xffffffff) >>> 0
 }

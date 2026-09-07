@@ -4,12 +4,16 @@ import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 import {
   RELEASED_V0_EVENT_TYPES,
   RELEASED_V0_EVENT_DISPOSITIONS,
-  assertReleasedV1Artifact,
-  releasedV0SessionFormatCodec,
-  releasedV1SessionFormatCodec,
-  sessionFormatV0ToV1,
 } from '../src/index.ts'
-import { assertReleasedEventPayload } from '../src/validation.ts'
+import { assertReleasedEventPayload, assertReleasedSurfaceMetadata } from '../src/validation.ts'
+import { restoreV0ToV1, restoreV1 } from '../src/testing/restore.ts'
+import {
+  assertNormalizedReleasedV0Artifact,
+  assertReleasedV0SourceArtifact,
+  assertReleasedV1Artifact,
+  assertReleasedV1MigrationSource,
+  assertReleasedV1PhysicalArtifact,
+} from '../src/testing/validation.ts'
 
 const v0Header = {
   type: 'session', version: 0, id: 'validation', createdAt: 1, delegationDepth: 0,
@@ -48,7 +52,6 @@ const validPayloads: Readonly<Record<string, SessionFormatJsonValue>> = {
     provider: 'mock', model: 'mock', rawOutput: [textBlock], llmStreamCall: true,
   },
   'feedback/record': { text: 'feedback' },
-  'git/worktree': { path: '/worktrees/feature', branch: 'feature', source: 'delegation' },
   'goal/change': {
     kind: 'goal/change', version: 1, operation: 'create',
     goal: { id: 'goal-1', revision: 1, objective: 'ship', phase: 'active', maxGoalRounds: 3 },
@@ -75,9 +78,6 @@ const validPayloads: Readonly<Record<string, SessionFormatJsonValue>> = {
     reason: 'initial',
   },
   'sandbox/mode': { mode: 'workspace-write', source: 'delegation' },
-  'automation/start': {
-    ruleId: 'rule-1', runId: 'run-1', scheduledAt: '2026-08-31T00:00:00.000Z',
-  },
   'schedule/change': {
     version: 1, operation: 'create',
     schedule: { id: 'schedule-1', kind: 'after', prompt: 'remember', afterSeconds: 60, scheduledAt: '2026-08-31T00:00:00.000Z' },
@@ -132,7 +132,6 @@ const validPayloads: Readonly<Record<string, SessionFormatJsonValue>> = {
   'turn/end': { turn: 1, reason: { kind: 'completed' } },
   'turn/start': { turn: 1 },
   'user/message': userMessage,
-  'workspace/home': { path: '/root/CODE/talkmod' },
   'web/deepseek-search-llm-request': {
     endpoint: 'https://example.test/messages', apiVersion: '2023-06-01',
     body: {
@@ -215,16 +214,11 @@ function replaceAtPath(value: SessionFormatJsonValue, path: string, replacement:
 describe('released event and payload inventory', () => {
   it('has an executable valid fixture for every frozen released-v0 event type', () => {
     expect(Object.keys(validPayloads).sort()).toEqual([...RELEASED_V0_EVENT_TYPES].sort())
-    expect(RELEASED_V0_EVENT_TYPES).toHaveLength(54)
+    expect(RELEASED_V0_EVENT_TYPES).toHaveLength(51)
     expect(RELEASED_V0_EVENT_TYPES
       .filter(type => type !== 'assistant/chunk')
       .every(type => KNOWN_SESSION_EVENT_TYPES.has(type))).toBe(true)
     expect(KNOWN_SESSION_EVENT_TYPES.has('assistant/chunk')).toBe(false)
-    expect(RELEASED_V0_EVENT_TYPES).toEqual(expect.arrayContaining([
-      'automation/start',
-      'git/worktree',
-      'workspace/home',
-    ]))
     for (const [type, data] of Object.entries(validPayloads)) {
       expect(() => { assertPayload(type, data) }, type).not.toThrow()
     }
@@ -300,6 +294,15 @@ describe('released event and payload inventory', () => {
     }
   })
 
+  it('refuses opaque members that are not lossless JSON without snapshotting them', () => {
+    const data = {
+      ...(validPayloads['tool/result'] as Record<string, unknown>),
+      meta: { value: undefined },
+    }
+    expect(() => { assertPayload('tool/result', data as unknown as SessionFormatJsonValue) })
+      .toThrow(/opaque meta is not lossless JSON/)
+  })
+
   it.each([
     ['user/message content block', 'user/message', {
       ...userMessage,
@@ -322,29 +325,56 @@ describe('released event and payload inventory', () => {
 
   it('refuses unknown v0 events even when the envelope marks them ignorable', () => {
     const row = { type: 'plugin/unknown', seq: 0, time: 1, data: {}, ignorable: true }
-    expect(() => releasedV0SessionFormatCodec.decodeArtifact(v0Header, [row]))
+    expect(() => restoreV0ToV1(v0Header, [row]))
       .toThrow(/unknown historical event.*refuses.*ignorable/)
   })
 
-  it('migrates first-party v0 overlay events that current writers still append', () => {
-    const rows = [
-      { type: 'workspace/home', seq: 0, time: 1, data: { path: '/root/CODE/talkmod' } },
-      {
-        type: 'git/worktree', seq: 1, time: 2,
-        data: { path: '/worktrees/feature', branch: 'feature' },
-      },
-      {
-        type: 'automation/start', seq: 2, time: 3,
-        data: { ruleId: 'rule-1', runId: 'run-1', scheduledAt: '2026-08-31T00:00:00.000Z' },
-      },
-    ]
-    const source = releasedV0SessionFormatCodec.decodeArtifact(v0Header, rows)
-    const migrated = sessionFormatV0ToV1.migrate(source)
-    expect(migrated.events.map(event => event.type)).toEqual([
-      'workspace/home', 'git/worktree', 'automation/start',
-    ])
-    expect(migrated.header.version).toBe(1)
-    expect(migrated.events[0]?.data).toEqual({ path: '/root/CODE/talkmod' })
+  it('exercises each released test validation policy', () => {
+    const v0 = {
+      header: { version: 0, id: 'validation', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      inheritedEventCount: 0,
+      events: [],
+    } as const
+    const v1 = { ...v0, header: { ...v0.header, version: 1 } } as const
+    const forwardCompatible = {
+      ...v1,
+      events: [{ type: 'plugin/future', seq: 0, time: 1, data: {}, ignorable: true }],
+    } as const
+
+    expect(() => { assertReleasedV0SourceArtifact(v0) }).not.toThrow()
+    expect(() => { assertNormalizedReleasedV0Artifact({
+      ...v0,
+      events: [{ type: 'feedback/record', seq: 0, time: 1, data: { text: 'retained' } }],
+    }) }).not.toThrow()
+    expect(() => { assertReleasedV1MigrationSource(v1) }).not.toThrow()
+    expect(() => { assertReleasedV1MigrationSource(forwardCompatible) }).not.toThrow()
+    expect(() => { assertReleasedV1PhysicalArtifact(v1) }).not.toThrow()
+    expect(() => { assertReleasedV0SourceArtifact({
+      ...v0,
+      events: [{
+        type: 'steering/message', seq: 0, time: 1, surfaceOp: 'append',
+        data: { turn: 1, content: [], source: { kind: 'user' } },
+      }],
+    }) }).not.toThrow()
+    expect(() => { assertReleasedV0SourceArtifact({
+      ...v0,
+      events: [{ type: 'compact/start', seq: 0, time: 1, data: { turn: null } }],
+    }) }).not.toThrow()
+    expect(() => { assertReleasedV0SourceArtifact({
+      ...v0,
+      events: [{ type: 'plugin/unknown', seq: 0, time: 1, data: {}, ignorable: true }],
+    }) }).toThrow(/unknown historical event/)
+  })
+
+  it('permits empty Assistant provenance only under the released-v1 policy', () => {
+    const assistant = {
+      type: 'assistant/message', seq: 1, time: 2, data: {},
+      sourceEventSeqs: [], surfaceOp: 'append',
+    }
+    expect(() => { assertReleasedSurfaceMetadata(assistant, 1, assistant.type, 'allow-empty-assistant') })
+      .not.toThrow()
+    expect(() => { assertReleasedSurfaceMetadata(assistant, 1, assistant.type, 'forbid-assistant') })
+      .toThrow(/obsolete chunk provenance/)
   })
 
   it('keeps capturedFormatVersion v1-only inside session-reference sources', () => {
@@ -360,9 +390,9 @@ describe('released event and payload inventory', () => {
       },
     }
     const event = { type: 'user/message', seq: 0, time: 1, data, surfaceOp: 'append' }
-    expect(() => sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(v0Header, [event])))
+    expect(() => restoreV0ToV1(v0Header, [event]))
       .toThrow(/capturedFormatVersion/)
-    expect(releasedV1SessionFormatCodec.decodeArtifact(v1Header, [event]).events).toEqual([event])
+    expect(restoreV1(v1Header, [event]).events).toEqual([event])
   })
 
   it('accepts every released nested union variant and optional member', () => {
@@ -514,11 +544,34 @@ describe('released event and payload inventory', () => {
       }],
       ['command/done', { commandId: 'c', kind: 'error', text: 'failed' }],
       ['compaction/end', { compactionId: 'c', sourceCommandId: 'command', turn: 1, error: 'failure' }],
-      ['git/worktree', { path: '/worktrees/feature', branch: 'feature' }],
     ]
     for (const [type, data] of remaining) {
       expect(() => { assertPayload(type, data) }, type).not.toThrow()
     }
+  })
+
+  it('validates legacy round-zero goal mutation messages', () => {
+    const change = {
+      kind: 'goal/change', version: 1, operation: 'clear',
+      cleared: { id: 'goal', revision: 2 }, clearedAt: 3,
+    }
+    const content = [{
+      type: 'text',
+      text: `<goal_state>${JSON.stringify({ cleared: change.cleared, clearedAt: change.clearedAt })}</goal_state>`,
+    }]
+    const message = {
+      id: 'legacy-goal', role: 'user', content,
+      source: { kind: 'goal', goalId: 'goal', revision: 2, round: 0, change },
+    }
+    expect(() => { assertPayload('user/message', message) }).not.toThrow()
+    expect(() => { assertPayload('user/message', {
+      ...message, source: { ...message.source, round: 1 },
+    }) }).toThrow(/round must be 0/)
+    expect(() => { assertPayload('user/message', {
+      ...message, source: { ...message.source, goalId: 'other' },
+    }) }).toThrow(/does not match/)
+    expect(() => { assertPayload('user/message', { ...message, content: [textBlock] }) })
+      .toThrow(/content does not match/)
   })
 
   it('refuses malformed logical headers, cuts, event envelopes, and surface metadata', () => {
@@ -598,7 +651,6 @@ describe('released event and payload inventory', () => {
         },
         reason: 'change', startsSeries: true,
       }],
-      ['git/worktree', { path: '/worktrees/feature', branch: 'feature', source: 'delegation' }],
     ]
     for (const [type, data] of cases) {
       expect(() => { assertPayload(type, data) }, type).not.toThrow()
@@ -608,15 +660,6 @@ describe('released event and payload inventory', () => {
   it('refuses every relationship-specific invalid payload branch', () => {
     const cases: Array<[string, SessionFormatJsonValue]> = [
       ['command/done', { commandId: 'c', kind: 'success', sourceEventSeq: 3 }],
-      ['workspace/home', { path: '' }],
-      ['workspace/home', { path: 'relative/home' }],
-      ['git/worktree', { path: '', branch: 'feature' }],
-      ['git/worktree', { path: 'relative/worktree', branch: 'feature' }],
-      ['git/worktree', { path: '/worktrees/feature', branch: '' }],
-      ['git/worktree', { path: '/worktrees/feature', branch: 'feature', source: 'runtime' }],
-      ['automation/start', { ruleId: '', runId: 'run-1', scheduledAt: '2026-08-31T00:00:00.000Z' }],
-      ['automation/start', { ruleId: 'rule-1', runId: '', scheduledAt: '2026-08-31T00:00:00.000Z' }],
-      ['automation/start', { ruleId: 'rule-1', runId: 'run-1', scheduledAt: 'not-an-instant' }],
       ['session/title-llm-request', {
         titleProvider: 'p', messageSeqs: [], route: { provider: 'p', model: 'm' },
         system: 's', messages: [userMessage], maxTokens: 1,
