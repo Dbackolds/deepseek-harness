@@ -499,6 +499,27 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
  * Copy the compiled desktop shell into a leaf app directory electron-builder
  * can treat as the application root without walking the workspace.
  */
+/**
+ * Pin the staged desktop manifest to the installed Electron release so
+ * electron-builder can download platform binaries without a version range.
+ * @param manifestPath - staged `apps/desktop` package.json copy.
+ */
+export function pinStagedElectronVersion(manifestPath: string): void {
+  const installedPath = join(desktopRoot, 'node_modules', 'electron', 'package.json')
+  if (!existsSync(installedPath)) {
+    throw new Error('desktop pack: apps/desktop/node_modules/electron is missing; run pnpm install')
+  }
+  const installed = JSON.parse(readFileSync(installedPath, 'utf8')) as { version?: unknown }
+  if (typeof installed.version !== 'string' || installed.version === '') {
+    throw new Error('desktop pack: installed electron has no version')
+  }
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    devDependencies?: Record<string, string>
+  }
+  manifest.devDependencies = { ...manifest.devDependencies, electron: installed.version }
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
 function stageApp(): void {
   run(pnpmBin(), ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'build'])
   const compiled = join(desktopRoot, 'lib', 'main.js')
@@ -510,6 +531,7 @@ function stageApp(): void {
   for (const name of ['lib', 'assets', 'package.json'] as const) {
     cpSync(join(desktopRoot, name), join(appRoot, name), { recursive: true })
   }
+  pinStagedElectronVersion(join(appRoot, 'package.json'))
 }
 
 /**
@@ -534,7 +556,7 @@ function packDesktop(platform: DesktopPlatform, skipBuild = false): void {
     'never',
     target.flag,
     target.target,
-  ], appRoot)
+  ], desktopRoot)
   for (const name of expectedArtifacts(version, platform)) {
     const path = join(outDir, name)
     if (!existsSync(path)) throw new Error(`desktop pack: missing artifact ${path}`)
