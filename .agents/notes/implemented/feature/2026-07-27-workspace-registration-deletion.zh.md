@@ -12,7 +12,7 @@ Workspace 注册已有代码目录，使 GUI 能够为目录命名，并对其�
 
 ## 决策
 
-`ctx.workspaceRegistry.delete(id)` 只删除 Workspace 注册记录：其 id 会从持久化的 `workspaceIds` 中移除，`workspaces` 表行与实体缓存条目会消失，有序 `sessionIds` 账本也随该行一并消失，隐藏 id 也在同一次串行操作中离开 `hiddenWorkspaceIds`。它绝不调用文件系统移除操作或 `SessionPersistence`；目录、所有用户文件、所有实时会话和所有已持久化的会话日志都会保留。侧边栏分组是所有存续 Workspace 账本的补集，因此这些会话（包括当前会话）会立即出现在 Ungrouped 下。不打散会话、只把 Workspace 从主列表折走，见[隐藏 Workspace](2026-08-20-workspace-hide.md)。
+`ctx.workspaceRegistry.delete(id)` 只删除 Workspace 注册记录：其 id 会从持久化的 `workspaceIds` 中移除，`workspaces` 表行与实体缓存条目会消失，有序 `sessionIds` 账本也随该行一并消失，隐藏 id 也在同一次串行操作中离开 `hiddenWorkspaceIds`。它绝不调用文件系统移除操作或 `SessionPersistence`；目录、所有用户文件、所有实时会话和所有已持久化的会话日志都会保留。侧边栏分组是所有存续 Workspace 账本的补集，因此这些会话（包括当前会话）会立即出现在 Ungrouped 下。不打散会话、只把 Workspace 从主列表折走，见[隐藏 Workspace](2026-08-20-workspace-hide.zh.md)。
 
 未知 id 在领域约定处返回 `false`。`workspace.delete({ workspaceId })` 将该结果映射为 `workspace-not-found`；成功时返回 `{ deleted: true }`。`workspace.list` 仍是重连基线。
 
@@ -52,7 +52,7 @@ Host 流在前一笔全局顺序写入期间继续保留其已提交 id 集合�
 
 Workspace 包测试固定了仅删除元数据的成功路径、同路径重新注册、未知 id 的幂等行为、表操作失败回滚、明确标记的重启恢复、来源不明损坏的拒绝，以及缓存／表不变量行为。Apiproxy 与载体测试固定了 schema、处理器、`workspace-not-found`、保留会话／文件夹、使用新 id 重新注册，以及已提交的 `host/workspace-removed` 帧。客户端测试固定了一元直接回显、重复移除、延迟到达的 changed 帧，以及删除与进行中基线并发的行为。组件测试固定了确认交互、投影稳定后关闭、成功帧先于一元响应、失败、Cancel、Escape 与 Close。浏览器场景会在为不同目录复用已删除名称时，观测每一次瞬时 alert、slot error、console error 与 page error。
 
-组装后的无密钥 Web 场景会注册一个已有临时项目目录，将持久化会话计入账本，把该会话设为当前会话，在 Chromium 中确认删除，并验证 Workspace 分组消失，而 Ungrouped 保留当前会话。该场景在删除前后检查用户文件和 JSONL 日志，并在刷新后重复验证 UI、目录与日志。
+组装后的无密钥 Web 场景会注册一个已有临时项目目录，将持久化会话计入账本，把该会话设为当前会话，在 Chromium 中确认删除，并验证 Workspace 分组消失，而 Ungrouped 保留当前会话。该场景在删除前后检查用户文件和 JSONL 日志，并在刷新后重复验证 UI、目录与日志。场景会扣住种子会话的归属帧，直到浏览器选中接纳目录时创建的 New Session，确认分组中尚无种子会话，再交付该帧并选中唯一的非空白会话。Host 完成归属写入和行数达到二都不能证明浏览器已收到成员关系：分组标题加 New Session 已满足该行数，而到达的种子会话会使位置定位器在点击与断言之间指向另一行。
 
 ## 后果
 

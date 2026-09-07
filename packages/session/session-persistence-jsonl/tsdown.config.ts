@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-/** Build the Host and its private Worker separately to avoid unlisted shared chunks. */
+/** Build the backend and its path-loaded verifier as separate bundles. */
 export default defineConfig([
   {
     entry: ['lib/types/index.js'],
@@ -11,17 +11,15 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: false,
-    deps: { neverBundle: [/^@deepseek-ai\//] },
   },
   {
-    entry: ['lib/types/format-worker.js'],
+    entry: ['lib/types/worker.js'],
     outDir: 'lib',
-    format: ['esm'],
+    format: ['cjs'],
     platform: 'node',
     target: 'es2024',
     fixedExtension: false,
     dts: false,
     clean: false,
-    deps: { neverBundle: [/^@deepseek-ai\//] },
   },
 ])

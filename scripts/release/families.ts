@@ -117,7 +117,7 @@ export abstract class ReleaseFamily {
   /**
    * Discover this family's members.
    * @param root - repository root.
-   * @returns Members sorted by directory, with names validated and deduplicated.
+   * @returns Publishable members sorted by directory, with names validated and deduplicated.
    */
   members(root: string): ReleaseMember[] {
     const manifestPaths = globSync([...this.patterns], { cwd: root }).sort()

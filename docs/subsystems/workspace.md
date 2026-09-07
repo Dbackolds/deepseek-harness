@@ -2,7 +2,7 @@
 
 English | [中文](workspace.zh.md)
 
-A workspace is the persistent record of a primary directory the user works in, plus optional additional folders: a stable id over a canonical path, extra canonical folders, a display title, and the ordered account of sessions that belong to it. The subsystem is one package ([dsh-workspace](../../packages/workspace/workspace), `ctx.workspaceRegistry`) — an optional host-side capability, not part of the agent-loop spine. The registry itself registers no tools and writes no session events; when a session's owning workspace has additional folders, `dsh-sandbox-policy` publishes that list as `workspace:folders` runtime context. It stores its records through the [storage domain form](storage.md) and validates session membership against [`SessionHeader.cwd`](persistence.md#sessionheader--metadata-beside-the-log), so `storageDomain` and `sessionPersistence` are mandatory startup dependencies: an unavailable persistence peer leaves the plugin pending rather than being mistaken for an empty history. Design record: [domain KV storage Agent Note](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md); bootstrap and GUI ordering: [Workspace UI product-flow Agent Note](../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.md).
+A workspace is the persistent record of a directory the user works in: a stable id over a canonical path, a display title, and the ordered account of sessions that belong to it. The subsystem is one package ([dsh-workspace](../../packages/workspace/workspace), `ctx.workspaceRegistry`) — an optional host-side capability, not part of the agent-loop spine, and invisible to models (no tools, no prompt text, no session events). It stores its records through the [storage domain form](storage.md) and validates session membership against [`SessionHeader.cwd`](persistence.md#sessionheader--metadata-beside-the-log), so `storageDomain` and `sessionPersistence` are mandatory startup dependencies: an unavailable persistence peer leaves the plugin pending rather than being mistaken for an empty history. Design record: [domain KV storage Agent Note](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md); bootstrap and GUI ordering: [Workspace UI product-flow Agent Note](../../.agents/notes/archived/feature/2026-07-25-workspace-ui-product-flow.md).
 
 Source: [`packages/workspace/workspace/src/types.ts`](../../packages/workspace/workspace/src/types.ts)
 
@@ -16,7 +16,7 @@ Source: [`packages/workspace/workspace/src/types.ts`](../../packages/workspace/w
 type WorkspaceId = Branded<'WorkspaceId'>
 ```
 
-`WorkspaceId` is a [branded id](core.md#branded-ids). Path identity is separate: `realpathNormalize` (`fs.realpath`; trailing slashes, `..`, and symlinks resolved) is the one uniqueness canon — primary and additional workspace paths are stored canonicalized, uniqueness is string equality of canonical paths (a symlink to an owned directory collides), and attach-time session cwd checks go through the same canon.
+`WorkspaceId` is a [branded id](core.md#branded-ids). Path identity is separate: `realpathNormalize` (`fs.realpath`; trailing slashes, `..`, and symlinks resolved) is the one uniqueness canon — workspace paths are stored canonicalized, uniqueness is string equality of canonical paths (a symlink to an owned directory collides), and attach-time session cwd checks go through the same canon.
 
 ## The workspace entity
 
@@ -24,32 +24,22 @@ Consumers see only the `Workspace` interface; the implementation stays package-p
 
 ```ts type-equiv
 /**
- * One workspace: a stable id over an existing primary directory, optional
- * additional folders, a display title, and an ordered candidate account of
- * sessions. Membership requires both an id in that account and a session
- * whose canonical effective home equals the workspace path. Consumers only see
- * this interface; the implementation stays private.
+ * One workspace: a stable id over an existing directory, a display title, and
+ * an ordered candidate account of sessions. Membership requires both an id in
+ * that account and a session header whose canonical cwd equals the workspace
+ * path. Consumers only see this interface; the implementation stays private.
  */
 interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Canonical primary directory path: the `fs.realpath` of the path given at
-   * create time (trailing slashes, `..`, and symlinks all resolved). Session
-   * cwd and membership stay bound to this path. Never rewritten afterwards,
-   * even when the directory disappears (see {@link status}).
+   * Canonical directory path: the `fs.realpath` of the path given at create
+   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
+   * afterwards, even when the directory disappears (see {@link status}).
    */
   readonly path: string
 
-  /**
-   * Additional canonical folders in durable add order. Never includes
-   * {@link path}; uniqueness is canonical-path equality. A missing folder
-   * stays listed until {@link removeFolder} removes it.
-   */
-  readonly folders: readonly string[]
-
-  /** Display title. Defaults to `basename(path)` at create; duplicates are allowed. */
   /** Display title. Defaults to the final path segment, or a filesystem root's own spelling; duplicates are allowed. */
   readonly title: string
 
@@ -63,9 +53,9 @@ interface Workspace {
    * Header-validated sessions in manually owned order: a new session is
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
-   * account is filtered synchronously: missing headers, invalid homes, and
-   * canonical membership-home mismatches are never returned. A subsequent
-   * workspace mutation prunes those filtered candidates durably.
+   * account is filtered synchronously: missing headers, invalid cwd values,
+   * and canonical cwd mismatches are never returned. A subsequent workspace
+   * mutation prunes those filtered candidates durably.
    */
   readonly sessionIds: readonly SessionId[]
 
@@ -81,9 +71,8 @@ interface Workspace {
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
    * live or persisted
-   * membership home (last `workspace/home`, else header cwd)
-   * must resolve to an existing directory equal to {@link path};
-   * unknown ids, missing or invalid homes, and mismatches reject without
+   * header cwd must resolve to an existing directory equal to {@link path};
+   * unknown ids, missing or invalid cwd values, and mismatches reject without
    * writing.
    * @param sessionId - The session to record.
    * @returns resolution after durability.
@@ -121,37 +110,16 @@ interface Workspace {
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
   status(): Promise<'ok' | 'missing-dir'>
-
-  /**
-   * Append an existing directory to {@link folders}. The path is
-   * canonicalized through `fs.realpath`; a nonexistent path rejects with the
-   * original error and a non-directory rejects. The primary {@link path} or
-   * an already-accounted folder resolves without writing, aside from the
-   * durable filtered-candidate prune every accepted mutation performs.
-   * @param path - Existing directory to add, in any path spelling.
-   * @returns resolution after durability.
-   */
-  addFolder(path: string): Promise<void>
-
-  /**
-   * Remove one additional folder from {@link folders}. The primary
-   * {@link path} cannot be removed this way. An unaccounted path is
-   * idempotent: it resolves without writing, aside from the durable
-   * filtered-candidate prune every accepted mutation performs.
-   * @param path - Additional folder to remove, in any path spelling.
-   * @returns resolution after durability.
-   */
-  removeFolder(path: string): Promise<void>
 }
 ```
 
-Ownership truth is the record's ordered `sessionIds`, never derived from session cwd — but membership requires both: an id on the account and a canonical membership home (last `workspace/home`, else header cwd) equal to the workspace path, so one session structurally belongs to at most one workspace. Failed writes reject (`insertSessionBefore` account errors as `WorkspaceMoveInvalidError`, storage failures as plain errors); every accepted mutation stamps `updatedAt` and durably prunes candidates that no longer pass the membership check.
+Ownership truth is the record's ordered `sessionIds`, never derived from session cwd — but membership requires both: an id on the account and a header whose canonical cwd equals the workspace path, so one session structurally belongs to at most one workspace. Failed writes reject (`insertSessionBefore` account errors as `WorkspaceMoveInvalidError`, storage failures as plain errors); every accepted mutation stamps `updatedAt` and durably prunes candidates that no longer pass the membership check.
 
 ## The registry: `ctx.workspaceRegistry`
 
 `WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?)` requires a fully qualified path, canonicalizes it, rejects a nonexistent path (the original `ENOENT`) or a non-directory, returns the existing entity unchanged when the canonical path is already owned, and otherwise creates a record with `title ?? defaultWorkspaceTitle(path)` prepended to the durable registry order (different canonical paths may share a display title, and a path with no final segment uses its root spelling). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path)` applies the same fully qualified realpath canon without creating. `delete(id)` removes only the registration, order entry, and session account — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption.
 
-Sessions get their birth cwd at create time from whoever creates them, not from this registry — the API gateway resolves a new session's cwd from the chosen workspace's `path` (falling back to an explicit or default cwd), creates the session so the cwd lands in its immutable [`SessionHeader`](persistence.md#sessionheader--metadata-beside-the-log), then calls `attachSession`, which re-validates membership home (last `workspace/home`, else header cwd; live logs, otherwise inspect) against the workspace path. `session.rehome` later moves the effective home and workspace account without rewriting the header. On the first successful start, the registry bootstraps history from persisted headers alone (`id`, `cwd`, `createdAt` — never event bodies), grouping sessions with a valid canonical cwd into per-directory workspaces, newest first; the initialized marker is written last so an interrupted bootstrap resumes safely. After that marker, accounted sessions are projected by membership home. The bootstrap is one-time: cwd-less legacy sessions stay Ungrouped, and sessions created afterwards join a workspace only through `attachSession`.
+Sessions get their cwd at create time from whoever creates them, not from this registry — the API gateway resolves a new session's cwd from the chosen workspace's `path` (falling back to an explicit or default cwd), creates the session so the cwd lands in its immutable [`SessionHeader`](persistence.md#sessionheader--metadata-beside-the-log), then calls `attachSession`, which re-validates that stored header cwd against the workspace path. On the first successful start, the registry bootstraps history from persisted headers alone (`id`, `cwd`, `createdAt` — never event bodies), grouping sessions with a valid canonical cwd into per-directory workspaces, newest first; the initialized marker is written last so an interrupted bootstrap resumes safely. The bootstrap is one-time: cwd-less legacy sessions stay Ungrouped, and sessions created afterwards join a workspace only through `attachSession`.
 
 ## Consumers
 
@@ -274,6 +242,68 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 
 Source: [`packages/api/workspace-controller/src/index.ts`](../../packages/api/workspace-controller/src/index.ts)
 
+<a id="ctxworkspacefiles--workspacefiles"></a>
+
+### `ctx.workspaceFiles` — `WorkspaceFiles`
+
+Host Remote service over the composed filesystem, confined to one workspace.
+
+```ts cordis-catalog
+/**
+ * Read one page of lines from a UTF-8 text file inside the Agent's workspace.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param range - the line window; omitted fields take the page defaults.
+ * @param signal - caller cancellation.
+ * @returns the page, the file's version at the stat before it, and whether it reaches the last line.
+ */
+@Remote async read(agent: Agent, path: string, range: WorkspaceFileRange, signal: AbortSignal): Promise<WorkspaceFileText>
+
+/**
+ * Read one byte window of a regular file inside the Agent's workspace: raw
+ * bytes, no text decoding and no binary rejection.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param range - the byte window; omitted fields take the window defaults.
+ * @param signal - caller cancellation.
+ * @returns the window in base64, the file's version and size at the stat before it, and whether it reaches the last byte.
+ */
+@Remote async readBytes(agent: Agent, path: string, range: WorkspaceByteRange, signal: AbortSignal): Promise<WorkspaceFileBytes>
+
+/**
+ * Report one regular file's identity, version, and size without its content.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param signal - caller cancellation.
+ * @returns the file's absolute path, current version, and byte size.
+ */
+@Remote async stat(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceFileStat>
+
+/**
+ * List the direct children of one directory inside the Agent's workspace.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param signal - caller cancellation.
+ * @returns the directory's children in the backend's stable name order, bounded by the entry cap.
+ */
+@Remote async list(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceDirectoryListing>
+
+/**
+ * Stream every `fs/observed` observation of a file inside the Agent's
+ * workspace. Only Agent filesystem operations report here; the OS is not
+ * watched.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param signal - generation cancellation.
+ * @returns `ready` once the Host observation queue is active and the workspace
+ *   root is resolved, then queued and live observations in emission order.
+ */
+@Remote({ mode: 'stream' }) changes(agent: Agent, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/api/workspace-files/src/index.ts`](../../packages/api/workspace-files/src/index.ts)
+
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`
@@ -282,15 +312,6 @@ Durable workspace registry. Startup waits for `sessionPersistence`, builds one c
 
 ```ts cordis-catalog
 /**
- * Create or reuse a workspace for an existing directory. The path is
- * canonicalized through `fs.realpath`; a nonexistent path rejects with the
- * original error and a non-directory rejects. Repeated calls for the same
- * canonical path return the existing entity without changing its title
- * or its registry-order position; a hidden owner of that path is shown
- * in place as part of the same serialized write. A newly created
- * workspace is prepended to the durable registry order. Different
- * canonical paths may share a display title.
- * @param path - Existing directory to own, in any path spelling.
  * Create or reuse a workspace for an existing directory. The fully qualified
  * path is canonicalized through `fs.realpath`; a relative, nonexistent, or
  * non-directory path rejects. Repeated calls for the same canonical path
@@ -322,9 +343,7 @@ list(): Workspace[]
  * Delete one workspace registration while retaining its directory and every
  * session log. The durable order is updated before the table deletion; a
  * failed table write restores the prior order and keeps the entity
- * published. A hidden id is dropped from the hidden set in the same
- * serialized operation. Unknown ids are an idempotent no-op for domain
- * callers.
+ * published. Unknown ids are an idempotent no-op for domain callers.
  * @param id - Workspace registration to remove.
  * @returns `true` when a record was deleted, `false` when it was unknown.
  */
@@ -347,37 +366,6 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
  * @returns resolution after durability.
  */
 archiveSession(sessionId: SessionId): Promise<void>
-
-/**
- * Unarchive one session durably: drop it from the archive set and keep
- * remaining ids in relative order. Accounting and the session log stay
- * put, so grouping surfaces restore the prior slot. An id already in the
- * set is removed without a live/persisted re-check. A known id that is
- * not archived resolves without writing. An unknown id throws
- * {@link WorkspaceUnknownSessionError}. Persistence listing failures
- * propagate as themselves.
- * @param sessionId - The session to unarchive.
- * @returns resolution after durability.
- */
-unarchiveSession(sessionId: SessionId): Promise<void>
-
-/**
- * Hide one registered workspace durably. Unknown ids are an idempotent
- * no-op returning false (Host maps that to workspace-not-found). An
- * already-hidden id succeeds without writing.
- * @param id - Workspace to hide.
- * @returns `true` when the workspace is registered, `false` when unknown.
- */
-hide(id: WorkspaceId): Promise<boolean>
-
-/**
- * Show one registered workspace durably. Unknown ids are an idempotent
- * no-op returning false (Host maps that to workspace-not-found). A
- * registered id that is not hidden succeeds without writing.
- * @param id - Workspace to show.
- * @returns `true` when the workspace is registered, `false` when unknown.
- */
-show(id: WorkspaceId): Promise<boolean>
 
 /**
  * Resolve by canonical directory path without creating or mutating a

@@ -2,7 +2,7 @@
 
 [English](workspace.md) | 中文
 
-工作区（workspace）是用户主工作目录以及可选附加文件夹的持久记录：一个建立在规范路径之上的稳定 id、额外的规范文件夹、一个显示标题，以及归属于它的会话的有序账本。该子系统是单个包（package）（[dsh-workspace](../../packages/workspace/workspace)，`ctx.workspaceRegistry`）——一项宿主侧可选能力，不属于 agent loop（智能体循环）主干。注册表本身不注册工具、也不写入会话事件；当会话所属 workspace 有附加文件夹时，`dsh-sandbox-policy` 会把该列表发布为 `workspace:folders` 运行时上下文。它通过[存储领域数据形式](storage.zh.md)存储自己的记录，并对照 [`SessionHeader.cwd`](persistence.zh.md#sessionheader--metadata-beside-the-log) 校验会话成员资格，因此 `storageDomain` 与 `sessionPersistence` 是必需的启动依赖：持久化这一依赖不可用时，插件保持 pending，而不是把这种不可用误当作空历史。设计记录：[领域 KV 存储 Agent Note（agent 决策记录）](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)；引导与 GUI 顺序：[Workspace UI 产品流程 Agent Note](../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.zh.md)。
+工作区（workspace）是用户工作目录的持久记录：一个建立在规范路径之上的稳定 id、一个显示标题，以及归属于它的会话的有序账本。该子系统是单个包（package）（[dsh-workspace](../../packages/workspace/workspace)，`ctx.workspaceRegistry`）——一项宿主侧可选能力，不属于 agent loop（智能体循环）主干，并且对模型不可见（没有工具、没有提示词文本、没有会话事件）。它通过[存储领域数据形式](storage.zh.md)存储自己的记录，并对照 [`SessionHeader.cwd`](persistence.zh.md#sessionheader--metadata-beside-the-log) 校验会话成员资格，因此 `storageDomain` 与 `sessionPersistence` 是必需的启动依赖：持久化这一依赖不可用时，插件保持 pending，而不是把这种不可用误当作空历史。设计记录：[领域 KV 存储 Agent Note（agent 决策记录）](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)；引导与 GUI 顺序：[Workspace UI 产品流程 Agent Note](../../.agents/notes/archived/feature/2026-07-25-workspace-ui-product-flow.md)。
 
 源码：[`packages/workspace/workspace/src/types.ts`](../../packages/workspace/workspace/src/types.ts)
 
@@ -24,32 +24,22 @@ type WorkspaceId = Branded<'WorkspaceId'>
 
 ```ts type-equiv
 /**
- * One workspace: a stable id over an existing primary directory, optional
- * additional folders, a display title, and an ordered candidate account of
- * sessions. Membership requires both an id in that account and a session
- * whose canonical effective home equals the workspace path. Consumers only see
- * this interface; the implementation stays private.
+ * One workspace: a stable id over an existing directory, a display title, and
+ * an ordered candidate account of sessions. Membership requires both an id in
+ * that account and a session header whose canonical cwd equals the workspace
+ * path. Consumers only see this interface; the implementation stays private.
  */
 interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Canonical primary directory path: the `fs.realpath` of the path given at
-   * create time (trailing slashes, `..`, and symlinks all resolved). Session
-   * cwd and membership stay bound to this path. Never rewritten afterwards,
-   * even when the directory disappears (see {@link status}).
+   * Canonical directory path: the `fs.realpath` of the path given at create
+   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
+   * afterwards, even when the directory disappears (see {@link status}).
    */
   readonly path: string
 
-  /**
-   * Additional canonical folders in durable add order. Never includes
-   * {@link path}; uniqueness is canonical-path equality. A missing folder
-   * stays listed until {@link removeFolder} removes it.
-   */
-  readonly folders: readonly string[]
-
-  /** Display title. Defaults to `basename(path)` at create; duplicates are allowed. */
   /** Display title. Defaults to the final path segment, or a filesystem root's own spelling; duplicates are allowed. */
   readonly title: string
 
@@ -63,9 +53,9 @@ interface Workspace {
    * Header-validated sessions in manually owned order: a new session is
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
-   * account is filtered synchronously: missing headers, invalid homes, and
-   * canonical membership-home mismatches are never returned. A subsequent
-   * workspace mutation prunes those filtered candidates durably.
+   * account is filtered synchronously: missing headers, invalid cwd values,
+   * and canonical cwd mismatches are never returned. A subsequent workspace
+   * mutation prunes those filtered candidates durably.
    */
   readonly sessionIds: readonly SessionId[]
 
@@ -81,9 +71,8 @@ interface Workspace {
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
    * live or persisted
-   * membership home (last `workspace/home`, else header cwd)
-   * must resolve to an existing directory equal to {@link path};
-   * unknown ids, missing or invalid homes, and mismatches reject without
+   * header cwd must resolve to an existing directory equal to {@link path};
+   * unknown ids, missing or invalid cwd values, and mismatches reject without
    * writing.
    * @param sessionId - The session to record.
    * @returns resolution after durability.
@@ -121,37 +110,16 @@ interface Workspace {
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
   status(): Promise<'ok' | 'missing-dir'>
-
-  /**
-   * Append an existing directory to {@link folders}. The path is
-   * canonicalized through `fs.realpath`; a nonexistent path rejects with the
-   * original error and a non-directory rejects. The primary {@link path} or
-   * an already-accounted folder resolves without writing, aside from the
-   * durable filtered-candidate prune every accepted mutation performs.
-   * @param path - Existing directory to add, in any path spelling.
-   * @returns resolution after durability.
-   */
-  addFolder(path: string): Promise<void>
-
-  /**
-   * Remove one additional folder from {@link folders}. The primary
-   * {@link path} cannot be removed this way. An unaccounted path is
-   * idempotent: it resolves without writing, aside from the durable
-   * filtered-candidate prune every accepted mutation performs.
-   * @param path - Additional folder to remove, in any path spelling.
-   * @returns resolution after durability.
-   */
-  removeFolder(path: string): Promise<void>
 }
 ```
 
-所有权的真源是记录中有序的 `sessionIds`，绝不从会话 cwd 派生——但成员资格要求两者同时成立：账本上有其 id，且规范成员家（最后一条 `workspace/home`，否则 header cwd）等于工作区路径，因此一个会话在结构上至多属于一个工作区。失败的写入会拒绝（`insertSessionBefore` 的账本错误以 `WorkspaceMoveInvalidError` 拒绝，存储失败以普通错误拒绝）；每次被接受的变更都盖上 `updatedAt` 时间戳，并持久修剪不再通过成员资格检查的候选项。
+所有权的真源是记录中有序的 `sessionIds`，绝不从会话 cwd 派生——但成员资格要求两者同时成立：账本上有其 id，且 header 的规范 cwd 等于工作区路径，因此一个会话在结构上至多属于一个工作区。失败的写入会拒绝（`insertSessionBefore` 的账本错误以 `WorkspaceMoveInvalidError` 拒绝，存储失败以普通错误拒绝）；每次被接受的变更都盖上 `updatedAt` 时间戳，并持久修剪不再通过成员资格检查的候选项。
 
 ## 注册表：`ctx.workspaceRegistry`
 
 `WorkspaceRegistry`（[签名](#ctxworkspaceregistry--workspaceregistry)）拥有注册与解析。`create(path, title?)` 要求完全限定路径并将其规范化，拒绝不存在的路径（原样传出原始 `ENOENT`）或非目录；当规范路径已被拥有时原样返回既有实体；否则创建一条标题为 `title ?? defaultWorkspaceTitle(path)` 的记录并前插到持久的注册表顺序中（不同规范路径可以共享同一显示标题，没有最终路径段时使用根路径拼写）。`get(id)` 与有序的 `list()` 是同步缓存读取；`resolveByPath(path)` 应用同一套完全限定 realpath 规范但不创建。`delete(id)` 只移除注册记录、顺序条目和会话账本——目录、用户文件、实时会话和已持久化日志一概不动，因此这些会话变为 Ungrouped（[决策](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)）；未知 id 返回 `false`。create 与 delete 会在其两次写入（记录 + 顺序）可能分叉之前先持久写入一个待定变更标记；启动时恰好解决被标记的那次变更——通过删除被标记的表行：这会补完被中断的 delete，并回滚被中断的 create（注册可以重建，因此回滚是安全方向）——而没有标记的顺序/表不一致则作为损坏大声失败。
 
-会话的出生 cwd 在创建时由创建者赋予，而不是由本注册表赋予——API 网关从所选工作区的 `path` 解析新会话的 cwd（回退到显式或默认 cwd），先创建会话使 cwd 落入其不可变的 [`SessionHeader`](persistence.zh.md#sessionheader--metadata-beside-the-log)，再调用 `attachSession`，后者会把成员家（最后一条 `workspace/home`，否则 header cwd；活动日志优先，否则 inspect）与工作区路径重新校验一遍。`session.rehome` 之后会改有效家和工作区账本，不改写 header。首次成功启动时，注册表仅凭已持久化的 header（`id`、`cwd`、`createdAt`——绝不读事件正文）引导历史：把规范 cwd 有效的会话按目录分组为工作区，最新的排在最前；「已初始化」标记最后写入，因此被中断的引导可以安全续跑。标记写入后，已记账会话按成员家投影。引导只发生这一次：没有 cwd 的历史遗留会话保持 Ungrouped，此后创建的会话只能通过 `attachSession` 加入工作区。
+会话的 cwd 在创建时由创建者赋予，而不是由本注册表赋予——API 网关从所选工作区的 `path` 解析新会话的 cwd（回退到显式或默认 cwd），先创建会话使 cwd 落入其不可变的 [`SessionHeader`](persistence.zh.md#sessionheader--metadata-beside-the-log)，再调用 `attachSession`，后者会把已存储的 header cwd 与工作区路径重新校验一遍。首次成功启动时，注册表仅凭已持久化的 header（`id`、`cwd`、`createdAt`——绝不读事件正文）引导历史：把规范 cwd 有效的会话按目录分组为工作区，最新的排在最前；「已初始化」标记最后写入，因此被中断的引导可以安全续跑。引导只发生这一次：没有 cwd 的历史遗留会话保持 Ungrouped，此后创建的会话只能通过 `attachSession` 加入工作区。
 
 ## 消费方
 
@@ -274,6 +242,68 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 
 Source: [`packages/api/workspace-controller/src/index.ts`](../../packages/api/workspace-controller/src/index.ts)
 
+<a id="ctxworkspacefiles--workspacefiles"></a>
+
+### `ctx.workspaceFiles` — `WorkspaceFiles`
+
+Host Remote service over the composed filesystem, confined to one workspace.
+
+```ts cordis-catalog
+/**
+ * Read one page of lines from a UTF-8 text file inside the Agent's workspace.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param range - the line window; omitted fields take the page defaults.
+ * @param signal - caller cancellation.
+ * @returns the page, the file's version at the stat before it, and whether it reaches the last line.
+ */
+@Remote async read(agent: Agent, path: string, range: WorkspaceFileRange, signal: AbortSignal): Promise<WorkspaceFileText>
+
+/**
+ * Read one byte window of a regular file inside the Agent's workspace: raw
+ * bytes, no text decoding and no binary rejection.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param range - the byte window; omitted fields take the window defaults.
+ * @param signal - caller cancellation.
+ * @returns the window in base64, the file's version and size at the stat before it, and whether it reaches the last byte.
+ */
+@Remote async readBytes(agent: Agent, path: string, range: WorkspaceByteRange, signal: AbortSignal): Promise<WorkspaceFileBytes>
+
+/**
+ * Report one regular file's identity, version, and size without its content.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param signal - caller cancellation.
+ * @returns the file's absolute path, current version, and byte size.
+ */
+@Remote async stat(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceFileStat>
+
+/**
+ * List the direct children of one directory inside the Agent's workspace.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param signal - caller cancellation.
+ * @returns the directory's children in the backend's stable name order, bounded by the entry cap.
+ */
+@Remote async list(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceDirectoryListing>
+
+/**
+ * Stream every `fs/observed` observation of a file inside the Agent's
+ * workspace. Only Agent filesystem operations report here; the OS is not
+ * watched.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param signal - generation cancellation.
+ * @returns `ready` once the Host observation queue is active and the workspace
+ *   root is resolved, then queued and live observations in emission order.
+ */
+@Remote({ mode: 'stream' }) changes(agent: Agent, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/api/workspace-files/src/index.ts`](../../packages/api/workspace-files/src/index.ts)
+
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`
@@ -282,15 +312,6 @@ Durable workspace registry. Startup waits for `sessionPersistence`, builds one c
 
 ```ts cordis-catalog
 /**
- * Create or reuse a workspace for an existing directory. The path is
- * canonicalized through `fs.realpath`; a nonexistent path rejects with the
- * original error and a non-directory rejects. Repeated calls for the same
- * canonical path return the existing entity without changing its title
- * or its registry-order position; a hidden owner of that path is shown
- * in place as part of the same serialized write. A newly created
- * workspace is prepended to the durable registry order. Different
- * canonical paths may share a display title.
- * @param path - Existing directory to own, in any path spelling.
  * Create or reuse a workspace for an existing directory. The fully qualified
  * path is canonicalized through `fs.realpath`; a relative, nonexistent, or
  * non-directory path rejects. Repeated calls for the same canonical path
@@ -322,9 +343,7 @@ list(): Workspace[]
  * Delete one workspace registration while retaining its directory and every
  * session log. The durable order is updated before the table deletion; a
  * failed table write restores the prior order and keeps the entity
- * published. A hidden id is dropped from the hidden set in the same
- * serialized operation. Unknown ids are an idempotent no-op for domain
- * callers.
+ * published. Unknown ids are an idempotent no-op for domain callers.
  * @param id - Workspace registration to remove.
  * @returns `true` when a record was deleted, `false` when it was unknown.
  */
@@ -347,37 +366,6 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
  * @returns resolution after durability.
  */
 archiveSession(sessionId: SessionId): Promise<void>
-
-/**
- * Unarchive one session durably: drop it from the archive set and keep
- * remaining ids in relative order. Accounting and the session log stay
- * put, so grouping surfaces restore the prior slot. An id already in the
- * set is removed without a live/persisted re-check. A known id that is
- * not archived resolves without writing. An unknown id throws
- * {@link WorkspaceUnknownSessionError}. Persistence listing failures
- * propagate as themselves.
- * @param sessionId - The session to unarchive.
- * @returns resolution after durability.
- */
-unarchiveSession(sessionId: SessionId): Promise<void>
-
-/**
- * Hide one registered workspace durably. Unknown ids are an idempotent
- * no-op returning false (Host maps that to workspace-not-found). An
- * already-hidden id succeeds without writing.
- * @param id - Workspace to hide.
- * @returns `true` when the workspace is registered, `false` when unknown.
- */
-hide(id: WorkspaceId): Promise<boolean>
-
-/**
- * Show one registered workspace durably. Unknown ids are an idempotent
- * no-op returning false (Host maps that to workspace-not-found). A
- * registered id that is not hidden succeeds without writing.
- * @param id - Workspace to show.
- * @returns `true` when the workspace is registered, `false` when unknown.
- */
-show(id: WorkspaceId): Promise<boolean>
 
 /**
  * Resolve by canonical directory path without creating or mutating a

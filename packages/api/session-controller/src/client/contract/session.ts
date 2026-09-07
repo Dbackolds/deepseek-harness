@@ -107,7 +107,7 @@ export interface ISession {
     content: PromptContentPart[],
   ): Promise<RemoteResult<{ accepted: true }>>
   /**
-   * Apply one edit, remove, or strict steer action to a still-pending queue occurrence.
+   * Apply one edit, remove, or Steer action to a still-pending queue occurrence.
    * @param itemId - agent-owned inbox occurrence identity.
    * @param action - requested queue operation.
    * @returns acceptance, or a business/transport error.

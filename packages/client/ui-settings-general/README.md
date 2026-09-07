@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-settings-general` is the settings shell of the dsh web client: the Settings panel opens from the sidebar's bottom account chip with the trigger chrome and modal shell, a connection-failure indicator beside that control offers immediate recovery, the navigation is built from the sections features contribute, and first-run users are walked through one onboarding step at a time. The trigger shows the last segment of the connection generation Host `home` (or the localized Local fallback), a trailing settings glyph in the wide column, and a visually hidden Settings accessible name. In the wide column the account chip and that glyph are separate click targets: the chip opens an account menu, and the glyph opens Settings. It also registers everything on the Settings pages that belongs to no single feature: the trigger/header/close chrome content, the local configuration-file action, the General section and its `settings.general.item` slot, and the `settings` dictionaries. Feature-owned rows (Permission, Language, Appearance, Product updates), sections (Models), and conditional onboarding steps stay with their feature packages; the shell itself ships no onboarding copy of its own.
+`dsh-client-ui-settings-general` is the settings shell of the dsh web client: the Settings panel opens from the sidebar's bottom control, a connection-failure indicator beside that control offers immediate recovery, the navigation is built from the sections features contribute, and first-run users are walked through one onboarding step at a time. It also registers everything on the Settings pages that belongs to no single feature: the trigger/header/close chrome content, the local configuration-file action, the General section and its `settings.general.item` slot, and the `settings` dictionaries. Feature-owned rows (Permission, Language, Appearance), sections (Models), and conditional onboarding steps stay with their feature packages; the shell itself ships no onboarding copy of its own.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Users reach Settings through the trailing glyph on the sidebar's bottom account bar (accessible name Settings). The account chip beside it opens a menu for interface language (System default plus shipped locales), appearance (System default / Dark theme / Light theme), and interface scale (Zoom in / Zoom out / Actual size). The collapsed rail still uses a single circular chip that opens Settings. Feature plugins contribute their pages and onboarding steps through the slot ledgers this shell projects. After a Host connection failure, a pale-yellow **Disconnected** action appears to the right of Settings. Automatic recovery shows **Connecting** with one to three dots advancing every 500ms. Hover or keyboard focus changes either yellow label to **Reconnect now** without changing its background; press feedback stays within the warning palette, and selecting it starts retry 1 immediately. Recovery changes the region to pale-green **Connected** for two seconds before it disappears. The icon, left-aligned text origin, height, and width remain fixed across every visible state. Initial startup and uninterrupted healthy operation remain silent. The shell renders the modal panel, the navigation built from `settings.section` entries, and exactly one mounted onboarding step at a time.
+Users reach the shell through the sidebar's bottom Settings control; feature plugins contribute their pages and onboarding steps through the slot ledgers this shell projects. A pale-yellow **Disconnected** action beside Settings indicates browser offline suspension. Automatic recovery shows **Reconnecting** with one to three dots advancing every 500ms. Hover or keyboard focus changes either yellow label to **Reconnect now** without changing its background; press feedback stays within the warning palette, and selecting it starts retry 1 immediately. Recovery changes the region to pale-green **Connected** for two seconds before it disappears. The icon, left-aligned text origin, height, and width remain fixed across every visible state. Initial startup and uninterrupted healthy operation remain silent. The shell renders the modal panel, the navigation built from `settings.section` entries, and exactly one mounted onboarding step at a time.
 
 ### The General section
 
-The General section holds rows registered into `settings.general.item` by feature packages — it has no built-in rows. Feature plugins own the row copy and behavior; the shell only provides the section and its slot. The Appearance row, for example, lives in ui-theme; Product updates lives in ui-update.
+The General section holds rows registered into `settings.general.item` by feature packages — it has no built-in rows. Feature plugins own the row copy and behavior; the shell only provides the section and its slot. The Appearance row, for example, lives in ui-theme.
 
 ### Opening the configuration file
 
@@ -63,7 +63,7 @@ On a loopback page, the Client loads the provider's `hasDocument` capability thr
 
 ### Host half
 
-The Host half registers `ui-onboarding` and `ui-host` in the user-settings seam. The welcome step contributed by ui-settings-models reads and writes its `welcomeNoticeVersion` through the existing public settings boundary. `ui-host` records this process start instant and increments a durable start count once per Node process; the settings content header shows both facts.
+The Host half registers `ui-onboarding` in the user-settings seam. The welcome step contributed by ui-settings-models reads and writes its `welcomeNoticeVersion` through the existing public settings boundary; the shell itself remains policy-free.
 
 </details>
 

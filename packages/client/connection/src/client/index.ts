@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import {
   ConnectionController,
-  type ConnectionConfig,
+  type ConnectionRecoveryConfig,
   type ConnectionGeneration,
   type ConnectionGenerationSource,
   type ConnectionSinks,
@@ -14,6 +14,7 @@ import { isLoopbackHostname } from '../loopback-hostname.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SettingsDescribeValue, SettingsNamespaceView } from '@deepseek-ai/dsh-settings/types'
 import type { ClientConnectionRpc, RpcResponse } from '../rpc.ts'
+import { resolveConnectionConfig } from '../recovery-config.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -41,7 +42,7 @@ export {
 // Connection loop types are public through ConnectionHandle.start; the
 // controller remains package-internal.
 export type {
-  ConnectionConfig,
+  ConnectionRecoveryConfig,
   ConnectionGeneration,
   ConnectionGenerationSource,
   ConnectionHostInfo,
@@ -193,6 +194,7 @@ export interface ClientTransportHooks {
 /** Page global carrying {@link ClientTransportHooks}; absent in the served web app. */
 interface ClientTransportGlobal {
   __DSH_TRANSPORT__?: ClientTransportHooks
+  __DSH_CONNECTION_RECOVERY__?: unknown
 }
 
 /**
@@ -230,10 +232,10 @@ export interface ConnectionHandle {
    * Start the connect/reconnect loop with the consumer's state callbacks.
    * API Gateway owns the loop; a second call throws.
    * @param sinks - connection-state callbacks.
-   * @param config - reconnect/backoff tunables.
+   * @param config - explicit timing overrides; omitted fields use Host bootstrap timing.
    * @returns lifecycle controls for the loop.
    */
-  start(sinks: ConnectionSinks, config?: ConnectionConfig): ConnectionLoop
+  start(sinks: ConnectionSinks, config?: ConnectionRecoveryConfig): ConnectionLoop
 }
 
 /** Controls retained by the sole owner of a running connection loop. */
@@ -279,6 +281,7 @@ export function apply(ctx: Context): void {
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureRpc = fixture ? createFixtureConnectionRpc() : undefined
   const transport = (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
+  const recovery = resolveConnectionConfig((globalThis as ClientTransportGlobal).__DSH_CONNECTION_RECOVERY__)
   const rpc = fixtureRpc ?? createWebConnectionRpc(transport?.fetch, transport?.openStream)
   let generationSource: ConnectionGenerationSource | undefined
   let owner: ConnectionOwner | undefined
@@ -371,7 +374,7 @@ export function apply(ctx: Context): void {
           publishState(nextState)
           sinks.onStateChange?.(nextState)
         },
-      }, config ?? {})
+      }, { ...recovery, ...config })
       const current = { token, source, controller, stopNetworkWatch: watchBrowserNetwork(controller) }
       owner = current
       controller.start()
