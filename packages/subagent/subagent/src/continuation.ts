@@ -364,7 +364,7 @@ export class SubagentContinuationManager {
       this.activations.sendWaking(
         parent,
         message,
-        parent.status === 'idle' || readBusyDelivery(this.ctx, 'reportBusy') === 'queue'
+        parent.status !== 'idle' && readBusyDelivery(this.ctx, 'reportBusy') === 'queue'
           ? 'queue'
           : 'steer',
       )
