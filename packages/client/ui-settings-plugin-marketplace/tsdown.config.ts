@@ -4,6 +4,7 @@ export default clientBundle(
   '@deepseek-ai/dsh-client-ui-settings-plugin-marketplace',
   ['lib/types/index.js', 'lib/types/invariant.js'],
   {
+    hostPhase: true,
     companions: [{
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-marketplace/host',
       entry: { host: 'lib/types/host/index.js' },
