@@ -262,13 +262,7 @@ export function formatReloadAccepted(
   ].join('\n')
 }
 
-export function formatReloadFinished(
-  ok: number,
-  failed: number,
-): string {
-  if (failed === 0) return `重载完成, 成功重载 ${String(ok)} 个插件`
-  return `重载完成, 成功重载 ${String(ok)} 个插件, 失败 ${String(failed)} 个`
-}
+export { formatReloadFinished } from '../shared.ts'
 
 /** First-line summary plus the plugin id list official command cards expand. */
 export function formatReloadOutcome(

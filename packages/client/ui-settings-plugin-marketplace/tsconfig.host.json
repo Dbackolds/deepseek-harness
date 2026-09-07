@@ -8,6 +8,8 @@
   "include": [
     "src/host/**/*.ts",
     "src/index.ts",
+    "src/ids.ts",
+    "src/shared.ts",
     "src/invariant.ts"
   ],
   "references": [

@@ -1,5 +1,7 @@
 /** Local notes and tags attached to installed plugins. */
 
+import { allTags as collectAllTags, parseTagInput as splitTagInput } from '../shared.ts'
+
 export interface PluginNote {
   readonly note: string
   readonly tags: readonly string[]
@@ -26,7 +28,7 @@ export function normalizeTags(raw: readonly string[]): string[] {
 }
 
 export function parseTagInput(raw: string): string[] {
-  return normalizeTags(raw.split(/[,，]/))
+  return splitTagInput(raw)
 }
 
 export function isPluginNotes(value: unknown): value is PluginNotes {
@@ -59,15 +61,5 @@ export function writeNote(
 }
 
 export function allTags(notes: PluginNotes | undefined): string[] {
-  const seen = new Set<string>()
-  const tags: string[] = []
-  for (const item of Object.values(notes ?? {})) {
-    for (const tag of item.tags) {
-      const key = tag.toLocaleLowerCase()
-      if (seen.has(key)) continue
-      seen.add(key)
-      tags.push(tag)
-    }
-  }
-  return tags.sort((left, right) => left.localeCompare(right))
+  return collectAllTags(notes)
 }

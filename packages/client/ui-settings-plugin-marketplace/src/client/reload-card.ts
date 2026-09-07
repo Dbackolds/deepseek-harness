@@ -1,4 +1,4 @@
-import { formatReloadFinished } from '../host/reload.ts'
+import { formatReloadFinished } from '../shared.ts'
 import type { ReloadProgress } from './ReloadProgressToast.tsx'
 
 export interface ReloadCardNode {

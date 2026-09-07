@@ -15,7 +15,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { catalogPackageLabel, installedHoverLabel } from './catalog-label.ts'
 import { updatedAgoLine, updatedAgoRelative } from './updated-ago.ts'
-import { allTags, parseTagInput } from '../host/plugin-notes.ts'
+import { allTags, parseTagInput } from '../shared.ts'
 import { confirmInstallMessage } from './confirm-install.ts'
 import type { MarketplaceLocaleKey } from './locales.ts'
 import css from './MarketplaceSettingsSection.module.css'

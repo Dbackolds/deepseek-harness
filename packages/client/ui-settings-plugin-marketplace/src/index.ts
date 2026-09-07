@@ -1,17 +1,15 @@
 /**
- * Host loader entry for the browser marketplace row. The Host half that
- * owns `/plugin-marketplace` and `/reload` lives under `./host`.
+ * Browser marketplace row. Shared identities live in `./ids.ts`; the Host
+ * half that owns `/plugin-marketplace` and `/reload` lives under `./host`.
  * @module @deepseek-ai/dsh-client-ui-settings-plugin-marketplace
  */
 
 export {
-  DEFAULT_CATALOG_URL,
   MARKETPLACE_BUNDLE_PACKAGE,
   MARKETPLACE_CLIENT_ENTRY_ID,
   MARKETPLACE_HOST_ENTRY_ID,
   MARKETPLACE_SETTINGS_NAMESPACE,
-  type Config,
-} from './host/index.ts'
+} from './ids.ts'
 
 /**
  * Empty Host body for the browser marketplace row.

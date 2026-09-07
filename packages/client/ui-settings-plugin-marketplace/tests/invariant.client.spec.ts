@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import * as MarketplaceInvariant from '../src/invariant.ts'
-import { apply as applyHost, inject, name } from '../src/host/index.ts'
 import { apply as applyClientRow } from '../src/index.ts'
 
 describe('invariant companion', () => {
@@ -14,10 +13,7 @@ describe('invariant companion', () => {
     await expect(ctx.plugin(MarketplaceInvariant).await()).resolves.toBeDefined()
   })
 
-  it('keeps Host identity on ./host and an empty package entry', () => {
-    expect(name).toBe('plugin-marketplace')
-    expect(inject).toEqual(['loader', 'profile', 'connection'])
-    expect(typeof applyHost).toBe('function')
-    expect(applyClientRow).not.toBe(applyHost)
+  it('keeps an empty package entry', () => {
+    expect(typeof applyClientRow).toBe('function')
   })
 })

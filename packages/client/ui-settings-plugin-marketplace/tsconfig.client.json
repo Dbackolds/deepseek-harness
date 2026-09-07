@@ -11,6 +11,8 @@
     "src/client/**/*.tsx",
     "src/css-modules.d.ts",
     "src/index.ts",
+    "src/ids.ts",
+    "src/shared.ts",
     "src/invariant.ts"
   ],
   "references": [

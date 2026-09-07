@@ -45,15 +45,23 @@ import type {
   ReloadProgressSnapshot,
   SetEnabledRequest,
 } from './types.ts'
+import {
+  MARKETPLACE_BUNDLE_PACKAGE,
+  MARKETPLACE_CLIENT_ENTRY_ID,
+  MARKETPLACE_HOST_ENTRY_ID,
+  MARKETPLACE_SETTINGS_NAMESPACE,
+} from '../ids.ts'
 
 export const name = 'plugin-marketplace'
 export const inject = ['loader', 'profile', 'connection']
-
-export const MARKETPLACE_BUNDLE_PACKAGE = '@deepseek-ai/dsh-client-ui-settings-plugin-marketplace'
-export const MARKETPLACE_HOST_ENTRY_ID = 'plugin-marketplace'
-export const MARKETPLACE_CLIENT_ENTRY_ID = 'ui-settings-plugin-marketplace'
-export const MARKETPLACE_SETTINGS_NAMESPACE = 'plugin-marketplace'
+export {
+  MARKETPLACE_BUNDLE_PACKAGE,
+  MARKETPLACE_CLIENT_ENTRY_ID,
+  MARKETPLACE_HOST_ENTRY_ID,
+  MARKETPLACE_SETTINGS_NAMESPACE,
+}
 export { DEFAULT_CATALOG_URL } from './defaults.ts'
+
 const SETTINGS_NS = settingsNamespace(MARKETPLACE_SETTINGS_NAMESPACE)
 const CHANNEL = '/plugin-marketplace'
 
