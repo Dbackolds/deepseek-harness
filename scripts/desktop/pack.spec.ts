@@ -59,6 +59,27 @@ describe('desktop release naming', () => {
     expect(installedElectronVersion()).toBe('44.0.0')
   })
 
+  it('writes a dependency-free staged manifest so Windows electron-builder skips pnpm list', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-desktop-leaf-manifest-'))
+    const manifest = join(dir, 'package.json')
+    writeFileSync(manifest, `${JSON.stringify({
+      name: '@deepseek-ai/dsh-desktop',
+      version: '0.1.3-alpha.2.7',
+      main: 'lib/main.js',
+      dependencies: { 'electron-updater': '^6.8.9' },
+      devDependencies: { electron: '^44.0.0' },
+    })}\n`)
+    pinStagedElectronVersion(manifest)
+    const staged = JSON.parse(readFileSync(manifest, 'utf8')) as {
+      name: string
+      dependencies?: unknown
+      devDependencies?: unknown
+    }
+    expect(staged.name).toBe('dsh-desktop')
+    expect(staged.dependencies).toBeUndefined()
+    expect(staged.devDependencies).toBeUndefined()
+  })
+
   it('rejects a missing or empty version', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-desktop-bad-manifest-'))
     const manifest = join(dir, 'package.json')

@@ -548,6 +548,9 @@ function stageApp(): void {
     cpSync(join(desktopRoot, name), join(appRoot, name), { recursive: true })
   }
   pinStagedElectronVersion(join(appRoot, 'package.json'))
+  // A tiny lockfile keeps electron-builder from walking the repository
+  // workspace when collecting node_modules for this leaf app.
+  writeFileSync(join(appRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n')
 }
 
 /**
@@ -572,7 +575,7 @@ function packDesktop(platform: DesktopPlatform, skipBuild = false): void {
     'never',
     target.flag,
     target.target,
-  ], desktopRoot)
+  ], appRoot)
   for (const name of expectedArtifacts(version, platform)) {
     const path = join(outDir, name)
     if (!existsSync(path)) throw new Error(`desktop pack: missing artifact ${path}`)
