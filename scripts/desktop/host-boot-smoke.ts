@@ -53,6 +53,7 @@ export async function bootSmokeHost(options: SmokeOptions): Promise<SmokeResult>
   const child = spawn(node, [bin, 'web', '--port', '0', '--no-open'], {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
+    env: { ...process.env },
   })
   const output: string[] = []
   const readyUrl = await new Promise<string>((resolvePromise, rejectPromise) => {
