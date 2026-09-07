@@ -534,7 +534,7 @@ function packDesktop(platform: DesktopPlatform, skipBuild = false): void {
     'never',
     target.flag,
     target.target,
-  ], desktopRoot)
+  ], appRoot)
   for (const name of expectedArtifacts(version, platform)) {
     const path = join(outDir, name)
     if (!existsSync(path)) throw new Error(`desktop pack: missing artifact ${path}`)

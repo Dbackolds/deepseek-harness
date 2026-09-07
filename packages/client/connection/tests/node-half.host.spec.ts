@@ -327,6 +327,21 @@ describe('connection node half', () => {
     expect(routes).toHaveLength(0)
   })
 
+  it('registers a dedicated RPC channel without a webServer until one is injected', async () => {
+    const ctx = new Context()
+    provideBrowserCredentials(ctx)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const connection = ctx.get('connection') as HostConnectionHandle
+    const remove = connection.rpc.handle('/rpc', async () => ({ ok: true, value: { accepted: true } }))
+    const routes: WebRoute[] = []
+    ctx.provide('webServer', fakeHttpServer(routes, []) as WebServer)
+    await new Promise(resolve => setImmediate(resolve))
+    expect(routes.find(candidate => candidate.path === '/rpc')).toBeDefined()
+    await remove()
+    await fiber.dispose()
+  })
+
   it('dispatches claimed /api endpoints and withdraws the claim', async () => {
     const ctx = new Context()
     const routes: WebRoute[] = []
