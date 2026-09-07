@@ -109,7 +109,6 @@ async function bench(script: Script): Promise<{
           agent.inbox.append('next-turn', message)
           idle = Promise.resolve().then(() => script.afterPrompt(session, message, agent))
         },
-        continueFromSurface: () => {},
         steer: () => {},
         inject: () => {},
         whenIdle: () => idle,

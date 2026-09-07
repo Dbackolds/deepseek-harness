@@ -39,5 +39,4 @@ export interface DshDesktopApi {
     install(): Promise<void>
     subscribe(listener: (state: DesktopUpdateState) => void): () => void
   }
-  setCompletedUnread(count: number): void
 }
