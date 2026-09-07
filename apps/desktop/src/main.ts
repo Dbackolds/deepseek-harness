@@ -273,13 +273,20 @@ async function main(): Promise<void> {
     assertDesktopSender(event, ['shell'])
     await updates.install()
   })
-  const dockIconPng = readFileSync(desktopIconPath(fileURLToPath(new URL('.', import.meta.url))))
+  const isMac = process.platform === 'darwin'
+  const dockIconPng = readFileSync(desktopIconPath())
   let previousCompletedUnread = 0
-  ipcMain.on(DESKTOP_IPC.setCompletedUnread, (_event, count: unknown) => {
+  if (isMac) app.dock?.setIcon(nativeImage.createFromPath(desktopIconPath()))
+  ipcMain.on(DESKTOP_IPC.setCompletedUnread, (event, count: unknown) => {
+    try {
+      assertDesktopSender(event, ['app'])
+    } catch {
+      return
+    }
     const next = typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
     applyCompletedDockIcon(
-      process.platform === 'darwin' ? app.dock : undefined,
-      process.platform === 'darwin' ? (png) => { app.dock?.setIcon(nativeImage.createFromBuffer(png)) } : undefined,
+      isMac ? app.dock : undefined,
+      isMac ? (png) => { app.dock?.setIcon(nativeImage.createFromBuffer(png)) } : undefined,
       dockIconPng,
       next,
       previousCompletedUnread,

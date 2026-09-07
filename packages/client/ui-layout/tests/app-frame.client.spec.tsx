@@ -200,6 +200,7 @@ describe('AppFrame', () => {
   it('renders owner props for the default sidebar and prospective right panel', () => {
     const { frame, rightOwner, sidebarOwner, slotCalls } = mountFrame()
     expect(tracks(frame)).toEqual([280, 0])
+    expect(frame.hasAttribute('data-dsh-frame')).toBe(true)
     expect(sidebarOwner()).toEqual({ collapsed: false, width: 280 })
     expect(rightOwner()).toEqual({ width: 864, viewportWidth: 1920, canShow: true })
     expect(slotCalls.find(c => c.key === 'conversation')!.props).toEqual({})

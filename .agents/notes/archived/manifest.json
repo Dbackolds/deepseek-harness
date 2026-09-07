@@ -256,9 +256,6 @@
     "architecture/2026-08-15-packed-session-history-transport.i18n.yaml": "sha256:547b89497b009593db5acfae2a3b989f17b8392f5df73ef631b38f8f68f629f1",
     "architecture/2026-08-15-packed-session-history-transport.md": "sha256:ec7f84d59eea95668a8cb6c92ae433a2b7e7b76446a27e57dd5dba05856f563f",
     "architecture/2026-08-15-packed-session-history-transport.zh.md": "sha256:0d8eb5444557a18f76c68ce5ae9f0779c580eaddb921ee8651464baea34e0e53",
-    "architecture/2026-08-16-plugins-settings-marketplace-yield.i18n.yaml": "sha256:f8f4fea642e126b2b2c96367b8ff8d55ffecf19131c0d6777eea08af7846b9ee",
-    "architecture/2026-08-16-plugins-settings-marketplace-yield.md": "sha256:8391b1d041909f4e46275df074ab35c7d8089affa19180121eeb5152d6defb3d",
-    "architecture/2026-08-16-plugins-settings-marketplace-yield.zh.md": "sha256:d850a27d7c2416dd658187627e17eb9e3105359a6ecc56592cbc4f9bbbc25a3e",
     "architecture/2026-08-17-dynamic-client-render-and-attachment-ownership.i18n.yaml": "sha256:863c11d0a376f3f261e23928a363a955f2031b503bac70fd695e3d1645b395e2",
     "architecture/2026-08-17-dynamic-client-render-and-attachment-ownership.md": "sha256:062e5392c2c2ddecaa36bf0b71316e889d1dc72a90bf519ad4048cb5846673c7",
     "architecture/2026-08-17-dynamic-client-render-and-attachment-ownership.zh.md": "sha256:53312abcbe706c90ac274a691486d2902a26e51aa2f138db45c90b524529be34",
@@ -1884,6 +1881,9 @@
     "testing/2026-08-28-ci-test-reliability-skill.zh.md": "sha256:f58bc370c9a1bf2fe2badd5bf10bd1a8c1012133bb506206113d5c12cb60f93a",
     "testing/2026-08-29-windows-lane-hook-and-lefthook-budget.i18n.yaml": "sha256:d6bd5a532f5ed27678291659c5a9424a854e97da6c8bdddba16e4ac4764b9762",
     "testing/2026-08-29-windows-lane-hook-and-lefthook-budget.md": "sha256:18a9c2d55ddf166ea3ae854e48cdbd69a9851ab6d68da71c650085ff9611753a",
-    "testing/2026-08-29-windows-lane-hook-and-lefthook-budget.zh.md": "sha256:571322ae3764969df7bfca845ab5fbec2b577762c53701333db7f6c10489cb9b"
+    "testing/2026-08-29-windows-lane-hook-and-lefthook-budget.zh.md": "sha256:571322ae3764969df7bfca845ab5fbec2b577762c53701333db7f6c10489cb9b",
+    "architecture/2026-08-16-plugins-settings-marketplace-yield.i18n.yaml": "sha256:f8f4fea642e126b2b2c96367b8ff8d55ffecf19131c0d6777eea08af7846b9ee",
+    "architecture/2026-08-16-plugins-settings-marketplace-yield.md": "sha256:8391b1d041909f4e46275df074ab35c7d8089affa19180121eeb5152d6defb3d",
+    "architecture/2026-08-16-plugins-settings-marketplace-yield.zh.md": "sha256:d850a27d7c2416dd658187627e17eb9e3105359a6ecc56592cbc4f9bbbc25a3e"
   }
 }

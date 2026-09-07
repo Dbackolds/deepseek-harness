@@ -47,8 +47,27 @@ export function createInboxStub(): Inbox {
       pending[location.target].splice(location.index, 1)
       return true
     },
-    move() {
-      return false
+    move(messageId, beforeMessageId) {
+      const location = locate(messageId)
+      if (location === undefined) return false
+      const inbox = pending[location.target]
+      let destination = inbox.length
+      if (beforeMessageId !== undefined) {
+        if (beforeMessageId === messageId) return false
+        const before = locate(beforeMessageId)
+        if (before === undefined) return false
+        if (before.target !== location.target) {
+          throw new Error(`cannot move message "${messageId}" across inbox lists`)
+        }
+        destination = before.index
+      }
+      const from = location.index
+      const insertAt = destination > from ? destination - 1 : destination
+      if (insertAt === from) return false
+      const [message] = inbox.splice(from, 1)
+      if (message === undefined) return false
+      inbox.splice(insertAt, 0, message)
+      return true
     },
     splice(target, start, deleteCount, inserted) {
       return pending[target].splice(start, deleteCount, ...inserted)

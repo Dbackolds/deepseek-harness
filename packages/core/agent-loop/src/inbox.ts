@@ -166,7 +166,6 @@ export class ReactLoopInbox implements InboxContract {
    * @param beforeMessageId - identity that should follow the moved
    *   message; omit to append at the end of the same list.
    * @returns whether the projection changed.
-   * @throws if `beforeMessageId` is pending in the other list.
    */
   move(messageId: MessageId, beforeMessageId?: MessageId): boolean {
     const location = this.locate(messageId)
@@ -178,7 +177,7 @@ export class ReactLoopInbox implements InboxContract {
       const before = this.locate(beforeMessageId)
       if (before === undefined) return false
       if (before.target !== location.target) {
-        throw new Error('cannot move message "' + messageId + '" across inbox lists')
+        throw new Error(`cannot move message "${messageId}" across inbox lists`)
       }
       destination = before.index
     }
@@ -186,7 +185,6 @@ export class ReactLoopInbox implements InboxContract {
     const insertAt = destination > from ? destination - 1 : destination
     if (insertAt === from) return false
     const message = inbox[from]
-    /* v8 ignore next -- locate() already proved this index is occupied. */
     if (message === undefined) return false
     const start = Math.min(from, insertAt)
     const end = Math.max(from, insertAt) + 1

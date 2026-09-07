@@ -27,6 +27,7 @@ export interface DesktopUpdateState {
 export interface DshDesktopApi {
   readonly protocolVersion: 1
   locale(): Promise<DesktopLocale>
+  setCompletedUnread?(count: number): void
   readonly plugins: {
     list(): Promise<readonly DesktopPluginRecord[]>
     add(spec: string): Promise<void>

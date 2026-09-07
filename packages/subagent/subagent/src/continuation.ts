@@ -39,6 +39,7 @@ import {
 } from './continuation-messages.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
+import { readBusyDelivery } from './delivery-settings.ts'
 import { SubagentError } from './error.ts'
 import { isAdjacentAgentSendMessageTool } from './internal.ts'
 import type { ActivationObserver } from './lifecycle.ts'
@@ -360,7 +361,13 @@ export class SubagentContinuationManager {
     message: ReturnType<typeof createUserMessage>,
   ): void {
     try {
-      this.activations.sendWaking(parent, message, 'steer')
+      this.activations.sendWaking(
+        parent,
+        message,
+        parent.status !== 'idle' && readBusyDelivery(this.ctx, 'reportBusy') === 'queue'
+          ? 'queue'
+          : 'steer',
+      )
     } catch (error: unknown) {
       throw new SubagentError(
         'direct parent is not live; the message was not delivered',

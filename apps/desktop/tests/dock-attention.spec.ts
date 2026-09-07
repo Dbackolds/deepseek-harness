@@ -155,14 +155,13 @@ describe('applyCompletedDockIcon', () => {
 
 describe('desktop completed attention wiring', () => {
   it('exposes setCompletedUnread from the isolated preload', () => {
-    expect(preload).toContain('setCompletedUnread:')
-    expect(preload).toContain('DESKTOP_IPC.setCompletedUnread')
+    expect(preload).toContain("setCompletedUnread: (count: number) => { ipcRenderer.send('dsh-desktop:set-completed-unread', count) }")
   })
 
   it('routes the completed IPC to the dock badge on macOS', () => {
-    expect(main).toContain('ipcMain.on(DESKTOP_IPC.setCompletedUnread')
+    expect(main).toContain("ipcMain.on('dsh-desktop:set-completed-unread'")
     expect(main).toContain('applyCompletedDockIcon(')
-    expect(main).toContain('claimDesktopSingleInstance')
+    expect(main).toContain('requestSingleInstanceLock()')
   })
 })
 
@@ -204,11 +203,9 @@ function pngChunk(type: string, data: Buffer): Buffer {
   body.copy(chunk, 4)
   let crc = 0xffffffff
   for (let i = 0; i < body.length; i += 1) {
-    const byte = body[i]
-    if (byte === undefined) continue
-    const entry = CRC_TABLE[(crc ^ byte) & 255]
-    if (entry === undefined) continue
-    crc = entry ^ (crc >>> 8)
+    const mixed = CRC_TABLE[(crc ^ (body[i] ?? 0)) & 255]
+    if (mixed === undefined) throw new Error('dsh desktop: CRC table is incomplete')
+    crc = mixed ^ (crc >>> 8)
   }
   chunk.writeUInt32BE((crc ^ 0xffffffff) >>> 0, 8 + data.length)
   return chunk

@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { UpdateRow, type ProductUpdateUiStatus, type UpdateRowProps } from '../src/client/UpdateRow.tsx'
@@ -11,11 +10,10 @@ import { en } from '../src/client/locales.ts'
 type AttentionSnapshot = Parameters<Parameters<UpdateRowProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: UpdateRowProps['useSessionPendingInteraction'] = selector => selector(noAttention)
-const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
 const runtime = {
   useSessions: (() => { throw new Error('unused') }) as never,
   useSessionPendingInteraction,
-  useResource,
+  useResource: (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as never,
   useWorkspaces: (() => { throw new Error('unused') }) as never,
 }
 

@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -14,8 +13,6 @@ import type { SessionHistoryToolsSettings } from '../src/client/preference.ts'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
-
-const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
 
 function emptySessions() {
   return bindSnapshotSelector(createSnapshotStore<SessionListState>({
@@ -33,6 +30,9 @@ type AttentionSnapshot = Parameters<Parameters<SessionHistoryGateRowProps['useSe
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: SessionHistoryGateRowProps['useSessionPendingInteraction'] =
   selector => selector(noAttention)
+const useResource = (() => ({
+  status: 'none' as const, value: undefined, failure: undefined, reload: () => {},
+})) as SessionHistoryGateRowProps['useResource']
 
 /** Render the row over a real preference bound to a fresh stubbed scope. */
 function mount(options: { enabled?: boolean; writable?: boolean } = {}) {

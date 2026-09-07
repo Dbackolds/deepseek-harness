@@ -1,6 +1,6 @@
 /** Desktop release tag, artifact names, and Host staging helpers. */
 
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -14,6 +14,7 @@ import {
   expectedArtifacts,
   GITHUB_RELEASE_BODY_MAX_CHARS,
   parsePlatform,
+  pinStagedElectronVersion,
   pnpmBin,
   verifyDesktopTag,
 } from './pack.ts'
@@ -29,6 +30,21 @@ describe('desktop release naming', () => {
     const manifest = join(dir, 'package.json')
     writeFileSync(manifest, `${JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '1.2.3' })}\n`)
     expect(desktopVersion(manifest)).toBe('1.2.3')
+  })
+
+  it('pins the staged Electron version to the installed release', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-desktop-electron-pin-'))
+    const manifest = join(dir, 'package.json')
+    writeFileSync(manifest, `${JSON.stringify({
+      name: '@deepseek-ai/dsh-desktop',
+      version: '0.1.3-alpha.2.4',
+      devDependencies: { electron: '^44.0.0' },
+    })}\n`)
+    pinStagedElectronVersion(manifest)
+    const pinned = JSON.parse(readFileSync(manifest, 'utf8')) as {
+      devDependencies: { electron: string }
+    }
+    expect(pinned.devDependencies.electron).toBe('44.0.0')
   })
 
   it('rejects a missing or empty version', () => {

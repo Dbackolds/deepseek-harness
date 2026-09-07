@@ -31,12 +31,12 @@ import {
 } from './child-agent.ts'
 import type { DelegatedPolicyOverrides } from './child-agent.ts'
 import { createSettlementMessage } from './continuation-messages.ts'
+import { readBusyDelivery } from './delivery-settings.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
 import { SubagentError } from './error.ts'
 import { SubagentInbox } from './inbox.ts'
 import type { SubagentDelivery } from './inbox.ts'
 import type { ActivationObserver, ActivationTerminal } from './lifecycle.ts'
-import { readBusyDelivery } from './delivery-settings.ts'
 
 /**
  * One residency epoch for a reconstructed continuable child Agent. It directly
@@ -307,20 +307,16 @@ export class ContinuableActivationRegistry {
    * @param delivery - receiving inbox destination.
    */
   sendWaking(parent: Agent, message: UserMessage, delivery: SubagentDelivery): void {
-    const placement: SubagentDelivery = delivery === 'steer' && parent.status !== 'idle'
-      && readBusyDelivery(this.ctx, 'reportBusy') === 'queue'
-      ? 'queue'
-      : delivery
     const parentActivation = this.resident.get(parent.id)
     if (parentActivation !== undefined && parentActivation.handle.agent === parent) {
       try {
-        parentActivation.inbox.deliver(message, placement)
+        parentActivation.inbox.deliver(message, delivery)
       } finally {
         this.wake(parentActivation)
       }
       return
     }
-    if (placement === 'steer') parent.steer(message)
+    if (delivery === 'steer') parent.steer(message)
     else parent.followup(message)
   }
 
@@ -835,8 +831,13 @@ export class ContinuableActivationRegistry {
         parent.inject(message)
         return
       }
-      const busy = readBusyDelivery(this.ctx, 'settlementBusy')
-      this.sendWaking(parent, message, parent.status === 'idle' || busy === 'queue' ? 'queue' : 'steer')
+      this.sendWaking(
+        parent,
+        message,
+        parent.status === 'idle' || readBusyDelivery(this.ctx, 'settlementBusy') === 'queue'
+          ? 'queue'
+          : 'steer',
+      )
     } catch (error: unknown) {
       this.ctx.logger.warn(
         `subagent "${activation.childId}" settlement notice was not delivered to its parent: `

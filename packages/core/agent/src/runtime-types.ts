@@ -91,7 +91,6 @@ export interface Inbox {
    * @param beforeMessageId - identity that should follow the moved
    *   message; omit to append at the end of the same list.
    * @returns whether the projection changed.
-   * @throws if `beforeMessageId` is pending in the other list.
    */
   move(messageId: MessageId, beforeMessageId?: MessageId): boolean
 

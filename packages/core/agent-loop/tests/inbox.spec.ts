@@ -273,6 +273,34 @@ describe('ReactLoopInbox', () => {
     expect(() => { agent.inbox.append('next-step', first) }).toThrow(`message "${first.id}" is already pending`)
   })
 
+  it('moves a pending message inside its current list without discarding it', async () => {
+    const { agent } = await inboxAgent('move-inbox')
+    const first = createUserMessage({ content: [{ type: 'text', text: 'first' }], source: { kind: 'user' } })
+    const second = createUserMessage({ content: [{ type: 'text', text: 'second' }], source: { kind: 'user' } })
+    const third = createUserMessage({ content: [{ type: 'text', text: 'third' }], source: { kind: 'user' } })
+    const step = createUserMessage({ content: [{ type: 'text', text: 'step' }], source: { kind: 'user' } })
+    agent.inbox.append('next-turn', first)
+    agent.inbox.append('next-turn', second)
+    agent.inbox.append('next-turn', third)
+    agent.inbox.append('next-step', step)
+
+    expect(agent.inbox.move(first.id, first.id)).toBe(false)
+    expect(agent.inbox.move(second.id, third.id)).toBe(false)
+    expect(agent.inbox.move(createUserMessage({
+      content: [{ type: 'text', text: 'missing' }],
+      source: { kind: 'user' },
+    }).id, first.id)).toBe(false)
+
+    expect(agent.inbox.move(third.id, first.id)).toBe(true)
+    expect(agent.inbox.nextTurn).toEqual([third, first, second])
+    expect(agent.inbox.move(third.id)).toBe(true)
+    expect(agent.inbox.nextTurn).toEqual([first, second, third])
+    expect(agent.inbox.nextStep).toEqual([step])
+    expect(() => { agent.inbox.move(first.id, step.id) })
+      .toThrow(`cannot move message "${first.id}" across inbox lists`)
+    expect(agent.inbox.nextTurn).toEqual([first, second, third])
+  })
+
   it('clears both pending lists as durable cancellations', async () => {
     const { ctx, session, agent } = await inboxAgent('clear-inbox')
     const discarded: UserMessage[] = []
