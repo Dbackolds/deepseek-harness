@@ -14,6 +14,7 @@ import {
   expectedArtifacts,
   GITHUB_RELEASE_BODY_MAX_CHARS,
   parsePlatform,
+  installedElectronVersion,
   pinStagedElectronVersion,
   pnpmBin,
   verifyDesktopTag,
@@ -42,9 +43,20 @@ describe('desktop release naming', () => {
     })}\n`)
     pinStagedElectronVersion(manifest)
     const pinned = JSON.parse(readFileSync(manifest, 'utf8')) as {
-      devDependencies: { electron: string }
+      name: string
+      version: string
+      main: string
+      dependencies?: unknown
+      devDependencies?: unknown
     }
-    expect(pinned.devDependencies.electron).toBe('44.0.0')
+    expect(pinned).toMatchObject({
+      name: 'dsh-desktop',
+      version: '0.1.3-alpha.2.4',
+      main: 'lib/main.js',
+    })
+    expect(pinned.dependencies).toBeUndefined()
+    expect(pinned.devDependencies).toBeUndefined()
+    expect(installedElectronVersion()).toBe('44.0.0')
   })
 
   it('rejects a missing or empty version', () => {

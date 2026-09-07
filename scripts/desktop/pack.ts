@@ -456,6 +456,8 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
       name: 'dsh-desktop',
       version,
     },
+    electronVersion: installedElectronVersion(),
+    npmRebuild: false,
     executableName: 'DeepSeekHarness',
     files: [
       'lib/**/*',
@@ -496,15 +498,10 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
 }
 
 /**
- * Copy the compiled desktop shell into a leaf app directory electron-builder
- * can treat as the application root without walking the workspace.
+ * Read the Electron release installed next to the desktop package.
+ * @returns the exact version string electron-builder should download.
  */
-/**
- * Pin the staged desktop manifest to the installed Electron release so
- * electron-builder can download platform binaries without a version range.
- * @param manifestPath - staged `apps/desktop` package.json copy.
- */
-export function pinStagedElectronVersion(manifestPath: string): void {
+export function installedElectronVersion(): string {
   const installedPath = join(desktopRoot, 'node_modules', 'electron', 'package.json')
   if (!existsSync(installedPath)) {
     throw new Error('desktop pack: apps/desktop/node_modules/electron is missing; run pnpm install')
@@ -513,13 +510,31 @@ export function pinStagedElectronVersion(manifestPath: string): void {
   if (typeof installed.version !== 'string' || installed.version === '') {
     throw new Error('desktop pack: installed electron has no version')
   }
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-    devDependencies?: Record<string, string>
-  }
-  manifest.devDependencies = { ...manifest.devDependencies, electron: installed.version }
-  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  return installed.version
 }
 
+/**
+ * Write a dependency-free staged desktop manifest. Host code lives in
+ * extraResources; electron-builder must not scan pnpm workspaces from this leaf.
+ * @param manifestPath - staged `apps/desktop` package.json copy.
+ */
+export function pinStagedElectronVersion(manifestPath: string): void {
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
+  writeFileSync(manifestPath, `${JSON.stringify({
+    name: 'dsh-desktop',
+    description: typeof manifest.description === 'string' ? manifest.description : 'DeepSeek Harness desktop',
+    version: typeof manifest.version === 'string' ? manifest.version : desktopVersion(),
+    private: true,
+    license: typeof manifest.license === 'string' ? manifest.license : 'MIT',
+    type: 'module',
+    main: typeof manifest.main === 'string' ? manifest.main : 'lib/main.js',
+  }, null, 2)}\n`)
+}
+
+/**
+ * Copy the compiled desktop shell into a leaf app directory electron-builder
+ * can treat as the application root without walking the workspace.
+ */
 function stageApp(): void {
   run(pnpmBin(), ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'build'])
   const compiled = join(desktopRoot, 'lib', 'main.js')
