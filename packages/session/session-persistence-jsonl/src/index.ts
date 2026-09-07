@@ -1066,12 +1066,12 @@ class JsonlSessionPersistence extends SessionPersistence {
     readonly version: number
     readonly id: string
     readonly createdAt: number
-    readonly cwd?: string
-    readonly parentSession?: string
+    readonly cwd?: string | undefined
+    readonly parentSession?: string | undefined
     readonly isSeeded: boolean
-    readonly origin?: 'subagent' | 'automation'
+    readonly origin?: string | undefined
     readonly delegationDepth: number
-    readonly agentPreset?: string
+    readonly agentPreset?: string | undefined
   }): SessionHeader {
     /* v8 ignore next 3 -- readable catalog results are restored to its configured current version. */
     if (header.version !== SESSION_FORMAT_VERSION) {
@@ -1086,7 +1086,7 @@ class JsonlSessionPersistence extends SessionPersistence {
         ? {}
         : { parentSession: makeSessionId(header.parentSession) }),
       isSeeded: header.isSeeded,
-      ...(header.origin === undefined ? {} : { origin: header.origin }),
+      ...(header.origin === 'subagent' || header.origin === 'automation' ? { origin: header.origin } : {}),
       delegationDepth: header.delegationDepth,
       ...(header.agentPreset === undefined ? {} : { agentPreset: header.agentPreset }),
     }

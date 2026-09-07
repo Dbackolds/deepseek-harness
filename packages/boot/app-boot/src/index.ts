@@ -17,6 +17,7 @@ import Include, { applyEntryPatches, entryListSchema, type PatchOptions } from '
 import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
+export type { DshBundleManifest, DshProfileManifest, ProfilePatchReload } from '@deepseek-ai/dsh-package-manifest'
 import type {} from '@deepseek-ai/cordis-plugin-hmr'
 // Side-effect type import: resolves `ctx.get('systemPrompt')` / `ctx.get('agents')`.
 import type {} from '@deepseek-ai/dsh-system-prompt'

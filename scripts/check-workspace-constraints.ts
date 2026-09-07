@@ -285,8 +285,7 @@ export function checkExperimentalManifest({ dir, manifest }: WorkspaceManifest):
  * private dsh package on one shared version, written by `release:dsh` and
  * shared with the workspace root. This name test is that boundary: it covers
  * the family wherever the manifest lives, so apps/ members cannot drift with
- * only the release lane noticing. The private desktop app is the exception:
- * it publishes from `desktop-v*` and keeps its own version line.
+ * only the release lane noticing.
  * @param manifest - the workspace package manifest.
  * @param expected - the version every dsh-family manifest must carry (the root's).
  * @returns one violation naming the manifest and the expected version, or
@@ -330,7 +329,7 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
       || manifest.repository.directory !== expectedDirectory) {
       errors.push(`${label}: published Landlock package repository must use ${repositoryUrl} with directory ${expectedDirectory} for trusted publishing`)
     }
-  } else if (releaseMemberDirectory.test(dir) && manifest.name !== '@deepseek-ai/dsh-desktop') {
+  } else if (releaseMemberDirectory.test(dir)) {
     // Release members state that they are publishable: npm refuses a private
     // package, and the repository field is how a consumer finds the source of
     // the package it installed.

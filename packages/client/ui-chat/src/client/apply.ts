@@ -43,7 +43,6 @@ const CHAT_NODE_INJECT: ChatNodeTurnDataInjected = {
   },
 }
 
-/** Session Controller service. Context still types this field as SessionStore. */
 function clientSessions(ctx: Context): ISessions {
   return ctx.sessions as unknown as ISessions
 }

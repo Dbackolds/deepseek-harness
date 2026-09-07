@@ -215,6 +215,40 @@ describe('ReactLoopInbox', () => {
       .toThrow(`message "${replacement.id}" is already pending`)
   })
 
+  it('moves a pending message inside its current list and rejects a cross-list anchor', async () => {
+    const { agent } = await inboxAgent('move-inbox')
+    const first = createUserMessage({ content: [{ type: 'text', text: 'first' }], source: { kind: 'user' } })
+    const second = createUserMessage({ content: [{ type: 'text', text: 'second' }], source: { kind: 'user' } })
+    const third = createUserMessage({ content: [{ type: 'text', text: 'third' }], source: { kind: 'user' } })
+    const step = createUserMessage({ content: [{ type: 'text', text: 'step' }], source: { kind: 'user' } })
+    agent.inbox.append('next-turn', first)
+    agent.inbox.append('next-turn', second)
+    agent.inbox.append('next-turn', third)
+    agent.inbox.append('next-step', step)
+    const beforeMove = agent.session.snapshotEvents().length
+
+    expect(agent.inbox.move(first.id, first.id)).toBe(false)
+    expect(agent.inbox.move(second.id, third.id)).toBe(false)
+    expect(agent.inbox.move(createUserMessage({
+      content: [{ type: 'text', text: 'missing' }],
+      source: { kind: 'user' },
+    }).id, first.id)).toBe(false)
+    expect(agent.inbox.move(first.id, createUserMessage({
+      content: [{ type: 'text', text: 'also-missing' }],
+      source: { kind: 'user' },
+    }).id)).toBe(false)
+    expect(agent.session.snapshotEvents()).toHaveLength(beforeMove)
+
+    expect(agent.inbox.move(third.id, first.id)).toBe(true)
+    expect(agent.inbox.nextTurn).toEqual([third, first, second])
+    expect(agent.inbox.move(third.id)).toBe(true)
+    expect(agent.inbox.nextTurn).toEqual([first, second, third])
+    expect(agent.inbox.nextStep).toEqual([step])
+    expect(() => { agent.inbox.move(first.id, step.id) })
+      .toThrow('cannot move message "' + first.id + '" across inbox lists')
+    expect(agent.inbox.nextTurn).toEqual([first, second, third])
+  })
+
   it('normalizes splice coordinates, rejects duplicate identities, and reports missing removals', async () => {
     const { agent } = await inboxAgent('splice-inbox')
     const first = createUserMessage({

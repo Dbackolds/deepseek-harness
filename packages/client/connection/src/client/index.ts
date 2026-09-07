@@ -54,9 +54,62 @@ export type {
 } from '../rpc.ts'
 export type { RpcFetch } from './rpc.ts'
 
+/** Observable identity and Host facts for the active connection generation. */
+export interface ConnectionGenerationState {
+  /** Active generation, or undefined before readiness and while reconnecting. */
+  getSnapshot(): ConnectionGeneration | undefined
+  /** Subscribe to generation establishment, replacement, and loss. */
+  subscribe(listener: () => void): () => void
+}
+
+/** Observable recovery lifecycle of the owned Connection loop. */
+export interface ConnectionStateSource {
+  /** Current state, or undefined before the first connection outcome. */
+  getSnapshot(): ConnectionState | undefined
+  /** Subscribe to state changes. */
+  subscribe(listener: () => void): () => void
+}
+
+/** Required services (none — this is the wire root). */
+export const inject: string[] = []
+
 /**
- * One configurable provider row on the historical `llm.providers` face.
- * Settings plugins that still call `connection.api` consume this view.
+ * Carrier override installed on the page global before plugin boot. The served
+ * web app leaves it unset and gets HTTP + WebSocket; a shell that owns a
+ * different physical transport (the worker preview's postMessage tunnel)
+ * provides both halves here instead of forking this plugin.
+ */
+export interface ClientTransportHooks {
+  /** Transport for generic unary RPC channels (the Typert gateway). */
+  fetch: RpcFetch
+  /** Worker-local Gateway stream carrier; absent when the page uses the Gateway WebSocket. */
+  openStream?: RpcStreamOpen
+  /**
+   * Bundle transport for the module system, present when the carrier also owns
+   * bundle bytes (the worker tunnel). Absent in the served web app, whose
+   * bundles load over HTTP.
+   */
+  loadBundle?(url: string): Promise<void>
+  /**
+   * The transport owner declares the page owns the Host outright: the Host
+   * runs inside a worker this page spawned, so no other party can reach it and
+   * the loopback stand-in for "the operator's own machine" is vacuous.
+   * `ctx.connection.isLoopback` then reports the privileged surface reachable
+   * regardless of the page authority. Only a shell that assembles its own
+   * transport can set this; served pages never carry the global at all.
+   */
+  ownsHost?: boolean
+}
+
+/** Page global carrying {@link ClientTransportHooks}; absent in the served web app. */
+interface ClientTransportGlobal {
+  __DSH_TRANSPORT__?: ClientTransportHooks
+  __DSH_CONNECTION_RECOVERY__?: unknown
+}
+
+/**
+ * The ctx.connection service API. API Gateway supplies generation readiness
+ * and reset callbacks; Connection stays independent of downstream domain state.
  */
 export interface ConfigurableProviderView {
   /** Provider route key. */
@@ -145,62 +198,6 @@ export interface ConnectionApi {
 export type IApiClient = ConnectionApi
 
 /** Observable identity and Host facts for the active connection generation. */
-export interface ConnectionGenerationState {
-  /** Active generation, or undefined before readiness and while reconnecting. */
-  getSnapshot(): ConnectionGeneration | undefined
-  /** Subscribe to generation establishment, replacement, and loss. */
-  subscribe(listener: () => void): () => void
-}
-
-/** Observable recovery lifecycle for connection-specific consumers. */
-export interface ConnectionStateSource {
-  /** Current recovery state, or undefined before the loop starts and after it stops. */
-  getSnapshot(): ConnectionState | undefined
-  /** Subscribe to recovery-state changes. */
-  subscribe(listener: () => void): () => void
-}
-
-/** Required services (none — this is the wire root). */
-export const inject: string[] = []
-
-/**
- * Carrier override installed on the page global before plugin boot. The served
- * web app leaves it unset and gets HTTP + WebSocket; a shell that owns a
- * different physical transport (the worker preview's postMessage tunnel)
- * provides both halves here instead of forking this plugin.
- */
-export interface ClientTransportHooks {
-  /** Transport for generic unary RPC channels (the Typert gateway). */
-  fetch: RpcFetch
-  /** Worker-local Gateway stream carrier; absent when the page uses the Gateway WebSocket. */
-  openStream?: RpcStreamOpen
-  /**
-   * Bundle transport for the module system, present when the carrier also owns
-   * bundle bytes (the worker tunnel). Absent in the served web app, whose
-   * bundles load over HTTP.
-   */
-  loadBundle?(url: string): Promise<void>
-  /**
-   * The transport owner declares the page owns the Host outright: the Host
-   * runs inside a worker this page spawned, so no other party can reach it and
-   * the loopback stand-in for "the operator's own machine" is vacuous.
-   * `ctx.connection.isLoopback` then reports the privileged surface reachable
-   * regardless of the page authority. Only a shell that assembles its own
-   * transport can set this; served pages never carry the global at all.
-   */
-  ownsHost?: boolean
-}
-
-/** Page global carrying {@link ClientTransportHooks}; absent in the served web app. */
-interface ClientTransportGlobal {
-  __DSH_TRANSPORT__?: ClientTransportHooks
-  __DSH_CONNECTION_RECOVERY__?: unknown
-}
-
-/**
- * The ctx.connection service API. API Gateway supplies generation readiness
- * and reset callbacks; Connection stays independent of downstream domain state.
- */
 export interface ConnectionHandle {
   /**
    * Whether the privileged surface is reachable: the page authority is
@@ -214,10 +211,6 @@ export interface ConnectionHandle {
   readonly state: ConnectionStateSource
   /** Generic logical RPC channels over the same Connection transport. */
   readonly rpc: ClientConnectionRpc
-  /**
-   * Compatibility unary API for plugins that still read `connection.api`.
-   * API Remotes installs it after `llm` and `settings` namespaces mount.
-   */
   api?: ConnectionApi
   /** Reset retry progression and replace the current attempt immediately. */
   reconnect(): void
@@ -366,13 +359,13 @@ export function apply(ctx: Context): void {
           if (!ownsGeneration() || !Object.is(generation, nextGeneration)) return
           sinks.onConnected?.(host)
         },
-        onStateChange: (nextState) => {
-          if (nextState !== 'connected') {
+        onStateChange: (state) => {
+          if (state !== 'connected') {
             publishGeneration(undefined)
           }
           if (!ownsGeneration()) return
-          publishState(nextState)
-          sinks.onStateChange?.(nextState)
+          publishState(state)
+          sinks.onStateChange?.(state)
         },
       }, { ...recovery, ...config })
       const current = { token, source, controller, stopNetworkWatch: watchBrowserNetwork(controller) }

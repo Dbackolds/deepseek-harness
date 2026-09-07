@@ -21,6 +21,7 @@ const api: DshDesktopApi = {
       return () => { ipcRenderer.off(DESKTOP_IPC.updatesState, handle) }
     },
   },
+  setCompletedUnread: (count) => { ipcRenderer.send(DESKTOP_IPC.setCompletedUnread, count) },
 }
 
 contextBridge.exposeInMainWorld('dshDesktop', api)
