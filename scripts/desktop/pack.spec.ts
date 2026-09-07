@@ -15,6 +15,7 @@ import {
   GITHUB_RELEASE_BODY_MAX_CHARS,
   parsePlatform,
   pinStagedElectronVersion,
+  stripStagedAppPackageManagerDeps,
   pnpmBin,
   verifyDesktopTag,
 } from './pack.ts'
@@ -45,6 +46,25 @@ describe('desktop release naming', () => {
       devDependencies: { electron: string }
     }
     expect(pinned.devDependencies.electron).toBe('44.0.0')
+  })
+
+
+  it('drops staged runtime dependencies so Windows electron-builder skips pnpm list', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-desktop-strip-deps-'))
+    const manifest = join(dir, 'package.json')
+    writeFileSync(manifest, `${JSON.stringify({
+      name: '@deepseek-ai/dsh-desktop',
+      version: '0.1.3-alpha.2.6',
+      dependencies: { 'electron-updater': '^6.8.9', semver: '^7.8.5' },
+      devDependencies: { electron: '44.0.0', typescript: '^6.0.3' },
+    })}\n`)
+    stripStagedAppPackageManagerDeps(manifest)
+    const staged = JSON.parse(readFileSync(manifest, 'utf8')) as {
+      dependencies?: Record<string, string>
+      devDependencies: Record<string, string>
+    }
+    expect(staged.dependencies).toBeUndefined()
+    expect(staged.devDependencies).toEqual({ electron: '44.0.0' })
   })
 
   it('rejects a missing or empty version', () => {

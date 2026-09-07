@@ -462,6 +462,8 @@ function writeBuilderConfig(version: string, platform: DesktopPlatform): string 
       'assets/**/*',
       'package.json',
     ],
+    nodeGypRebuild: false,
+    npmRebuild: false,
     extraResources: [
       {
         from: hostRoot,
@@ -520,6 +522,24 @@ export function pinStagedElectronVersion(manifestPath: string): void {
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
+/**
+ * Drop runtime package-manager dependencies from the staged leaf app so
+ * electron-builder does not run `pnpm list --json` against it.
+ * @param manifestPath - staged `apps/desktop` package.json copy.
+ */
+export function stripStagedAppPackageManagerDeps(manifestPath: string): void {
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+  }
+  delete manifest.dependencies
+  if (manifest.devDependencies !== undefined) {
+    const electron = manifest.devDependencies.electron
+    manifest.devDependencies = electron === undefined ? {} : { electron }
+  }
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
 function stageApp(): void {
   run(pnpmBin(), ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'build'])
   const compiled = join(desktopRoot, 'lib', 'main.js')
@@ -531,7 +551,9 @@ function stageApp(): void {
   for (const name of ['lib', 'assets', 'package.json'] as const) {
     cpSync(join(desktopRoot, name), join(appRoot, name), { recursive: true })
   }
-  pinStagedElectronVersion(join(appRoot, 'package.json'))
+  const manifestPath = join(appRoot, 'package.json')
+  pinStagedElectronVersion(manifestPath)
+  stripStagedAppPackageManagerDeps(manifestPath)
 }
 
 /**
