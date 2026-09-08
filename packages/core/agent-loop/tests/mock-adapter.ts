@@ -1,4 +1,4 @@
-import type { GenerateOptions, LlmModelReasoningInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmModelReasoningInfo, LlmResolvedModelInfo, StreamChunk, SystemPromptUpdate } from '@deepseek-ai/dsh-llm'
 import { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
 
 /** Helpers to write scripted responses tersely. */
@@ -71,6 +71,8 @@ export interface HangAfter {
  */
 export class MockAdapter extends LlmAdapter {
   requests: GenerateOptions[] = []
+  /** Declared system prompt update mode of every route this adapter serves. */
+  systemPromptUpdate?: SystemPromptUpdate
 
   constructor(
     private script: (StreamChunk[] | ((options: GenerateOptions) => StreamChunk[]) | 'hang' | 'hang-slow' | HangAfter)[],
@@ -92,6 +94,7 @@ export class MockAdapter extends LlmAdapter {
       ...this.reasoning === undefined ? {} : { reasoning: this.reasoning },
       ...this.defaultMaxTokens === undefined ? {} : { defaultMaxTokens: this.defaultMaxTokens },
       ...this.systemPrompt === undefined ? {} : { systemPrompt: this.systemPrompt },
+      ...this.systemPromptUpdate === undefined ? {} : { systemPromptUpdate: this.systemPromptUpdate },
     })
   }
 

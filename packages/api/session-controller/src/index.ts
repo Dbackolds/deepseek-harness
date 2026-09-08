@@ -24,6 +24,7 @@ import { installModelSelectionProjection } from './model-selection-projection.ts
 import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionUsageController } from './usage.ts'
 import { SessionGitController } from './git.ts'
+import { SessionMediaReferences } from './media-references.ts'
 import type {
   ModelCatalog,
   SessionAttachmentRequest,
@@ -141,6 +142,7 @@ export class SessionController extends TypertRemoteService {
     this.canOpenPath = internals.canOpenPath
       ?? (() => config.nativeOpen ?? (internals.openPath !== undefined || canOpenNativePath()))
     ctx.plugin(SessionFileReferences)
+    ctx.plugin(SessionMediaReferences)
     ctx.plugin(SessionSkillCatalog)
     ctx.plugin(SessionUsageController)
     ctx.plugin(SessionGitController)

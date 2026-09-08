@@ -182,7 +182,7 @@ describe('Agent', () => {
       content: [{ type: 'text', text: 'rewritten' }],
       source: { kind: 'user' },
     }), {
-      surfaceOp: { op: 'replace', start: original.seq, end: endSeq },
+      surfaceOp: { op: 'replace', startSeq: original.seq, endSeq },
       sourceEventSeqs: shadowed,
     })
     agent.continueFromSurface()
