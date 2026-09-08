@@ -429,26 +429,8 @@ export class AgentLoop extends Service implements AgentFactory {
       'cwd',
       context => context.agent === undefined ? undefined : sessionWorkingDirectory(context.agent.session),
     )
-    ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
-      const transformed = await next()
-      const provider = context.agent?.options.provider
-      const model = context.agent?.options.model
-      if (provider === undefined || provider.length === 0 || model === undefined || model.length === 0) {
-        return transformed
-      }
-      try {
-        const info = await ctx.llm.resolveModelInfo(provider, model, context.signal)
-        if (info.systemPrompt === undefined || info.systemPrompt.length === 0) return transformed
-        return {
-          ...transformed,
-          sections: [{ name: 'model:system-prompt', text: info.systemPrompt }],
-        }
-      } catch {
-        // A missing adapter or invalid exact-model metadata must not swallow
-        // the assembled prompt; request dispatch still fails on that route.
-        return transformed
-      }
-    })
+    // Model catalog templates replace assembled sections after prepareCall in
+    // the loop driver, so this waterfall stays off the resolveModel hot path.
 
     for (const { id, sessionId, cwd, resumeSessionId, ...options } of this.config.agents) {
       const meta = cwd === undefined ? {} : { cwd }
@@ -562,6 +544,7 @@ export class AgentLoop extends Service implements AgentFactory {
     session: Session,
     callerSignal?: AbortSignal,
     handle?: SessionHandle,
+    parentAgent?: Agent,
   ): PreparedAgent {
     assertAgentOptions(options)
     ownerCtx.fiber.assertActive()
@@ -691,7 +674,7 @@ export class AgentLoop extends Service implements AgentFactory {
           detachSession = agent.ctx.sessions.enter(session)
           // The mounted backend routes announced live events into the active
           // write handle by session id; the loop only owns the handle itself.
-          detachAgent = loopCtx.agents.enter(agent, ownerCtx.agent)
+          detachAgent = loopCtx.agents.enter(agent, parentAgent)
           agent.ctx.sessions.announce(session)
           assertLive()
           loopCtx.agents.announce(agent)
@@ -785,7 +768,7 @@ export class AgentLoop extends Service implements AgentFactory {
   /**
    * Create an owned agent on a caller-supplied session id.
    * @param ownerCtx - caller context that structurally owns the lifecycle.
-   * @param options - identities, session seed/metadata, loop options, setup, and cancellation.
+   * @param options - identities, optional live parent, session seed/metadata, loop options, setup, and cancellation.
    * @returns the published handle.
    */
   async createAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> {
@@ -820,6 +803,7 @@ export class AgentLoop extends Service implements AgentFactory {
         options.signal,
         'startup',
         stored,
+        options.parentAgent,
       )
     })()
     this.ownership.trackWrapper(published)
@@ -836,18 +820,19 @@ export class AgentLoop extends Service implements AgentFactory {
     signal: AbortSignal | undefined,
     source: SessionStartSource,
     stored?: StoredSession,
+    parentAgent?: Agent,
   ): Promise<AgentHandle> {
     using ownedPreparation = preparation
     const session = ownedPreparation.session
     let prepared: PreparedAgent
     try {
-      prepared = this.prepare(ownerCtx, id, agentOptions, session, signal, stored?.handle)
+      prepared = this.prepare(ownerCtx, id, agentOptions, session, signal, stored?.handle, parentAgent)
     } catch (error: unknown) {
       await stored?.handle.close().catch(() => {})
       throw error
     }
     try {
-      const setupCommit = await raceAbort(setup?.(prepared.agent.ctx), prepared.signal, id)
+      const setupCommit = await raceAbort(setup?.(prepared.agent.ctx, prepared.agent), prepared.signal, id)
       setupCommit?.commit()
       await this.appendUnstoredSuffix(stored, session)
       return prepared.publish(source)
@@ -862,7 +847,7 @@ export class AgentLoop extends Service implements AgentFactory {
   /**
    * Resume an owned agent from the configured persistence service.
    * @param ownerCtx - caller context that owns load, setup, and the live lifecycle.
-   * @param options - persisted identity, loop options, setup, and cancellation.
+   * @param options - persisted identity, optional live parent, loop options, setup, and cancellation.
    * @returns the published handle.
    */
   async resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandle> {
@@ -939,6 +924,7 @@ export class AgentLoop extends Service implements AgentFactory {
           options.signal,
           'resume',
           owned,
+          options.parentAgent,
         )
       } finally {
         preparation?.[Symbol.dispose]()

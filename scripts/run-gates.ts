@@ -267,6 +267,7 @@ export function gatesForMode(selected: Mode): Gate[] {
         pnpmScript('client-domain-graph', 'verify-client-domain-graph', { label: 'client domain graph' }),
         pnpmScript('test', 'test'),
         pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+        pnpmScript('request-review', 'test:request-review', { label: 'Review request policy' }),
         pnpmScript('duplication', 'duplication'),
         snapshotGate(),
         expectedOutputGate(),
@@ -312,6 +313,7 @@ function ciSharedStaticGates(): Gate[] {
     pnpmScript('fork-customizations', 'verify-fork-customizations', { label: 'fork customizations' }),
     pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),
     pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+    pnpmScript('request-review', 'test:request-review', { label: 'Review request policy' }),
   ]
 }
 
@@ -631,7 +633,8 @@ function coverageGates(): Gate[] {
       streamOutput: true,
     })
   return [
-    instrumented,
+    pnpmScript('native-system', 'build:native-system'),
+    { ...instrumented, needs: ['native-system'] },
     pnpmExec('coverage-exempt-heavy', [
       'vitest',
       'run',
@@ -640,6 +643,7 @@ function coverageGates(): Gate[] {
       ...timeouts,
     ], {
       label: 'test:coverage-exempt-heavy',
+      needs: ['native-system'],
     }),
   ]
 }
@@ -747,6 +751,7 @@ function docSyncLeafGates(options: {
     pnpmScript('package-paths', 'verify-package-paths', { label: 'package paths' }),
     pnpmScript('tsconfig-paths', 'verify-tsconfig-paths', { label: 'tsconfig paths' }),
     pnpmScript('config-source-ownership', 'verify-config-source-ownership', { label: 'config source ownership' }),
+    pnpmScript('package-readme-summaries', 'verify-package-readme-summaries', { label: 'package README Summaries', quick: true }),
     pnpmScript('package-readme-model-experience', 'verify-package-readme-model-experience', { label: 'package README model experience', quick: true }),
     pnpmScript('agent-note-classification', 'verify-agent-note-classification', { label: 'agent note classification', quick: true }),
     pnpmScript('agent-note-format', 'verify-agent-note-format', { label: 'agent note format', quick: true }),

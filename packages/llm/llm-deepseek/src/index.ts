@@ -13,11 +13,18 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { assertUsableApiKey, LlmError, resolveImageAttachmentAccess, resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
+import { assertUsableApiKey, LlmError, resolveImageAttachmentAccess, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
 import type { ModelModality, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-fs'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
+import {
+  LLM_DEFAULT_POLICY_ENTRY,
+  LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE,
+  resolveProviderRetryPolicy,
+} from '@deepseek-ai/dsh-llm-default-policy'
+import type { LlmDefaultPolicySettings } from '@deepseek-ai/dsh-llm-default-policy'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-settings'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
@@ -173,6 +180,7 @@ const catalogModel: z<DeepSeekCatalogModel> = z.object({
   imagePixelBudget: z.union([z.number().step(1).min(1), 'low']),
   imageMaxBytes: z.number().step(1).min(1),
   systemPrompt: z.string(),
+  systemPromptUpdate: z.const('in-history'),
 })
 
 export const Config: z<Config> = z.object({
@@ -259,6 +267,11 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
       && (!Number.isSafeInteger(model.imageMaxBytes) || model.imageMaxBytes <= 0)) {
       throw new Error(`llm-deepseek: catalog model "${model.id}" imageMaxBytes must be a positive safe integer`)
     }
+    // Widened: a dynamic config update reaches this check without schema validation.
+    const systemPromptUpdate: string | undefined = model.systemPromptUpdate
+    if (systemPromptUpdate !== undefined && systemPromptUpdate !== 'in-history') {
+      throw new Error(`llm-deepseek: catalog model "${model.id}" systemPromptUpdate must be "in-history" when present`)
+    }
     if (seen.has(model.id)) throw new Error(`llm-deepseek: duplicate catalog model "${model.id}"`)
     seen.add(model.id)
     return {
@@ -267,6 +280,7 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
       ...model.description === undefined ? {} : { description: model.description },
       ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
       ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
+      ...model.systemPromptUpdate === undefined ? {} : { systemPromptUpdate: model.systemPromptUpdate },
       inputModalities: [...inputModalities],
       ...hasImage
         ? {
@@ -290,9 +304,14 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
  * the product CLI. Every layer may supply an endpoint: the product trusts the
  * project it is launched in, so a checkout can point its own agent at the
  * gateway that checkout is meant to use.
+ * @param defaults - product-wide retry defaults used when the provider omitted a policy.
  * @returns validated connection facts plus the credential reference.
  */
-export function resolveAdapterOptions(config: Config, environment?: LaunchEnvironmentSnapshot): ResolvedDeepSeekOptions {
+export function resolveAdapterOptions(
+  config: Config,
+  environment?: LaunchEnvironmentSnapshot,
+  defaults: LlmDefaultPolicySettings = LLM_DEFAULT_POLICY_ENTRY,
+): ResolvedDeepSeekOptions {
   if (config.thinking === 'disabled'
     && config.reasoningEffort !== undefined
     && config.reasoningEffort !== 'off') {
@@ -399,20 +418,25 @@ export function resolveAdapterOptions(config: Config, environment?: LaunchEnviro
       refreshMarginSeconds: fileRefreshMarginSeconds,
       quotaCleanupBatch: fileQuotaCleanupBatch,
     },
-    retryPolicy: resolveRetryPolicy(config.retryPolicy, 'llm-deepseek: retryPolicy'),
+    retryPolicy: resolveProviderRetryPolicy(config.retryPolicy, defaults, 'llm-deepseek: retryPolicy'),
   }
 }
 
 export function apply(ctx: Context, config: Config): void {
   let current: () => Config = () => config
   let lastRaw: Config | undefined
+  let lastDefaults: LlmDefaultPolicySettings | undefined
   let lastGood: ResolvedDeepSeekOptions | undefined
+  const defaults = (): LlmDefaultPolicySettings =>
+    ctx.get('llmDefaultPolicy')?.current() ?? LLM_DEFAULT_POLICY_ENTRY
   const options = (): ResolvedDeepSeekOptions => {
     const raw = current()
-    if (raw === lastRaw && lastGood !== undefined) return lastGood
+    const nextDefaults = defaults()
+    if (raw === lastRaw && lastDefaults === nextDefaults && lastGood !== undefined) return lastGood
     try {
-      const next = resolveAdapterOptions(raw, launchEnvironmentOf(ctx))
+      const next = resolveAdapterOptions(raw, launchEnvironmentOf(ctx), nextDefaults)
       lastRaw = raw
+      lastDefaults = nextDefaults
       lastGood = next
       return next
     } catch (error) {
@@ -421,6 +445,7 @@ export function apply(ctx: Context, config: Config): void {
       // keep serving the last good facts and say so once per bad snapshot.
       if (lastGood === undefined) throw error
       lastRaw = raw
+      lastDefaults = nextDefaults
       ctx.logger.error('llm-deepseek: keeping the last good configuration after an invalid settings section')
       ctx.logger.error(error)
       return lastGood
@@ -495,5 +520,13 @@ export function apply(ctx: Context, config: Config): void {
       },
       onChange: ensureRegistrationFacts,
     })
+  })
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.on('settings/updated', (ns) => {
+      if (ns === settingsNamespace(LLM_DEFAULT_POLICY_SETTINGS_NAMESPACE)) ensureRegistrationFacts()
+    })
+  })
+  ctx.inject(['llmDefaultPolicy'], () => {
+    ensureRegistrationFacts()
   })
 }

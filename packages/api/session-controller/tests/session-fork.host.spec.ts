@@ -38,9 +38,9 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
           : { inheritedEventCount: options.inheritedEventCount },
       })
       const agent = {} as Agent
-      const agentCtx = ownerCtx.extend({ agent })
+      const agentCtx = ownerCtx
       Object.assign(agent, { id: session.id, session, status: 'idle', ctx: agentCtx })
-      await options.setup?.(agentCtx)
+      await options.setup?.(agentCtx, agent)
       ctx.agents.register(agent)
       return { agent, dispose: () => Promise.resolve() }
     },
@@ -331,7 +331,7 @@ describe('sessions.rewrite', () => {
     const replacement = source.snapshotEvents().at(-1)
     expect(replacement?.type).toBe('user/message')
     if (replacement?.type !== 'user/message') return
-    expect(replacement.surfaceOp).toEqual({ op: 'replace', start: atSeq, end: beforeTail })
+    expect(replacement.surfaceOp).toEqual({ op: 'replace', startSeq: atSeq, endSeq: beforeTail })
     expect(replacement.data.content).toEqual([{ type: 'text', text: 'rewritten' }])
     expect(source.surface.nodes).toEqual([replacement.seq])
     const again = await sessions.rewrite(request({
