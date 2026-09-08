@@ -331,7 +331,7 @@ describe('sessions.rewrite', () => {
     const replacement = source.snapshotEvents().at(-1)
     expect(replacement?.type).toBe('user/message')
     if (replacement?.type !== 'user/message') return
-    expect(replacement.surfaceOp).toEqual({ op: 'replace', start: atSeq, end: beforeTail })
+    expect(replacement.surfaceOp).toEqual({ op: 'replace', startSeq: atSeq, endSeq: beforeTail })
     expect(replacement.data.content).toEqual([{ type: 'text', text: 'rewritten' }])
     expect(source.surface.nodes).toEqual([replacement.seq])
     const again = await sessions.rewrite(request({

@@ -373,10 +373,15 @@ export class ReactLoopAgent implements Agent {
     signal.throwIfAborted()
 
     const { assembly } = decision
-    const renderedPrompt = renderPrompt(assembly)
     let firstAttempt = true
     while (true) {
       const { config, preparedCall } = await this.prepareRequest(turn, step, signal)
+      const renderedPrompt = preparedCall?.systemPrompt !== undefined && preparedCall.systemPrompt.length > 0
+        ? renderPrompt({
+          ...assembly,
+          sections: [{ name: 'model:system-prompt', text: preparedCall.systemPrompt }],
+        })
+        : renderPrompt(assembly)
       const startsRequestSeries = firstAttempt && decision.startsRequestSeries === true
       const commits = this.systemPrompt.project(renderedPrompt, {
         inHistory: preparedCall?.systemPromptUpdate === 'in-history',

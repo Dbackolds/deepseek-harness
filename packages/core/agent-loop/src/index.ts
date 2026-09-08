@@ -429,26 +429,8 @@ export class AgentLoop extends Service implements AgentFactory {
       'cwd',
       context => context.agent === undefined ? undefined : sessionWorkingDirectory(context.agent.session),
     )
-    ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
-      const transformed = await next()
-      const provider = context.agent?.options.provider
-      const model = context.agent?.options.model
-      if (provider === undefined || provider.length === 0 || model === undefined || model.length === 0) {
-        return transformed
-      }
-      try {
-        const info = await ctx.llm.resolveModelInfo(provider, model, context.signal)
-        if (info.systemPrompt === undefined || info.systemPrompt.length === 0) return transformed
-        return {
-          ...transformed,
-          sections: [{ name: 'model:system-prompt', text: info.systemPrompt }],
-        }
-      } catch {
-        // A missing adapter or invalid exact-model metadata must not swallow
-        // the assembled prompt; request dispatch still fails on that route.
-        return transformed
-      }
-    })
+    // Model catalog templates replace assembled sections after prepareCall in
+    // the loop driver, so this waterfall stays off the resolveModel hot path.
 
     for (const { id, sessionId, cwd, resumeSessionId, ...options } of this.config.agents) {
       const meta = cwd === undefined ? {} : { cwd }

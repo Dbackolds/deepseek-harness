@@ -22,9 +22,9 @@ import { ApiSessionList } from './list.ts'
 import { buildModelCatalog } from './catalog.ts'
 import { installModelSelectionProjection } from './model-selection-projection.ts'
 import { SessionSkillCatalog } from './skill-catalog.ts'
+import { SessionMediaReferences } from './media-references.ts'
 import { SessionUsageController } from './usage.ts'
 import { SessionGitController } from './git.ts'
-import { SessionMediaReferences } from './media-references.ts'
 import type {
   ModelCatalog,
   SessionAttachmentRequest,

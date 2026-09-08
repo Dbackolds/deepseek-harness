@@ -299,7 +299,7 @@ export class SessionCommandController {
           source,
         })
         agent.session.append('user/message', message, {
-          surfaceOp: { op: 'replace', startSeq: atSeq, endSeq },
+          surfaceOp: { op: 'replace', startSeq: atSeq, endSeq: endSeq },
           sourceEventSeqs: shadowedSeqs,
         })
         agent.continueFromSurface()

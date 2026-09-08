@@ -151,8 +151,7 @@ The package-level contract is enough for most consumers; read these when you nee
 
 #### What the model sees
 
-For each step, the loop sends the session's derived messages and visible tool schemas. Non-empty `system/message` nodes carry the prompt, with the latest as the effective version; an empty rendering clears all prompt versions from derived history. A non-empty resolved-model `systemPrompt` replaces every assembled system section before interpolation; tool schemas stay on the request. It supplies `provider`, `model`, and `cwd` variable values but no additional fixed prose.
-
+For each step, the loop sends the session's derived messages and visible tool schemas. Non-empty `system/message` nodes carry the prompt, with the latest as the effective version; an empty rendering clears all prompt versions from derived history. It supplies `provider`, `model`, and `cwd` variable values but no additional fixed prose. A non-empty resolved-model `systemPrompt` replaces every assembled system section before interpolation; tool schemas stay on the request.
 #### Token effect
 
 System text and schemas are paid again on every step, and on an `in-history` route every retained prompt version is paid until compaction shadows it or prompt reconciliation empties it. Per-agent scoping chooses the contributions, while the authoritative assembly waterfall can alter the final request and makes its listener responsible for protocol coherence.

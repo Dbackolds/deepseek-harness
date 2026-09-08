@@ -172,6 +172,8 @@ export interface PreparedLlmCall {
   readonly inputModalities?: readonly ModelModality[]
   /** Exact model system prompt update mode captured with the adapter dispatch generation. */
   readonly systemPromptUpdate?: SystemPromptUpdate
+  /** Complete system-prompt template captured with the adapter dispatch generation. */
+  readonly systemPrompt?: string
   /** Config fields materialized by the captured adapter rather than proposed by the caller. */
   readonly adapterDefaults: LlmCallConfigAdapterDefaults
   /**
@@ -978,6 +980,9 @@ export class LlmRuntime extends TypertRemoteService {
         ? {}
         : { inputModalities: Object.freeze([...modelInfo.inputModalities]) },
       ...modelInfo.systemPromptUpdate === undefined ? {} : { systemPromptUpdate: modelInfo.systemPromptUpdate },
+      ...modelInfo.systemPrompt === undefined || modelInfo.systemPrompt.length === 0
+        ? {}
+        : { systemPrompt: modelInfo.systemPrompt },
       stream: (options: GenerateOptions): AsyncIterable<StreamChunk> => {
         if (dispatched) {
           throw new LlmError('a prepared LLM call can only be dispatched once', 'INVALID_PREPARED_CALL')
