@@ -6,6 +6,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { UpdateRow, type ProductUpdateUiStatus, type UpdateRowProps } from '../src/client/UpdateRow.tsx'
 import { UpdateToast, type UpdateToastProps } from '../src/client/UpdateToast.tsx'
 import { en } from '../src/client/locales.ts'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 
 type AttentionSnapshot = Parameters<Parameters<UpdateRowProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()

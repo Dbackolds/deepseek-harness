@@ -11,6 +11,7 @@ import type { SessionHistoryGateRowProps } from '../src/client/SessionHistoryGat
 import { SessionHistoryGatePreference } from '../src/client/preference.ts'
 import type { SessionHistoryToolsSettings } from '../src/client/preference.ts'
 import { en } from '../src/client/locales.ts'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 
 afterEach(cleanup)
 

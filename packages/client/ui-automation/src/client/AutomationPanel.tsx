@@ -12,6 +12,8 @@ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import {
   draftToCreate, EMPTY_DRAFT, formatNextIn, formatSelector, formatState, toggleWeekday,
   type AutomationDraft, type ScheduleKind,
