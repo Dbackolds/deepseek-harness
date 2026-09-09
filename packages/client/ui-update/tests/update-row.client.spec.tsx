@@ -14,7 +14,7 @@ const useSessionPendingInteraction: UpdateRowProps['useSessionPendingInteraction
 const runtime = {
   useSessions: (() => { throw new Error('unused') }) as never,
   useSessionPendingInteraction,
-  usePanelInfo: selector => selector({ activePanelId: null }),
+  usePanelInfo: (selector => selector({ activePanelId: null })) as UpdateRowProps['usePanelInfo'],
   useResource: (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as never,
   useWorkspaces: (() => { throw new Error('unused') }) as never,
 }
