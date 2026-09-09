@@ -47,7 +47,7 @@ function mount(options: { enabled?: boolean; writable?: boolean } = {}) {
   const props: SessionHistoryGateRowProps = {
     useSessions: emptySessions(),
     useSessionPendingInteraction,
-    usePanelInfo: (selector => selector({ activePanelId: null })) as never,
+    usePanelInfo: selector => selector({ activePanelId: null }),
     useResource,
     useWorkspaces: emptyWorkspaces(),
     useEnabled: bindSnapshotSelector(preference.enabled),

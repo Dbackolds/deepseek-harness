@@ -99,8 +99,6 @@ export interface SidebarPanelMetadata {
 export interface SidebarAutomationOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail). */
   wide: boolean
-  useWorkspaces?: unknown
-  useSessions?: unknown
 }
 
 export interface SidebarSectionOwnerProps {
