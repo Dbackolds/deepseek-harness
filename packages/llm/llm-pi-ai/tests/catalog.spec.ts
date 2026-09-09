@@ -165,8 +165,8 @@ describe('hand-declared providers', () => {
   it('defaults a key-only FAC profile to the shipped endpoint and protocol', () => {
     const resolved = resolveProfiles({ fac: { apiKeyEnv: KEY_ENV } })
     expect(resolved.get('fac')?.displayName).toBe('FAC')
-    expect(resolved.get('fac')?.piProvider.baseUrl).toBe('https://new.fastaicode.top/v1')
-    expect(resolved.get('fac')?.piProvider.getModels()).toEqual([])
+    expect(resolved.get('fac')?.piProvider?.baseUrl).toBe('https://new.fastaicode.top/v1')
+    expect(resolved.get('fac')?.piProvider?.getModels()).toEqual([])
   })
 
   it('sizes a model the catalog cannot describe from the route\u2019s own fallbacks', () => {
@@ -1403,7 +1403,7 @@ describe('video modality superset', () => {
       },
     })
     const inputOf = (route: string, id: string): readonly string[] | undefined =>
-      resolved.get(route)?.piProvider.getModels().find(model => model.id === id)?.input
+      resolved.get(route)?.piProvider?.getModels().find(model => model.id === id)?.input
     expect(inputOf('acme-gateway', 'acme-vision')).toEqual(['text', 'image', 'video'])
     expect(inputOf('video-gateway', 'bare')).toEqual(['text', 'video'])
 
@@ -1429,6 +1429,6 @@ describe('video modality superset', () => {
     const resolved = resolveProfiles({
       deepseek: { models: [{ id: catalogModel.id, input: [] }] },
     })
-    expect(resolved.get('deepseek')?.piProvider.getModels()[0]?.input).toEqual(catalogModel.input)
+    expect(resolved.get('deepseek')?.piProvider?.getModels()[0]?.input).toEqual(catalogModel.input)
   })
 })

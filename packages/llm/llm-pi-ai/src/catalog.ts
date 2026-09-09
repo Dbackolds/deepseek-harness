@@ -1073,9 +1073,9 @@ export function resolveRouteModels(
       ...resolveModelCompat(provider, entry, request.compat, base, api),
     }
   }
-  const models: Model<Api>[] = []
+  const models: DshModel[] = []
   for (const entry of entries) {
-    let model: Model<Api>
+    let model: DshModel
     try {
       model = resolveEntry(entry)
     } catch (error) {
