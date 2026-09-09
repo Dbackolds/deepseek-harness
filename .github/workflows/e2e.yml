@@ -19,6 +19,8 @@ name: E2E (real DeepSeek API)
 on:
   workflow_dispatch:
 
+# Keep only the newest validation in each workflow/ref, including master
+# pushes, nightly runs, and manual dispatches.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

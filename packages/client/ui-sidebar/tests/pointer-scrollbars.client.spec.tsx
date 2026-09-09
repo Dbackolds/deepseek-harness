@@ -14,6 +14,7 @@ import { en } from '../src/client/locales.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
+const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
 
 /** Pinned column box; the shell compares pointer coordinates against it. */
 const COLUMN_WIDTH = 280
@@ -25,6 +26,19 @@ const neverHook = (() => { throw new Error('shell must not read global hooks') }
 type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+
+function sessionsHook(completedIds: readonly string[] = []): SidebarRootComponentProps['useSessions'] {
+  return select => select({
+    ids: completedIds as never,
+    byId: Object.fromEntries(completedIds.map(id => [id, { completed: true }])) as never,
+    current: undefined,
+    phase: 'ready',
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
+  })
+}
+
 
 afterEach(() => {
   cleanup()
@@ -39,7 +53,8 @@ function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
   const view = render(
     <SidebarRoot
       collapsed={false} width={300}
-      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction}
+      useSessions={sessionsHook()} useSessionPendingInteraction={useSessionPendingInteraction}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((_key: string, owner: SidebarSectionOwnerProps) =>

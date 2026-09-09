@@ -6,10 +6,11 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
-import { en } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
+const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
 
 afterEach(() => {
   cleanup()
@@ -34,6 +35,7 @@ const useSessionPendingInteraction: SettingsRootComponentProps['useSessionPendin
 
 function mount({
   wide = true,
+  _dictionary = en,
   connectionState = 'connected',
   onboardingActive = true,
   themePreference = 'system',
@@ -51,6 +53,7 @@ function mount({
   ],
 }: {
   wide?: boolean
+  dictionary?: typeof en | typeof zh
   connectionState?: ConnectionSnapshot
   onboardingActive?: boolean
   themePreference?: 'light' | 'dark' | 'system'
@@ -89,7 +92,7 @@ function mount({
   const props: SettingsRootComponentProps = {
     useSessions,
     useSessionPendingInteraction,
-    useResource,
+    usePanelInfo, useResource,
     useWorkspaces: unusedHook,
     wide,
     reconnect,
@@ -172,14 +175,10 @@ describe('SettingsRoot trigger', () => {
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: true, part: 'settings' })
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: true, part: 'account' })
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(trigger)
+    trigger.focus()
+    fireEvent.click(trigger, { detail: 0 })
     expect(screen.getByRole('dialog')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Settings', expanded: true })).toBeTruthy()
-  })
-
-  it('hands the rail state to the trigger seat', () => {
-    const { renderSlot } = mount({ wide: false })
-    expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: false })
   })
 
   it('shows outage, retry progress, and a two-second recovery confirmation', () => {

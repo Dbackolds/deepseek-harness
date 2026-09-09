@@ -24,7 +24,7 @@ import type { Api, ApiKeyAuth, Model, Provider, ProviderStreams } from '@earendi
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy'
-import { catalogProvider, shippedApi } from './catalog.ts'
+import { catalogProvider, PiAiCatalogError, shippedApi } from './catalog.ts'
 import type { DshModel } from './catalog.ts'
 
 /**
@@ -190,14 +190,14 @@ export function buildProvider(spec: ProviderSpec): Provider {
   const streams: Partial<Record<string, ProviderStreams>> = {}
   for (const api of needed) {
     if (api === undefined) {
-      throw new Error(
+      throw new PiAiCatalogError(
         `llm-pi-ai: provider "${spec.provider}" names no api, which this build cannot serve;`
         + ` supported protocols are ${supportedProtocols().join(', ')}`,
       )
     }
     const factory = PROTOCOLS[api]
     if (factory === undefined) {
-      throw new Error(
+      throw new PiAiCatalogError(
         `llm-pi-ai: provider "${spec.provider}" names api "${api}", which this build cannot serve;`
         + ` supported protocols are ${supportedProtocols().join(', ')}`,
       )

@@ -80,6 +80,9 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../feedback/command-feedback"
     }
   ]
 }

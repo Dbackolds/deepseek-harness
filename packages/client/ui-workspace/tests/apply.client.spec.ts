@@ -21,6 +21,8 @@ async function bench() {
   const insertSessionBefore = vi.fn(async () => ({}))
   const open = vi.fn()
   const clear = vi.fn()
+  const selectPanel = vi.fn()
+  ctx.provide('layout', { selectPanel, beginNavigation: () => new AbortController().signal })
   const search = vi.fn(async () => ({
     ok: true as const,
     value: { items: [{ sessionId: 'session' as never, snippet: 'match' }], hasMore: false },
@@ -83,7 +85,7 @@ async function bench() {
   } as never)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
-    insertSessionBefore, open, clear, search, renameSession, binding, fork, markUnread, pickDirectory,
+    insertSessionBefore, open, clear, selectPanel, search, renameSession, binding, fork, markUnread, pickDirectory,
   }
 }
 
@@ -97,13 +99,13 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 
 describe('ui-workspace apply', () => {
   it('keeps the host Loader entry inert', () => {
-    expect(hostApply).not.toThrow()
+    expect(() => hostApply(new Context())).not.toThrow()
   })
 
   it('declares the services it drives', () => {
     expect(inject).toEqual([
       'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'remote.session',
-      'settingsScope',
+      'settingsScope', 'layout',
     ])
   })
 

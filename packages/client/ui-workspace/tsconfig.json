@@ -54,6 +54,9 @@
       "path": "../../settings/settings"
     },
     {
+      "path": "../ui-layout"
+    },
+    {
       "path": "../ui-renderer"
     },
     {

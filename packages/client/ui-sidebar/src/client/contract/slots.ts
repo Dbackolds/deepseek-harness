@@ -2,17 +2,16 @@
  * Sidebar slot contract: the registrant-side props composition for the
  * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
  * owns column geometry (fold state machine, brand row, New Session);
- * the list under New Session is `sidebar.automation`; everything between
- * that list and the list bottom is the `sidebar.workspaces` registrant's
- * (ui-workspace), and the foot is the `sidebar.settings` registrant's
- * (ui-settings), followed by optional footer actions in
- * `sidebar.footer.action`.
+ * the list under New Session is `sidebar.automation`, then official global
+ * panel rows; everything between that list and the list bottom is the
+ * `sidebar.workspaces` registrant's (ui-workspace), and the foot is the
+ * `sidebar.settings` registrant's (ui-settings), followed by optional footer
+ * actions in `sidebar.footer.action`.
  */
-import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
-// Type-only: pulls ui-layout's SlotMap merge (the 'sidebar' entry) into every
-// program that sees this contract, so PropsRuntime<'sidebar'> resolves.
-import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -33,6 +32,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * Automation registers first; other plugins append after it.
      */
     'sidebar.automation': { kind: 'list'; scope: 'root'; owner: SidebarAutomationOwnerProps }
+    /**
+     * Global panel icons. Each list id addresses the matching main panel;
+     * the sidebar owns the button and resolves its label from list metadata.
+     */
+    'sidebar.panellist': { kind: 'list'; scope: 'root'; owner: SidebarPanelIconOwnerProps }
     /**
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
@@ -66,6 +70,24 @@ export interface SidebarBrandNameOwnerProps {
   children?: never
 }
 
+/** Icon presentation supplied by the global panel row. */
+export interface SidebarPanelIconOwnerProps {
+  /** Requested square edge in pixels. */
+  size: number
+  /** Whether this panel is selected in the main column. */
+  active: boolean
+}
+
+/** Serializable metadata for one active global panel list registration. */
+export interface SidebarPanelMetadata {
+  /** List id and matching main panel key. */
+  id: MainPanelId
+  /** Ascending row order; ties retain registration order. */
+  order: number
+  /** Row title and accessible name: resolved label, or the id when omitted. */
+  label: string
+}
+
 /**
  * Owner share of the browser hole — the only facts crossing the shell/region
  * boundary. Business data and actions arrive through the region's own inject.
@@ -77,8 +99,8 @@ export interface SidebarBrandNameOwnerProps {
 export interface SidebarAutomationOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail). */
   wide: boolean
-  useWorkspaces?: any
-  useSessions?: any
+  useWorkspaces?: unknown
+  useSessions?: unknown
 }
 
 export interface SidebarSectionOwnerProps {
@@ -105,8 +127,7 @@ export interface SidebarFooterActionOwnerProps {
 
 /**
  * Registrant-private injected share (arrives via the register inject
- * factory). The shell keeps only its own controls: starting a Session from
- * the New Session button and toggling the column.
+ * factory). The renderer binds the panel metadata source to usePanels.
  */
 export type SidebarRootInjected = {
   /**
@@ -117,12 +138,16 @@ export type SidebarRootInjected = {
   startSession: (workspaceId?: WorkspaceId) => void
   /** Toggle the sidebar column through the layout service. */
   toggleSidebar: () => void
+  /** Select the global panel addressed by a sidebar row. */
+  selectPanel: (id: MainPanelId) => void
+  /** Private reactive sources bound to framework selector hooks. */
+  hooks: { panels: ObservableSnapshot<readonly SidebarPanelMetadata[]> }
 }
 
 /**
  * Full component props: layout owner state/actions plus the declared holes'
  * render shares, this package's injected callbacks, and the standard locale
- * seat. No store is registered.
+ * seat. Panel metadata arrives through an injected observable.
  */
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
@@ -130,8 +155,9 @@ export type SidebarRootComponentProps =
     | 'sidebar.brand.mark'
     | 'sidebar.brand.name'
     | 'sidebar.automation'
+    | 'sidebar.panellist'
     | 'sidebar.workspaces'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
   >
-  & SidebarRootInjected & PropsLocale<'sidebar'>
+  & InjectFace<SidebarRootInjected> & PropsLocale<'sidebar'>

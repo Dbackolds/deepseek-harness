@@ -52,6 +52,8 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 -----
 该浏览器通过全局运行时钩子将 Session 行渲染为分组或扁平形式，并负责 Workspace 添加／重命名／重排序以及 Session 重排序。视图选项会持久化状态分区布局。**空工作区 → 自动隐藏** 会从分组主列表省略空的项目 Workspace，保留聊天和当前 Session 所属 Workspace，并且不会调用 Host 隐藏。**按状态分区**（默认）恢复可折叠的**已完成**、**运行中**、**异常**和**历史记录**标题，前三个带数量徽章；历史记录展开时仍使用五行溢出控件。**不分区**时只有 Workspace 是文件夹，进行中的 Session——待处理交互、自身运行或有运行中的后代——排在空闲行之上，这些状态只留在行内点上，**再展开**只覆盖空闲行。打开的 Workspace 会显示全部进行中或未折叠状态行，历史记录或空闲 Session 默认五条。从 Workspace 行创建 Session 时会先打开该分组。新的空白 Session 在首次获受理的 prompt 之前不进入列表，发送后出现在运行中或进行中行里。Workspace 列表基线就绪后，浏览器持久化的展开状态与 Session 顺序记录只保留当前 Workspace id、Chat、单列表记账和已隐藏区键。视图选项把分组方式和每个记账各自的一份浏览器持久化 Session 顺序放在一起：真实 Workspace 从 `WorkspaceView.sessionIds` 初始化，Chat 和跨 Workspace 的单列表则从最近更新时间顺序初始化。**手动排序**和**最近更新**在两种呈现方式下都可用。进入最近更新时会执行一次完整的时间排序，后续 user prompt 或 steer 会将对应 Session 置顶一次；进入手动排序则保留所有当前位置并停用后续置顶。两种模式下的拖拽都会编辑当前顺序；真实 Workspace 在手动模式下的拖拽还会更新 Host Session 记账，而没有注册 No Repo 的 Chat 和单列表因没有单一项目 Workspace 记账，其顺序始终只保存在浏览器本地。单列表没有父级层次，因此不显示空的左侧状态槽；Session 存在可见状态时仍保留该槽。无论采用哪种 Session 顺序，Workspace 拖拽顺序都由 Host 持久化。
 
+`ctx.uiWorkspace.openSession(id)` 将选中会话与中央区域返回会话界面作为一次 UI 导航操作，包括目标会话已经是当前会话的情况。`openWorkspace(id, beforeOpen?)` 和 `forkSession(id)` 仅在请求未被后续导航替代时打开结果；新会话使用 `openWorkspace`。可选的同步准备回调仅对仍有效的工作区请求执行，因此过期请求不会搬移 composer 草稿。后续导航或所有者释放会阻止晚到的 UI 提交，但不取消底层会话创建。选中失败时保留当前全局面板。会话行读取 `usePanelInfo`，在全局面板活跃时不显示会话选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

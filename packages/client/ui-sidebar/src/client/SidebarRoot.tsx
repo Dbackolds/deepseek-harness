@@ -1,16 +1,17 @@
 /**
- * Sidebar shell: column geometry only. Collapse is a slide plus crossfade:
+ * Sidebar shell: column geometry and global panel navigation.
+ * Collapse is a slide plus crossfade:
  * content freezes at its expanded width (inline style) and fades out in place
  * while the sliding column (AppFrame grid tracks) clips it — nothing reflows
- * mid-slide. At settle the wide-only content unmounts and the four upper
+ * mid-slide. At settle the wide-only content unmounts and the upper
  * controls enter the 56px rail from the same horizontal offset (one icon each,
  * same top-down order) on one fade that ends with the slide. The bottom-pinned
  * settings control only fades. The workspace/session browsing region between
  * the New Session button and the foot is the `sidebar.workspaces` registrant's,
  * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the
- * list under New Session is `sidebar.automation`. Occupants match New Session
- * geometry. The shell hands them the wide flag (plus an expand request
- * callback for the browser).
+ * list under New Session is `sidebar.automation`, followed by official global
+ * panel rows. Occupants match New Session geometry. The shell hands them the
+ * wide flag (plus an expand request callback for the browser).
  *
  * The shell also counts unread Completed reminders from `useSessions` and
  * forwards that count to the desktop Host, when present, so macOS can badge
@@ -26,7 +27,10 @@ import clsx from 'clsx'
 import {
   FishLogo, IconNewChatOutline16, IconPanelLeftOutline16, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SidebarRootComponentProps } from './contract/slots.ts'
+import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  SidebarPanelMetadata, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps,
+} from './contract/slots.ts'
 import { unreadCompletedCount } from './completed-badge.ts'
 import { setDesktopCompletedUnread } from './desktop-attention.ts'
 import css from './SidebarRoot.module.css'
@@ -54,6 +58,38 @@ function localBuildVersion(): string | undefined {
     + (process.env.DSH_CLIENT_GIT_DIRTY === 'true' ? '-dirty' : '')
 }
 
+type PanelRowProps =
+  Pick<SidebarPanelMetadata, 'id' | 'label'>
+  & Pick<SidebarSectionOwnerProps, 'wide'>
+  & Pick<PropsRuntime<'sidebar'>, 'usePanelInfo'>
+  & Pick<InjectFace<SidebarRootInjected>, 'selectPanel'>
+  & PropsRenderSlots<'sidebar.panellist'>
+
+/** Each panel row subscribes only to its own selection state. */
+function PanelRow({ id, label, wide, usePanelInfo, selectPanel, renderSlot }: PanelRowProps) {
+  const active = usePanelInfo(info => info.activePanelId === id)
+  return (
+    <Tooltip label={label} delayMs={500} disabled={wide}>
+      <button
+        type="button"
+        className={clsx(css.panelRow, active && css.panelActive)}
+        aria-label={label}
+        aria-current={active ? 'page' : undefined}
+        onClick={() => { selectPanel(id) }}
+      >
+        <span className={css.panelGlyph} aria-hidden="true">
+          {renderSlot('sidebar.panellist', { size: wide ? 16 : 18, active }, { only: id })}
+        </span>
+        {wide && (
+          <span className={clsx(css.panelTitle, css.wide)}>
+            {label}
+          </span>
+        )}
+      </button>
+    </Tooltip>
+  )
+}
+
 /**
  * Render the sidebar column shell.
  * @param props - composed slot props (runtime share + injected callbacks, contract/slots.ts).
@@ -65,6 +101,9 @@ export function SidebarRoot({
   useSessions,
   startSession,
   toggleSidebar,
+  selectPanel,
+  usePanels,
+  usePanelInfo,
   t,
   renderSlot,
 }: SidebarRootComponentProps) {
@@ -72,6 +111,7 @@ export function SidebarRoot({
   useEffect(() => {
     setDesktopCompletedUnread(unreadCompleted)
   }, [unreadCompleted])
+  const panels = usePanels(snapshot => snapshot)
 
   // Wide content stays mounted while the collapse animates (fading via
   // .collapsed .wide), unmounts at settle, and remounts right away on expand.
@@ -219,6 +259,21 @@ export function SidebarRoot({
       <div className={css.automationArea} data-dsh-sidebar-actions="">
         {renderSlot('sidebar.automation', { wide })}
       </div>
+      {panels.length > 0 && (
+        <nav className={css.panelList} aria-label={t('panels.label')}>
+          {panels.map(({ id, label }) => (
+            <PanelRow
+              key={id}
+              id={id}
+              label={label}
+              wide={wide}
+              usePanelInfo={usePanelInfo}
+              selectPanel={selectPanel}
+              renderSlot={renderSlot}
+            />
+          ))}
+        </nav>
+      )}
 
       {/* The browsing region fills the column between the controls and the
           foot in both states; its rail icon column rides the same slot. */}
