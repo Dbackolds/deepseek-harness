@@ -38,6 +38,7 @@ describe('StarPivot container image', () => {
   it('builds this checkout into ghcr.io/starpivotnet/deepseek-harness', () => {
     const dockerfile = readRepo('docker/Dockerfile')
     expect(dockerfile).toContain('pnpm --filter @deepseek-ai/dsh deploy --legacy --prod')
+    expect(dockerfile).toContain('--config.allow-unused-patches=true')
     expect(dockerfile).toContain('Do not start from an official')
     expect(dockerfile).toContain('ARG DSH_CLIENT_COMMIT_HASH')
     expect(dockerfile).toContain('test -n "$DSH_CLIENT_COMMIT_HASH"')

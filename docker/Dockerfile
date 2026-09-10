@@ -25,6 +25,7 @@ RUN test -n "$DSH_CLIENT_COMMIT_HASH" \
   && pnpm run build \
   && mkdir -p /out \
   && pnpm --filter @deepseek-ai/dsh deploy --legacy --prod \
+    --config.allow-unused-patches=true \
     --config.node-linker=hoisted \
     --config.auto-install-peers=true \
     --config.link-workspace-packages=true \

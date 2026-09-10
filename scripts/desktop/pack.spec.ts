@@ -166,4 +166,9 @@ describe('desktop builder targets', () => {
   it('spawns pnpm.cmd on Windows so pack does not look for pnpm.exe', () => {
     expect(pnpmBin()).toBe(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
   })
+
+  it('allows unused Electron signer patches when deploying the Host', () => {
+    const source = readFileSync(join(import.meta.dirname, 'pack.ts'), 'utf8')
+    expect(source).toContain('--config.allow-unused-patches=true')
+  })
 })

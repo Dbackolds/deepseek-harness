@@ -419,6 +419,8 @@ function stageHost(skipBuild = false): void {
     'deploy',
     '--legacy',
     '--prod',
+    // Production Host deploy omits Electron's patched signer.
+    '--config.allow-unused-patches=true',
     '--config.node-linker=hoisted',
     '--config.auto-install-peers=true',
     '--config.link-workspace-packages=true',
