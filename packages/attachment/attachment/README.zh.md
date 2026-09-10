@@ -41,7 +41,7 @@ kind: "package-reference"
 
 ### 把附件传给命令
 
-声明接受附件的命令会按选择顺序接收图片与通用文件。不接受附件的命令会返回错误，并保留 composer 的草稿与附件卡。
+声明接受附件的命令会按选择顺序接收图片与通用文件。不接受附件的命令会返回错误，并保留输入区的草稿与附件卡。
 
 ### 在整个会话中复用图片
 
@@ -65,14 +65,14 @@ kind: "package-reference"
 
 - **事件前完成规范化与持久化。** 每个源图都会在批次按序发布前完成准备与校验，因此会话日志绝不会引用部分完成或规范化失败的对象。
 - **不可变且保留策略中立。** 对象一经发布即不可变；恢复和 fork 后的会话可能共享它们，因此引用感知的垃圾回收被推迟，而不是与任何单个会话的删除绑定。
-- **读取时校验。** 读取在返回前把字节和元数据与记录的引用比对，请求投影还会完整解码缓存字节，因此缺失、损坏或被替换的对象都会失败关闭。
+- **读取时校验。** 读取在返回前把字节和元数据与记录的引用比对，请求投影还会完整解码缓存字节，因此缺失、损坏或被替换的对象不会通过校验。
 - **角色无关的图片块。** `dsh-llm` 中的 `ImageBlock` 内容块携带 `ImageAttachmentRef`；提供方适配器以显式像素与字节预算把引用解析为确定性请求版本，执行文件系统则可以把不可变宿主对象映射为模型可读的进程路径。
 - **按错误码路由。** `AttachmentError` 重新实现 `HarnessError` 的结构而不是继承它，因为基类位于 `dsh-llm`，而后者依赖本包；消费方用 `isAttachmentError` 识别错误并按 `code` 路由，绝不依赖原型链。
-- **文件原样，图片规范化。**`saveFile` 提交已有字节数组，`saveFileStream` 以背压和取消语义提交有界分块，`readFileStream` 校验并返回有界分块，`fileHostPath` 定位存储对象供按需读取投影；两种文件写入路径都不设准入限制。图片路径保留其独立的规范化、限额与请求版本流水线。`dsh-llm` 中的 `FileBlock` 内容块承载 `FileAttachmentRef`，请求组装把它对每条路由都投影成确定性 handle 文本。
+- **文件原样，图片规范化。**`saveFile` 提交已有字节数组，`saveFileStream` 以背压和取消语义提交有界分块，`readFileStream` 校验并返回有界分块，`fileHostPath` 定位存储对象供按需读取投影；两种文件写入路径都不设准入限制。图片路径保留其独立的规范化、限额与请求版本流水线。`dsh-llm` 中的 `FileBlock` 内容块承载 `FileAttachmentRef`，请求组装会为每条路由将其投影为确定性的句柄文本。
 
 ### 服务操作
 
-服务族运行同一条准入与存储流程：每个入口都强制执行源批次限制与规范 base64，在发布任何成员前准备提供方无关的规范化附件，再按输入顺序持久提交而不产生部分结果。Host prompt 消费方把有序文本、编码图片和已经解析的文件引用交给 `ctx.attachments.admitPromptContent()`；该方法持久化图片，并让文件引用原样通过。编码协议适配器调用 `ctx.attachments.admitEncodedFile()`，由该方法检查规范 base64 后委托给 `saveFile`；适配器通过 `ctx.attachments.isAttachmentError()` 识别附件错误。通用文件调用方可以用 `saveFile` 提交已有字节，或用 `saveFileStream` 提交有界异步字节源；两者返回相同的持久引用，`readFileStream` 则在有界读取过程中校验摘要与长度。`readImageRequest` 派生确定性的路由尺寸变体，其身份包含附件 id、变换版本、像素与字节预算及编码参数。纯函数导出 `requestImageDimensions` 会按总像素预算计算每个投影保持宽高比的尺寸，使提供方与请求定价共享同一套几何计算。`imageHostPath` 只向需要执行世界映射的受信任同进程消费方暴露实现拥有的宿主位置。调用方组合有序批次，而实现拥有压缩并发、缓存与 singleflight。读取、流式写入和投影保留调用方的取消语义。失败带有稳定且机器可读的错误码，运行时即可识别可由调用方修正的准入子集，让每个协议适配器映射自己的词汇；各操作的确切约定见 [`src/index.ts`](src/index.ts) 与 [`src/error.ts`](src/error.ts)。
+服务族运行同一条准入与存储流程：每个入口都强制执行源批次限制与规范 base64，在发布任何成员前准备提供方无关的规范化附件，再按输入顺序持久提交而不产生部分结果。Host 提示词消费方把有序文本、编码图片和已经解析的文件引用交给 `ctx.attachments.admitPromptContent()`；该方法持久化图片，并让文件引用原样通过。编码协议适配器调用 `ctx.attachments.admitEncodedFile()`，由该方法检查规范 base64 后委托给 `saveFile`；适配器通过 `ctx.attachments.isAttachmentError()` 识别附件错误。通用文件调用方可以用 `saveFile` 提交已有字节，或用 `saveFileStream` 提交有界异步字节源；两者返回相同的持久引用，`readFileStream` 则在有界读取过程中校验摘要与长度。`readImageRequest` 派生确定性的路由尺寸变体，其身份包含附件 id、变换版本、像素与字节预算及编码参数。纯函数导出 `requestImageDimensions` 会按总像素预算计算每个投影保持宽高比的尺寸，使提供方与请求定价共享同一套几何计算。`imageHostPath` 只向需要把该位置映射到执行环境的受信任同进程消费方暴露实现拥有的宿主位置。调用方组合有序批次，而实现负责管理压缩并发、缓存与 singleflight。读取、流式写入和投影保留调用方的取消语义。失败带有稳定且机器可读的错误码，运行时即可识别可由调用方修正的准入子集，让每个协议适配器映射自己的词汇；各操作的确切约定见 [`src/index.ts`](src/index.ts) 与 [`src/error.ts`](src/error.ts)。
 
 ### 源码地图
 
@@ -83,7 +83,7 @@ kind: "package-reference"
 | [`src/admission.ts`](src/admission.ts) | 对编码图片和文件上传强制执行规范 base64 并委托存储 |
 | [`src/error.ts`](src/error.ts) | `AttachmentError` 类与 `isImageAdmissionError` 运行时子集 |
 | [`src/brand.ts`](src/brand.ts) | `AttachmentId` 带类型标记的不透明标识符 |
-| — | 不发布运行时不变式伴生入口；实现负责强制不可变存储检查。 |
+| — | 不发布运行时不变式伴生入口；这个无状态 seam 承载类型，实现则负责强制执行不可变存储检查。 |
 
 </details>
 
@@ -94,7 +94,7 @@ kind: "package-reference"
 
 完整的服务约定与载荷类型请看子系统参考；支撑这一能力的存储请看本地后端。
 
-- [附件子系统参考](../../../docs/subsystems/attachment.zh.md)——服务约定、载荷类型与 `ctx.attachments` 的 cordis 接口面。
+- [附件子系统参考](../../../docs/subsystems/attachment.zh.md)——服务约定、载荷类型与 `ctx.attachments` 的 Cordis 接口面。
 - [本地文件系统后端](../attachment-local/README.zh.md)——你的附加图片在本机上的存储位置。
 - [能力 seam](../../../docs/capability-seams.zh.md)——本能力家族如何拆分为多个角色。
 
@@ -107,6 +107,7 @@ kind: "package-reference"
 视频经由同一服务边界以未变换形式存储。`VideoAttachmentRef` 记录嗅探得到的容器类型、字节长度与净化后的名称；`validateVideo`、`saveVideos`、`saveVideo`、`readVideo` 与图片侧一一对应，`videoLimits` 约束单视频、数量与总字节数准入。不支持视频的后端保留默认的零准入策略，因此每个视频操作都以调用方可修正的 `UNSUPPORTED_VIDEO_TYPE` 失败，`readVideoRequest` 默认返回 `ATTACHMENT_PROJECTION_UNSUPPORTED`。`admitEncodedVideos` 与 `admitEncodedImages` 对应，`isVideoAdmissionError` 在运行时识别视频准入子集（`TOO_MANY_VIDEOS`、`VIDEOS_TOO_LARGE`、`UNSUPPORTED_VIDEO_TYPE`、`INVALID_VIDEO`、`VIDEO_TOO_LARGE`）。
 该包通过角色无关的核心 `ImageBlock`，以及把持久引用解析为确定请求版本的提供方适配器，间接影响模型。请求描述会公开完整附件 ID 和实际请求尺寸。视频块直接引用已存储字节；请求版本是原始直通形式 `raw-v1`。
 该包通过提供方适配器间接影响模型；适配器会把每个持久图片引用解析为确切请求版本，并在图片旁发送稳定附件 id 与实际尺寸。执行文件系统可以映射已存对象时，描述符还会包含只读进程路径，以及可写副本使用的匹配扩展名。通用文件的字节永远不会到达提供方：每条路由都收到一行确定性 handle 文本，指出文件名、字节数、摘要前缀，以及供文件工具读取的只读保存路径。
+该包通过提供方适配器间接影响模型；适配器会把每个持久图片引用解析为确切请求版本，并在图片旁发送稳定附件 id 与实际尺寸。执行文件系统可以映射已存对象时，描述符还会包含只读进程路径，以及可写副本使用的匹配扩展名。通用文件的字节永远不会到达提供方：每条路由都收到一行确定性的句柄文本，指出文件名、字节数、摘要前缀，以及供文件工具读取的只读保存路径。
 
 #### KV Cache 影响
 
@@ -137,7 +138,7 @@ kind: "package-reference"
 
 #### 未来：音频、视频与助手侧输出
 
-音频与视频需要原样文件路径之外的专门生命周期与提供方契约；角色无关的 `ImageBlock` 也把助手侧图片输出留作前瞻兼容——当前生产适配器声明只输出文本，因此只有用户内容携带图片。两个方向都尚未决定。
+音频与视频需要原样文件路径之外的专门生命周期与提供方约定；角色无关的 `ImageBlock` 也为助手侧图片输出保留向前兼容空间——当前生产适配器声明只输出文本，因此只有用户内容携带图片。两个方向都尚未决定。
 
 </details>
 - 第一版仅接受 PNG、JPEG、WebP、GIF 图片与 MP4、Matroska、QuickTime 视频容器。

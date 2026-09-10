@@ -33,11 +33,12 @@ dsh Web 客户端的侧边栏让用户识别当前构建、启动新会话、将
 
 ### 全局面板入口
 
-插件在 root 作用域的 `sidebar.panellist` list 中注册图标组件，提供 `id`、可选 `order`，以及字符串或随语言变化的 `label`。同一个 id 寻址布局中 root 作用域 `main` keyed slot 的组件；选择不存在的主面板条目会抛错，并保留当前选中态。标签提供普通可见文字、无障碍名称和折叠提示。每一行通过 `usePanelInfo` 读取自己的选中态；DOM 焦点移到搜索框或目录选择器时，显示的面板及其列表项选中态不变。没有注册项时，列表及其间距均不渲染。默认组合不注册示例面板。
+插件在 root 作用域的 `sidebar.panellist` list 中注册图标组件，提供 `id`、可选 `order`，以及字符串或 locale-aware 的 `label`。同一个 id 寻址布局中 root 作用域 `main` keyed slot 的组件；选择不存在的主面板条目会抛错，并保留当前选中态。标签提供普通可见文字、无障碍名称和折叠提示。每一行通过 `usePanelInfo` 读取自己的选中态；DOM 焦点移到搜索框或目录选择器时，显示的面板及其列表项选中态不变。没有注册项时，列表及其间距均不渲染。产品随附的组合不注册示例面板。
 
 ### 折叠行为
 
 实时收起时，外壳会把展开内容固定在当前宽度，用 150ms 淡出，并让布局的 300ms 栏滑动完整跑完。随后，上方控件——外壳的侧栏切换、新建会话、New Session 兄弟列表，以及通过 `sidebar.workspaces` 渲染的添加和搜索——共用一次 150ms 的淡入和 49px 左移进入 56px 轨道；每个 36px 控件盒都会沿同一条路径到达轨道左侧 10px 的内边距。已知的注入兄弟入口（`data-dsh-mnemon-entry`、`data-dsh-taskboard-entry`、`data-dsh-ssh-entry`）在轨道上保留 18px 图形并隐藏文字标签，避免残留标题被裁成单字记号。固定在底部的 `sidebar.settings` 控件只共用淡入时序，不发生横向位移。展开时，宽内容以匹配的 300ms 淡入重新挂载。页面初始即为收起状态时会静态渲染轨道；减少动态效果模式会禁用两段过渡。
+实时收起时，展开内容在当前宽度淡出，上方控件共用同一段透明度渐变，并向左平移进入 56px 轨道，由布局的栏滑动结束整段动画。页面初始即为收起状态时会静态渲染轨道；减少动态效果模式会禁用两段过渡。固定在底部的 `sidebar.settings` 控件共用相同的透明度渐变时序，但不发生横向位移。
 
 ### 滚动条
 
@@ -51,9 +52,9 @@ dsh Web 客户端的侧边栏让用户识别当前构建、启动新会话、将
 <details>
 <summary>实现细节——点击展开</summary>
 
-外壳是纯组合：`SidebarRootComponentProps` 组合布局 owner share、全局 `useSessions` 与 `useWorkspaces` 钩子、已声明的品牌、`sidebar.workspaces` 与 `sidebar.settings` 子 slot，以及注入的导航回调。面板入口及其可选标题使用相同的组合方式。面板元数据由列表注册和语言变化派生；选中态属于布局存储。
+外壳是纯组合：`SidebarRootComponentProps` 组合布局 owner share、全局 `useSessions` 与 `useWorkspaces` 钩子、已声明的品牌、`sidebar.workspaces` 与 `sidebar.settings` 子 slot，以及注入的导航回调。面板入口及其可选标题使用相同的组合方式。面板元数据由列表注册和 locale 变化派生；选中态属于布局存储。
 
-### Slot 纪律
+### slot 纪律
 
 声明感知的 `slots.inject()` 让替换包无论先于还是后于侧边栏激活都能生效。页脚承载 `sidebar.settings` 席位：侧边栏只渲染固定在底部的布局 slot，并共享其栏状态（`wide`）。`/client` 导出接口只包含插件主体（`apply`/`inject`）及约定类型；SidebarRoot、行组件与树派生仍由 slot 注册封装在包内。
 
@@ -104,4 +105,4 @@ dsh Web 客户端的侧边栏让用户识别当前构建、启动新会话、将
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。面板元数据是 Slot 注册表与 locale 的只读呈现投影，没有独立写入 API。注册表拥有条目身份和释放；本包的装配测试在注册和语言通知完成后断言投影。外壳没有需要与这些来源协调的独立导航状态。
+**运行时不变式：** 不发布伴生入口。面板元数据是 Slot 注册表与 locale 的只读呈现投影，没有独立写入 API。注册表负责条目身份与资源释放；本包的装配测试在注册和 locale 通知完成后断言该投影。外壳没有需要与这些来源协调的独立导航状态。

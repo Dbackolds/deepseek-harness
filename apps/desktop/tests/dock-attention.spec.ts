@@ -155,13 +155,13 @@ describe('applyCompletedDockIcon', () => {
 
 describe('desktop completed attention wiring', () => {
   it('exposes setCompletedUnread from the isolated preload', () => {
-    expect(preload).toContain("setCompletedUnread: (count: number) => { ipcRenderer.send('dsh-desktop:set-completed-unread', count) }")
+    expect(preload).toContain('setCompletedUnread: (count) => { ipcRenderer.send(DESKTOP_IPC.setCompletedUnread, count) }')
   })
 
   it('routes the completed IPC to the dock badge on macOS', () => {
-    expect(main).toContain("ipcMain.on('dsh-desktop:set-completed-unread'")
+    expect(main).toContain('ipcMain.on(DESKTOP_IPC.setCompletedUnread')
     expect(main).toContain('applyCompletedDockIcon(')
-    expect(main).toContain('requestSingleInstanceLock()')
+    expect(main).toContain('claimDesktopSingleInstance(')
   })
 })
 

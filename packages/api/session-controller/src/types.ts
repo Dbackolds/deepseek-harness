@@ -247,6 +247,8 @@ export interface SkillEntry {
   readonly source?: string
   readonly provider?: string
   readonly userInvocable?: boolean
+  /** Absolute SKILL.md path when supplied by a filesystem provider. */
+  readonly path?: string
   /** Kebab-case identifier referenced as `/name`. */
   readonly name: string
   /** Short routing description. */
